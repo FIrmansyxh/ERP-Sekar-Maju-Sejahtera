@@ -1,0 +1,2 @@
+#!/bin/bash
+perl -0777 -pi -e 's/\{item\.modId === .modul-6-dashboard-analytic. \? \(\s*<BarChart3 className="w-3\.5 h-3\.5 text-\[\#b81d24\] shrink-0" \/>\s*\) : item\.modId === .modul-6-laporan-pembelian. \? \(\s*<FileSpreadsheet className="w-3\.5 h-3\.5 text-blue-700 shrink-0" \/>\s*\) : item\.modId === .modul-users. \? \(\s*<ShieldCheck className="w-3\.5 h-3\.5 text-\[\#b81d24\] shrink-0" \/>\s*\) : null\}//g' src/components/home/HomeDashboardView.tsx

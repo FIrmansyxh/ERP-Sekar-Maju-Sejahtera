@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Remix ERP PR. Sekar Anom Versi lite</title>
+    <meta name="description" content="Sistem ERP Desktop Manajemen Gudang Tembakau - Master Data Petani, Inventaris Barang, Tabel Harga, dan Logistik Pengiriman." />
+    <meta property="og:title" content="Remix ERP PR. Sekar Anom Versi lite" />
+    <meta property="og:description" content="Sistem ERP Desktop Manajemen Gudang Tembakau - Master Data Petani, Inventaris Barang, Tabel Harga, dan Logistik Pengiriman." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script>
+      (function() {
+        try {
+          var currentFetch = window.fetch;
+          Object.defineProperty(window, 'fetch', {
+            get: function() {
+              return currentFetch;
+            },
+            set: function(fn) {
+              currentFetch = fn;
+            },
+            configurable: true,
+            enumerable: true
+          });
+        } catch (e) {
+          // Property may be non-configurable, fallback to error suppression if needed
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

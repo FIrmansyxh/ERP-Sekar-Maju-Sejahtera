@@ -1,0 +1,8 @@
+{
+  "name": "Remix ERP PR. Sekar Anom Versi lite",
+  "description": "Sistem ERP Desktop Manajemen Gudang Tembakau - Master Data Petani, Inventaris Barang, Tabel Harga, dan Logistik Pengiriman.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
