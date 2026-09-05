@@ -79,7 +79,7 @@ export function generateMaduraTobaccoDataset(): GeneratorResult {
       petaniList.push({
         petani_id: `PTN-${d.year}-${String(i).padStart(2, '0')}`,
         nama_petani: realName,
-        nomor_kartu: `KRT-${d.year}-${String(i).padStart(4, '0')}`,
+
         desa_kecamatan: 'Madura',
         alamat: 'Desa Tembakau, Madura',
         no_hp: '0812345678',
@@ -187,8 +187,7 @@ export function generateMaduraTobaccoDataset(): GeneratorResult {
       no_kupon: kuponId,
       petani_id: petani.petani_id,
       nama_petani: petani.nama_petani,
-      nomor_kartu: petani.nomor_kartu,
-      desa_kecamatan: petani.desa_kecamatan,
+            desa_kecamatan: petani.desa_kecamatan,
       no_bal: `${trxItems[0].no_bal} - ${trxItems[trxItems.length-1].no_bal}`,
       kode_grade: Array.from(gradesInTrx).join(', '),
       tanggal_transaksi: trxDateStr.split('T')[0],

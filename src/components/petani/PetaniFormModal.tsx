@@ -95,8 +95,7 @@ export const PetaniFormModal: React.FC<PetaniFormModalProps> = ({
   const handleConfirmSave = () => {
     const finalData: Petani = {
       petani_id: formData.petani_id || generatePetaniId(existingPetaniList),
-      nomor_kartu: formData.petani_id || generatePetaniId(existingPetaniList),
-      nama_petani: (formData.nama_petani || '').trim(),
+            nama_petani: (formData.nama_petani || '').trim(),
       no_hp: (formData.no_hp || '').trim(),
       alamat: (formData.alamat || '').trim(),
       desa_kecamatan: formData.alamat || '',
@@ -160,10 +159,10 @@ export const PetaniFormModal: React.FC<PetaniFormModalProps> = ({
 
           {/* Form Content */}
           <form onSubmit={handleSubmit} className="p-5 space-y-4">
-            {/* Auto Generated Petani ID */}
+            {/* Auto Generated ID Petani */}
             <div>
               <label className="block text-gray-700 font-semibold mb-1">
-                Petani ID <span className="text-gray-400 font-normal text-[11px]">(Otomatis Sistem)</span>
+                ID Petani <span className="text-gray-400 font-normal text-[11px]">(Otomatis Sistem)</span>
               </label>
               <div className="flex items-center space-x-2">
                 <input
@@ -177,7 +176,7 @@ export const PetaniFormModal: React.FC<PetaniFormModalProps> = ({
                 </span>
               </div>
               <p className="text-[10px] text-gray-400 mt-1">
-                Petani ID dibuat otomatis berdasarkan tahun pendaftaran dan urutan nomor registrasi.
+                ID Petani dibuat otomatis berdasarkan tahun pendaftaran dan urutan nomor registrasi.
               </p>
             </div>
 

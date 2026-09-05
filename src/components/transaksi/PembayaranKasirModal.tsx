@@ -142,7 +142,7 @@ export const PembayaranKasirModal: React.FC<PembayaranKasirModalProps> = ({
               <div>
                 <span className="text-[10px] font-bold text-gray-500 uppercase">Petani Penerima Tunai</span>
                 <p className="text-sm font-bold text-gray-900">{transaksi.nama_petani}</p>
-                <span className="text-[10px] font-mono text-gray-500">{transaksi.nomor_kartu || transaksi.petani_id} • {transaksi.desa_kecamatan || '-'}</span>
+                <span className="text-[10px] font-mono text-gray-500">{transaksi.petani_id} • {transaksi.desa_kecamatan || '-'}</span>
               </div>
               <div className="text-right">
                 <span className="text-[10px] font-bold text-gray-500 uppercase">No. Kupon & Transaksi</span>

@@ -60,7 +60,7 @@ export const OperatorLoketView: React.FC<OperatorLoketViewProps> = ({
     const q = scannedInput.trim().toLowerCase();
     if (!q) return [];
     return petaniList.filter((p) => {
-      const card = (p.nomor_kartu || '').toLowerCase();
+      const card = (p.petani_id || '').toLowerCase();
       const pId = (p.petani_id || '').toLowerCase();
       const name = (p.nama_petani || '').toLowerCase();
       const desa = (p.desa_kecamatan || '').toLowerCase();
@@ -70,7 +70,7 @@ export const OperatorLoketView: React.FC<OperatorLoketViewProps> = ({
 
   const handleSelectSuggestedFarmer = (p: Petani) => {
     setSelectedPetaniId(p.petani_id);
-    setScannedInput(p.nomor_kartu);
+    setScannedInput(p.petani_id);
     setIsFarmerDropdownOpen(false);
   };
 
@@ -80,7 +80,7 @@ export const OperatorLoketView: React.FC<OperatorLoketViewProps> = ({
     setHighlightedFarmerIndex(0);
     const clean = val.trim().toUpperCase();
     const found = petaniList.find(
-      (p) => p.nomor_kartu.toUpperCase() === clean || p.petani_id.toUpperCase() === clean
+      (p) => p.petani_id.toUpperCase() === clean || p.petani_id.toUpperCase() === clean
     );
     if (found) {
       setSelectedPetaniId(found.petani_id);
@@ -90,7 +90,7 @@ export const OperatorLoketView: React.FC<OperatorLoketViewProps> = ({
   const handleQuickSelectFirst = () => {
     if (activeFarmers.length > 0) {
       setSelectedPetaniId(activeFarmers[0].petani_id);
-      setScannedInput(activeFarmers[0].nomor_kartu);
+      setScannedInput(activeFarmers[0].petani_id);
     }
   };
 
@@ -158,7 +158,7 @@ export const OperatorLoketView: React.FC<OperatorLoketViewProps> = ({
               {/* Scan input */}
               <div className="relative">
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Scan Barcode Kartu / Ketik No. Kartu:
+                  Scan Barcode / Ketik ID Petani:
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -239,7 +239,7 @@ export const OperatorLoketView: React.FC<OperatorLoketViewProps> = ({
                               <div className="flex items-center space-x-2">
                                 <span className="font-bold text-slate-900">{p.nama_petani}</span>
                                 <span className="font-mono text-[10px] text-slate-500 bg-slate-100 px-1 py-0.2 rounded border border-slate-200">
-                                  {p.nomor_kartu}
+                                  {p.petani_id}
                                 </span>
                               </div>
                               <div className="text-[10px] text-slate-500">{p.desa_kecamatan}</div>
@@ -259,7 +259,7 @@ export const OperatorLoketView: React.FC<OperatorLoketViewProps> = ({
                 )}
               </div>
 
-              {/* Read-only Dropdown Disambiguation (PRD requirement: nama sama tetap beda via nomor kartu) */}
+              {/* Read-only Dropdown Disambiguation (PRD requirement: nama sama tetap beda via ID Petani) */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Atau Pilih Dari Dropdown Petani Aktif:
@@ -270,14 +270,14 @@ export const OperatorLoketView: React.FC<OperatorLoketViewProps> = ({
                   onChange={(e) => {
                     setSelectedPetaniId(e.target.value);
                     const sel = petaniList.find((p) => p.petani_id === e.target.value);
-                    if (sel) setScannedInput(sel.nomor_kartu);
+                    if (sel) setScannedInput(sel.petani_id);
                   }}
                   className="w-full text-xs font-semibold rounded-xl p-2.5 bg-slate-50 border border-slate-300 focus:border-indigo-600 focus:bg-white focus:outline-none cursor-pointer"
                 >
                   <option value="">-- Pilih Petani Terdaftar --</option>
                   {activeFarmers.map((p) => (
                     <option key={p.petani_id} value={p.petani_id}>
-                      {p.nama_petani} [{p.nomor_kartu}] - {p.desa_kecamatan.split(',')[0]}
+                      {p.nama_petani} [{p.petani_id}] - {p.desa_kecamatan.split(',')[0]}
                     </option>
                   ))}
                 </select>
@@ -306,7 +306,7 @@ export const OperatorLoketView: React.FC<OperatorLoketViewProps> = ({
                       <div className="flex items-center space-x-2">
                         <h4 className="font-bold text-sm">{selectedFarmer.nama_petani}</h4>
                         <span className="font-mono text-xs bg-white/80 px-2 py-0.5 rounded border font-bold">
-                          {selectedFarmer.nomor_kartu}
+                          {selectedFarmer.petani_id}
                         </span>
                       </div>
                       <p className="text-xs opacity-80 mt-0.5">
@@ -449,7 +449,7 @@ export const OperatorLoketView: React.FC<OperatorLoketViewProps> = ({
               </p>
               <p className="flex items-start space-x-2">
                 <span className="w-4 h-4 rounded-full bg-slate-900 text-white text-[10px] flex items-center justify-center shrink-0 font-bold mt-0.5">2</span>
-                <span>Arahkan scanner ke barcode atau ketik nomor kartu di kolom pencarian cepat.</span>
+                <span>Arahkan scanner ke barcode atau ketik ID Petani di kolom pencarian cepat.</span>
               </p>
               <p className="flex items-start space-x-2">
                 <span className="w-4 h-4 rounded-full bg-slate-900 text-white text-[10px] flex items-center justify-center shrink-0 font-bold mt-0.5">3</span>

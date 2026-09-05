@@ -158,7 +158,7 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
         const q = searchQuery.toLowerCase().trim();
         const matchId = tx.transaksi_id.toLowerCase().includes(q);
         const matchNama = (tx.nama_petani || '').toLowerCase().includes(q);
-        const matchKartu = (tx.nomor_kartu || '').toLowerCase().includes(q);
+        const matchKartu = (tx.petani_id || '').toLowerCase().includes(q);
         const matchBal = (tx.no_bal || '').toLowerCase().includes(q);
         const matchKupon = (tx.no_kupon || '').toLowerCase().includes(q);
         const matchDesa = (tx.desa_kecamatan || '').toLowerCase().includes(q);
@@ -780,7 +780,7 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
                             <td className="py-2.5 px-3 border-r border-gray-200">
                               <div className="font-bold text-gray-900">{tx.nama_petani}</div>
                               <div className="text-[10px] text-gray-500 font-mono">
-                                {tx.nomor_kartu || tx.petani_id} • {tx.desa_kecamatan || '-'}
+                                {tx.petani_id} • {tx.desa_kecamatan || '-'}
                               </div>
                               {tx.terakhir_diubah_oleh && (
                                 <div 
@@ -955,7 +955,7 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
                       <td className="py-2.5 px-3 border-r border-gray-200">
                         <div className="font-bold text-gray-900">{tx.nama_petani}</div>
                         <div className="text-[10px] text-gray-500 font-mono">
-                          {tx.nomor_kartu || tx.petani_id} • {tx.desa_kecamatan || '-'}
+                          {tx.petani_id} • {tx.desa_kecamatan || '-'}
                         </div>
                         {tx.terakhir_diubah_oleh && (
                           <div 

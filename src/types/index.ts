@@ -4,8 +4,7 @@ export interface Petani {
   no_hp: string; // numeric phone number
   alamat: string; // required address/area
   status_aktif: boolean; // default true
-  nomor_kartu?: string; // fallback / alias to petani_id
-  desa_kecamatan?: string; // optional area
+    desa_kecamatan?: string; // optional area
   tanggal_daftar?: string; // YYYY-MM-DD
   catatan?: string;
   statistik?: {
@@ -164,7 +163,6 @@ export interface TransaksiPembelian {
   no_kupon: string; // No Kupon antrian (e.g. KUP001)
   petani_id: string;
   nama_petani: string;
-  nomor_kartu: string;
   no_hp?: string;
   desa_kecamatan?: string;
   no_bal: string;

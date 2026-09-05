@@ -123,12 +123,12 @@ export const LaporanAnalytics: React.FC<LaporanAnalyticsProps> = ({
     let filename = `laporan_${type}_${new Date().toISOString().split('T')[0]}.csv`;
 
     if (type === 'transaksi') {
-      const headers = ['No Transaksi', 'Tanggal', 'Nama Petani', 'Nomor Kartu', 'No Bal', 'Grade', 'Berat (KG)', 'Harga/Kg', 'Potongan', 'Total Bersih'];
+      const headers = ['No Transaksi', 'Tanggal', 'Nama Petani', 'ID Petani', 'No Bal', 'Grade', 'Berat (KG)', 'Harga/Kg', 'Potongan', 'Total Bersih'];
       const rows = transaksiList.map((tx) => [
         tx.transaksi_id,
         tx.tanggal_transaksi,
         tx.nama_petani,
-        tx.nomor_kartu,
+        tx.petani_id,
         tx.no_bal,
         tx.kode_grade,
         tx.berat_kg,

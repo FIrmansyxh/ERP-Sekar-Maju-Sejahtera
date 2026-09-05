@@ -389,7 +389,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
               <option value="">-- Semua Petani --</option>
               {petaniList.map((p) => (
                 <option key={p.petani_id} value={p.petani_id}>
-                  {p.nama_petani} ({p.nomor_kartu || p.petani_id})
+                  {p.nama_petani} ({p.petani_id})
                 </option>
               ))}
             </select>
@@ -641,7 +641,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                       <td className="py-2.5 px-3">
                         <div className="font-medium text-slate-900">{tx.nama_petani}</div>
                         <span className="text-[10px] text-slate-500 font-mono">
-                          {tx.nomor_kartu || tx.petani_id}
+                          {tx.petani_id}
                         </span>
                       </td>
                       <td className="py-2.5 px-3 text-center">

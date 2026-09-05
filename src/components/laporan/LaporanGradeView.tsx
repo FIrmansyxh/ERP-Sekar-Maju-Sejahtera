@@ -436,8 +436,7 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
       totalStokKg,
       totalValuasi,
       totalDoKg,
-      dominantKode: dominant?.kode || '-',
-      dominantPorsi: dominant ? dominant.persenStokBal : 0,
+      dominantKode: dominant,
     };
   }, [hargaJualMetrics, filteredHargaJualList]);
 
@@ -590,7 +589,7 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
           <div className="flex items-center justify-between text-[11px] text-gray-500 mt-1 pt-2 border-t border-gray-100">
             <span>Kode Dominan:</span>
             <span className="font-semibold text-gray-800">
-              {overallSummaryJual.dominantKode ? `Kode ${overallSummaryJual.dominantKode.code} (${overallSummaryJual.dominantKode.persenStokKg.toFixed(1)}%)` : '-'}
+              {overallSummaryJual.dominantKode ? `Kode ${overallSummaryJual.dominantKode.kode} (${overallSummaryJual.dominantKode.persenStokKg.toFixed(1)}%)` : '-'}
             </span>
           </div>
         </div>

@@ -303,8 +303,7 @@ export const TransaksiFormModal: React.FC<TransaksiFormModalProps> = ({
       no_kupon: `KUP${String(seqNum).padStart(4, '0')}`,
       petani_id: currentPetani.petani_id,
       nama_petani: currentPetani.nama_petani,
-      nomor_kartu: currentPetani.nomor_kartu || currentPetani.petani_id,
-      no_hp: currentPetani.no_hp,
+            no_hp: currentPetani.no_hp,
       desa_kecamatan: (currentPetani.alamat || currentPetani.desa_kecamatan || '') as string,
       no_bal: balNoList.join(', '),
       kode_grade: primaryGrade,
@@ -462,11 +461,11 @@ export const TransaksiFormModal: React.FC<TransaksiFormModalProps> = ({
                 </div>
 
                 <div className="flex items-center">
-                  <label className="w-32 text-gray-700 font-medium">ID / No. Kartu</label>
+                  <label className="w-32 text-gray-700 font-medium">ID Petani</label>
                   <input
                     type="text"
                     disabled
-                    value={currentPetani?.nomor_kartu || currentPetani?.petani_id || '-'}
+                    value={currentPetani?.petani_id || '-'}
                     className="flex-1 bg-[#e9ecef] border border-[#ced4da] rounded-sm px-2.5 py-1.5 text-gray-700 font-mono font-bold text-xs"
                   />
                 </div>

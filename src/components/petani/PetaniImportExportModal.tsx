@@ -78,20 +78,20 @@ export const PetaniImportExportModal: React.FC<PetaniImportExportModalProps> = (
     }
 
     const headers = lines[0].split(',').map((h) => h.trim().toLowerCase());
-    const cardIdx = headers.indexOf('nomor_kartu');
+    const cardIdx = headers.indexOf('petani_id');
     const nameIdx = headers.indexOf('nama_petani');
     const desaIdx = headers.indexOf('desa_kecamatan');
 
     if (cardIdx === -1 || nameIdx === -1) {
       setImportErrors([
-        'Kolom wajib "nomor_kartu" dan "nama_petani" tidak ditemukan pada baris header CSV.',
+        'Kolom wajib "petani_id" dan "nama_petani" tidak ditemukan pada baris header CSV.',
       ]);
       return;
     }
 
     const importedPetani: Petani[] = [];
     const errors: string[] = [];
-    const existingCards = new Set(petaniList.map((p) => p.nomor_kartu.toUpperCase()));
+    const existingCards = new Set(petaniList.map((p) => p.petani_id.toUpperCase()));
 
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim();
@@ -103,12 +103,12 @@ export const PetaniImportExportModal: React.FC<PetaniImportExportModalProps> = (
       const desa = desaIdx !== -1 ? cols[desaIdx] : 'Desa Tembakau';
 
       if (!cardNumber || !nama) {
-        errors.push(`Baris ${i + 1}: Nomor kartu dan nama tidak boleh kosong.`);
+        errors.push(`Baris ${i + 1}: ID Petani dan nama tidak boleh kosong.`);
         continue;
       }
 
       if (existingCards.has(cardNumber)) {
-        errors.push(`Baris ${i + 1}: Nomor kartu "${cardNumber}" sudah terdaftar.`);
+        errors.push(`Baris ${i + 1}: ID Petani "${cardNumber}" sudah terdaftar.`);
         continue;
       }
 
@@ -116,7 +116,7 @@ export const PetaniImportExportModal: React.FC<PetaniImportExportModalProps> = (
 
       const newPetani: Petani = {
         petani_id: generatePetaniId([...petaniList, ...importedPetani]),
-        nomor_kartu: generatePetaniId([...petaniList, ...importedPetani]),
+
         nama_petani: nama,
         no_hp: '0812-3456-7890',
         alamat: desa || 'Ds. Wringin Anom, Pamekasan',
@@ -224,7 +224,7 @@ export const PetaniImportExportModal: React.FC<PetaniImportExportModalProps> = (
                 rows={6}
                 value={csvText}
                 onChange={(e) => setCsvText(e.target.value)}
-                placeholder="nomor_kartu,nama_petani,desa_kecamatan&#10;KRT-WRA-2001,Bpk. Ahmad Fauzi,Ds. Wringin Anom&#10;KRT-WRA-2002,Bpk. Hendro,Ds. Besuki"
+                placeholder="petani_id,nama_petani,desa_kecamatan&#10;PTN-WRA-2001,Bpk. Ahmad Fauzi,Ds. Wringin Anom&#10;PTN-WRA-2002,Bpk. Hendro,Ds. Besuki"
                 className="w-full font-mono text-xs p-2.5 border border-[#ced4da] rounded-sm focus:border-[#b81d24] focus:outline-none bg-white text-gray-900"
               />
 

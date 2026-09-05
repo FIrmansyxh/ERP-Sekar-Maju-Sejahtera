@@ -84,7 +84,7 @@ export const PetaniDetailDrawer: React.FC<PetaniDetailDrawerProps> = ({
               <h2 className="text-sm font-bold text-gray-900 tracking-tight">
                 Detail Master Petani & Profil Timbang
               </h2>
-              <p className="text-[11px] font-mono text-gray-500">{petani.petani_id} | {petani.nomor_kartu}</p>
+              <p className="text-[11px] font-mono text-gray-500">{petani.petani_id} | {petani.petani_id}</p>
             </div>
           </div>
 
@@ -273,8 +273,8 @@ export const PetaniDetailDrawer: React.FC<PetaniDetailDrawerProps> = ({
                   <span className="text-[10px] text-gray-500 uppercase font-bold tracking-wider block">KARTU PETANI TEMBAKAU</span>
                   <span className="text-sm font-bold text-gray-900 block">{petani.nama_petani}</span>
                   <div className="bg-gray-50 border border-gray-200 p-2 my-2">
-                    <span className="text-[10px] text-gray-500 block uppercase">Nomor Kartu</span>
-                    <span className="text-base font-mono font-bold text-gray-900 block tracking-widest">{petani.nomor_kartu}</span>
+                    <span className="text-[10px] text-gray-500 block uppercase">ID Petani</span>
+                    <span className="text-base font-mono font-bold text-gray-900 block tracking-widest">{petani.petani_id}</span>
                   </div>
                   <span className="text-[11px] text-gray-500 block">{petani.desa_kecamatan}</span>
                 </div>
@@ -290,7 +290,7 @@ export const PetaniDetailDrawer: React.FC<PetaniDetailDrawerProps> = ({
                     className="flex-1 px-3 py-2 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-none flex items-center justify-center space-x-1 cursor-pointer"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
-                    <span>Ganti / Reset Nomor Kartu</span>
+                    <span>Ganti / Reset ID Petani</span>
                   </button>
 
                   <button
@@ -328,7 +328,7 @@ export const PetaniDetailDrawer: React.FC<PetaniDetailDrawerProps> = ({
       <ConfirmModal
         isOpen={isDeleteConfirmOpen}
         title="Konfirmasi Hapus Data Petani"
-        message={`Apakah Anda yakin ingin menghapus data petani "${petani.nama_petani}" (${petani.nomor_kartu}) secara permanen?`}
+        message={`Apakah Anda yakin ingin menghapus data petani "${petani.nama_petani}" (${petani.petani_id}) secara permanen?`}
         detail="Tindakan ini akan menghapus master data registrasi petani dari sistem."
         variant="danger"
         confirmText="Hapus Permanen"

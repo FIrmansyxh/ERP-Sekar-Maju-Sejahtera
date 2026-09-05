@@ -1241,10 +1241,10 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
                       <td 
                         className="py-2 px-3 text-gray-900 font-medium border-r border-gray-100 truncate"
                         style={{ maxWidth: colWidths.petani }}
-                        title={`${row.nama_petani} - ${row.nomor_kartu || ''}`}
+                        title={`${row.nama_petani} - ${row.petani_id || ''}`}
                       >
                         <div className="font-semibold text-gray-800 leading-tight truncate">{row.nama_petani}</div>
-                        <div className="text-[10px] text-gray-400 font-mono leading-none mt-0.5 truncate">{row.nomor_kartu}</div>
+                        <div className="text-[10px] text-gray-400 font-mono leading-none mt-0.5 truncate">{row.petani_id}</div>
                       </td>
 
                       {/* 5. No Ball */}

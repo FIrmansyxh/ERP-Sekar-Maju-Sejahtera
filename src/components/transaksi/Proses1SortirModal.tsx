@@ -354,8 +354,7 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
       no_kupon: kuponNo,
       petani_id: currentPetani.petani_id,
       nama_petani: currentPetani.nama_petani,
-      nomor_kartu: currentPetani.nomor_kartu || currentPetani.petani_id,
-      no_hp: currentPetani.no_hp,
+            no_hp: currentPetani.no_hp,
       desa_kecamatan: (currentPetani.alamat || currentPetani.desa_kecamatan || '') as string,
       no_bal: balItems.map((i) => i.noBal.trim()).join(', '),
       kode_grade: primaryGrade,
@@ -512,7 +511,7 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
                 >
                   {activeFarmers.map((p) => (
                     <option key={p.petani_id} value={p.petani_id}>
-                      {p.nama_petani} ({p.nomor_kartu || p.petani_id})
+                      {p.nama_petani} ({p.petani_id})
                     </option>
                   ))}
                 </select>

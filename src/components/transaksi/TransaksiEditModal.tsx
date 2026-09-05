@@ -148,8 +148,7 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
   const currentPetani = petaniList.find((p) => p.petani_id === selectedPetaniId) || {
     petani_id: transaksi.petani_id,
     nama_petani: transaksi.nama_petani,
-    nomor_kartu: transaksi.nomor_kartu,
-    no_hp: transaksi.no_hp,
+        no_hp: transaksi.no_hp,
     desa_kecamatan: transaksi.desa_kecamatan,
   };
 
@@ -344,8 +343,7 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
       ...transaksi,
       petani_id: currentPetani.petani_id,
       nama_petani: currentPetani.nama_petani,
-      nomor_kartu: currentPetani.nomor_kartu || currentPetani.petani_id,
-      no_hp: currentPetani.no_hp,
+            no_hp: currentPetani.no_hp,
       desa_kecamatan: (currentPetani.alamat || currentPetani.desa_kecamatan || '') as string,
       no_bal: noBalCombinedBaru,
       kode_grade: primaryGradeBaru,
@@ -511,7 +509,7 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
               >
                 {petaniList.map((p) => (
                   <option key={p.petani_id} value={p.petani_id}>
-                    {p.nama_petani} - {p.nomor_kartu || p.petani_id} ({p.desa_kecamatan || p.alamat || 'Pamekasan'})
+                    {p.nama_petani} - {p.petani_id} ({p.desa_kecamatan || p.alamat || 'Pamekasan'})
                   </option>
                 ))}
               </select>

@@ -174,7 +174,7 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
                 }}
                 className="w-full bg-white border border-gray-300 rounded-sm px-2.5 py-1.5 text-xs text-gray-800 focus:outline-none focus:border-[#b81d24]"
               >
-                <option value="petani_id">Petani ID (PTN-YYYY-XXX)</option>
+                <option value="petani_id">ID Petani (PTN-YYYY-XXX)</option>
                 <option value="nama">Nama Petani (A - Z)</option>
                 <option value="tanggal">Tanggal Pendaftaran</option>
                 <option value="setoran">Total Setoran Bal</option>
@@ -356,7 +356,7 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
                   className="py-2.5 px-3 border-r border-gray-200 cursor-pointer hover:bg-gray-100 select-none w-36"
                 >
                   <div className="flex items-center justify-between">
-                    <span>Petani ID</span>
+                    <span>ID Petani</span>
                     {renderSortIcon('petani_id')}
                   </div>
                 </th>
@@ -413,7 +413,7 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
                         {itemNumber}
                       </td>
 
-                      {/* Petani ID */}
+                      {/* ID Petani */}
                       <td className="py-2.5 px-3 border-r border-gray-200 font-mono font-bold text-[#b81d24]">
                         {petani.petani_id}
                       </td>
@@ -530,7 +530,7 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
       <ConfirmModal
         isOpen={Boolean(deletingPetaniTarget)}
         title="Konfirmasi Hapus Data Petani"
-        message={`Apakah Anda yakin ingin menghapus data petani "${deletingPetaniTarget?.nama_petani}" (${deletingPetaniTarget?.nomor_kartu}) dari Master Petani?`}
+        message={`Apakah Anda yakin ingin menghapus data petani "${deletingPetaniTarget?.nama_petani}" (${deletingPetaniTarget?.petani_id}) dari Master Petani?`}
         detail="Perhatian: Tindakan ini akan menghapus data registrasi petani dari sistem master data."
         variant="danger"
         confirmText="Hapus Permanen"

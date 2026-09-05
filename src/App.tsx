@@ -384,7 +384,7 @@ export default function App() {
       showToast(`Data petani "${petaniData.nama_petani}" berhasil diperbarui.`);
     } else {
       updated = [petaniData, ...petaniList];
-      showToast(`Petani baru "${petaniData.nama_petani}" (${petaniData.nomor_kartu}) berhasil didaftarkan!`);
+      showToast(`Petani baru "${petaniData.nama_petani}" (${petaniData.petani_id}) berhasil didaftarkan!`);
     }
 
     setPetaniList(updated);
@@ -416,8 +416,7 @@ export default function App() {
       if (p.petani_id === petaniId) {
         return {
           ...p,
-          nomor_kartu: newCardNumber,
-        };
+                  };
       }
       return p;
     });
@@ -425,7 +424,7 @@ export default function App() {
     setPetaniList(updated);
     savePetaniData(updated);
     setResettingCardPetani(null);
-    showToast(`Nomor kartu petani berhasil diubah menjadi ${newCardNumber}`);
+    showToast(`ID Petani petani berhasil diubah menjadi ${newCardNumber}`);
   };
 
   const handleImportSuccess = (imported: Petani[]) => {
@@ -437,7 +436,7 @@ export default function App() {
 
       const validItems: Petani[] = [];
       const errorDetails: string[] = [];
-      const existingCards = new Set(petaniList.map((p) => (p.nomor_kartu || '').trim().toUpperCase()));
+      const existingCards = new Set(petaniList.map((p) => (p.petani_id || '').trim().toUpperCase()));
 
       imported.forEach((p, idx) => {
         if (!p || typeof p !== 'object') {
@@ -448,14 +447,14 @@ export default function App() {
           errorDetails.push(`Baris #${idx + 1}: Nama petani wajib diisi`);
           return;
         }
-        if (!p.nomor_kartu || typeof p.nomor_kartu !== 'string' || !p.nomor_kartu.trim()) {
-          errorDetails.push(`Baris #${idx + 1} (${p.nama_petani}): Nomor kartu RFID wajib diisi`);
+        if (!p.petani_id || typeof p.petani_id !== 'string' || !p.petani_id.trim()) {
+          errorDetails.push(`Baris #${idx + 1} (${p.nama_petani}): ID Petani wajib diisi`);
           return;
         }
 
-        const cardUpper = p.nomor_kartu.trim().toUpperCase();
+        const cardUpper = p.petani_id.trim().toUpperCase();
         if (existingCards.has(cardUpper)) {
-          errorDetails.push(`Baris #${idx + 1} (${p.nama_petani}): Nomor kartu "${cardUpper}" sudah dipakai petani lain.`);
+          errorDetails.push(`Baris #${idx + 1} (${p.nama_petani}): ID Petani "${cardUpper}" sudah dipakai petani lain.`);
           return;
         }
 
@@ -463,8 +462,7 @@ export default function App() {
         validItems.push({
           ...p,
           petani_id: p.petani_id || `PTN-${Date.now()}-${idx}`,
-          nomor_kartu: cardUpper,
-          nama_petani: p.nama_petani.trim(),
+                    nama_petani: p.nama_petani.trim(),
           desa_kecamatan: p.desa_kecamatan || 'Ds. Wringin Anom',
           status_aktif: p.status_aktif !== false,
           tanggal_daftar: p.tanggal_daftar || new Date().toISOString().split('T')[0],
@@ -497,7 +495,7 @@ export default function App() {
     setPetaniList(updated);
     savePetaniData(updated);
     setViewingPetani(null);
-    showToast(`Data petani "${target?.nama_petani || petaniId}" (${target?.nomor_kartu || ''}) berhasil dihapus.`);
+    showToast(`Data petani "${target?.nama_petani || petaniId}" (${target?.petani_id || ''}) berhasil dihapus.`);
   };
 
   // --- PRD 4.2: Harga Handlers ---

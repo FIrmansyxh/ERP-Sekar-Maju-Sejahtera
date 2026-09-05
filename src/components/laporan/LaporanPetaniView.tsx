@@ -181,7 +181,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
         const matchName = (p.nama_petani || '').toLowerCase().includes(q);
         const matchId = (p.petani_id || '').toLowerCase().includes(q);
         const matchHp = (p.no_hp || '').includes(q);
-        const matchCard = (p.nomor_kartu || '').toLowerCase().includes(q);
+        const matchCard = (p.petani_id || '').toLowerCase().includes(q);
         const matchAlamat = (p.alamat || '').toLowerCase().includes(q);
         const matchDesa = (p.desa_kecamatan || '').toLowerCase().includes(q);
         if (!matchName && !matchId && !matchHp && !matchCard && !matchAlamat && !matchDesa) {
@@ -306,8 +306,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
       'No',
       'ID Petani',
       'Nama Petani',
-      'No Kartu',
-      'No HP',
+            'No HP',
       'Desa / Wilayah',
       'Status Petani',
       'Total Transaksi',
@@ -322,7 +321,6 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
       idx + 1,
       p.petani_id,
       p.nama_petani,
-      p.nomor_kartu || p.petani_id,
       p.no_hp || '-',
       p.desa_kecamatan || p.alamat || '-',
       p.status_aktif ? 'Aktif' : 'Non-Aktif',
@@ -533,7 +531,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
             <div className="relative">
               <input
                 type="text"
-                placeholder="Nama / ID / No HP / Kartu..."
+                placeholder="Nama / ID / No HP..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-7 pr-2 py-1.5 text-xs bg-gray-50 border border-gray-300 rounded-xs focus:bg-white focus:outline-none focus:border-[#b81d24]"
@@ -745,9 +743,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
                           <div className="font-bold text-gray-900">{p.nama_petani}</div>
                           <div className="text-[10px] font-mono text-gray-500 flex items-center space-x-1 mt-0.5">
                             <span>ID: {p.petani_id}</span>
-                            {p.nomor_kartu && (
-                              <span className="text-gray-400">• Kartu: {p.nomor_kartu}</span>
-                            )}
+                            
                           </div>
                         </td>
                         <td className="py-2.5 px-3 border-r border-gray-200">

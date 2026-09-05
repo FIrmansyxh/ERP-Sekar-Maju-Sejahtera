@@ -54,7 +54,7 @@ export const PetaniDeactivateModal: React.FC<PetaniDeactivateModalProps> = ({
                 {isDeactivating ? 'Konfirmasi Nonaktifkan Petani' : 'Konfirmasi Aktifkan Kembali Petani'}
               </h2>
               <p className="text-[11px] text-gray-500 font-medium">
-                ID: {petani.petani_id} • No. Kartu: {petani.nomor_kartu}
+                ID: {petani.petani_id} • ID Petani: {petani.petani_id}
               </p>
             </div>
           </div>
@@ -92,9 +92,9 @@ export const PetaniDeactivateModal: React.FC<PetaniDeactivateModalProps> = ({
               <strong className="text-gray-900">{petani.nama_petani}</strong>
             </div>
             <div className="flex items-center justify-between text-xs">
-              <span className="text-gray-500 font-semibold">No. Kartu Fisik:</span>
+              <span className="text-gray-500 font-semibold">ID Petani:</span>
               <span className="font-mono font-bold text-gray-800 bg-white px-1.5 py-0.5 border border-gray-300">
-                {petani.nomor_kartu}
+                {petani.petani_id}
               </span>
             </div>
             <div className="flex items-center justify-between text-xs">
@@ -126,7 +126,7 @@ export const PetaniDeactivateModal: React.FC<PetaniDeactivateModalProps> = ({
             </div>
           ) : (
             <p className="text-xs text-gray-600 leading-relaxed">
-              Petani akan diaktifkan kembali dan nomor kartu dapat langsung digunakan untuk proses loket timbangan penerimaan.
+              Petani akan diaktifkan kembali dan ID Petani dapat langsung digunakan untuk proses loket timbangan penerimaan.
             </p>
           )}
 

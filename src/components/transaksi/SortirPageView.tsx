@@ -345,8 +345,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
       no_kupon: kuponFinal,
       petani_id: currentPetani.petani_id,
       nama_petani: currentPetani.nama_petani,
-      nomor_kartu: currentPetani.nomor_kartu || currentPetani.petani_id,
-      no_hp: currentPetani.no_hp || '-',
+            no_hp: currentPetani.no_hp || '-',
       desa_kecamatan: currentPetani.alamat || currentPetani.desa_kecamatan || 'Pamekasan',
       no_bal: balItems.map((i) => i.no_bal).join(', '),
       kode_grade: gradeSummary,
@@ -486,7 +485,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
               >
                 {activeFarmers.map((p) => (
                   <option key={p.petani_id} value={p.petani_id}>
-                    {p.nama_petani} ({p.nomor_kartu || p.petani_id})
+                    {p.nama_petani} ({p.petani_id})
                   </option>
                 ))}
               </select>

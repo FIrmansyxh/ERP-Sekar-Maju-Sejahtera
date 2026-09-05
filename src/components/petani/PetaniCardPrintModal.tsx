@@ -156,7 +156,7 @@ export const PetaniCardPrintModal: React.FC<PetaniCardPrintModalProps> = ({
                 {/* Farmer Info Body */}
                 <div className="my-2 space-y-1.5">
                   <div className="flex items-baseline justify-between">
-                    <span className="text-[10px] text-gray-500 font-medium">PETANI ID:</span>
+                    <span className="text-[10px] text-gray-500 font-medium">ID PETANI:</span>
                     <span className="text-sm font-mono font-black text-gray-950 tracking-wider">
                       {petani.petani_id}
                     </span>

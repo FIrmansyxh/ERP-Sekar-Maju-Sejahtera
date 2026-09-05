@@ -325,8 +325,8 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
                   <span className="font-bold text-gray-900">{transaksi.nama_petani}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500 font-medium">ID Petani / Kartu:</span>
-                  <span className="font-mono font-bold text-gray-900">{transaksi.nomor_kartu || transaksi.petani_id}</span>
+                  <span className="text-gray-500 font-medium">ID Petani:</span>
+                  <span className="font-mono font-bold text-gray-900">{transaksi.petani_id}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500 font-medium">Alamat / Asal:</span>

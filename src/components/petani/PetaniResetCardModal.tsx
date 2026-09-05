@@ -45,7 +45,7 @@ export const PetaniResetCardModal: React.FC<PetaniResetCardModalProps> = ({
 
   const handleGenerateNew = () => {
     let card = generateSuggestedCardNumber('WRA');
-    while (existingPetaniList.some((p) => p.nomor_kartu.toUpperCase() === card.toUpperCase())) {
+    while (existingPetaniList.some((p) => p.petani_id.toUpperCase() === card.toUpperCase())) {
       card = generateSuggestedCardNumber('WRA');
     }
     setNewCardNumber(card);
@@ -57,21 +57,21 @@ export const PetaniResetCardModal: React.FC<PetaniResetCardModalProps> = ({
     const cleanCard = newCardNumber.trim().toUpperCase();
 
     if (!cleanCard) {
-      setError('Nomor kartu baru wajib diisi.');
+      setError('ID Petani baru wajib diisi.');
       return;
     }
 
-    if (cleanCard === petani.nomor_kartu.toUpperCase()) {
-      setError('Nomor kartu baru tidak boleh sama dengan nomor kartu lama.');
+    if (cleanCard === petani.petani_id.toUpperCase()) {
+      setError('ID Petani baru tidak boleh sama dengan ID Petani lama.');
       return;
     }
 
     const duplicate = existingPetaniList.find(
-      (p) => p.nomor_kartu.toUpperCase() === cleanCard
+      (p) => p.petani_id.toUpperCase() === cleanCard
     );
 
     if (duplicate) {
-      setError(`Nomor kartu "${cleanCard}" sudah digunakan oleh petani ${duplicate.nama_petani}. Pilih nomor lain.`);
+      setError(`ID Petani "${cleanCard}" sudah digunakan oleh petani ${duplicate.nama_petani}. Pilih nomor lain.`);
       return;
     }
 
@@ -88,7 +88,7 @@ export const PetaniResetCardModal: React.FC<PetaniResetCardModalProps> = ({
             <RotateCcw className="w-4 h-4 text-[#b81d24]" />
             <div>
               <h2 className="text-sm font-bold text-gray-900 tracking-tight">
-                Penerbitan Ulang Nomor Kartu Fisik
+                Penerbitan Ulang ID Petani
               </h2>
               <p className="text-[11px] text-gray-500">Ganti kartu hilang/rusak dengan audit log</p>
             </div>
@@ -124,9 +124,9 @@ export const PetaniResetCardModal: React.FC<PetaniResetCardModalProps> = ({
               <strong className="text-gray-900">{petani.nama_petani} ({petani.petani_id})</strong>
             </div>
             <div className="flex items-center justify-between text-xs">
-              <span className="text-gray-500 font-semibold">Nomor Kartu Saat Ini:</span>
+              <span className="text-gray-500 font-semibold">ID Petani Saat Ini:</span>
               <span className="font-mono font-bold text-red-600 bg-white px-1.5 py-0.5 border border-gray-300">
-                {petani.nomor_kartu}
+                {petani.petani_id}
               </span>
             </div>
           </div>
@@ -134,7 +134,7 @@ export const PetaniResetCardModal: React.FC<PetaniResetCardModalProps> = ({
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label className="font-semibold text-gray-700">
-                Nomor Kartu Baru <span className="text-red-500">*</span>
+                ID Petani Baru <span className="text-red-500">*</span>
               </label>
               <button
                 type="button"
@@ -174,7 +174,7 @@ export const PetaniResetCardModal: React.FC<PetaniResetCardModalProps> = ({
           </div>
 
           <div className="bg-[#f8f9fa] border border-gray-300 p-2.5 text-[11px] text-gray-600">
-            <strong>Catatan Keamanan:</strong> Nomor kartu lama akan secara otomatis dinonaktifkan dari sistem loket dan dicatat dalam log riwayat mutasi kartu.
+            <strong>Catatan Keamanan:</strong> ID Petani lama akan secara otomatis dinonaktifkan dari sistem loket dan dicatat dalam log riwayat mutasi kartu.
           </div>
 
         </form>
