@@ -1,1 +1,0 @@
-sed -i "s/export type StatusBatchSample = 'draft' | 'dikirim' | 'sedang_evaluasi' | 'selesai_deal' | 'deal_sebagian' | 'ditolak_semua';/export type StatusBatchSample = 'sample' | 'diproses' | 'dikirim' | 'dibatalkan' | 'selesai';/g" src/types/index.ts
