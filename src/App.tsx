@@ -35,6 +35,7 @@ import {
   loadUserData, 
   saveUserData,
   loadLogAktivitasData,
+  recordLogAktivitas,
   loadCurrentUser, 
   saveCurrentUser,
   resetToDemoData
@@ -54,6 +55,9 @@ import { HomeDashboardView } from './components/home/HomeDashboardView';
 
 //  Dashboard Laporan & Analytic ERP
 import { DashboardAnalyticView } from './components/laporan/DashboardAnalyticView';
+
+// Laporan Detail Bal Tembakau
+import { LaporanBalView } from './components/laporan/LaporanBalView';
 
 // Laporan Mutu Grade & Analisis Stok Inventaris
 import { LaporanHargaJualView } from './components/laporan/LaporanHargaJualView';
@@ -197,6 +201,62 @@ export default function App() {
   const [transaksiList, setTransaksiList] = useState<TransaksiPembelian[]>(() => loadTransaksiData());
   const [sampleList, setSampleList] = useState<PengirimanSample[]>(() => loadSampleData());
   const [pengirimanList, setPengirimanList] = useState<PengirimanBarang[]>(() => loadPengirimanData());
+
+  useEffect(() => {
+    // TEMPORARY MIGRATION: Update "Petani 20xx" to real names
+    let needsUpdate = false;
+    const names = [
+      "Abdullah", "Ahmad", "Amin", "Amir", "Anwar", "Arifin", "Azis", "Bahrudin", "Basri", "Budi Santoso",
+      "Dhofir", "Djumadi", "Fadil", "Faruq", "Fauzi", "Ghozali", "Habib", "Hadi", "Hafid", "Hasan Basri",
+      "Hasyim", "Husen", "Ibrahim", "Imam", "Ismail", "Jalal", "Jamil", "Junaidi", "Kamarudin", "Kholil",
+      "Lutfi", "Mahfud", "Mansyur", "Muis", "Mujib", "Mukhlis", "Munir", "Mustofa", "Nawawi", "Nurkholis",
+      "Qosim", "Rahman", "Rasyid", "Rizal", "Romli", "Roni", "Saifuddin", "Samsudin", "Sanusi", "Sholeh",
+      "Subaidi", "Sudar", "Supriyadi", "Syaiful", "Syukur", "Taufiq", "Tohir", "Wahab", "Wahid", "Wawan",
+      "Yasin", "Yunus", "Yusuf", "Zainal", "Zaini"
+    ];
+    
+    const newPetani = petaniList.map((p, i) => {
+      if (p.nama_petani && p.nama_petani.startsWith('Petani 20')) {
+        needsUpdate = true;
+        return { ...p, nama_petani: names[i % names.length] };
+      }
+      return p;
+    });
+
+    if (needsUpdate) {
+      savePetaniData(newPetani);
+      setPetaniList(newPetani);
+
+      let txUpdated = false;
+      const newTx = transaksiList.map(tx => {
+        if (tx.nama_petani && tx.nama_petani.startsWith('Petani 20')) {
+          txUpdated = true;
+          const p = newPetani.find(p => p.petani_id === tx.petani_id);
+          return { ...tx, nama_petani: p ? p.nama_petani : tx.nama_petani };
+        }
+        return tx;
+      });
+      if (txUpdated) {
+        saveTransaksiData(newTx);
+        setTransaksiList(newTx);
+      }
+
+      let brgUpdated = false;
+      const newBrg = barangList.map(b => {
+        if (b.nama_petani && b.nama_petani.startsWith('Petani 20')) {
+          brgUpdated = true;
+          const p = newPetani.find(p => p.petani_id === b.petani_id);
+          return { ...b, nama_petani: p ? p.nama_petani : b.nama_petani };
+        }
+        return b;
+      });
+      if (brgUpdated) {
+        saveBarangData(newBrg);
+        setBarangList(newBrg);
+      }
+    }
+  }, [petaniList, transaksiList, barangList]);
+
   const [gudangList, setGudangList] = useState<Gudang[]>(() => loadGudangData());
   
   const [hargaJualList, setHargaJualList] = useState<MasterHargaJual[]>(() => loadHargaJualData());
@@ -255,6 +315,7 @@ export default function App() {
   };
 
   const handleSidebarClick = (moduleId: string) => {
+    setSelectedBatchIdForShipment('');
     setTargetKuponNo(undefined);
     setTargetTxId(undefined);
     setTargetBalNo(undefined);
@@ -526,7 +587,8 @@ export default function App() {
 
   // ---  Transaksi Pembelian Handlers ---
   const handleSaveTransaksi = (newTx: TransaksiPembelian, generatedBarang: Barang | Barang[]) => {
-    const exists = transaksiList.some((t) => t.transaksi_id === newTx.transaksi_id);
+    const oldTx = transaksiList.find((t) => t.transaksi_id === newTx.transaksi_id);
+    const exists = Boolean(oldTx);
     const updatedTxList = exists
       ? transaksiList.map((t) => (t.transaksi_id === newTx.transaksi_id ? newTx : t))
       : [newTx, ...transaksiList];
@@ -543,6 +605,9 @@ export default function App() {
     }
 
     const balCount = newTx.total_bal || (newTx.items ? newTx.items.length : 1);
+    const itemBalList = (newTx.items && newTx.items.length > 0)
+      ? newTx.items.map((i) => i.no_bal || i.barcode).join(', ')
+      : newTx.no_bal || '-';
 
     const updatedPetaniList = petaniList.map((p) => {
       if (p.petani_id === newTx.petani_id) {
@@ -564,10 +629,77 @@ export default function App() {
     setPetaniList(updatedPetaniList);
     savePetaniData(updatedPetaniList);
 
+    // Integrasi Audit Trail Activity Log
+    if (exists && oldTx) {
+      // Cek apakah baru saja dicatat dengan detail kaya oleh TransaksiEditModal
+      const isRecentlyLoggedByModal = Boolean(
+        newTx.terakhir_diubah_pada &&
+        Math.abs(new Date().getTime() - new Date(newTx.terakhir_diubah_pada).getTime()) < 5000
+      );
+
+      if (!isRecentlyLoggedByModal) {
+        const diffSummary: string[] = [];
+        if (oldTx.nama_petani !== newTx.nama_petani) {
+          diffSummary.push(`Petani: "${oldTx.nama_petani}" -> "${newTx.nama_petani}"`);
+        }
+        if (oldTx.kode_grade !== newTx.kode_grade) {
+          diffSummary.push(`Grade: ${oldTx.kode_grade} -> ${newTx.kode_grade}`);
+        }
+        if (oldTx.berat_kg !== newTx.berat_kg) {
+          diffSummary.push(`Netto: ${oldTx.berat_kg} Kg -> ${newTx.berat_kg} Kg (Δ ${(newTx.berat_kg - oldTx.berat_kg).toFixed(1)} Kg)`);
+        }
+        if ((oldTx.harga_final || oldTx.total_harga_beli) !== (newTx.harga_final || newTx.total_harga_beli)) {
+          diffSummary.push(`Nilai: Rp ${(oldTx.harga_final || oldTx.total_harga_beli).toLocaleString('id-ID')} -> Rp ${(newTx.harga_final || newTx.total_harga_beli).toLocaleString('id-ID')}`);
+        }
+        if (oldTx.status_pembayaran !== newTx.status_pembayaran) {
+          diffSummary.push(`Status bayar: ${oldTx.status_pembayaran} -> ${newTx.status_pembayaran}`);
+        }
+
+        recordLogAktivitas({
+          user_id: currentUser?.user_id || 'USR-001',
+          username: currentUser?.username || 'admin',
+          nama_lengkap: currentUser?.nama_lengkap || 'Administrator',
+          role: currentUser?.role || currentRole,
+          modul: 'transaksi',
+          aksi: 'Edit & Pembaruan Transaksi',
+          tipe_aksi: 'edit',
+          transaksi_id: newTx.transaksi_id,
+          no_kupon: newTx.no_kupon,
+          no_bal: itemBalList,
+          nama_petani: newTx.nama_petani,
+          berat_kg: newTx.berat_kg,
+          alasan: newTx.alasan_perubahan_terakhir || 'Pembaruan data transaksi via sistem',
+          status: 'sukses',
+          rincian: `EDIT TRANSAKSI: Data Kupon ${newTx.no_kupon} (${newTx.transaksi_id}) milik Petani "${newTx.nama_petani}" diperbarui oleh ${currentUser?.nama_lengkap || 'Admin'} (@${currentUser?.username || 'admin'}). Pembuat Asli: ${oldTx.operator_nama || oldTx.petugas_sortir || 'Operator Awal'}. Perubahan: ${diffSummary.length > 0 ? diffSummary.join('; ') : 'Pembaruan data bal / alur proses'}.${newTx.alasan_perubahan_terakhir ? ` Alasan: "${newTx.alasan_perubahan_terakhir}".` : ''}`,
+          data_sebelum: JSON.stringify(oldTx, null, 2),
+          data_sesudah: JSON.stringify(newTx, null, 2),
+        });
+      }
+    } else {
+      recordLogAktivitas({
+        user_id: currentUser?.user_id || 'USR-001',
+        username: currentUser?.username || 'admin',
+        nama_lengkap: currentUser?.nama_lengkap || 'Administrator',
+        role: currentUser?.role || currentRole,
+        modul: 'transaksi',
+        aksi: 'Input Transaksi Baru',
+        tipe_aksi: 'tambah',
+        transaksi_id: newTx.transaksi_id,
+        no_kupon: newTx.no_kupon,
+        no_bal: itemBalList,
+        nama_petani: newTx.nama_petani,
+        berat_kg: newTx.berat_kg,
+        status: 'sukses',
+        rincian: `TRANSAKSI BARU: Pembuatan transaksi Kupon ${newTx.no_kupon} (${newTx.transaksi_id}) untuk Petani ${newTx.nama_petani}. Total ${balCount} Bal (${itemBalList}), Berat ${newTx.berat_kg} Kg, Nilai Rp ${(newTx.harga_final || newTx.total_harga_beli).toLocaleString('id-ID')}. Dicatat oleh ${currentUser?.nama_lengkap || 'Admin'}.`,
+        data_sesudah: JSON.stringify(newTx, null, 2),
+      });
+    }
+
+    setLogAktivitasList(loadLogAktivitasData());
     showToast(`Transaksi ${newTx.transaksi_id} (${balCount} Bal, ${newTx.berat_kg} Kg) berhasil disimpan!`);
   };
 
-  const handleDeleteTransaksi = (transaksiId: string) => {
+  const handleDeleteTransaksi = (transaksiId: string, alasanHapus?: string) => {
     const txToDelete = transaksiList.find((t) => t.transaksi_id === transaksiId);
     if (!txToDelete) return;
 
@@ -609,6 +741,33 @@ export default function App() {
     setPetaniList(updatedPetaniList);
     savePetaniData(updatedPetaniList);
 
+    // 4. Record Detailed Audit Log for Deletion
+    const itemBalList = (txToDelete.items && txToDelete.items.length > 0)
+      ? txToDelete.items.map((i) => i.no_bal || i.barcode).join(', ')
+      : txToDelete.no_bal || '-';
+    const totalNilai = txToDelete.harga_final || txToDelete.total_harga_beli || 0;
+
+    recordLogAktivitas({
+      user_id: currentUser?.user_id || 'USR-001',
+      username: currentUser?.username || 'admin',
+      nama_lengkap: currentUser?.nama_lengkap || 'Administrator',
+      role: currentUser?.role || currentRole,
+      modul: 'transaksi',
+      aksi: 'Hapus Transaksi Pembelian',
+      tipe_aksi: 'hapus',
+      transaksi_id: txToDelete.transaksi_id,
+      no_kupon: txToDelete.no_kupon,
+      no_bal: itemBalList,
+      nama_petani: txToDelete.nama_petani,
+      berat_kg: txToDelete.berat_kg,
+      alasan: alasanHapus || 'Dihapus oleh user via menu transaksi',
+      status: 'peringatan',
+      rincian: `HAPUS TRANSAKSI: Transaksi Kupon ${txToDelete.no_kupon} (${txToDelete.transaksi_id}) milik Petani "${txToDelete.nama_petani}" DIHAPUS PERMANEN oleh ${currentUser?.nama_lengkap || 'Admin'} (@${currentUser?.username || 'admin'}, role: ${currentUser?.role || currentRole}). Pembuat Asli: ${txToDelete.operator_nama || txToDelete.petugas_sortir || 'Operator Awal'}. Data terhapus: ${balCount} Bal (${itemBalList}), Netto ${txToDelete.berat_kg} Kg, Nilai Rp ${totalNilai.toLocaleString('id-ID')}. Alasan: "${alasanHapus || 'Penghapusan administratif oleh user'}". Bal gudang terkait transaksi ini telah ditarik.`,
+      data_sebelum: JSON.stringify(txToDelete, null, 2),
+      data_sesudah: 'DATA TRANSAKSI DAN INVENTARIS BAL TERKAIT DIHAPUS PERMANEN DARI SISTEM',
+    });
+
+    setLogAktivitasList(loadLogAktivitasData());
     showToast(`Transaksi ${transaksiId} dan data bal terkait berhasil dihapus.`);
   };
 
@@ -768,6 +927,8 @@ export default function App() {
         return { title: 'Dasbor Menu Utama', breadcrumb: 'PR. SEKAR MAJU SEJAHTERA / Beranda' };
       case 'modul-6-dashboard-analytic':
         return { title: 'Dashboard Laporan & Analytic ERP', breadcrumb: 'Beranda / Dashboard Analytic' };
+      case 'modul-6-laporan-bal':
+        return { title: 'Laporan Detail Bal Tembakau', breadcrumb: 'Beranda / Laporan Detail Bal' };
       case 'modul-6-laporan-grade':
         return { title: 'Laporan Stok & Mutu Grade', breadcrumb: 'Beranda / Laporan Mutu Grade' };
       case 'modul-6-laporan-pembelian':
@@ -927,6 +1088,21 @@ export default function App() {
               />
             )}
 
+            {/* Laporan Detail Bal Tembakau */}
+            {activeModuleId === 'modul-6-laporan-bal' && (
+              <LaporanBalView
+                barangList={barangList}
+                gudangList={gudangList}
+                petaniList={petaniList}
+                transaksiList={transaksiList}
+                hargaList={hargaList}
+                userRole={currentRole}
+                onNavigateToBarang={() => handleSelectModule('modul-2-barang')}
+                onNavigateToTransaksi={() => handleSelectModule('modul-0-transaksi')}
+                onNavigateToGudang={() => handleSelectModule('modul-7-gudang')}
+              />
+            )}
+
             {/* Laporan Harga Jual / Laporan Harga */}
             {activeModuleId === 'modul-6-laporan-harga-jual' && (
               <LaporanGradeView
@@ -940,6 +1116,7 @@ export default function App() {
                 gudangList={gudangList}
                 userRole={currentRole}
                 onNavigateToHarga={() => handleSelectModule('modul-3-harga')}
+                onNavigateToHargaJual={() => handleSelectModule('modul-3-harga-jual')}
                 onNavigateToBarang={() => handleSelectModule('modul-2-barang')}
               />
             )}
@@ -955,6 +1132,7 @@ export default function App() {
                 gudangList={gudangList}
                 userRole={currentRole}
                 onNavigateToHarga={() => handleSelectModule('modul-3-harga')}
+                onNavigateToHargaJual={() => handleSelectModule('modul-3-harga-jual')}
                 onNavigateToBarang={() => handleSelectModule('modul-2-barang')}
               />
             )}
@@ -1125,6 +1303,7 @@ export default function App() {
                 barangList={barangList}
                 gudangList={gudangList}
                 userRole={currentRole}
+                currentUser={currentUser}
                 initialKuponNo={targetKuponNo}
                 initialTxId={targetTxId}
                 onSaveTransaksi={handleSaveTransaksi}

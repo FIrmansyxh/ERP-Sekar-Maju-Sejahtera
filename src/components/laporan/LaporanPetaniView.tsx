@@ -23,7 +23,11 @@ import {
   ArrowUpRight,
   ShieldCheck,
   Scale,
-  ExternalLink
+  ExternalLink,
+  Eye,
+  EyeOff,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 import { Petani, TransaksiPembelian, Barang, UserRole } from '../../types';
 import { downloadCsvFile, downloadElementAsPdf } from '../../utils/printDownload';
@@ -69,9 +73,10 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
   });
 
   // UI & Detail Drawer State
+  const [showSummaryCards, setShowSummaryCards] = useState<boolean>(true);
   const [selectedPetaniForDetail, setSelectedPetaniForDetail] = useState<Petani | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(15);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   const printDocumentRef = useRef<HTMLDivElement>(null);
@@ -365,11 +370,29 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
               Laporan Petani & Rekapitulasi Setoran Tembakau
             </h1>
           </div>
-          
         </div>
 
-        {/* Action Controls: Unduh CSV & Unduh PDF */}
+        {/* Action Controls: Unduh CSV, Unduh PDF, & Toggle Ringkasan */}
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowSummaryCards(!showSummaryCards)}
+            className="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-xs transition flex items-center space-x-1.5 cursor-pointer"
+            title={showSummaryCards ? 'Sembunyikan Ringkasan' : 'Tampilkan Ringkasan'}
+          >
+            {showSummaryCards ? (
+              <>
+                <EyeOff className="w-3.5 h-3.5 text-gray-600" />
+                <span>Sembunyikan Ringkasan</span>
+              </>
+            ) : (
+              <>
+                <Eye className="w-3.5 h-3.5 text-gray-600" />
+                <span>Tampilkan Ringkasan</span>
+              </>
+            )}
+          </button>
+
           {onNavigateToPetani && (
             <button
               onClick={onNavigateToPetani}
@@ -402,91 +425,93 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
       </div>
 
       {/* 2. Executive KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-        <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
-          <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-            Total Petani
-          </div>
-          <div className="mt-1">
-            <div className="text-xl font-bold font-mono text-gray-900">
-              {overallKPIs.totalPetani.toLocaleString('id-ID')}
+      {showSummaryCards && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+          <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
+            <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+              Total Petani
             </div>
-            <div className="text-[10px] text-emerald-600 font-semibold mt-0.5">
-              {overallKPIs.totalPetaniAktif} Petani Aktif
+            <div className="mt-1">
+              <div className="text-xl font-bold font-mono text-gray-900">
+                {overallKPIs.totalPetani.toLocaleString('id-ID')}
+              </div>
+              <div className="text-[10px] text-emerald-600 font-semibold mt-0.5">
+                {overallKPIs.totalPetaniAktif} Petani Aktif
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
-          <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-            Petani Menyetor
-          </div>
-          <div className="mt-1">
-            <div className="text-xl font-bold font-mono text-gray-900">
-              {overallKPIs.petaniPenyetorAktif.toLocaleString('id-ID')}
+          <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
+            <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+              Petani Menyetor
             </div>
-            <div className="text-[10px] text-gray-500 font-medium mt-0.5">
-              Tercatat Transaksi
+            <div className="mt-1">
+              <div className="text-xl font-bold font-mono text-gray-900">
+                {overallKPIs.petaniPenyetorAktif.toLocaleString('id-ID')}
+              </div>
+              <div className="text-[10px] text-gray-500 font-medium mt-0.5">
+                Tercatat Transaksi
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
-          <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-            Total Setoran Bal
-          </div>
-          <div className="mt-1">
-            <div className="text-xl font-bold font-mono text-gray-900">
-              {overallKPIs.totalBalSetor.toLocaleString('id-ID')}
+          <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
+            <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+              Total Setoran Bal
             </div>
-            <div className="text-[10px] text-gray-500 font-medium mt-0.5">
-              Bal Tembakau Masuk
+            <div className="mt-1">
+              <div className="text-xl font-bold font-mono text-gray-900">
+                {overallKPIs.totalBalSetor.toLocaleString('id-ID')}
+              </div>
+              <div className="text-[10px] text-gray-500 font-medium mt-0.5">
+                Bal Tembakau Masuk
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
-          <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-            Total Tonase (Kg)
-          </div>
-          <div className="mt-1">
-            <div className="text-xl font-bold font-mono text-blue-900">
-              {overallKPIs.totalKgSetor.toLocaleString('id-ID')}
+          <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
+            <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+              Total Tonase (Kg)
             </div>
-            <div className="text-[10px] text-gray-500 font-medium mt-0.5">
-              {(overallKPIs.totalKgSetor / 1000).toFixed(2)} Ton Netto
+            <div className="mt-1">
+              <div className="text-xl font-bold font-mono text-blue-900">
+                {overallKPIs.totalKgSetor.toLocaleString('id-ID')}
+              </div>
+              <div className="text-[10px] text-gray-500 font-medium mt-0.5">
+                {(overallKPIs.totalKgSetor / 1000).toFixed(2)} Ton Netto
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between col-span-2 sm:col-span-1 lg:col-span-1">
-          <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-            Total Nilai Beli
-          </div>
-          <div className="mt-1">
-            <div className="text-sm sm:text-base font-bold font-mono text-[#b81d24] truncate">
-              Rp {overallKPIs.totalNilaiRp.toLocaleString('id-ID')}
+          <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between col-span-2 sm:col-span-1 lg:col-span-1">
+            <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+              Total Nilai Beli
             </div>
-            <div className="text-[10px] text-gray-500 font-medium mt-0.5">
-              Dana Dicairkan
+            <div className="mt-1">
+              <div className="text-sm sm:text-base font-bold font-mono text-[#b81d24] truncate">
+                Rp {overallKPIs.totalNilaiRp.toLocaleString('id-ID')}
+              </div>
+              <div className="text-[10px] text-gray-500 font-medium mt-0.5">
+                Dana Dicairkan
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between col-span-2 sm:col-span-1 lg:col-span-1">
-          <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-            Rata-rata Penyetoran
-          </div>
-          <div className="mt-1">
-            <div className="text-base font-bold font-mono text-gray-900">
-              {overallKPIs.rataRataKgPerPetani.toLocaleString('id-ID')} kg
+          <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between col-span-2 sm:col-span-1 lg:col-span-1">
+            <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+              Rata-rata Penyetoran
             </div>
-            <div className="text-[10px] text-gray-500 font-medium mt-0.5">
-              ~ {overallKPIs.rataRataBalPerPetani} Bal / Petani
+            <div className="mt-1">
+              <div className="text-base font-bold font-mono text-gray-900">
+                {overallKPIs.rataRataKgPerPetani.toLocaleString('id-ID')} kg
+              </div>
+              <div className="text-[10px] text-gray-500 font-medium mt-0.5">
+                ~ {overallKPIs.rataRataBalPerPetani} Bal / Petani
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* 3. Comprehensive Filter Panel */}
       <form onSubmit={handleApplyFilter} className="bg-white p-3.5 border border-gray-200 shadow-2xs space-y-3">
@@ -651,6 +676,35 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
       {/* 5. Tab Content 1: Rekapitulasi Data Petani Table */}
       {activeTab === 'rekap' && (
         <div className="bg-white border border-gray-200 shadow-2xs overflow-hidden">
+          {/* Table Header Bar with Tampil Dropdown */}
+          <div className="p-3 bg-gray-50 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="text-xs text-gray-700 font-semibold">
+              Daftar Petani ({filteredPetaniData.length} Data)
+            </div>
+            <div className="flex items-center space-x-1.5 text-xs text-gray-600">
+              <span>Tampil</span>
+              <select
+                value={itemsPerPage === filteredPetaniData.length ? 'all' : itemsPerPage}
+                onChange={(e) => {
+                  if (e.target.value === 'all') {
+                    setItemsPerPage(filteredPetaniData.length || 10000);
+                  } else {
+                    setItemsPerPage(Number(e.target.value));
+                  }
+                  setCurrentPage(1);
+                }}
+                className="border border-gray-300 rounded-xs px-2 py-1 bg-white text-xs text-gray-800 font-semibold focus:outline-none focus:border-[#b81d24]"
+              >
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value="all">All</option>
+              </select>
+            </div>
+          </div>
+
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
@@ -681,7 +735,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
                     return (
                       <tr 
                         key={p.petani_id}
-                        className="hover:bg-gray-50/80 transition-colors cursor-pointer"
+                        className={`${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'} hover:bg-gray-100/80 transition-colors cursor-pointer`}
                         onClick={() => setSelectedPetaniForDetail(p)}
                       >
                         <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono text-gray-500">
@@ -754,8 +808,32 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
           {/* Pagination Controls */}
           {filteredPetaniData.length > 0 && (
             <div className="p-3 bg-[#f8f9fa] border-t border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div className="text-xs text-gray-600">
-                Menampilkan <strong>{(currentPage - 1) * itemsPerPage + 1}</strong> - <strong>{Math.min(currentPage * itemsPerPage, filteredPetaniData.length)}</strong> dari <strong>{filteredPetaniData.length}</strong> petani
+              <div className="flex items-center space-x-3">
+                <div className="text-xs text-gray-600">
+                  Menampilkan <strong>{(currentPage - 1) * itemsPerPage + 1}</strong> - <strong>{Math.min(currentPage * itemsPerPage, filteredPetaniData.length)}</strong> dari <strong>{filteredPetaniData.length}</strong> petani
+                </div>
+                <div className="flex items-center space-x-1.5 text-xs text-gray-600">
+                  <span>Tampil</span>
+                  <select
+                    value={itemsPerPage === filteredPetaniData.length ? 'all' : itemsPerPage}
+                    onChange={(e) => {
+                      if (e.target.value === 'all') {
+                        setItemsPerPage(filteredPetaniData.length || 10000);
+                      } else {
+                        setItemsPerPage(Number(e.target.value));
+                      }
+                      setCurrentPage(1);
+                    }}
+                    className="border border-gray-300 rounded-xs px-2 py-1 bg-white text-xs text-gray-800 font-semibold focus:outline-none focus:border-[#b81d24]"
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                    <option value="all">All</option>
+                  </select>
+                </div>
               </div>
               <Pagination
                 currentPage={currentPage}
@@ -807,7 +885,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
                       const totalAllKg = overallKPIs.totalKgSetor || 1;
                       const persen = ((p.totalKg / totalAllKg) * 100).toFixed(1);
                       return (
-                        <tr key={p.petani_id} className="hover:bg-gray-50/80">
+                        <tr key={p.petani_id} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'} hover:bg-gray-100/80 transition-colors`}>
                           <td className="py-2.5 px-3 text-center">
                             <span
                               className={`inline-flex items-center justify-center w-6 h-6 text-xs font-bold ${
@@ -900,7 +978,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
                   const totalKg = overallKPIs.totalKgSetor || 1;
                   const persen = ((w.totalKg / totalKg) * 100).toFixed(1);
                   return (
-                    <tr key={w.desa} className="hover:bg-gray-50">
+                    <tr key={w.desa} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'} hover:bg-gray-100/80 transition-colors`}>
                       <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono text-gray-500">
                         {idx + 1}
                       </td>
@@ -1023,7 +1101,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
                         const subtotal = t.total_harga_beli || (t.berat_kg * t.harga_per_kg);
                         const jmlBayar = t.harga_final || (subtotal - (t.total_potongan || 7000));
                         return (
-                          <tr key={t.transaksi_id} className="hover:bg-gray-50">
+                          <tr key={t.transaksi_id} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'} hover:bg-gray-100/80 transition-colors`}>
                             <td className="py-2 px-2.5 text-center font-mono text-gray-500">{idx + 1}</td>
                             <td className="py-2 px-2.5 font-mono font-semibold text-gray-800">{t.transaksi_id}</td>
                             <td className="py-2 px-2.5 text-gray-600 font-mono text-xs">{formatDateHariBulanTahun(t.tanggal_transaksi)}</td>

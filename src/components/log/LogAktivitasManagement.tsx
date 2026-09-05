@@ -138,30 +138,30 @@ export const LogAktivitasManagement: React.FC<LogAktivitasManagementProps> = ({
     switch (modul) {
       case 'timbangan':
         return (
-          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-xs text-[11px] font-medium bg-amber-50 text-amber-800 border border-amber-200">
-            <Scale className="w-3 h-3 text-amber-600" />
+          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-xs text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
+            <Scale className="w-3 h-3 text-slate-500" />
             <span>Timbangan</span>
           </span>
         );
       case 'sortir':
         return (
-          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-xs text-[11px] font-medium bg-blue-50 text-blue-800 border border-blue-200">
-            <Layers className="w-3 h-3 text-blue-600" />
+          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-xs text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
+            <Layers className="w-3 h-3 text-slate-500" />
             <span>Meja Sortir</span>
           </span>
         );
       case 'kasir':
         return (
-          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-xs text-[11px] font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">
-            <span className="inline-flex items-center justify-center font-bold leading-none w-3 h-3 text-emerald-600">Rp</span>
+          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-xs text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
+            <span className="inline-flex items-center justify-center font-bold leading-none w-3 h-3 text-slate-500 text-[10px]">Rp</span>
             <span>Kasir</span>
           </span>
         );
       case 'pengiriman':
       case 'sample':
         return (
-          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-xs text-[11px] font-medium bg-purple-50 text-purple-800 border border-purple-200">
-            <Truck className="w-3 h-3 text-purple-600" />
+          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-xs text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
+            <Truck className="w-3 h-3 text-slate-500" />
             <span>Pengiriman/QC</span>
           </span>
         );
@@ -238,26 +238,26 @@ export const LogAktivitasManagement: React.FC<LogAktivitasManagementProps> = ({
       </div>
 
       {/* Case Study Explanatory Box (User Requirement Fulfillment) */}
-      <div className="bg-blue-50/70 border border-blue-200/80 rounded-sm p-4 text-xs text-blue-900 leading-relaxed shadow-2xs">
+      <div className="bg-slate-50 border border-slate-200 rounded-sm p-4 text-xs text-slate-700 leading-relaxed shadow-2xs">
         <div className="flex items-start space-x-2.5">
-          <Info className="w-4 h-4 text-blue-700 shrink-0 mt-0.5" />
+          <Info className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
           <div className="space-y-1">
-            <span className="font-bold text-blue-950">Prinsip Akuntabilitas Jejak Akun:</span>
-            <p className="text-blue-800">
+            <span className="font-bold text-slate-900">Prinsip Akuntabilitas Jejak Akun:</span>
+            <p className="text-slate-600">
               Setiap operator membawa jejak akunnya secara otomatis tanpa perlu mengisi kolom nama petugas secara manual.
               Sebagai contoh: Apabila <strong>Sortir A (Ahmad Fauzi)</strong> memproses tembakau kemarin dan hari ini berhalangan sakit sehingga digantikan oleh <strong>Sortir B (Bayu Pratama)</strong>, seluruh penentuan mutu hari ini akan tercatat rapi atas nama Sortir B. Jika di kemudian hari timbul ketidaksesuaian grade pada bal tersebut, Super Admin dapat menelusuri secara pasti siapa petugas yang bertanggung jawab di hari pengerjaan.
             </p>
-            <div className="pt-1.5 flex items-center space-x-2">
+            <div className="pt-1.5 flex items-center space-x-2 flex-wrap gap-y-1.5">
               <button
                 onClick={() => {
                   setSelectedModul('sortir');
                   setSelectedUser('all');
                   setSearchTerm('');
                 }}
-                className="px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-900 rounded-xs text-[11px] font-semibold flex items-center space-x-1 transition cursor-pointer"
+                className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-xs text-[11px] font-medium flex items-center space-x-1 transition cursor-pointer shadow-2xs"
               >
                 <span>Filter Khusus: Meja Sortir (Sortir A vs Sortir B)</span>
-                <ArrowRight className="w-3 h-3" />
+                <ArrowRight className="w-3 h-3 text-slate-400" />
               </button>
 
               <button
@@ -266,10 +266,10 @@ export const LogAktivitasManagement: React.FC<LogAktivitasManagementProps> = ({
                   setSelectedUser('all');
                   setSearchTerm('');
                 }}
-                className="px-2 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-xs text-[11px] font-semibold flex items-center space-x-1 transition cursor-pointer"
+                className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-xs text-[11px] font-medium flex items-center space-x-1 transition cursor-pointer shadow-2xs"
               >
                 <span>Filter Khusus: Timbangan Bal</span>
-                <ArrowRight className="w-3 h-3" />
+                <ArrowRight className="w-3 h-3 text-slate-400" />
               </button>
             </div>
           </div>
@@ -290,28 +290,28 @@ export const LogAktivitasManagement: React.FC<LogAktivitasManagementProps> = ({
         <div className="bg-white border border-slate-200 rounded-sm p-3.5 shadow-2xs">
           <div className="flex items-center justify-between text-slate-500 text-xs mb-1">
             <span>Aktivitas Sortir</span>
-            <Layers className="w-4 h-4 text-blue-600" />
+            <Layers className="w-4 h-4 text-slate-500" />
           </div>
-          <div className="text-xl font-bold text-blue-900 font-mono">{stats.sortirCount}</div>
-          <div className="text-[10px] text-blue-600 mt-0.5">Penetapan Grade & Kupon</div>
+          <div className="text-xl font-bold text-slate-900 font-mono">{stats.sortirCount}</div>
+          <div className="text-[10px] text-slate-400 mt-0.5">Penetapan Grade & Kupon</div>
         </div>
 
         <div className="bg-white border border-slate-200 rounded-sm p-3.5 shadow-2xs">
           <div className="flex items-center justify-between text-slate-500 text-xs mb-1">
             <span>Aktivitas Timbang</span>
-            <Scale className="w-4 h-4 text-amber-600" />
+            <Scale className="w-4 h-4 text-slate-500" />
           </div>
-          <div className="text-xl font-bold text-amber-900 font-mono">{stats.timbanganCount}</div>
-          <div className="text-[10px] text-amber-600 mt-0.5">Bruto, Tara & Netto</div>
+          <div className="text-xl font-bold text-slate-900 font-mono">{stats.timbanganCount}</div>
+          <div className="text-[10px] text-slate-400 mt-0.5">Bruto, Tara & Netto</div>
         </div>
 
         <div className="bg-white border border-slate-200 rounded-sm p-3.5 shadow-2xs">
           <div className="flex items-center justify-between text-slate-500 text-xs mb-1">
             <span>Operator Bertugas</span>
-            <UserIcon className="w-4 h-4 text-emerald-600" />
+            <UserIcon className="w-4 h-4 text-slate-500" />
           </div>
-          <div className="text-xl font-bold text-emerald-900 font-mono">{stats.uniqueUsers} Akun</div>
-          <div className="text-[10px] text-emerald-600 mt-0.5">Tervalidasi identitas</div>
+          <div className="text-xl font-bold text-slate-900 font-mono">{stats.uniqueUsers} Akun</div>
+          <div className="text-[10px] text-slate-400 mt-0.5">Tervalidasi identitas</div>
         </div>
       </div>
 
@@ -439,7 +439,7 @@ export const LogAktivitasManagement: React.FC<LogAktivitasManagementProps> = ({
                   return (
                     <tr 
                       key={log.log_id} 
-                      className={`hover:bg-slate-50/80 transition ${isSortirB ? 'bg-amber-50/20' : ''}`}
+                      className="hover:bg-slate-50 transition"
                     >
                       {/* Timestamp */}
                       <td className="py-2.5 px-3 whitespace-nowrap">
@@ -455,7 +455,7 @@ export const LogAktivitasManagement: React.FC<LogAktivitasManagementProps> = ({
                         <div className="font-semibold text-slate-900 flex items-center space-x-1.5">
                           <span>{log.nama_lengkap}</span>
                           {isSortirB && (
-                            <span className="text-[9px] px-1 bg-amber-100 text-amber-800 rounded-xs font-semibold">
+                            <span className="text-[9px] px-1.5 py-0.5 bg-slate-100 text-slate-600 border border-slate-200 rounded-xs font-semibold">
                               Pengganti
                             </span>
                           )}
@@ -467,19 +467,46 @@ export const LogAktivitasManagement: React.FC<LogAktivitasManagementProps> = ({
 
                       {/* Modul & Aksi */}
                       <td className="py-2.5 px-3">
-                        <div className="mb-1">{getModulBadge(log.modul)}</div>
+                        <div className="mb-1 flex items-center space-x-1.5 flex-wrap gap-y-1">
+                          {getModulBadge(log.modul)}
+                          {log.tipe_aksi === 'edit' && (
+                            <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded-xs bg-slate-100 text-slate-700 border border-slate-300">
+                              Koreksi / Edit
+                            </span>
+                          )}
+                          {log.tipe_aksi === 'hapus' && (
+                            <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded-xs bg-red-50 text-red-700 border border-red-200">
+                              Hapus
+                            </span>
+                          )}
+                          {log.tipe_aksi === 'tambah' && (
+                            <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded-xs bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              Tambah Baru
+                            </span>
+                          )}
+                          {log.tipe_aksi === 'bayar' && (
+                            <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded-xs bg-slate-100 text-slate-700 border border-slate-300">
+                              Pembayaran
+                            </span>
+                          )}
+                        </div>
                         <div className="font-medium text-slate-800 text-[11px]">{log.aksi}</div>
+                        {log.alasan && (
+                          <div className="text-[10px] text-slate-500 font-medium mt-0.5 italic">
+                            Alasan: "{log.alasan}"
+                          </div>
+                        )}
                       </td>
 
                       {/* Objek */}
                       <td className="py-2.5 px-3 whitespace-nowrap">
                         {log.no_bal ? (
-                          <div className="font-mono font-bold text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded-xs inline-block text-[11px]">
+                          <div className="font-mono font-bold text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded-xs inline-block text-[11px] border border-slate-200">
                             {log.no_bal}
                           </div>
                         ) : null}
                         {log.kode_grade && (
-                          <span className="ml-1.5 font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1 rounded-xs text-[10px]">
+                          <span className="ml-1.5 font-bold text-slate-800 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded-xs text-[10px]">
                             Grade {log.kode_grade}
                           </span>
                         )}
@@ -604,12 +631,53 @@ export const LogAktivitasManagement: React.FC<LogAktivitasManagementProps> = ({
                 </div>
               </div>
 
+              {/* Alasan Pengubahan / Penghapusan */}
+              {selectedDetailLog.alasan && (
+                <div className="border border-slate-200 bg-slate-50 p-3 rounded-xs space-y-1">
+                  <div className="flex items-center space-x-1.5 text-slate-700 font-bold text-xs uppercase tracking-wide">
+                    <AlertTriangle className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Alasan Pengubahan / Penghapusan Data:</span>
+                  </div>
+                  <p className="text-xs font-semibold text-slate-900 font-mono">
+                    "{selectedDetailLog.alasan}"
+                  </p>
+                </div>
+              )}
+
               <div className="border-t border-slate-100 pt-3 space-y-1">
                 <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wide">Rincian Narasi Perubahan</h4>
                 <div className="p-3 bg-slate-100 rounded-xs font-mono text-[11px] text-slate-800 leading-relaxed border border-slate-200">
                   {selectedDetailLog.rincian}
                 </div>
               </div>
+
+              {/* Data Diff Snapshot (Audit Trail) */}
+              {(selectedDetailLog.data_sebelum || selectedDetailLog.data_sesudah) && (
+                <div className="border-t border-slate-100 pt-3 space-y-2">
+                  <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wide flex items-center justify-between">
+                    <span>Snapshot Data (Audit Trail Diff)</span>
+                    <span className="text-[10px] text-slate-500 font-normal">Perbandingan sebelum & sesudah</span>
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {selectedDetailLog.data_sebelum && (
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-bold text-slate-600 uppercase">Data Sebelum</span>
+                        <pre className="p-2 bg-slate-50 border border-slate-200 rounded-xs text-[10px] font-mono text-slate-700 max-h-40 overflow-y-auto whitespace-pre-wrap">
+                          {selectedDetailLog.data_sebelum}
+                        </pre>
+                      </div>
+                    )}
+                    {selectedDetailLog.data_sesudah && (
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-bold text-slate-700 uppercase">Data Sesudah</span>
+                        <pre className="p-2 bg-slate-100 border border-slate-200 rounded-xs text-[10px] font-mono text-slate-900 max-h-40 overflow-y-auto whitespace-pre-wrap">
+                          {selectedDetailLog.data_sesudah}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
             </div>
 

@@ -32,8 +32,7 @@ export const PengirimanFormModal: React.FC<PengirimanFormModalProps> = ({
   sampleList,
   onSavePengiriman,
 }) => {
-  const [tujuanPabrik, setTujuanPabrik] = useState('PT Djarum Kudus - Plant Pengolahan');
-  const [customTujuan, setCustomTujuan] = useState('');
+  const [tujuanPabrik, setTujuanPabrik] = useState('');
   const [selectedBarangIds, setSelectedBarangIds] = useState<string[]>([]);
   const [sampleRefId, setSampleRefId] = useState<string>('');
   const [driverNama, setDriverNama] = useState('Sugiono (Trans Logistik Madura)');
@@ -53,6 +52,15 @@ export const PengirimanFormModal: React.FC<PengirimanFormModalProps> = ({
   } | null>(null);
 
   const scannerInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setTujuanPabrik('');
+      setSelectedBarangIds([]);
+      setScanFeedback(null);
+      setIsConfirmOpen(false);
+    }
+  }, [isOpen]);
 
   // Active items in warehouse available for dispatch
   const availableBal = barangList.filter(
@@ -224,12 +232,26 @@ export const PengirimanFormModal: React.FC<PengirimanFormModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (selectedBarangIds.length === 0) return;
+    if (!tujuanPabrik.trim()) {
+      setScanFeedback({
+        type: 'error',
+        message: 'Tujuan gudang / pabrik buyer tujuan wajib diisi!',
+      });
+      return;
+    }
+    if (selectedBarangIds.length === 0) {
+      setScanFeedback({
+        type: 'error',
+        message: 'Pilih minimal 1 bal tembakau untuk dimuat!',
+      });
+      return;
+    }
     setIsConfirmOpen(true);
   };
 
   const handleConfirmSave = () => {
-    const finalTujuan = tujuanPabrik === 'lainnya' ? (customTujuan.trim() || 'Pabrik Rokok Rekanan') : tujuanPabrik;
+    const finalTujuan = tujuanPabrik.trim();
+    if (!finalTujuan) return;
     const now = new Date();
     const nextSeq = Math.floor(1 + Math.random() * 999);
     const noSurat = generateNoSuratJalanSimple(nextSeq);
@@ -288,7 +310,8 @@ export const PengirimanFormModal: React.FC<PengirimanFormModalProps> = ({
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={selectedBarangIds.length === 0}
+                disabled={selectedBarangIds.length === 0 || !tujuanPabrik.trim()}
+                title={!tujuanPabrik.trim() ? 'Tujuan gudang / pabrik buyer wajib diisi' : selectedBarangIds.length === 0 ? 'Pilih minimal 1 bal' : 'Terbitkan Surat Jalan'}
                 className="px-4 py-1.5 text-xs font-bold text-white bg-gray-900 hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed rounded-none transition flex items-center space-x-1.5 cursor-pointer shadow-xs whitespace-nowrap"
               >
                 <Save className="w-3.5 h-3.5" />
@@ -308,33 +331,23 @@ export const PengirimanFormModal: React.FC<PengirimanFormModalProps> = ({
                   Informasi Pengiriman
                 </span>
 
-                {/* Destination Factory */}
+                {/* Destination Factory / Warehouse */}
                 <div>
                   <label className="block text-gray-700 font-bold mb-1">
-                    Pabrik Buyer Tujuan <span className="text-red-500">*</span>
+                    Tujuan Gudang / Pabrik Buyer <span className="text-red-500">*</span>
                   </label>
-                  <select
+                  <input
+                    type="text"
                     value={tujuanPabrik}
                     onChange={(e) => setTujuanPabrik(e.target.value)}
+                    placeholder="Ketik nama gudang / pabrik buyer tujuan..."
+                    required
                     className="w-full bg-white border border-[#ced4da] rounded-none px-2.5 py-1.5 text-xs text-gray-900 focus:outline-none focus:border-gray-800"
-                  >
-                    <option value="PT Djarum Kudus - Plant Pengolahan">PT Djarum Kudus - Plant Pengolahan</option>
-                    <option value="PT Gudang Garam Tbk - Unit Kediri">PT Gudang Garam Tbk - Unit Kediri</option>
-                    <option value="PT HM Sampoerna Tbk - Plant Karawang">PT HM Sampoerna Tbk - Plant Karawang</option>
-                    <option value="PT Bentoel Prima - Malang Warehouse">PT Bentoel Prima - Malang Warehouse</option>
-                    <option value="PT Wismilak Inti Makmur - Surabaya">PT Wismilak Inti Makmur - Surabaya</option>
-                    <option value="lainnya">-- Input Manual Pabrik Lainnya --</option>
-                  </select>
-
-                  {tujuanPabrik === 'lainnya' && (
-                    <input
-                      type="text"
-                      value={customTujuan}
-                      onChange={(e) => setCustomTujuan(e.target.value)}
-                      placeholder="Masukkan nama pabrik & alamat tujuan..."
-                      className="w-full mt-1.5 bg-white border border-[#ced4da] rounded-none px-2.5 py-1.5 text-xs text-gray-900 focus:outline-none focus:border-gray-800"
-                      required
-                    />
+                  />
+                  {!tujuanPabrik.trim() && (
+                    <p className="text-[10px] text-red-600 font-medium mt-0.5">
+                      * Wajib diisi, ketik tujuan gudang secara manual (bukan dropdown).
+                    </p>
                   )}
                 </div>
 
@@ -503,7 +516,7 @@ export const PengirimanFormModal: React.FC<PengirimanFormModalProps> = ({
                               >
                                 <div className="space-y-0.5">
                                   <div className="flex items-center space-x-2">
-                                    <span className="font-mono font-bold text-gray-900 bg-amber-50 px-1.5 py-0.2 border border-amber-200">
+                                    <span className="font-mono font-bold text-gray-900 bg-slate-100 px-1.5 py-0.2 border border-slate-300">
                                       #{bal.no_bal || bal.barang_id}
                                     </span>
                                     <span className="px-1 py-0.2 bg-gray-100 text-gray-700 text-[10px] font-semibold border border-gray-200">
@@ -524,7 +537,7 @@ export const PengirimanFormModal: React.FC<PengirimanFormModalProps> = ({
                                     </span>
                                   ) : (
                                     <span className="text-[10px] text-gray-700 font-semibold bg-gray-100 px-1.5 py-0.5 border border-gray-200">
-                                      + Pilih
+                                      Pilih
                                     </span>
                                   )}
                                 </div>

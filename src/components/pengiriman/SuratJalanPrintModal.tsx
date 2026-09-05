@@ -390,8 +390,8 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
               </div>
 
               {pengiriman.catatan && (
-                <div className="p-2.5 bg-amber-50/70 border border-amber-300 text-xs text-amber-950">
-                  <strong className="block font-bold text-[10px] uppercase text-amber-900">Catatan Khusus Pengiriman:</strong>
+                <div className="p-2.5 bg-slate-50 border border-slate-300 text-xs text-slate-800">
+                  <strong className="block font-bold text-[10px] uppercase text-slate-900">Catatan Khusus Pengiriman:</strong>
                   <p className="mt-0.5">{pengiriman.catatan}</p>
                 </div>
               )}

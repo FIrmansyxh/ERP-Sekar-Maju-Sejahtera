@@ -15,11 +15,16 @@ import {
   FileSpreadsheet,
   ArrowUp,
   ArrowDown,
-  Scale
+  Scale,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
+
 import { TransaksiPembelian, Petani } from '../../types';
 import { downloadCsvFile, downloadElementAsPdf } from '../../utils/printDownload';
 import { formatDateHariBulanTahun } from '../../utils/formatters';
+
+export type SortField = 'default' | 'tanggal' | 'kupon' | 'petani' | 'no_bal' | 'kode_beli' | 'bruto' | 'netto' | 'potongan' | 'total_harga' | 'jumlah_bayar';
 
 interface LaporanPembelianBarangViewProps {
   transaksiList: TransaksiPembelian[];
@@ -27,6 +32,96 @@ interface LaporanPembelianBarangViewProps {
   userRole?: string;
   onNavigateToTransaksi?: () => void;
 }
+
+interface ResizableHeaderProps {
+  colKey: string;
+  title: string;
+  colWidths: Record<string, number>;
+  setColWidths: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  minWidth?: number;
+  align?: 'left' | 'center' | 'right';
+  className?: string;
+  sortField?: SortField;
+  currentSortField?: SortField;
+  sortDirection?: 'asc' | 'desc' | 'none';
+  onSort?: (field: SortField) => void;
+}
+
+const ResizableHeader: React.FC<ResizableHeaderProps> = ({ 
+  colKey, 
+  title, 
+  colWidths, 
+  setColWidths, 
+  minWidth = 50,
+  align = 'left',
+  className = '',
+  sortField,
+  currentSortField,
+  sortDirection = 'none',
+  onSort
+}) => {
+  const width = colWidths[colKey];
+  
+  const alignClass = align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left';
+  const baseClass = `py-2.5 px-2.5 border-r border-gray-200 relative group select-none whitespace-nowrap ${onSort && sortField ? 'cursor-pointer hover:bg-gray-200/80 transition' : ''}`;
+  
+  return (
+    <th 
+      className={`${baseClass} ${alignClass} ${className}`}
+      style={{ width, minWidth: width, maxWidth: width }}
+      onClick={() => {
+        if (onSort && sortField) {
+          onSort(sortField);
+        }
+      }}
+      title={onSort && sortField ? `Klik untuk mengurutkan berdasarkan ${title}` : ''}
+    >
+      <div className={`flex items-center ${align === 'center' ? 'justify-center' : align === 'right' ? 'justify-end' : 'justify-start'} space-x-1`}>
+        <span className="truncate">{title}</span>
+        {sortField && currentSortField === sortField && sortDirection !== 'none' && (
+          sortDirection === 'asc' ? (
+            <span className="inline-flex items-center text-[#b81d24] bg-red-50 p-0.5 rounded-xs border border-red-200 ml-1 flex-shrink-0" title="Urutan Terendah / Naik / A-Z">
+              <ArrowUp className="w-3.5 h-3.5 text-[#b81d24]" />
+            </span>
+          ) : (
+            <span className="inline-flex items-center text-[#b81d24] bg-red-50 p-0.5 rounded-xs border border-red-200 ml-1 flex-shrink-0" title="Urutan Tertinggi / Turun / Z-A">
+              <ArrowDown className="w-3.5 h-3.5 text-[#b81d24]" />
+            </span>
+          )
+        )}
+      </div>
+      <div
+        className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-[#b81d24] active:bg-[#b81d24] z-10"
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const startX = e.pageX;
+          const startWidth = width;
+
+          const onMouseMove = (moveEvent: MouseEvent) => {
+            const newWidth = Math.max(minWidth, startWidth + (moveEvent.pageX - startX));
+            setColWidths(prev => ({ ...prev, [colKey]: newWidth }));
+          };
+
+          const onMouseUp = (upEvent: MouseEvent) => {
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+            const finalWidth = Math.max(minWidth, startWidth + (upEvent.pageX - startX));
+            setColWidths(prev => {
+              const updated = { ...prev, [colKey]: finalWidth };
+              sessionStorage.setItem('pembelianColWidths', JSON.stringify(updated));
+              return updated;
+            });
+          };
+
+          document.addEventListener('mousemove', onMouseMove);
+          document.addEventListener('mouseup', onMouseUp);
+        }}
+      />
+    </th>
+  );
+};
 
 export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProps> = ({
   transaksiList = [],
@@ -42,6 +137,28 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
   const [filterNoBall, setFilterNoBall] = useState('');
   const [filterSupplier, setFilterSupplier] = useState('');
 
+  // Column Widths State (Persisted in session)
+  const [colWidths, setColWidths] = useState<Record<string, number>>(() => {
+    const saved = sessionStorage.getItem('pembelianColWidths');
+    return saved ? JSON.parse(saved) : {
+      no: 50,
+      tanggal: 80,
+      kupon: 100,
+      petani: 140,
+      noBal: 120,
+      kodeBeli: 80,
+      bruto: 80,
+      netto: 80,
+      potongan: 100,
+      totalHarga: 120,
+      jumlahBayar: 120
+    };
+  });
+
+  // Sort State
+  const [sortField, setSortField] = useState<SortField>('default');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | 'none'>('none');
+
   // Applied Filter State (updates on "Cari Data" or reset)
   const [appliedFilters, setAppliedFilters] = useState({
     startDate: '',
@@ -55,6 +172,9 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
   // PDF Generation State (Direct Download)
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const printReportRef = useRef<HTMLDivElement>(null);
+
+  // Sub-Ringkasan Grade Collapse State
+  const [showGradeSummary, setShowGradeSummary] = useState(true);
 
   // Scroll Position State for Scroll-To-Top and Scroll-To-Bottom buttons
   const [showScrollButtons, setShowScrollButtons] = useState(false);
@@ -183,6 +303,39 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
     });
   };
 
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      if (sortDirection === 'asc') setSortDirection('desc');
+      else if (sortDirection === 'desc') {
+        setSortDirection('none');
+        setSortField('default');
+      }
+      else setSortDirection('asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  // Render Sort Header Icon - Single clean arrow when active
+  const renderSortIndicator = (field: SortField) => {
+    if (sortField !== field || sortDirection === 'none') {
+      return null;
+    }
+    if (sortDirection === 'asc') {
+      return (
+        <span className="inline-flex items-center text-[#b81d24] bg-red-50 p-0.5 rounded-xs border border-red-200 ml-1" title="Urutan Terendah / Naik / A-Z">
+          <ArrowUp className="w-3.5 h-3.5 text-[#b81d24]" />
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center text-[#b81d24] bg-red-50 p-0.5 rounded-xs border border-red-200 ml-1" title="Urutan Tertinggi / Turun / Z-A">
+        <ArrowDown className="w-3.5 h-3.5 text-[#b81d24]" />
+      </span>
+    );
+  };
+
   // Filtered Transaksi Data
   const filteredData = useMemo(() => {
     return transaksiList.filter((item) => {
@@ -221,6 +374,93 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
     });
   }, [transaksiList, appliedFilters]);
 
+  // Sorted Transaksi Data
+  const sortedData = useMemo(() => {
+    if (sortField === 'default' || sortDirection === 'none') {
+      return filteredData;
+    }
+
+    return [...filteredData].sort((a, b) => {
+      let comparison = 0;
+      switch (sortField) {
+        case 'tanggal': {
+          const tA = a.tanggal_transaksi ? new Date(a.tanggal_transaksi).getTime() : 0;
+          const tB = b.tanggal_transaksi ? new Date(b.tanggal_transaksi).getTime() : 0;
+          comparison = tA - tB;
+          break;
+        }
+        case 'kupon': {
+          const kA = a.no_kupon || '';
+          const kB = b.no_kupon || '';
+          comparison = kA.localeCompare(kB, undefined, { numeric: true, sensitivity: 'base' });
+          break;
+        }
+        case 'petani': {
+          const pA = a.nama_petani || '';
+          const pB = b.nama_petani || '';
+          comparison = pA.localeCompare(pB, undefined, { numeric: true, sensitivity: 'base' });
+          break;
+        }
+        case 'no_bal': {
+          const bA = a.no_bal || '';
+          const bB = b.no_bal || '';
+          comparison = bA.localeCompare(bB, undefined, { numeric: true, sensitivity: 'base' });
+          break;
+        }
+        case 'kode_beli': {
+          const getUniqueStr = (t: TransaksiPembelian) => {
+            const rowGrades = Array.from(new Set(t.items?.map(i => i.kode_grade?.toUpperCase()) || [])).filter(Boolean);
+            if (rowGrades.length > 0) return rowGrades.sort().join(',');
+            return t.kode_grade || '';
+          };
+          const kA = getUniqueStr(a);
+          const kB = getUniqueStr(b);
+          comparison = kA.localeCompare(kB, undefined, { numeric: true, sensitivity: 'base' });
+          break;
+        }
+        case 'bruto': {
+          const brA = a.jenis_timbang === 'bruto' ? (a.berat_terukur_kg || a.berat_kg + 2) : 0;
+          const brB = b.jenis_timbang === 'bruto' ? (b.berat_terukur_kg || b.berat_kg + 2) : 0;
+          comparison = brA - brB;
+          break;
+        }
+        case 'netto': {
+          const ntA = a.berat_kg || 0;
+          const ntB = b.berat_kg || 0;
+          comparison = ntA - ntB;
+          break;
+        }
+        case 'potongan': {
+          const ptA = a.total_potongan || 7000;
+          const ptB = b.total_potongan || 7000;
+          comparison = ptA - ptB;
+          break;
+        }
+        case 'total_harga': {
+          const ntA = a.berat_kg || 0;
+          const thA = a.total_harga_beli || (ntA * (a.harga_per_kg || 0));
+          const ntB = b.berat_kg || 0;
+          const thB = b.total_harga_beli || (ntB * (b.harga_per_kg || 0));
+          comparison = thA - thB;
+          break;
+        }
+        case 'jumlah_bayar': {
+          const ptA = a.total_potongan || 7000;
+          const thA = a.total_harga_beli || ((a.berat_kg || 0) * (a.harga_per_kg || 0));
+          const jA = a.harga_final || (thA - ptA);
+          
+          const ptB = b.total_potongan || 7000;
+          const thB = b.total_harga_beli || ((b.berat_kg || 0) * (b.harga_per_kg || 0));
+          const jB = b.harga_final || (thB - ptB);
+          
+          comparison = jA - jB;
+          break;
+        }
+      }
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [filteredData, sortField, sortDirection]);
+
   // Totals Calculation 
   const totals = useMemo(() => {
     let totalBal = 0;
@@ -233,7 +473,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
     let totalNilaiHargaBeli = 0;
     let totalJumlahBayar = 0;
 
-    filteredData.forEach((row) => {
+    sortedData.forEach((row) => {
       const balCount = row.total_bal || (row.items && row.items.length > 0 ? row.items.length : 1);
       const bruto = row.jenis_timbang === 'bruto' ? (row.berat_terukur_kg || row.berat_kg + 2) : 0;
       const netto = row.berat_kg || 0;
@@ -265,19 +505,94 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
       totalPotonganAll,
       totalNilaiHargaBeli,
       totalJumlahBayar,
-      count: filteredData.length,
+      count: sortedData.length,
     };
+  }, [sortedData]);
+
+  // Sub-Ringkasan Akumulasi Berat Berdasarkan Pengelompokan Kode Beli (Grade)
+  const gradeSummary = useMemo(() => {
+    const map: Record<
+      string,
+      {
+        grade: string;
+        totalBal: number;
+        totalBruto: number;
+        totalNetto: number;
+        totalPotongan: number;
+        totalNilaiHargaBeli: number;
+        totalJumlahBayar: number;
+      }
+    > = {};
+
+    filteredData.forEach((row) => {
+      if (row.items && Array.isArray(row.items) && row.items.length > 0) {
+        row.items.forEach((it) => {
+          const gr = (it.kode_grade || 'LAINNYA').trim().toUpperCase();
+          if (!map[gr]) {
+            map[gr] = {
+              grade: gr,
+              totalBal: 0,
+              totalBruto: 0,
+              totalNetto: 0,
+              totalPotongan: 0,
+              totalNilaiHargaBeli: 0,
+              totalJumlahBayar: 0,
+            };
+          }
+          const bNetto = it.berat_kg || 0;
+          const bBruto = it.berat_bruto_kg || (bNetto > 0 ? bNetto + (it.potongan_tara_kg || 2) : 0);
+          const pot = it.potongan || ((it.potongan_kuli || 7000) + (it.potongan_tali || 0) + (it.potongan_tikar || 0));
+          const subtotal = it.total_kotor || (bNetto * (it.harga_per_kg || 0));
+          const jmlBayar = it.subtotal_bersih || (subtotal - pot);
+
+          map[gr].totalBal += 1;
+          map[gr].totalBruto += bBruto;
+          map[gr].totalNetto += bNetto;
+          map[gr].totalPotongan += pot;
+          map[gr].totalNilaiHargaBeli += subtotal;
+          map[gr].totalJumlahBayar += jmlBayar;
+        });
+      } else {
+        const gr = (row.kode_grade || 'LAINNYA').trim().toUpperCase();
+        if (!map[gr]) {
+          map[gr] = {
+            grade: gr,
+            totalBal: 0,
+            totalBruto: 0,
+            totalNetto: 0,
+            totalPotongan: 0,
+            totalNilaiHargaBeli: 0,
+            totalJumlahBayar: 0,
+          };
+        }
+        const bNetto = row.berat_kg || 0;
+        const bBruto = row.jenis_timbang === 'bruto' ? (row.berat_terukur_kg || bNetto + 2) : bNetto;
+        const pot = row.total_potongan || ((row.potongan_kuli || 7000) + (row.potongan_tikar || 0));
+        const subtotal = row.total_harga_beli || (bNetto * (row.harga_per_kg || 0));
+        const jmlBayar = row.harga_final || (subtotal - pot);
+        const balCount = row.total_bal || 1;
+
+        map[gr].totalBal += balCount;
+        map[gr].totalBruto += bBruto;
+        map[gr].totalNetto += bNetto;
+        map[gr].totalPotongan += pot;
+        map[gr].totalNilaiHargaBeli += subtotal;
+        map[gr].totalJumlahBayar += jmlBayar;
+      }
+    });
+
+    return Object.values(map).sort((a, b) => a.grade.localeCompare(b.grade));
   }, [filteredData]);
 
   // Export CSV / Excel Compatible
   const handleExportCSV = () => {
-    if (filteredData.length === 0) return;
+    if (sortedData.length === 0) return;
 
     const headers = [
       'No',
       'Tanggal',
       'Kupon',
-      'Supplier',
+      'Petani',
       'No Ball',
       'Kode Beli',
       'Bruto (kg)',
@@ -287,7 +602,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
       'Jumlah Bayar (Rp)',
     ];
 
-    const rows: (string | number)[][] = filteredData.map((row, idx) => {
+    const rows: (string | number)[][] = sortedData.map((row, idx) => {
       const bruto = row.jenis_timbang === 'bruto' ? (row.berat_terukur_kg || row.berat_kg + 2) : 0;
       const subtotalHrgBeli = row.total_harga_beli || (row.berat_kg * row.harga_per_kg);
       const jmlBayar = row.harga_final || (subtotalHrgBeli - (row.total_potongan || 7000));
@@ -309,6 +624,29 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
       ];
     });
 
+    // Add Sub-Ringkasan by Kode Beli
+    rows.push(['', '', '', '', '', '', '', '', '', '', '']);
+    rows.push(['--- SUB-RINGKASAN BERDASARKAN KODE BELI (GRADE) ---', '', '', '', '', '', '', '', '', '', '']);
+    rows.push(['Kode Beli (Grade)', 'Jumlah Bal', 'Total Bruto (kg)', 'Total Netto (kg)', 'Rata-rata (kg/bal)', '% Kontribusi Berat', 'Total Potongan (Rp)', 'Total Harga Beli (Rp)', 'Total Jumlah Bayar (Rp)', '', '']);
+    
+    gradeSummary.forEach((gs) => {
+      const avg = gs.totalBal > 0 ? (gs.totalNetto / gs.totalBal).toFixed(2) : '0';
+      const pct = totals.totalNetto > 0 ? ((gs.totalNetto / totals.totalNetto) * 100).toFixed(1) + '%' : '0%';
+      rows.push([
+        `Grade ${gs.grade}`,
+        gs.totalBal,
+        gs.totalBruto.toFixed(1),
+        gs.totalNetto.toFixed(1),
+        avg,
+        pct,
+        Math.round(gs.totalPotongan),
+        Math.round(gs.totalNilaiHargaBeli),
+        Math.round(gs.totalJumlahBayar),
+        '',
+        '',
+      ]);
+    });
+
     // Add Summary rows
     rows.push(['', '', '', '', '', '', '', '', '', '', '']);
     rows.push(['', '', '', '', '', 'TOTAL POTONGAN OUT (KULI)', '', '', totals.totalPotonganKuli, '', '']);
@@ -319,7 +657,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
       '',
       '',
       '',
-      'TOTAL AKUMULASI',
+      'TOTAL AKUMULASI KESELURUHAN',
       totals.totalBruto,
       totals.totalNetto,
       totals.totalPotonganAll,
@@ -353,7 +691,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
         <div className="flex items-center space-x-2">
           <button
             onClick={handleExportCSV}
-            disabled={filteredData.length === 0}
+            disabled={sortedData.length === 0}
             className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
           >
             <Download className="w-3.5 h-3.5 text-gray-500" />
@@ -362,7 +700,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
           
           <button
             onClick={handleDownloadPdf}
-            disabled={filteredData.length === 0 || isGeneratingPdf}
+            disabled={sortedData.length === 0 || isGeneratingPdf}
             className="px-3.5 py-1.5 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#a0181e] disabled:opacity-50 rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
           >
             <Download className="w-3.5 h-3.5" />
@@ -370,6 +708,242 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
           </button>
         </div>
       </div>
+
+      {/* Ringkasan Keseluruhan (Kumulatif) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="bg-white p-3 border border-gray-200 shadow-xs flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Total Baris & Bal</p>
+            <p className="text-lg font-black text-gray-900 font-mono mt-0.5">
+              {sortedData.length} <span className="text-sm font-medium text-gray-500 font-sans">Baris</span> <span className="text-gray-300 mx-1">|</span> {totals.totalBal} <span className="text-sm font-medium text-gray-500 font-sans">Bal</span>
+            </p>
+          </div>
+          <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center border border-blue-100">
+            <FileText className="w-5 h-5 text-blue-600" />
+          </div>
+        </div>
+        <div className="bg-white p-3 border border-gray-200 shadow-xs flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Total Berat (Netto)</p>
+            <p className="text-lg font-black text-gray-900 font-mono mt-0.5">
+              {totals.totalNetto.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} <span className="text-sm font-medium text-gray-500 font-sans">Kg</span>
+            </p>
+          </div>
+          <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center border border-emerald-100">
+            <Scale className="w-5 h-5 text-emerald-600" />
+          </div>
+        </div>
+        <div className="bg-white p-3 border border-gray-200 shadow-xs flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Total Nilai Pembayaran</p>
+            <p className="text-lg font-black text-[#b81d24] font-mono mt-0.5">
+              Rp {Math.round(totals.totalJumlahBayar).toLocaleString('id-ID')}
+            </p>
+          </div>
+          <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center border border-red-100">
+            <TrendingUp className="w-5 h-5 text-[#b81d24]" />
+          </div>
+        </div>
+      </div>
+
+      {/* SUB-RINGKASAN: Total Berat Berdasarkan Pengelompokan Kode Beli (Grade) (Di atas Filter Data) */}
+      {sortedData.length > 0 && gradeSummary.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-none shadow-xs overflow-hidden">
+          <div className="px-4 py-3 bg-[#f8f9fa] border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center space-x-2">
+              <Scale className="w-4 h-4 text-[#b81d24]" />
+              <h2 className="text-xs font-bold text-gray-900 uppercase tracking-wide">
+                Sub-Ringkasan Akumulasi Berat Berdasarkan Pengelompokan Kode Beli (Grade)
+              </h2>
+              <span className="px-2 py-0.5 text-[10px] font-bold bg-white text-gray-700 border border-gray-300 rounded-xs">
+                {gradeSummary.length} Grade Terdata
+              </span>
+            </div>
+            <div className="flex items-center space-x-3">
+              <p className="text-[11px] text-gray-500 font-medium">
+                Total Tonase: <strong className="text-gray-900 font-mono">{totals.totalNetto.toFixed(1)} kg</strong> ({(totals.totalNetto / 1000).toFixed(2)} Ton)
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowGradeSummary(!showGradeSummary)}
+                className="px-2.5 py-1 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-xs transition flex items-center space-x-1 cursor-pointer shadow-2xs"
+              >
+                {showGradeSummary ? (
+                  <>
+                    <ChevronUp className="w-3.5 h-3.5 text-gray-500" />
+                    <span>Sembunyikan</span>
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
+                    <span>Tampilkan Ringkasan</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Collapsible Content */}
+          {showGradeSummary && (
+            <>
+              {/* Grid Grade Quick Visual Cards */}
+              <div className="p-4 bg-[#fafafa] border-b border-gray-200">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
+                  {gradeSummary.map((gs) => {
+                    const pct = totals.totalNetto > 0 ? ((gs.totalNetto / totals.totalNetto) * 100).toFixed(1) : '0';
+                    const avg = gs.totalBal > 0 ? (gs.totalNetto / gs.totalBal).toFixed(1) : '0';
+                    const gradeBadgeClass =
+                      gs.grade === 'A' ? 'bg-zinc-900 text-white' :
+                      gs.grade === 'B' ? 'bg-zinc-800 text-zinc-100' :
+                      gs.grade === 'C' ? 'bg-blue-100 text-blue-900 font-bold' :
+                      gs.grade === 'D' ? 'bg-purple-100 text-purple-900 font-bold' :
+                      gs.grade === 'E' ? 'bg-gray-200 text-gray-800 font-bold' :
+                      'bg-red-100 text-red-900 font-bold';
+
+                    return (
+                      <div
+                        key={gs.grade}
+                        className="bg-white border border-gray-200 p-2.5 rounded-xs flex flex-col justify-between space-y-1.5 shadow-2xs hover:border-gray-300 transition"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className={`px-2 py-0.5 text-xs font-bold rounded-xs ${gradeBadgeClass}`}>
+                            Grade {gs.grade}
+                          </span>
+                          <span className="text-[10px] font-mono font-bold text-blue-800 bg-blue-50 px-1.5 py-0.5 rounded-xs border border-blue-100">
+                            {pct}%
+                          </span>
+                        </div>
+
+                        <div className="pt-1 space-y-0.5">
+                          <div className="flex items-baseline justify-between">
+                            <span className="text-[11px] text-gray-500 font-medium">Total Berat:</span>
+                            <span className="text-xs font-bold font-mono text-gray-900">
+                              {gs.totalNetto.toFixed(1)} <span className="text-[10px] font-normal text-gray-500">kg</span>
+                            </span>
+                          </div>
+                          <div className="flex items-baseline justify-between text-[10px] text-gray-500">
+                            <span>Populasi:</span>
+                            <span className="font-mono font-semibold text-gray-700">{gs.totalBal} Bal</span>
+                          </div>
+                          <div className="flex items-baseline justify-between text-[10px] text-gray-500">
+                            <span>Rata-rata:</span>
+                            <span className="font-mono text-gray-700">{avg} kg/bal</span>
+                          </div>
+                        </div>
+
+                        <div className="pt-1 border-t border-gray-100 text-[11px] text-right font-mono font-bold text-[#b81d24]">
+                          Rp {Math.round(gs.totalJumlahBayar).toLocaleString('id-ID')}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Sub-Summary Detail Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-[#f1f3f5] border-b border-gray-200 text-gray-700 font-bold">
+                      <th className="py-2 px-3 text-center border-r border-gray-200 w-10">No</th>
+                      <th className="py-2 px-3 border-r border-gray-200">Kode Beli (Grade)</th>
+                      <th className="py-2 px-3 border-r border-gray-200 text-center">Jumlah Bal</th>
+                      <th className="py-2 px-3 border-r border-gray-200 text-right">Total Bruto (kg)</th>
+                      <th className="py-2 px-3 border-r border-gray-200 text-right bg-blue-50/40">Total Netto (kg)</th>
+                      <th className="py-2 px-3 border-r border-gray-200 text-right">Rata-rata (kg/bal)</th>
+                      <th className="py-2 px-3 border-r border-gray-200 text-center">% Kontribusi Berat</th>
+                      <th className="py-2 px-3 border-r border-gray-200 text-right">Total Potongan (Rp)</th>
+                      <th className="py-2 px-3 border-r border-gray-200 text-right">Subtotal Harga (Rp)</th>
+                      <th className="py-2 px-3 text-right bg-red-50/40 text-[#b81d24]">Total Jumlah Bayar (Rp)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {gradeSummary.map((gs, idx) => {
+                      const pct = totals.totalNetto > 0 ? ((gs.totalNetto / totals.totalNetto) * 100).toFixed(1) : '0';
+                      const avg = gs.totalBal > 0 ? (gs.totalNetto / gs.totalBal).toFixed(1) : '0';
+                      const gradeBadgeClass =
+                        gs.grade === 'A' ? 'bg-zinc-900 text-white' :
+                        gs.grade === 'B' ? 'bg-zinc-800 text-zinc-100' :
+                        gs.grade === 'C' ? 'bg-blue-100 text-blue-900 font-bold' :
+                        gs.grade === 'D' ? 'bg-purple-100 text-purple-900 font-bold' :
+                        gs.grade === 'E' ? 'bg-gray-200 text-gray-800 font-bold' :
+                        'bg-red-100 text-red-900 font-bold';
+
+                      return (
+                        <tr key={gs.grade} className="hover:bg-gray-50/80 transition-colors">
+                          <td className="py-2 px-3 text-center border-r border-gray-200 font-mono text-gray-500">
+                            {idx + 1}
+                          </td>
+                          <td className="py-2 px-3 border-r border-gray-200 font-bold">
+                            <span className={`inline-block px-2 py-0.5 text-[11px] rounded-xs ${gradeBadgeClass}`}>
+                              Grade {gs.grade}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 border-r border-gray-200 text-center font-mono font-bold text-gray-800">
+                            {gs.totalBal} Bal
+                          </td>
+                          <td className="py-2 px-3 border-r border-gray-200 text-right font-mono text-gray-700">
+                            {gs.totalBruto > 0 ? gs.totalBruto.toFixed(1) : '-'}
+                          </td>
+                          <td className="py-2 px-3 border-r border-gray-200 text-right font-mono font-black text-blue-950 bg-blue-50/20">
+                            {gs.totalNetto.toFixed(1)} kg
+                          </td>
+                          <td className="py-2 px-3 border-r border-gray-200 text-right font-mono text-gray-700">
+                            {avg} kg
+                          </td>
+                          <td className="py-2 px-3 border-r border-gray-200 text-center font-mono font-bold text-gray-800">
+                            {pct}%
+                          </td>
+                          <td className="py-2 px-3 border-r border-gray-200 text-right font-mono text-amber-800">
+                            Rp {Math.round(gs.totalPotongan).toLocaleString('id-ID')}
+                          </td>
+                          <td className="py-2 px-3 border-r border-gray-200 text-right font-mono text-gray-800 font-semibold">
+                            Rp {Math.round(gs.totalNilaiHargaBeli).toLocaleString('id-ID')}
+                          </td>
+                          <td className="py-2 px-3 text-right font-mono font-bold text-[#b81d24] bg-red-50/20">
+                            Rp {Math.round(gs.totalJumlahBayar).toLocaleString('id-ID')}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-slate-200/90 text-gray-950 font-extrabold text-xs border-t-2 border-gray-300">
+                      <td colSpan={2} className="py-2.5 px-3 text-right uppercase border-r border-gray-300 bg-gray-200/80">
+                        TOTAL KESELURUHAN GRADE:
+                      </td>
+                      <td className="py-2.5 px-3 text-center font-mono border-r border-gray-300 font-bold">
+                        {totals.totalBal} Bal
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono border-r border-gray-300 font-bold">
+                        {totals.totalBruto.toFixed(1)} kg
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono text-blue-950 border-r border-gray-300 font-black bg-blue-50/60">
+                        {totals.totalNetto.toFixed(1)} kg
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono border-r border-gray-300 font-bold">
+                        {totals.totalBal > 0 ? (totals.totalNetto / totals.totalBal).toFixed(1) : '0'} kg
+                      </td>
+                      <td className="py-2.5 px-3 text-center font-mono border-r border-gray-300 font-bold">
+                        100.0%
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono text-amber-950 border-r border-gray-300 font-bold">
+                        Rp {Math.round(totals.totalPotonganAll).toLocaleString('id-ID')}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono border-r border-gray-300 font-bold text-gray-900">
+                        Rp {Math.round(totals.totalNilaiHargaBeli).toLocaleString('id-ID')}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono text-[#b81d24] bg-red-100 font-black">
+                        Rp {Math.round(totals.totalJumlahBayar).toLocaleString('id-ID')}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Filter Form Card  */}
       <div className="bg-white p-4 border border-gray-200 shadow-xs">
@@ -474,21 +1048,21 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
             />
           </div>
 
-          {/* Supplier (Petani) */}
+          {/* Petani */}
           <div>
             <label className="block text-[11px] font-semibold text-gray-600 mb-1">
-              Supplier (Petani)
+              Petani
             </label>
             <input
               type="text"
               list="supplier-list"
               value={filterSupplier}
               onChange={(e) => setFilterSupplier(e.target.value)}
-              placeholder="Ketik/Pilih Supplier..."
+              placeholder="Ketik/Pilih Petani..."
               className="w-full text-xs px-2.5 py-1.5 bg-gray-50 border border-gray-300 focus:bg-white focus:border-[#b81d24] focus:outline-none rounded-none truncate"
             />
             <datalist id="supplier-list">
-              <option value="ALL">Semua Supplier</option>
+              <option value="ALL">Semua Petani</option>
               {uniqueSuppliers.map(sup => (
                 <option key={sup.id} value={sup.id}>
                   {sup.name}
@@ -552,7 +1126,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
               Tabel Rekapitulasi Pembelian Barang
             </span>
             <span className="text-xs text-gray-500">
-              ({filteredData.length} baris data • {totals.totalBal} Bal • {totals.totalNetto.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg Netto)
+              ({sortedData.length} baris data • {totals.totalBal} Bal • {totals.totalNetto.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg Netto)
             </span>
           </div>
           
@@ -565,21 +1139,63 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
           <table className="w-full text-left text-xs border-collapse min-w-[1100px]">
             <thead>
               <tr className="bg-gray-100/90 text-gray-700 font-bold border-b border-gray-200 uppercase text-[10px] tracking-wider">
-                <th className="py-2.5 px-2 text-center w-12 border-r border-gray-200 whitespace-nowrap">No</th>
-                <th className="py-2.5 px-2.5 border-r border-gray-200 whitespace-nowrap">Tanggal</th>
-                <th className="py-2.5 px-2.5 border-r border-gray-200 whitespace-nowrap">Kupon</th>
-                <th className="py-2.5 px-3 border-r border-gray-200 min-w-[160px]">Supplier</th>
-                <th className="py-2.5 px-2.5 text-center border-r border-gray-200 whitespace-nowrap">No Ball</th>
-                <th className="py-2.5 px-2 text-center border-r border-gray-200 whitespace-nowrap">Kode Beli</th>
-                <th className="py-2.5 px-2.5 text-right border-r border-gray-200 whitespace-nowrap">Bruto (kg)</th>
-                <th className="py-2.5 px-2.5 text-right border-r border-gray-200 whitespace-nowrap">Netto (kg)</th>
-                <th className="py-2.5 px-2.5 text-right border-r border-gray-200 whitespace-nowrap">Potongan</th>
-                <th className="py-2.5 px-3 text-right border-r border-gray-200 whitespace-nowrap">Total Harga Beli</th>
-                <th className="py-2.5 px-3 text-right bg-red-50/50 font-extrabold text-[#b81d24] whitespace-nowrap">Jumlah Bayar</th>
+                <th 
+                  className="py-2.5 px-2.5 text-center border-r border-gray-200 cursor-pointer hover:bg-gray-200/80 transition select-none"
+                  style={{ width: colWidths.no, minWidth: 40, maxWidth: colWidths.no }}
+                  onClick={() => {
+                    setSortField('default');
+                    setSortDirection('none');
+                  }}
+                  title="Klik untuk reset urutan default"
+                >
+                  <div className="flex items-center justify-center space-x-1">
+                    <span className="truncate">No</span>
+                    {sortField === 'default' && sortDirection !== 'none' && renderSortIndicator('default')}
+                  </div>
+                  <div
+                    className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-[#b81d24] active:bg-[#b81d24] z-10"
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const startX = e.pageX;
+                      const startWidth = colWidths.no;
+
+                      const onMouseMove = (moveEvent: MouseEvent) => {
+                        const newWidth = Math.max(40, startWidth + (moveEvent.pageX - startX));
+                        setColWidths(prev => ({ ...prev, no: newWidth }));
+                      };
+
+                      const onMouseUp = (upEvent: MouseEvent) => {
+                        document.removeEventListener('mousemove', onMouseMove);
+                        document.removeEventListener('mouseup', onMouseUp);
+                        const finalWidth = Math.max(40, startWidth + (upEvent.pageX - startX));
+                        setColWidths(prev => {
+                          const updated = { ...prev, no: finalWidth };
+                          sessionStorage.setItem('pembelianColWidths', JSON.stringify(updated));
+                          return updated;
+                        });
+                      };
+
+                      document.addEventListener('mousemove', onMouseMove);
+                      document.addEventListener('mouseup', onMouseUp);
+                    }}
+                  />
+                </th>
+                <ResizableHeader colKey="tanggal" title="Tanggal" colWidths={colWidths} setColWidths={setColWidths} minWidth={70} sortField="tanggal" currentSortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                <ResizableHeader colKey="kupon" title="Kupon" colWidths={colWidths} setColWidths={setColWidths} minWidth={70} sortField="kupon" currentSortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                <ResizableHeader colKey="petani" title="Petani" colWidths={colWidths} setColWidths={setColWidths} minWidth={80} sortField="petani" currentSortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                <ResizableHeader colKey="noBal" title="No Ball" colWidths={colWidths} setColWidths={setColWidths} align="center" minWidth={60} sortField="no_bal" currentSortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                <ResizableHeader colKey="kodeBeli" title="Kode Beli" colWidths={colWidths} setColWidths={setColWidths} align="center" minWidth={60} sortField="kode_beli" currentSortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                <ResizableHeader colKey="bruto" title="Bruto (kg)" colWidths={colWidths} setColWidths={setColWidths} align="right" minWidth={60} sortField="bruto" currentSortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                <ResizableHeader colKey="netto" title="Netto (kg)" colWidths={colWidths} setColWidths={setColWidths} align="right" minWidth={60} sortField="netto" currentSortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                <ResizableHeader colKey="potongan" title="Potongan" colWidths={colWidths} setColWidths={setColWidths} align="right" minWidth={70} sortField="potongan" currentSortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                <ResizableHeader colKey="totalHarga" title="Total Harga Beli" colWidths={colWidths} setColWidths={setColWidths} align="right" minWidth={80} sortField="total_harga" currentSortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                <ResizableHeader colKey="jumlahBayar" title="Jumlah Bayar" colWidths={colWidths} setColWidths={setColWidths} align="right" minWidth={90} className="bg-red-50/50 font-extrabold text-[#b81d24]" sortField="jumlah_bayar" currentSortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filteredData.length === 0 ? (
+              {sortedData.length === 0 ? (
                 <tr>
                   <td colSpan={11} className="py-10 text-center text-gray-500">
                     <FileText className="w-8 h-8 mx-auto text-gray-300 mb-2" />
@@ -588,7 +1204,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
                   </td>
                 </tr>
               ) : (
-                filteredData.map((row, idx) => {
+                sortedData.map((row, idx) => {
                   const bruto = row.jenis_timbang === 'bruto' ? (row.berat_terukur_kg || row.berat_kg + 2) : 0;
                   const netto = row.berat_kg || 0;
                   const hrgBeli = row.harga_per_kg || 0;
@@ -600,38 +1216,45 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
                   return (
                     <tr 
                       key={row.transaksi_id || idx}
-                      className="hover:bg-amber-50/40 transition-colors"
+                      className={`transition-colors hover:bg-amber-50/60 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'}`}
                     >
                       {/* 1. No */}
-                      <td className="py-2 px-2 text-center text-gray-500 font-mono text-[11px] border-r border-gray-100 whitespace-nowrap">
-                        {idx + 1}
+                      <td className="py-2 px-2 text-center text-gray-500 font-mono text-[11px] border-r border-gray-100 truncate" style={{ maxWidth: colWidths.no }}>
+                        <div className="truncate">{idx + 1}</div>
                       </td>
 
                       {/* 2. Tanggal (YYYY-MM-DD) */}
-                      <td className="py-2 px-2.5 text-gray-700 font-mono text-[11px] whitespace-nowrap border-r border-gray-100">
-                        {tglDisplay}
+                      <td className="py-2 px-2.5 text-gray-700 font-mono text-[11px] border-r border-gray-100 truncate" style={{ maxWidth: colWidths.tanggal }}>
+                        <div className="truncate">{tglDisplay}</div>
                       </td>
 
                       {/* 3. Kupon (Full 1 row, never truncated) */}
-                      <td className="py-2 px-2.5 font-mono text-gray-900 font-bold border-r border-gray-100 whitespace-nowrap">
-                        <span className="bg-gray-100 px-2 py-0.5 rounded text-[11px] whitespace-nowrap font-mono font-bold text-[#b81d24]">
-                          {row.no_kupon || '-'}
-                        </span>
+                      <td className="py-2 px-2.5 font-mono text-gray-900 font-bold border-r border-gray-100 truncate" style={{ maxWidth: colWidths.kupon }}>
+                        <div className="truncate">
+                          <span className="bg-gray-100 px-2 py-0.5 rounded text-[11px] whitespace-nowrap font-mono font-bold text-[#b81d24]">
+                            {row.no_kupon || '-'}
+                          </span>
+                        </div>
                       </td>
 
-                      {/* 4. Supplier */}
-                      <td className="py-2 px-3 text-gray-900 font-medium border-r border-gray-100">
-                        <div className="font-semibold text-gray-800 leading-tight">{row.nama_petani}</div>
-                        <div className="text-[10px] text-gray-400 font-mono leading-none mt-0.5">{row.nomor_kartu}</div>
+                      {/* 4. Petani */}
+                      <td 
+                        className="py-2 px-3 text-gray-900 font-medium border-r border-gray-100 truncate"
+                        style={{ maxWidth: colWidths.petani }}
+                        title={`${row.nama_petani} - ${row.nomor_kartu || ''}`}
+                      >
+                        <div className="font-semibold text-gray-800 leading-tight truncate">{row.nama_petani}</div>
+                        <div className="text-[10px] text-gray-400 font-mono leading-none mt-0.5 truncate">{row.nomor_kartu}</div>
                       </td>
 
                       {/* 5. No Ball */}
-                      <td className="py-2 px-2.5 text-center font-mono font-semibold text-gray-800 border-r border-gray-100 whitespace-nowrap">
-                        {row.no_bal}
+                      <td className="py-2 px-2.5 text-center font-mono font-semibold text-gray-800 border-r border-gray-100" style={{ maxWidth: colWidths.noBal }}>
+                        <div className="break-words whitespace-normal leading-tight">{row.no_bal}</div>
                       </td>
 
                       {/* 6. Kode Beli */}
-                      <td className="py-2 px-2 text-center border-r border-gray-100 whitespace-nowrap">
+                      <td className="py-2 px-2 text-center border-r border-gray-100 truncate" style={{ maxWidth: colWidths.kodeBeli }}>
+                        <div className="truncate">
                         {(() => {
                           const rowGrades = getTransactionUniqueGrades(row);
                           if (rowGrades.length === 0) {
@@ -660,31 +1283,32 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
                             </div>
                           );
                         })()}
+                        </div>
                       </td>
 
                       {/* 7. Bruto */}
-                      <td className="py-2 px-2.5 text-right font-mono text-gray-700 border-r border-gray-100 whitespace-nowrap">
-                        {bruto > 0 ? bruto.toFixed(1) : '-'}
+                      <td className="py-2 px-2.5 text-right font-mono text-gray-700 border-r border-gray-100 truncate" style={{ maxWidth: colWidths.bruto }}>
+                        <div className="truncate">{bruto > 0 ? bruto.toFixed(1) : '-'}</div>
                       </td>
 
                       {/* 8. Netto */}
-                      <td className="py-2 px-2.5 text-right font-mono font-bold text-gray-900 border-r border-gray-100 bg-blue-50/20 whitespace-nowrap">
-                        {netto.toFixed(1)}
+                      <td className="py-2 px-2.5 text-right font-mono font-bold text-gray-900 border-r border-gray-100 bg-blue-50/20 truncate" style={{ maxWidth: colWidths.netto }}>
+                        <div className="truncate">{netto.toFixed(1)}</div>
                       </td>
 
                       {/* 9. Potongan */}
-                      <td className="py-2 px-2.5 text-right font-mono text-amber-800 border-r border-gray-100 whitespace-nowrap">
-                        {Math.round(totalPotonganRow).toLocaleString('id-ID')}
+                      <td className="py-2 px-2.5 text-right font-mono text-amber-800 border-r border-gray-100 truncate" style={{ maxWidth: colWidths.potongan }}>
+                        <div className="truncate">{Math.round(totalPotonganRow).toLocaleString('id-ID')}</div>
                       </td>
 
                       {/* 10. Total Harga Beli */}
-                      <td className="py-2 px-3 text-right font-mono font-semibold text-gray-900 border-r border-gray-100 whitespace-nowrap">
-                        {Math.round(totalHargaBeliRow).toLocaleString('id-ID')}
+                      <td className="py-2 px-3 text-right font-mono font-semibold text-gray-900 border-r border-gray-100 truncate" style={{ maxWidth: colWidths.totalHarga }}>
+                        <div className="truncate">{Math.round(totalHargaBeliRow).toLocaleString('id-ID')}</div>
                       </td>
 
                       {/* 11. Jumlah Bayar */}
-                      <td className="py-2 px-3 text-right font-mono font-bold text-[#b81d24] bg-red-50/30 whitespace-nowrap">
-                        {Math.round(jumlahBayarRow).toLocaleString('id-ID')}
+                      <td className="py-2 px-3 text-right font-mono font-bold text-[#b81d24] bg-red-50/30 truncate" style={{ maxWidth: colWidths.jumlahBayar }}>
+                        <div className="truncate">{Math.round(jumlahBayarRow).toLocaleString('id-ID')}</div>
                       </td>
                     </tr>
                   );
@@ -693,7 +1317,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
             </tbody>
 
             {/* Footer Totals  */}
-            {filteredData.length > 0 && (
+            {sortedData.length > 0 && (
               <tfoot className="bg-gray-100 text-gray-900 font-bold border-t-2 border-gray-300">
                 {/* Baris Total Potongan Out */}
                 <tr className="bg-amber-50/70 border-b border-amber-200/60 text-[11px]">
@@ -753,19 +1377,19 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
         <button
           type="button"
           onClick={scrollToTop}
-          className="p-2.5 bg-slate-900/95 hover:bg-slate-900 text-white rounded-full shadow-lg border border-slate-700/80 backdrop-blur-sm transition cursor-pointer group flex items-center justify-center hover:scale-110 active:scale-95"
+          className="p-2.5 bg-white/90 hover:bg-white text-gray-600 hover:text-[#b81d24] rounded-full shadow-[0_4px_10px_rgba(0,0,0,0.1)] border border-gray-200 hover:border-red-200 backdrop-blur-sm transition-all cursor-pointer group flex items-center justify-center hover:scale-110 active:scale-95"
           title="Geser ke Paling Atas"
         >
-          <ArrowUp className="w-4 h-4 text-amber-400 group-hover:-translate-y-0.5 transition-transform" />
+          <ArrowUp className="w-4 h-4 group-hover:-translate-y-0.5 transition-transform" />
           <span className="sr-only">Geser ke Paling Atas</span>
         </button>
         <button
           type="button"
           onClick={scrollToBottom}
-          className="p-2.5 bg-slate-900/95 hover:bg-slate-900 text-white rounded-full shadow-lg border border-slate-700/80 backdrop-blur-sm transition cursor-pointer group flex items-center justify-center hover:scale-110 active:scale-95"
+          className="p-2.5 bg-white/90 hover:bg-white text-gray-600 hover:text-[#b81d24] rounded-full shadow-[0_4px_10px_rgba(0,0,0,0.1)] border border-gray-200 hover:border-red-200 backdrop-blur-sm transition-all cursor-pointer group flex items-center justify-center hover:scale-110 active:scale-95"
           title="Geser ke Paling Bawah"
         >
-          <ArrowDown className="w-4 h-4 text-amber-400 group-hover:translate-y-0.5 transition-transform" />
+          <ArrowDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
           <span className="sr-only">Geser ke Paling Bawah</span>
         </button>
       </div>
@@ -824,7 +1448,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
                 <th className="p-1 border border-gray-300 text-center">No</th>
                 <th className="p-1 border border-gray-300">Tanggal</th>
                 <th className="p-1 border border-gray-300">Kupon</th>
-                <th className="p-1 border border-gray-300">Supplier</th>
+                <th className="p-1 border border-gray-300">Petani</th>
                 <th className="p-1 border border-gray-300 text-center">No Bal</th>
                 <th className="p-1 border border-gray-300 text-center">Kode Beli</th>
                 <th className="p-1 border border-gray-300 text-right">Bruto (kg)</th>
@@ -835,7 +1459,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
               </tr>
             </thead>
             <tbody>
-              {filteredData.map((row, idx) => {
+              {sortedData.map((row, idx) => {
                 const bruto = row.jenis_timbang === 'bruto' ? (row.berat_terukur_kg || row.berat_kg + 2) : 0;
                 const netto = row.berat_kg || 0;
                 const hrgBeli = row.harga_per_kg || 0;
@@ -850,7 +1474,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
                     <td className="p-1 border border-gray-300 font-mono">{tglDisplay}</td>
                     <td className="p-1 border border-gray-300 font-mono">{row.no_kupon || '-'}</td>
                     <td className="p-1 border border-gray-300 font-medium">{row.nama_petani}</td>
-                    <td className="p-1 border border-gray-300 text-center font-mono">{row.no_bal}</td>
+                    <td className="p-1 border border-gray-300 text-center font-mono max-w-[150px] break-words whitespace-normal">{row.no_bal}</td>
                     <td className="p-1 border border-gray-300 text-center font-bold">
                       {(() => {
                         const rowGrades = getTransactionUniqueGrades(row);
@@ -881,6 +1505,51 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
               </tr>
             </tfoot>
           </table>
+
+          {/* Sub-Ringkasan Grade di Dokumen Cetak */}
+          {gradeSummary.length > 0 && (
+            <div className="mt-4 pt-2">
+              <h4 className="text-[11px] font-bold uppercase text-gray-900 mb-1.5 pb-1 border-b border-gray-400">
+                SUB-RINGKASAN TOTAL BERAT & NILAI BERDASARKAN KODE BELI (GRADE)
+              </h4>
+              <table className="w-full text-left border-collapse border border-gray-300 text-[9px] mb-3">
+                <thead>
+                  <tr className="bg-gray-100 font-bold border-b border-gray-300">
+                    <th className="p-1 border border-gray-300 text-center w-8">No</th>
+                    <th className="p-1 border border-gray-300">Kode Beli (Grade)</th>
+                    <th className="p-1 border border-gray-300 text-center">Jumlah Bal</th>
+                    <th className="p-1 border border-gray-300 text-right">Bruto (kg)</th>
+                    <th className="p-1 border border-gray-300 text-right">Netto (kg)</th>
+                    <th className="p-1 border border-gray-300 text-right">Rata-rata (kg/bal)</th>
+                    <th className="p-1 border border-gray-300 text-center">% Tonase</th>
+                    <th className="p-1 border border-gray-300 text-right">Potongan (Rp)</th>
+                    <th className="p-1 border border-gray-300 text-right">Subtotal (Rp)</th>
+                    <th className="p-1 border border-gray-300 text-right font-bold">Jumlah Bayar (Rp)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {gradeSummary.map((gs, idx) => {
+                    const pct = totals.totalNetto > 0 ? ((gs.totalNetto / totals.totalNetto) * 100).toFixed(1) : '0';
+                    const avg = gs.totalBal > 0 ? (gs.totalNetto / gs.totalBal).toFixed(1) : '0';
+                    return (
+                      <tr key={gs.grade} className="border-b border-gray-200">
+                        <td className="p-1 border border-gray-300 text-center">{idx + 1}</td>
+                        <td className="p-1 border border-gray-300 font-bold">Grade {gs.grade}</td>
+                        <td className="p-1 border border-gray-300 text-center font-mono">{gs.totalBal} Bal</td>
+                        <td className="p-1 border border-gray-300 text-right font-mono">{gs.totalBruto.toFixed(1)}</td>
+                        <td className="p-1 border border-gray-300 text-right font-mono font-bold">{gs.totalNetto.toFixed(1)}</td>
+                        <td className="p-1 border border-gray-300 text-right font-mono">{avg}</td>
+                        <td className="p-1 border border-gray-300 text-center font-mono">{pct}%</td>
+                        <td className="p-1 border border-gray-300 text-right font-mono">{Math.round(gs.totalPotongan).toLocaleString('id-ID')}</td>
+                        <td className="p-1 border border-gray-300 text-right font-mono">{Math.round(gs.totalNilaiHargaBeli).toLocaleString('id-ID')}</td>
+                        <td className="p-1 border border-gray-300 text-right font-mono font-bold">{Math.round(gs.totalJumlahBayar).toLocaleString('id-ID')}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {/* Tanda Tangan Audit */}
           <div className="grid grid-cols-3 gap-4 pt-6 text-center text-[11px]">

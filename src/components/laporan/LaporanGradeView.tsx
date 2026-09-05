@@ -20,7 +20,9 @@ import {
   FileSpreadsheet,
   BarChart3,
   Percent,
-  Plus
+  Plus,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { 
   TabelHarga, 
@@ -55,6 +57,7 @@ interface LaporanGradeViewProps {
   userRole?: UserRole;
   initialTab?: 'beli' | 'jual';
   onNavigateToHarga?: () => void;
+  onNavigateToHargaJual?: () => void;
   onNavigateToBarang?: () => void;
 }
 
@@ -69,15 +72,17 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
   userRole = 'superadmin',
   initialTab = 'beli',
   onNavigateToHarga,
+  onNavigateToHargaJual,
   onNavigateToBarang,
 }) => {
   const [activeTab, setActiveTab] = useState<'beli' | 'jual'>(initialTab);
 
   // Harga Jual States & Logic
+  const [showSummaryCardsJual, setShowSummaryCardsJual] = useState<boolean>(true);
   const [searchTermJual, setSearchTermJual] = useState<string>('');
   const [filterStatusJual, setFilterStatusJual] = useState<string>('ALL');
   const [currentPageJual, setCurrentPageJual] = useState<number>(1);
-  const itemsPerPageJual = 15;
+  const [itemsPerPageJual, setItemsPerPageJual] = useState<number>(15);
   const printJualRef = useRef<HTMLDivElement>(null);
   const [isGeneratingJualPdf, setIsGeneratingJualPdf] = useState<boolean>(false);
 
@@ -140,13 +145,14 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
     };
   }, [hargaJualList]);
   // Filter States
+  const [showSummaryCardsBeli, setShowSummaryCardsBeli] = useState<boolean>(true);
   const [selectedGradeCode, setSelectedGradeCode] = useState<string>('');
   const [filterGudang, setFilterGudang] = useState<string>('ALL');
   const [filterStatusStok, setFilterStatusStok] = useState<string>('ALL');
   const [searchBalQuery, setSearchBalQuery] = useState<string>('');
   const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const itemsPerPage = 10;
+  const [itemsPerPage, setItemsPerPage] = useState<number>(10);
 
   const printDocumentRef = useRef<HTMLDivElement>(null);
 
@@ -351,7 +357,90 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
       }
       return true;
     });
+
+
   }, [barangList, selectedGradeCode, filterGudang, filterStatusStok, searchBalQuery]);
+  const [selectedHargaJualCode, setSelectedHargaJualCode] = useState<string>('ALL');
+
+  const hargaJualMetrics = useMemo(() => {
+    const activeBal = barangList.filter((b) => b.status_stok === 'di_gudang' || b.status_stok === 'siap_kirim');
+    const totalActiveBalCount = activeBal.length || 1;
+    const totalActiveBalKg = activeBal.reduce((sum, b) => sum + (b.berat_kg || 0), 0) || 1;
+
+    const metrics = filteredHargaJualList.map((hj, idx) => {
+      const color = getGradePalette(idx);
+
+      const inGudangBal = activeBal.filter((b) => (b.kode_harga_jual || '').toUpperCase() === hj.kode.toUpperCase());
+      const stokBal = inGudangBal.length;
+      const stokKg = inGudangBal.reduce((sum, b) => sum + (b.berat_kg || 0), 0);
+      const persenStokBal = (stokBal / totalActiveBalCount) * 100;
+      const persenStokKg = (stokKg / totalActiveBalKg) * 100;
+      const valuasiRupiah = stokKg * hj.harga_jual;
+
+      let intakeBal = 0;
+      let intakeKg = 0;
+      let intakeNilai = 0;
+
+      // DO / Outbound
+      let doBal = 0;
+      let doKg = 0;
+      pengirimanList.forEach((p) => {
+        const shippedBal = barangList.filter(
+          (b) => b.pengiriman_id === p.pengiriman_id && (b.kode_harga_jual || '').toUpperCase() === hj.kode.toUpperCase()
+        );
+        if (shippedBal.length > 0) {
+          doBal += shippedBal.length;
+          doKg += shippedBal.reduce((sum, b) => sum + (b.berat_kg || 0), 0);
+        }
+      });
+
+      // QC
+      const totalSampleCount = 0;
+      const approvedSampleCount = 0;
+
+      return {
+        ...hj,
+        color,
+        index: idx,
+        stokBal,
+        stokKg,
+        persenStokBal,
+        persenStokKg,
+        valuasiRupiah,
+        intakeBal,
+        intakeKg,
+        intakeNilai,
+        doBal,
+        doKg,
+        totalSampleCount,
+        approvedSampleCount,
+      };
+    });
+
+    return metrics.sort((a, b) => b.stokBal - a.stokBal);
+  }, [filteredHargaJualList, barangList, pengirimanList]);
+
+  const overallSummaryJual = useMemo(() => {
+    const totalStokBal = hargaJualMetrics.reduce((sum, m) => sum + m.stokBal, 0);
+    const totalStokKg = hargaJualMetrics.reduce((sum, m) => sum + m.stokKg, 0);
+    const totalValuasi = hargaJualMetrics.reduce((sum, m) => sum + m.valuasiRupiah, 0);
+    const totalDoKg = hargaJualMetrics.reduce((sum, m) => sum + m.doKg, 0);
+
+    const dominant = hargaJualMetrics.length > 0 && hargaJualMetrics[0].stokBal > 0 
+      ? hargaJualMetrics[0] 
+      : null;
+
+    return {
+      totalJualCount: filteredHargaJualList.length,
+      totalStokBal,
+      totalStokKg,
+      totalValuasi,
+      totalDoKg,
+      dominantKode: dominant?.kode || '-',
+      dominantPorsi: dominant ? dominant.persenStokBal : 0,
+    };
+  }, [hargaJualMetrics, filteredHargaJualList]);
+
 
   const totalPages = Math.ceil(filteredBalList.length / itemsPerPage) || 1;
   const paginatedBalList = useMemo(() => {
@@ -452,186 +541,630 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
 
   const contentJual = (
     <div className="space-y-4">
-      <div className="flex items-center justify-between bg-white p-3 border border-gray-200 rounded-sm">
-        <div className="flex items-center space-x-2">
-          <span className="inline-flex items-center justify-center font-bold leading-none w-5 h-5 text-[#b81d24]">Rp</span>
-          <h2 className="text-xs font-bold text-gray-900 uppercase">Rekapitulasi Master Harga Jual</h2>
+      <div className="bg-white p-4 border border-gray-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-bold text-gray-900 tracking-tight">
+            Laporan Stok & Analisis Harga Jual
+          </h2>
+          
         </div>
+
+        {/* Action Direct Download Buttons */}
         <div className="flex items-center space-x-2">
           <button
             onClick={handleExportJualCSV}
-            className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-sm text-xs font-semibold transition cursor-pointer"
+            className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
+            title="Download file spreadsheet Excel / CSV"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5" />
-            <span>Ekspor CSV</span>
+            <Download className="w-3.5 h-3.5 text-gray-500" />
+            <span>Download CSV / Excel</span>
           </button>
           <button
             onClick={handleExportJualPDF}
             disabled={isGeneratingJualPdf}
-            className="flex items-center space-x-1.5 px-3 py-1.5 bg-red-50 text-[#b81d24] hover:bg-red-100 border border-red-200 rounded-sm text-xs font-semibold transition disabled:opacity-50 cursor-pointer"
+            className="px-3.5 py-1.5 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#a0181e] rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+            title="Download dokumen laporan dalam format PDF"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>{isGeneratingJualPdf ? 'Memproses...' : 'Cetak PDF'}</span>
+            <span>{isGeneratingJualPdf ? 'Membuat PDF...' : 'Download Laporan (PDF)'}</span>
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <div className="bg-white p-3 rounded-sm border border-gray-200 shadow-xs flex items-center space-x-3">
-          <div className="p-2 bg-blue-50 text-blue-600 rounded-sm"><Tag className="w-5 h-5" /></div>
-          <div>
-            <p className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Total Penawaran</p>
-            <p className="text-lg font-bold text-gray-900">{summaryJual.total} <span className="text-xs font-normal text-gray-500">Data</span></p>
+      {/* KPI Cards Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        
+        {/* Card 1: Total Kode Terdaftar */}
+        <div className="bg-white p-4 border border-gray-200 shadow-xs relative overflow-hidden">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              Total Kode Harga Jual
+            </span>
+            <span className="p-1.5 bg-red-50 text-[#b81d24] rounded-sm">
+              <Tag className="w-4 h-4" />
+            </span>
+          </div>
+          <div className="text-xl font-bold text-gray-900 mt-2">
+            {overallSummaryJual.totalJualCount} <span className="text-xs font-normal text-gray-500">Kode Harga</span>
+          </div>
+          <div className="flex items-center justify-between text-[11px] text-gray-500 mt-1 pt-2 border-t border-gray-100">
+            <span>Kode Dominan:</span>
+            <span className="font-semibold text-gray-800">
+              {overallSummaryJual.dominantKode ? `Kode ${overallSummaryJual.dominantKode.code} (${overallSummaryJual.dominantKode.persenStokKg.toFixed(1)}%)` : '-'}
+            </span>
           </div>
         </div>
-        <div className="bg-white p-3 rounded-sm border border-gray-200 shadow-xs flex items-center space-x-3">
-          <div className="p-2 bg-emerald-50 text-emerald-600 rounded-sm"><CheckCircle2 className="w-5 h-5" /></div>
-          <div>
-            <p className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Harga Aktif</p>
-            <p className="text-lg font-bold text-emerald-700">{summaryJual.active} <span className="text-xs font-normal text-gray-500">Aktif</span></p>
+
+        {/* Card 2: Stok Tersimpan di Gudang */}
+        <div className="bg-white p-4 border border-gray-200 shadow-xs relative overflow-hidden">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              Stok Aktif Fisik Bal
+            </span>
+            <span className="p-1.5 bg-emerald-50 text-emerald-800 rounded-sm">
+              <Package className="w-4 h-4" />
+            </span>
+          </div>
+          <div className="text-xl font-bold text-emerald-950 mt-2">
+            {overallSummaryJual.totalStokBal} <span className="text-xs font-normal text-gray-500">Bal ({overallSummaryJual.totalStokKg.toLocaleString('id-ID')} kg)</span>
+          </div>
+          <div className="flex items-center justify-between text-[11px] text-gray-500 mt-1 pt-2 border-t border-gray-100">
+            <span>Tonase Total:</span>
+            <span className="font-semibold text-emerald-900">{(overallSummaryJual.totalStokKg / 1000).toFixed(2)} Ton</span>
           </div>
         </div>
-        <div className="bg-white p-3 rounded-sm border border-gray-200 shadow-xs flex items-center space-x-3">
-          <div className="p-2 bg-gray-50 text-gray-500 rounded-sm"><X className="w-5 h-5" /></div>
-          <div>
-            <p className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Non-Aktif</p>
-            <p className="text-lg font-bold text-gray-600">{summaryJual.inactive} <span className="text-xs font-normal text-gray-500">Histori</span></p>
+
+        {/* Card 3: Valuasi Aset Inventaris */}
+        <div className="bg-white p-4 border border-gray-200 shadow-xs relative overflow-hidden">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              Valuasi Aset Tembakau
+            </span>
+            <span className="p-1.5 bg-blue-50 text-blue-800 rounded-sm">
+              <span className="inline-flex items-center justify-center font-bold leading-none w-4 h-4">Rp</span>
+            </span>
+          </div>
+          <div className="text-xl font-bold text-blue-950 mt-2">
+            Rp {overallSummaryJual.totalValuasi.toLocaleString('id-ID')}
+          </div>
+          <div className="flex items-center justify-between text-[11px] text-gray-500 mt-1 pt-2 border-t border-gray-100">
+            <span>Dihitung dari tarif acuan aktif</span>
+            <span className="font-semibold text-blue-800">{overallSummaryJual.totalJualCount} Grade</span>
           </div>
         </div>
+
+        {/* Card 4: Arus Masuk vs DO */}
+        <div className="bg-white p-4 border border-gray-200 shadow-xs relative overflow-hidden">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              Perputaran Intake & DO
+            </span>
+            <span className="p-1.5 bg-purple-50 text-purple-800 rounded-sm">
+              <TrendingUp className="w-4 h-4" />
+            </span>
+          </div>
+          <div className="text-xl font-bold text-purple-950 mt-2">
+            {(overallSummaryJual.totalDoKg / 1000).toFixed(1)} <span className="text-xs font-normal text-gray-500">Ton Intake</span>
+          </div>
+          <div className="flex items-center justify-between text-[11px] text-gray-500 mt-1 pt-2 border-t border-gray-100">
+            <span>Terkirim ke Pabrik:</span>
+            <span className="font-semibold text-purple-900">{(overallSummaryJual.totalDoKg / 1000).toFixed(1)} Ton</span>
+          </div>
+        </div>
+
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-sm shadow-xs">
-        <div className="p-3 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50/50">
+      {/* Main Kode Matrix & Color Visual Breakdown */}
+      <div className="bg-white border border-gray-200 shadow-xs p-4 space-y-4">
+        
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-gray-100 gap-2">
+          <div>
+            <h2 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center space-x-2">
+              <span>Matriks Distribusi & Rekapitulasi per Mutu Grade</span>
+              <span className="px-2 py-0.5 text-[10px] bg-red-50 text-[#b81d24] font-bold border border-red-200">
+                Pembaruan Real-Time
+              </span>
+            </h2>
+            <p className="text-[11px] text-gray-500 mt-0.5">
+              Urutan berdasarkan jumlah inventaris bal aktif terbanyak di seluruh fasilitas gudang.
+            </p>
+          </div>
+
           <div className="flex items-center space-x-2">
-            <div className="relative w-full sm:w-64">
-              <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Cari kode atau keterangan..."
-                value={searchTermJual}
-                onChange={(e) => { setSearchTermJual(e.target.value); setCurrentPageJual(1); }}
-                className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-300 rounded-sm focus:outline-none focus:border-[#b81d24]"
-              />
-            </div>
-            <select
-              value={filterStatusJual}
-              onChange={(e) => { setFilterStatusJual(e.target.value); setCurrentPageJual(1); }}
-              className="text-xs border border-gray-300 rounded-sm px-2 py-1.5 focus:outline-none focus:border-[#b81d24]"
-            >
-              <option value="ALL">Semua Status</option>
-              <option value="aktif">Aktif</option>
-              <option value="nonaktif">Non-Aktif</option>
-            </select>
+            {onNavigateToHargaJual && (
+    <button
+      onClick={onNavigateToHargaJual}
+      className="px-2.5 py-1 text-xs font-semibold text-gray-700 bg-gray-50 border border-gray-200 hover:bg-gray-100 rounded-sm transition flex items-center space-x-1 cursor-pointer"
+    >
+      <Tag className="w-3 h-3 text-[#b81d24]" />
+      <span>Kelola Master Harga Jual</span>
+    </button>
+  )}
           </div>
-          <button
-            onClick={() => { setSearchTermJual(''); setFilterStatusJual('ALL'); setCurrentPageJual(1); }}
-            className="flex items-center space-x-1 text-xs text-gray-500 hover:text-gray-900 transition cursor-pointer"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>Reset</span>
-          </button>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-[11px] border-collapse">
+        {/* Quick Filter Kode Pills */}
+        <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px]">
+          <span className="text-gray-500 font-medium">Filter Tampilan Kode:</span>
+          <button
+            onClick={() => setSelectedHargaJualCode('ALL')}
+            className={`px-2.5 py-1 border text-xs cursor-pointer transition rounded-sm ${
+              selectedHargaJualCode === 'ALL'
+                ? 'bg-gray-900 text-white font-bold border-gray-900 shadow-xs'
+                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+            }`}
+          >
+            Semua Kode ({hargaJualMetrics.length})
+          </button>
+          {hargaJualMetrics.map((m) => (
+            <button
+              key={m.code}
+              onClick={() => setSelectedGradeCode(selectedGradeCode === m.code ? 'ALL' : m.code)}
+              className={`px-2.5 py-1 border text-xs cursor-pointer transition rounded-sm ${
+                selectedGradeCode === m.code
+                  ? 'bg-gray-900 text-white font-bold border-gray-900 shadow-xs'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              <span>Grade {m.code}</span>
+              <span className={`ml-1 text-[10px] ${selectedGradeCode === m.code ? 'text-gray-300' : 'text-gray-500'}`}>
+                ({m.stokBal} Bal)
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {/* Master Grade Table Matrix */}
+        <div className="overflow-x-auto border border-gray-200">
+          <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="bg-gray-100 text-gray-900 border-b border-gray-200">
-                <th className="py-2.5 px-3 font-semibold w-10 text-center">No</th>
-                <th className="py-2.5 px-3 font-semibold">Kode Penawaran</th>
-                <th className="py-2.5 px-3 font-semibold text-right">Harga Jual (Rp)</th>
-                <th className="py-2.5 px-3 font-semibold text-center">Tanggal Berlaku</th>
-                <th className="py-2.5 px-3 font-semibold">Keterangan</th>
-                <th className="py-2.5 px-3 font-semibold text-center">Status</th>
+              <tr className="bg-gray-50 text-gray-700 font-bold border-b border-gray-200 text-[10px] uppercase">
+                <th className="py-2.5 px-3 text-center w-12">Grade</th>
+                <th className="py-2.5 px-3">Nama Mutu & Kualitas</th>
+                <th className="py-2.5 px-3 text-right">Tarif Acuan</th>
+                <th className="py-2.5 px-3 text-center bg-emerald-50/50">Stok Bal</th>
+                <th className="py-2.5 px-3 text-right bg-emerald-50/50">Stok (Kg)</th>
+                <th className="py-2.5 px-3 text-center">% Porsi</th>
+                <th className="py-2.5 px-3 text-right">Valuasi Stok (Rp)</th>
+                <th className="py-2.5 px-3 text-center bg-blue-50/40">Intake Masuk</th>
+                <th className="py-2.5 px-3 text-center bg-purple-50/40">DO Keluar</th>
+                <th className="py-2.5 px-3 text-center">QC Sample</th>
+                <th className="py-2.5 px-3 text-center w-16">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {paginatedHargaJualList.length === 0 ? (
+              {gradeMetrics.map((item) => {
+                const isSelected = selectedGradeCode === item.code;
+                return (
+                  <tr 
+                    key={item.code} 
+                    className={`transition-colors ${isSelected ? 'bg-red-50/40 font-medium' : 'hover:bg-gray-50/80'}`}
+                  >
+                    {/* Grade Badge with designated color */}
+                    <td className="py-2.5 px-3 text-center">
+                      <span className={`inline-flex items-center justify-center w-7 h-7 font-bold text-xs ${item.color.badgeBg} shadow-xs`}>
+                        {item.code}
+                      </span>
+                    </td>
+
+                    {/* Nama Mutu & Deskripsi */}
+                    <td className="py-2.5 px-3">
+                      <div className="font-bold text-gray-900">{item.name}</div>
+                      <div className="text-[10px] text-gray-500 line-clamp-1 max-w-xs">{item.ketentuan}</div>
+                    </td>
+
+                    {/* Tarif Acuan */}
+                    <td className="py-2.5 px-3 text-right font-mono font-bold text-gray-800">
+                      {item.price > 0 ? `Rp ${item.price.toLocaleString('id-ID')}` : '-'}
+                      <span className="text-[10px] font-normal text-gray-500 block">/ kg</span>
+                    </td>
+
+                    {/* Stok Bal */}
+                    <td className="py-2.5 px-3 text-center font-mono font-bold text-emerald-950 bg-emerald-50/30">
+                      {item.stokBal} Bal
+                    </td>
+
+                    {/* Stok Kg */}
+                    <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-900 bg-emerald-50/30">
+                      {item.stokKg.toLocaleString('id-ID')} kg
+                    </td>
+
+                    {/* % Porsi */}
+                    <td className="py-2.5 px-3 text-center">
+                      <span className={`inline-block px-1.5 py-0.5 text-[10px] font-bold ${item.color.lightBg}`}>
+                        {item.persenStokKg.toFixed(1)}%
+                      </span>
+                    </td>
+
+                    {/* Valuasi Stok */}
+                    <td className="py-2.5 px-3 text-right font-mono font-bold text-[#b81d24]">
+                      Rp {item.valuasiRupiah.toLocaleString('id-ID')}
+                    </td>
+
+                    {/* Intake Masuk */}
+                    <td className="py-2.5 px-3 text-center font-mono text-gray-700 bg-blue-50/20">
+                      <div>{item.intakeBal} Bal</div>
+                      <span className="text-[10px] text-blue-900 font-semibold">{item.intakeKg.toLocaleString('id-ID')} kg</span>
+                    </td>
+
+                    {/* DO Keluar */}
+                    <td className="py-2.5 px-3 text-center font-mono text-gray-700 bg-purple-50/20">
+                      <div>{item.doBal} Bal</div>
+                      <span className="text-[10px] text-purple-900 font-semibold">{item.doKg.toLocaleString('id-ID')} kg</span>
+                    </td>
+
+                    {/* QC Sample */}
+                    <td className="py-2.5 px-3 text-center font-mono text-[11px]">
+                      {item.totalSampleCount > 0 ? (
+                        <span className="text-green-700 font-semibold">
+                          {item.approvedSampleCount}/{item.totalSampleCount} ACC
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </td>
+
+                    {/* Aksi Filter */}
+                    <td className="py-2.5 px-3 text-center">
+                      <button
+                        onClick={() => setSelectedGradeCode(isSelected ? 'ALL' : item.code)}
+                        className={`px-2 py-1 text-[11px] font-semibold rounded-xs transition cursor-pointer ${
+                          isSelected
+                            ? 'bg-[#b81d24] text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        {isSelected ? 'Terpilih' : 'Detail'}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="bg-gray-100 text-gray-900 font-bold border-t-2 border-gray-300 text-xs">
+                <td colSpan={3} className="py-2.5 px-3 text-right uppercase tracking-wider">
+                  TOTAL KESELURUHAN INVENTARIS:
+                </td>
+                <td className="py-2.5 px-3 text-center font-mono font-bold text-emerald-950 bg-emerald-100/50">
+                  {overallSummary.totalStokBal} Bal
+                </td>
+                <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-950 bg-emerald-100/50">
+                  {overallSummary.totalStokKg.toLocaleString('id-ID')} kg
+                </td>
+                <td className="py-2.5 px-3 text-center">
+                  100%
+                </td>
+                <td className="py-2.5 px-3 text-right font-mono font-bold text-[#b81d24]">
+                  Rp {overallSummary.totalValuasi.toLocaleString('id-ID')}
+                </td>
+                <td className="py-2.5 px-3 text-center font-mono text-blue-950 bg-blue-100/50">
+                  {overallSummary.totalIntakeKg.toLocaleString('id-ID')} kg
+                </td>
+                <td className="py-2.5 px-3 text-center font-mono text-purple-950 bg-purple-100/50">
+                  {overallSummary.totalDoKg.toLocaleString('id-ID')} kg
+                </td>
+                <td colSpan={2}></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+      </div>
+
+      {/* Deep-Dive Bal Inventory Explorer */}
+      <div className="bg-white border border-gray-200 shadow-xs p-4 space-y-3">
+        
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-gray-100 gap-2">
+          <div>
+            <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center space-x-2">
+              <span>Eksplorasi Fisik Bal Inventaris</span>
+              {selectedGradeCode !== 'ALL' && (
+                <span className="px-2 py-0.5 text-[10px] bg-red-100 text-red-800 font-bold">
+                  Khusus Grade {selectedGradeCode}
+                </span>
+              )}
+            </h3>
+            <p className="text-[11px] text-gray-500 mt-0.5">
+              Daftar rincian bal tembakau dan lokasi blok rak penyimpanan
+            </p>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={handleDownloadBalDetailCsv}
+              className="px-2.5 py-1 text-xs font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-none transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
+            >
+              <Download className="w-3.5 h-3.5 text-gray-500" />
+              <span>Download Detail Bal (CSV)</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Filter Controls for Bal Table */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 pt-1">
+          {/* Grade Filter */}
+          <div>
+            <label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">Filter Grade:</label>
+            <input
+              type="text"
+              list="grade-list-filter"
+              value={selectedGradeCode}
+              onChange={(e) => {
+                setSelectedGradeCode(e.target.value);
+                setCurrentPage(1);
+              }}
+              placeholder="Ketik/Pilih Grade..."
+              className="w-full bg-white border border-gray-300 px-2 py-1.5 text-xs rounded-none focus:border-gray-800 focus:outline-none font-semibold text-gray-800"
+            />
+            <datalist id="grade-list-filter">
+              <option value="ALL">Semua Grade</option>
+              {uniqueGrades.map((g) => (
+                <option key={g.code} value={g.code}>
+                  Grade {g.code} - {g.name}
+                </option>
+              ))}
+            </datalist>
+          </div>
+
+          {/* Gudang Filter */}
+          <div>
+            <label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">Lokasi Gudang:</label>
+            <select
+              value={filterGudang}
+              onChange={(e) => {
+                setFilterGudang(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full bg-white border border-gray-300 px-2 py-1.5 text-xs rounded-none focus:border-gray-800 focus:outline-none text-gray-800"
+            >
+              <option value="ALL">Semua Gudang</option>
+              {gudangList.map((gdg) => (
+                <option key={gdg.gudang_id} value={gdg.nama_gudang}>
+                  {gdg.nama_gudang}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Status Stok Filter */}
+          <div>
+            <label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">Status Stok:</label>
+            <select
+              value={filterStatusStok}
+              onChange={(e) => {
+                setFilterStatusStok(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full bg-white border border-gray-300 px-2 py-1.5 text-xs rounded-none focus:border-gray-800 focus:outline-none text-gray-800"
+            >
+              <option value="ALL">Semua Status ({barangList.length})</option>
+              <option value="di_gudang">Di Gudang (Stok Aktif)</option>
+              <option value="siap_kirim">Siap Kirim</option>
+              <option value="keluar">Keluar / Terkirim Pabrik (DO)</option>
+              <option value="terkirim_sample">Sample Lab QC</option>
+            </select>
+          </div>
+
+          {/* Search Bal */}
+          <div>
+            <label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">Cari No Bal / Petani:</label>
+            <div className="relative">
+              <input
+                type="text"
+                value={searchBalQuery}
+                onChange={(e) => {
+                  setSearchBalQuery(e.target.value);
+                  setCurrentPage(1);
+                }}
+                placeholder="No Bal, Petani, Lokasi..."
+                className="w-full bg-white border border-gray-300 pl-7 pr-2 py-1.5 text-xs rounded-none focus:border-gray-800 focus:outline-none text-gray-800"
+              />
+              <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2 top-2" />
+            </div>
+          </div>
+        </div>
+
+        {/* Bal Inventory Table */}
+        <div className="overflow-x-auto border border-gray-200 mt-2">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="bg-gray-50 text-gray-700 font-bold border-b border-gray-200 text-[10px] uppercase">
+                <th className="py-2 px-3 text-center w-10">No</th>
+                <th className="py-2 px-3">No Bal</th>
+                <th className="py-2 px-3">No Bal</th>
+                <th className="py-2 px-3 text-center">Grade</th>
+                <th className="py-2 px-3 text-right">Berat (kg)</th>
+                <th className="py-2 px-3 text-right">Estimasi Valuasi</th>
+                <th className="py-2 px-3">Petani Penyetor</th>
+                <th className="py-2 px-3">Lokasi Gudang</th>
+                <th className="py-2 px-3 text-center">Status</th>
+                <th className="py-2 px-3">Tgl Masuk</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {paginatedBalList.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-gray-400">
-                    Tidak ada data harga jual ditemukan.
+                  <td colSpan={10} className="py-6 text-center text-gray-500 text-xs">
+                    Tidak ditemukan data bal yang sesuai dengan filter grade ini.
                   </td>
                 </tr>
               ) : (
-                paginatedHargaJualList.map((item, index) => (
-                  <tr key={item.harga_jual_id} className="hover:bg-gray-50/50">
-                    <td className="py-2.5 px-3 text-center text-gray-500 font-mono">
-                      {(currentPageJual - 1) * itemsPerPageJual + index + 1}
-                    </td>
-                    <td className="py-2.5 px-3 font-bold text-gray-900">{item.kode}</td>
-                    <td className="py-2.5 px-3 text-right font-mono font-semibold text-[#b81d24]">
-                      Rp {item.harga_jual.toLocaleString('id-ID')}
-                    </td>
-                    <td className="py-2.5 px-3 text-center font-mono text-gray-600">{item.tanggal_berlaku}</td>
-                    <td className="py-2.5 px-3 text-gray-600">{item.keterangan || '-'}</td>
-                    <td className="py-2.5 px-3 text-center">
-                      {item.status_aktif ? (
-                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-sm text-[10px] font-semibold">Aktif</span>
-                      ) : (
-                        <span className="px-2 py-0.5 bg-gray-100 text-gray-600 border border-gray-200 rounded-sm text-[10px] font-semibold">Non-Aktif</span>
-                      )}
-                    </td>
-                  </tr>
-                ))
+                paginatedBalList.map((bal, idx) => {
+                  const gMetric = gradeMetrics.find((m) => m.code === bal.kode_grade.toUpperCase());
+                  const estPrice = gMetric ? gMetric.price * bal.berat_kg : 0;
+                  const gColor = gMetric ? gMetric.color : GRADE_PALETTE[0];
+
+                  return (
+                    <tr key={bal.barang_id || idx} className="hover:bg-gray-50/80">
+                      <td className="py-2 px-3 text-center font-mono text-gray-500 text-[11px]">
+                        {(currentPage - 1) * itemsPerPage + idx + 1}
+                      </td>
+                      <td className="py-2 px-3 font-mono font-bold text-gray-900">
+                        {bal.barang_id}
+                      </td>
+                      <td className="py-2 px-3 font-mono text-gray-800">
+                        {bal.no_bal}
+                      </td>
+                      <td className="py-2 px-3 text-center">
+                        <span className={`inline-flex items-center justify-center w-5 h-5 font-bold text-[10px] ${gColor.badgeBg}`}>
+                          {bal.kode_grade}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3 text-right font-mono font-bold text-emerald-950">
+                        {bal.berat_kg} kg
+                      </td>
+                      <td className="py-2 px-3 text-right font-mono text-[#b81d24] font-semibold">
+                        Rp {estPrice.toLocaleString('id-ID')}
+                      </td>
+                      <td className="py-2 px-3 text-gray-800 font-medium">
+                        {bal.nama_petani || '-'}
+                      </td>
+                      <td className="py-2 px-3 text-gray-600 text-[11px]">
+                        {bal.lokasi_gudang}
+                      </td>
+                      <td className="py-2 px-3 text-center">
+                        <span className={`px-2 py-0.5 text-[10px] font-bold rounded-none ${
+                          bal.status_stok === 'di_gudang' ? 'bg-emerald-50 text-emerald-800 border border-emerald-300' :
+                          bal.status_stok === 'siap_kirim' ? 'bg-amber-50 text-amber-800 border border-amber-300' :
+                          bal.status_stok === 'keluar' ? 'bg-gray-100 text-gray-700 border border-gray-300' :
+                          'bg-purple-50 text-purple-800 border border-purple-300'
+                        }`}>
+                          {bal.status_stok === 'di_gudang' ? 'Di Gudang' :
+                           bal.status_stok === 'siap_kirim' ? 'Siap Kirim' :
+                           bal.status_stok === 'keluar' ? 'Keluar (DO)' : 'Sample Lab'}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3 text-gray-500 font-mono text-[11px]">
+                        {bal.tanggal_masuk ? bal.tanggal_masuk.split(' ')[0] : '-'}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
 
-        <div className="p-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
-          <span className="text-xs text-gray-500">
-            Menampilkan {paginatedHargaJualList.length} dari {filteredHargaJualList.length} data
-          </span>
+        {/* Pagination */}
+        <div className="pt-2">
           <Pagination
-            currentPage={currentPageJual}
-            totalPages={totalPagesJual}
-            onPageChange={(page) => setCurrentPageJual(page)}
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={filteredBalList.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={(page) => setCurrentPage(page)}
           />
         </div>
+
       </div>
 
-      {/* Hidden PDF container for Jual */}
+      {/* Hidden DOM for High-Fidelity PDF Generation */}
       <div className="hidden">
-        <div ref={printJualRef} className="p-8 bg-white text-gray-900 font-sans text-xs space-y-6">
+        <div ref={printDocumentRef} className="p-8 bg-white text-gray-900 font-sans text-xs space-y-6">
+          {/* Header */}
           <div className="border-b-2 border-gray-900 pb-4 flex items-center justify-between">
             <div>
               <h1 className="text-xl font-bold tracking-tight text-gray-900">PR. SEKAR MAJU SEJAHTERA</h1>
               <p className="text-xs font-semibold text-gray-600">SISTEM DATA GUDANG TEMBAKAU & LOGISTIK ERP</p>
+              <p className="text-[10px] text-gray-500">Pusat Intake & Pengolahan Tembakau Madura - Pamekasan, Jawa Timur</p>
             </div>
             <div className="text-right">
-              <h2 className="text-sm font-bold uppercase text-[#b81d24]">LAPORAN MASTER HARGA JUAL</h2>
+              <h2 className="text-sm font-bold uppercase text-[#b81d24]">LAPORAN MASTER HARGA BELI & VALUASI STOK</h2>
               <p className="text-[10px] text-gray-600">Tanggal Ekspor: {new Date().toLocaleDateString('id-ID', { dateStyle: 'full' })}</p>
+              <p className="text-[10px] text-gray-500">Total Mutu Terdaftar: {uniqueGrades.length} Grade</p>
             </div>
           </div>
+
+          {/* Summary Box */}
+          <div className="grid grid-cols-4 gap-3 bg-gray-50 p-3 border border-gray-300 text-xs">
+            <div>
+              <span className="text-[10px] text-gray-500 uppercase block">Total Mutu Grade:</span>
+              <strong className="text-sm text-gray-900">{overallSummary.totalGradeCount} Grade</strong>
+            </div>
+            <div>
+              <span className="text-[10px] text-gray-500 uppercase block">Total Fisik Stok:</span>
+              <strong className="text-sm text-emerald-900">{overallSummary.totalStokBal} Bal ({overallSummary.totalStokKg.toLocaleString('id-ID')} kg)</strong>
+            </div>
+            <div>
+              <span className="text-[10px] text-gray-500 uppercase block">Total Valuasi Aset:</span>
+              <strong className="text-sm text-[#b81d24]">Rp {overallSummary.totalValuasi.toLocaleString('id-ID')}</strong>
+            </div>
+            <div>
+              <span className="text-[10px] text-gray-500 uppercase block">Total Intake / DO:</span>
+              <strong className="text-sm text-blue-900">{(overallSummary.totalIntakeKg / 1000).toFixed(1)} T / {(overallSummary.totalDoKg / 1000).toFixed(1)} T</strong>
+            </div>
+          </div>
+
+          {/* Table */}
           <table className="w-full text-left border-collapse border border-gray-300 text-[11px]">
             <thead>
-              <tr className="bg-gray-100 font-bold border-b border-gray-300">
+              <tr className="bg-gray-100 text-gray-900 font-bold border-b border-gray-300">
                 <th className="py-2 px-2 border-r border-gray-300 text-center w-8">No</th>
-                <th className="py-2 px-2 border-r border-gray-300">Kode Penawaran</th>
-                <th className="py-2 px-2 border-r border-gray-300 text-right">Harga Jual (Rp)</th>
-                <th className="py-2 px-2 border-r border-gray-300 text-center">Tanggal Berlaku</th>
-                <th className="py-2 px-2 border-r border-gray-300 text-center">Status</th>
-                <th className="py-2 px-2">Keterangan</th>
+                <th className="py-2 px-2 border-r border-gray-300 text-center w-12">Grade</th>
+                <th className="py-2 px-3 border-r border-gray-300">Nama Mutu Grade</th>
+                <th className="py-2 px-3 border-r border-gray-300 text-right">Harga Beli (Rp/kg)</th>
+                <th className="py-2 px-2 border-r border-gray-300 text-center">Stok (Bal)</th>
+                <th className="py-2 px-3 border-r border-gray-300 text-right">Stok (Kg)</th>
+                <th className="py-2 px-2 border-r border-gray-300 text-center">% Porsi</th>
+                <th className="py-2 px-3 border-r border-gray-300 text-right">Valuasi Beli (Rp)</th>
+                <th className="py-2 px-2 border-r border-gray-300 text-center">Intake (Kg)</th>
+                <th className="py-2 px-2 border-r border-gray-300 text-center">DO Keluar (Kg)</th>
+                <th className="py-2 px-2 text-center">QC Sample</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {filteredHargaJualList.map((m, idx) => (
-                <tr key={m.harga_jual_id}>
+              {gradeMetrics.map((m, idx) => (
+                <tr key={m.code}>
                   <td className="py-2 px-2 border-r border-gray-300 text-center font-mono">{idx + 1}</td>
-                  <td className="py-2 px-2 border-r border-gray-300 font-bold">{m.kode}</td>
-                  <td className="py-2 px-2 border-r border-gray-300 text-right font-mono">Rp {m.harga_jual.toLocaleString('id-ID')}</td>
-                  <td className="py-2 px-2 border-r border-gray-300 text-center font-mono">{m.tanggal_berlaku}</td>
-                  <td className="py-2 px-2 border-r border-gray-300 text-center">{m.status_aktif ? 'Aktif' : 'Non-Aktif'}</td>
-                  <td className="py-2 px-2">{m.keterangan || '-'}</td>
+                  <td className="py-2 px-2 border-r border-gray-300 text-center font-bold">{m.code}</td>
+                  <td className="py-2 px-3 border-r border-gray-300 font-semibold">{m.name}</td>
+                  <td className="py-2 px-3 border-r border-gray-300 text-right font-mono">Rp {m.price.toLocaleString('id-ID')}</td>
+                  <td className="py-2 px-2 border-r border-gray-300 text-center font-mono font-bold">{m.stokBal}</td>
+                  <td className="py-2 px-3 border-r border-gray-300 text-right font-mono">{m.stokKg.toLocaleString('id-ID')}</td>
+                  <td className="py-2 px-2 border-r border-gray-300 text-center font-semibold">{m.persenStokKg.toFixed(1)}%</td>
+                  <td className="py-2 px-3 border-r border-gray-300 text-right font-mono font-bold">Rp {m.valuasiRupiah.toLocaleString('id-ID')}</td>
+                  <td className="py-2 px-2 border-r border-gray-300 text-center font-mono">{m.intakeKg.toLocaleString('id-ID')}</td>
+                  <td className="py-2 px-2 border-r border-gray-300 text-center font-mono">{m.doKg.toLocaleString('id-ID')}</td>
+                  <td className="py-2 px-2 text-center font-mono">{m.approvedSampleCount}/{m.totalSampleCount}</td>
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr className="bg-gray-100 font-bold border-t-2 border-gray-400">
+                <td colSpan={4} className="py-2 px-3 text-right">TOTAL KESELURUHAN:</td>
+                <td className="py-2 px-2 text-center font-mono">{overallSummary.totalStokBal} Bal</td>
+                <td className="py-2 px-3 text-right font-mono">{overallSummary.totalStokKg.toLocaleString('id-ID')} kg</td>
+                <td className="py-2 px-2 text-center">100%</td>
+                <td className="py-2 px-3 text-right font-mono">Rp {overallSummary.totalValuasi.toLocaleString('id-ID')}</td>
+                <td className="py-2 px-2 text-center font-mono">{overallSummary.totalIntakeKg.toLocaleString('id-ID')}</td>
+                <td className="py-2 px-2 text-center font-mono">{overallSummary.totalDoKg.toLocaleString('id-ID')}</td>
+                <td></td>
+              </tr>
+            </tfoot>
           </table>
+
+          {/* Signatures */}
+          <div className="pt-6 grid grid-cols-3 gap-6 text-center text-xs">
+            <div>
+              <p className="text-gray-500 mb-12">Petugas Operator Timbang,</p>
+              <p className="font-bold border-t border-gray-400 pt-1">Budi Hartono</p>
+            </div>
+            <div>
+              <p className="text-gray-500 mb-12">Supervisor QC & Laboratorium,</p>
+              <p className="font-bold border-t border-gray-400 pt-1">Ir. Hendra Wijaya</p>
+            </div>
+            <div>
+              <p className="text-gray-500 mb-12">Kepala Gudang PR. Sekar Maju Sejahtera,</p>
+              <p className="font-bold border-t border-gray-400 pt-1">Bambang Sutrisno, S.T.</p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
 
-  const contentBeli = (
+const contentBeli = (
     <div className="space-y-4">
       <div className="bg-white p-4 border border-gray-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
@@ -740,7 +1273,7 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
           </div>
           <div className="flex items-center justify-between text-[11px] text-gray-500 mt-1 pt-2 border-t border-gray-100">
             <span>Terkirim ke Pabrik:</span>
-            <span className="font-semibold text-purple-900">{(overallSummary.totalDoKg / 1000).toFixed(1)} Ton</span>
+            <span className="font-semibold text-purple-900">{(overallSummary.totalIntakeKg / 1000).toFixed(1)} Ton</span>
           </div>
         </div>
 
@@ -764,14 +1297,14 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
 
           <div className="flex items-center space-x-2">
             {onNavigateToHarga && (
-              <button
-                onClick={onNavigateToHarga}
-                className="px-2.5 py-1 text-xs font-semibold text-gray-700 bg-gray-50 border border-gray-200 hover:bg-gray-100 rounded-sm transition flex items-center space-x-1 cursor-pointer"
-              >
-                <Tag className="w-3 h-3 text-[#b81d24]" />
-                <span>Kelola Master Harga & Grade</span>
-              </button>
-            )}
+    <button
+      onClick={onNavigateToHarga}
+      className="px-2.5 py-1 text-xs font-semibold text-gray-700 bg-gray-50 border border-gray-200 hover:bg-gray-100 rounded-sm transition flex items-center space-x-1 cursor-pointer"
+    >
+      <Tag className="w-3 h-3 text-[#b81d24]" />
+      <span>Kelola Master Tarif Acuan</span>
+    </button>
+  )}
           </div>
         </div>
 
@@ -1255,6 +1788,7 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
       </div>
     </div>
   );
+
 
   return (
     <div className="space-y-4 font-sans text-gray-800 pb-10">

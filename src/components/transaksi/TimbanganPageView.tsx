@@ -13,7 +13,11 @@ import {
   FileText,
   RotateCcw,
   Sparkles,
-  Printer
+  Printer,
+  ShieldCheck,
+  ShieldAlert,
+  Unlock,
+  Lock
 } from 'lucide-react';
 import { TransaksiPembelian, Petani, TabelHarga, Barang, Gudang, TransaksiItemBal, UserRole, User as UserType } from '../../types';
 import { formatRupiah, formatNoKupon, formatDateHariBulanTahun, hitungPotonganTaraKg } from '../../utils/formatters';
@@ -111,11 +115,19 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
   const [lokasiBlok, setLokasiBlok] = useState('Blok A (Utara)');
 
   const [scanFeedback, setScanFeedback] = useState<{ text: string; isError: boolean } | null>(null);
+  const [antiScanAlert, setAntiScanAlert] = useState<{ text: string; code?: string } | null>(null);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
 
   const barcodeScannerRef = useRef<HTMLInputElement>(null);
   const beratBrutoInputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Anti-Scan Guard tracking for weight input
+  const weightKeyBufferRef = useRef<{ chars: string; lastTime: number; isBurst: boolean }>({
+    chars: '',
+    lastTime: 0,
+    isBurst: false,
+  });
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -160,7 +172,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     }
   }, [currentTx]);
 
-  // Open a specific bal item and focus weight input
+  // Open a specific bal item and keep focus safely on scanner / No Bal field
   const selectBalAndOpen = useCallback((foundTx: TransaksiPembelian, foundItem: TransaksiItemBal, source: 'manual' | 'scanner' = 'manual') => {
     setSelectedTxId(foundTx.transaksi_id);
     setWorkingItems(foundTx.items || []);
@@ -172,16 +184,17 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     setLokasiBlok(foundItem.lokasi_simpan || 'Blok A (Utara)');
     
     const isAlreadyWeighed = (foundItem.berat_kg || 0) > 0;
-    const sourceLabel = source === 'scanner' ? '[ALAT TEMBAK BARCODE]' : '[PILIH BAL]';
+    const sourceLabel = source === 'scanner' ? '[SCAN BARCODE]' : '[PILIH BAL]';
     setScanFeedback({
-      text: `✓ ${sourceLabel} Bal "${foundItem.no_bal}" (Grade ${foundItem.kode_grade}) langsung terbuka! Kupon "${foundTx.no_kupon}" (${foundTx.nama_petani})${isAlreadyWeighed ? ` • [Netto: ${foundItem.berat_kg} Kg]` : ' • [Siap Timbang Bruto]'}`,
+      text: `✓ ${sourceLabel} Bal "${foundItem.no_bal}" (Grade ${foundItem.kode_grade}) terbuka! Kupon "${foundTx.no_kupon}" (${foundTx.nama_petani})${isAlreadyWeighed ? ` • [Netto: ${foundItem.berat_kg} Kg - TERKUNCI]` : ' • [Langkah 2: Masukkan Berat Manual]'}`,
       isError: false,
     });
 
+    // PENGAMAN: Jaga fokus tetap pada kolom No Bal / Scanner agar tidak langsung mengisi berat tanpa sengaja
     setTimeout(() => {
-      if (beratBrutoInputRef.current) {
-        beratBrutoInputRef.current.focus();
-        beratBrutoInputRef.current.select();
+      if (barcodeScannerRef.current) {
+        barcodeScannerRef.current.focus();
+        barcodeScannerRef.current.select();
       }
     }, 120);
   }, []);
@@ -274,7 +287,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     }
   }, [currentTx, transaksiList, selectBalAndOpen]);
 
-  // Focus scanner or weight input on mount & Global Scanner listener for barcode guns
+  // Focus scanner on mount & Global Scanner listener for barcode guns
   useEffect(() => {
     barcodeScannerRef.current?.focus();
 
@@ -321,14 +334,21 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     return workingItems.find((it) => it.item_id === activeItemId);
   }, [workingItems, activeItemId]);
 
-  // Switch active bal item
+  // Switch active bal item - focus strictly stays on scanner/No Bal
   const handleSelectBalItem = (item: TransaksiItemBal) => {
     setActiveItemId(item.item_id);
     setBeratBrutoInput(item.berat_bruto_kg && item.berat_bruto_kg > 0 ? item.berat_bruto_kg : '');
     setLokasiBlok(item.lokasi_simpan || 'Blok A (Utara)');
-    setScanFeedback({ text: `Memilih Bal "${item.no_bal}" (Grade ${item.kode_grade})`, isError: false });
+    const isWeighed = (item.berat_kg || 0) > 0;
+    setScanFeedback({ 
+      text: `Memilih Bal "${item.no_bal}" (Grade ${item.kode_grade})${isWeighed ? ` • [Netto: ${item.berat_kg} Kg - TERKUNCI]` : ' • [Langkah 2: Masukkan Berat Manual]'}`, 
+      isError: false 
+    });
     setTimeout(() => {
-      beratBrutoInputRef.current?.focus();
+      if (barcodeScannerRef.current) {
+        barcodeScannerRef.current.focus();
+        barcodeScannerRef.current.select();
+      }
     }, 100);
   };
 
@@ -528,29 +548,163 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     setSaveSuccessMsg(`✓ Berat Bal "${activeBalItem.no_bal}" (${liveNetto} Kg) berhasil disimpan ke ${lokasiBlok}!`);
     setScanFeedback(null);
 
-    // Auto-advance to next unweighed item if exists
-    const nextUnweighed = updatedItems.find((it) => it.item_id !== activeBalItem.item_id && (it.berat_kg || 0) <= 0);
-    if (nextUnweighed) {
-      setActiveItemId(nextUnweighed.item_id);
-      setBeratBrutoInput('');
-      setTimeout(() => {
-        beratBrutoInputRef.current?.focus();
-      }, 150);
-    } else {
-      // All items in current kupon are weighed!
+    // Tetap pada bal terakhir yang baru saja ditimbang dalam kondisi terkunci (tidak bisa diedit),
+    // jangan berpindah ke bal selanjutnya, dan langsung kembalikan fokus ke kolom No Bal / Scanner.
+    setScannedBarcode('');
+    setIsDropdownOpen(false);
+    setHighlightedIndex(-1);
+
+    if (allItemsWeighed) {
       setScanFeedback({
-        text: `🎉 Semua ${updatedItems.length} bal pada Kupon "${currentTx.no_kupon}" telah tuntas ditimbang!`,
+        text: `🎉 Semua ${updatedItems.length} bal pada Kupon "${currentTx.no_kupon}" tuntas ditimbang (${totalNettoKg} Kg Netto)! Bal "${activeBalItem.no_bal}" tersimpan & TERKUNCI. Siap scan kupon/bal berikutnya.`,
         isError: false,
       });
-      barcodeScannerRef.current?.focus();
+    } else {
+      setScanFeedback({
+        text: `✓ Bal "${activeBalItem.no_bal}" (${liveNetto} Kg Netto) tersimpan & TERKUNCI. Kursor otomatis kembali ke kolom No Bal / Scanner untuk bal berikutnya.`,
+        isError: false,
+      });
+    }
+
+    setTimeout(() => {
+      if (barcodeScannerRef.current) {
+        barcodeScannerRef.current.focus();
+        barcodeScannerRef.current.select();
+      }
+    }, 100);
+  };
+
+  // SISTEM PENGAMAN ANTI-SCAN PADA INPUT BERAT
+  // Mencegah tembakan barcode scanner masuk dan mengunci berat secara otomatis
+  const handleKeyDownWeight = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const now = Date.now();
+    const interval = now - weightKeyBufferRef.current.lastTime;
+    weightKeyBufferRef.current.lastTime = now;
+
+    // 1. Intercept non-numeric characters (huruf, strip, simbol barcode)
+    if (e.key.length === 1 && !/[\d.,]/.test(e.key)) {
+      e.preventDefault();
+      weightKeyBufferRef.current.chars += e.key;
+      weightKeyBufferRef.current.isBurst = true;
+      return;
+    }
+
+    // 2. Intercept burst input (kecepatan tembak scanner < 45ms per karakter)
+    if (e.key.length === 1) {
+      if (interval < 45) {
+        weightKeyBufferRef.current.isBurst = true;
+        weightKeyBufferRef.current.chars += e.key;
+      } else {
+        if (interval > 300) {
+          weightKeyBufferRef.current.chars = e.key;
+          weightKeyBufferRef.current.isBurst = false;
+        } else {
+          weightKeyBufferRef.current.chars += e.key;
+        }
+      }
+    }
+
+    // 3. Handle Enter Key
+    if (e.key === 'Enter') {
+      e.preventDefault();
+
+      // Jika terdeteksi tembakan scanner (burst scan / ada karakter non-numeric)
+      if (weightKeyBufferRef.current.isBurst && weightKeyBufferRef.current.chars.trim().length >= 2) {
+        const scannedCode = weightKeyBufferRef.current.chars.trim();
+        weightKeyBufferRef.current = { chars: '', lastTime: 0, isBurst: false };
+        
+        // Reset berat agar tidak terkunci dengan angka barcode
+        setBeratBrutoInput('');
+        setAntiScanAlert({
+          text: `🛡️ PENGAMAN ANTI-SCAN AKTIF: Terdeteksi tembakan barcode saat kursor berada di kolom berat. Data scan "${scannedCode}" otomatis dialihkan ke pencarian No Bal agar berat tidak terkunci salah.`,
+          code: scannedCode,
+        });
+
+        // Alihkan scan ke pencarian nomor bal
+        lookupBal(scannedCode, true);
+        return;
+      }
+
+      // Input manual manusia yang sah
+      weightKeyBufferRef.current = { chars: '', lastTime: 0, isBurst: false };
+      handleApplyWeightForActiveBal();
     }
   };
 
-  const handleKeyDownWeight = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+  // Intercept Paste pada input berat agar barcode tidak bisa di-paste secara liar
+  const handleWeightPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const text = e.clipboardData.getData('text').trim();
+    // Jika teks yang di-paste mengandung huruf/strip atau angka terlalu panjang (> 3 digit wajar bal tembakau)
+    if (!/^\d+([.,]\d+)?$/.test(text) || parseFloat(text.replace(',', '.')) > 300 || text.length > 5) {
       e.preventDefault();
-      handleApplyWeightForActiveBal();
+      setAntiScanAlert({
+        text: `🛡️ PENGAMAN ANTI-SCAN: Teks paste "${text}" terdeteksi sebagai barcode atau nilai di luar batas normal bal (maks 300 kg). Teks dialihkan ke pencarian No Bal.`,
+        code: text,
+      });
+      lookupBal(text, true);
     }
+  };
+
+  // Buka kunci bal yang sudah ditimbang jika operator perlu timbang ulang / edit
+  const handleUnlockActiveBal = (itemId: string) => {
+    const item = workingItems.find((it) => it.item_id === itemId);
+    if (!item) return;
+
+    const confirmed = window.confirm(`Buka kunci penimbangan untuk Bal "${item.no_bal}"?\n\nData berat bal ini akan direset sehingga Anda dapat menimbang ulang dan memasukkan berat yang benar.`);
+    if (!confirmed) return;
+
+    const updatedItems = workingItems.map((it) => {
+      if (it.item_id === itemId) {
+        return {
+          ...it,
+          berat_kg: 0,
+          berat_bruto_kg: 0,
+          total_kotor: 0,
+          potongan: 0,
+          subtotal_bersih: 0,
+          status_timbang: 'menunggu_timbang' as const,
+        };
+      }
+      return it;
+    });
+
+    setWorkingItems(updatedItems);
+    setBeratBrutoInput('');
+    setScanFeedback({
+      text: `🔓 Kunci berat Bal "${item.no_bal}" telah dibuka. Silakan timbang ulang dan masukkan berat bruto.`,
+      isError: false,
+    });
+    setSaveSuccessMsg(null);
+
+    // Record audit log for bal weight unlock / reset
+    recordLogAktivitas({
+      user_id: currentUser?.user_id || 'USR-TIMBANG',
+      username: currentUser?.username || 'admintimbang',
+      nama_lengkap: currentUser?.nama_lengkap || 'Operator Timbang Digital',
+      role: currentUser?.role || 'operator_timbang',
+      modul: 'timbangan',
+      aksi: 'Buka Kunci Timbangan Bal',
+      tipe_aksi: 'edit',
+      no_kupon: currentTx?.no_kupon,
+      no_bal: item.no_bal,
+      kode_grade: item.kode_grade,
+      berat_kg: item.berat_kg,
+      transaksi_id: currentTx?.transaksi_id,
+      nama_petani: currentTx?.nama_petani,
+      status: 'peringatan',
+      rincian: `KOREKSI TIMBANGAN: Buka kunci dan reset timbangan Bal "${item.no_bal}" (Sebelumnya: ${item.berat_kg} Kg Netto, Bruto: ${item.berat_bruto_kg || 0} Kg) oleh ${currentUser?.nama_lengkap || 'Operator'} (@${currentUser?.username || 'admintimbang'}). Petani: ${currentTx?.nama_petani} (Kupon ${currentTx?.no_kupon}). Bal disiapkan untuk penimbangan ulang.`,
+      data_sebelum: JSON.stringify({ no_bal: item.no_bal, berat_kg: item.berat_kg, berat_bruto_kg: item.berat_bruto_kg, subtotal_bersih: item.subtotal_bersih }),
+      data_sesudah: JSON.stringify({ no_bal: item.no_bal, berat_kg: 0, status_timbang: 'menunggu_timbang' }),
+      alasan: 'Buka kunci untuk penimbangan ulang bal',
+    });
+
+    // Kursor diarahkan ke No Bal / Scanner
+    setTimeout(() => {
+      if (barcodeScannerRef.current) {
+        barcodeScannerRef.current.focus();
+        barcodeScannerRef.current.select();
+      }
+    }, 100);
   };
 
   const handleManualChangeKupon = (txId: string) => {
@@ -583,6 +737,27 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
           <button
             onClick={() => setSaveSuccessMsg(null)}
             className="text-xs text-emerald-700 hover:text-emerald-900 font-bold underline cursor-pointer"
+          >
+            Tutup
+          </button>
+        </div>
+      )}
+
+      {/* Anti-Scan Protection Banner */}
+      {antiScanAlert && (
+        <div className="bg-amber-50 border border-amber-300 text-amber-950 p-3.5 rounded-sm flex items-start justify-between shadow-2xs animate-in fade-in duration-200">
+          <div className="flex items-start space-x-2.5 text-xs">
+            <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-amber-900">{antiScanAlert.text}</p>
+              <p className="text-[11px] text-amber-700 mt-0.5">
+                Sistem pengaman aktif: Kolom berat timbangan dilindungi dari input tembakan barcode scanner agar berat bal tidak terisi angka barcode yang salah.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setAntiScanAlert(null)}
+            className="text-xs text-amber-800 hover:text-amber-950 font-bold underline cursor-pointer ml-3 shrink-0"
           >
             Tutup
           </button>
@@ -929,12 +1104,22 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                 
                 {/* Info Bar for Already Weighed Items */}
                 {isActiveBalWeighed && (
-                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-sm flex items-start space-x-2.5">
-                    <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
-                    <div>
-                      <h4 className="text-xs font-bold text-amber-800 uppercase tracking-wider mb-0.5">Sudah Ditimbang</h4>
-                      <p className="text-[11px] text-amber-700">Nomor bal ini sudah memiliki data berat dan tersimpan. Anda hanya dapat melihat datanya (Mode Baca).</p>
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <div className="flex items-start space-x-2.5">
+                      <Lock className="w-4 h-4 text-amber-700 mt-0.5 shrink-0" />
+                      <div>
+                        <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wider mb-0.5">Bal Selesai Ditimbang & Terkunci ({activeBalItem.berat_kg} Kg Netto)</h4>
+                        <p className="text-[11px] text-amber-800">Data berat bal ini terkunci demi keamanan audit. Kursor otomatis disiapkan pada kolom No Bal untuk bal berikutnya.</p>
+                      </div>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => handleUnlockActiveBal(activeBalItem.item_id)}
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xs border border-slate-300 transition flex items-center justify-center space-x-1.5 cursor-pointer shadow-2xs whitespace-nowrap self-start sm:self-center"
+                    >
+                      <Unlock className="w-3.5 h-3.5 text-slate-600" />
+                      <span>Buka Kunci / Timbang Ulang</span>
+                    </button>
                   </div>
                 )}
                 
@@ -943,12 +1128,18 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                   
                   {/* Berat Bruto Input */}
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                        Berat / Bruto (Kg) <span className="text-rose-500">*</span>
-                      </label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center space-x-2">
+                        <label className="block text-xs font-semibold text-slate-800 uppercase tracking-wider">
+                          Berat Bruto Timbangan (Kg) <span className="text-rose-500">*</span>
+                        </label>
+                        <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded-xs text-[9px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                          <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                          <span>Anti-Scan Guard Aktif</span>
+                        </span>
+                      </div>
                       <span className="text-[10px] text-slate-500 font-normal">
-                        Berat timbangan kotor sebelum dikurangi tara
+                        Ketik manual angka timbangan (dilarang scan)
                       </span>
                     </div>
                     <div className="relative">
@@ -956,13 +1147,25 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                         ref={beratBrutoInputRef}
                         type="number"
                         step="0.1"
+                        min="0"
+                        max="300"
                         value={beratBrutoInput}
-                        onChange={(e) => setBeratBrutoInput(e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          // Reject unreasonable scanner numbers
+                          if (val && parseFloat(val) > 300) {
+                            setAntiScanAlert({
+                              text: `🛡️ PENGAMAN ANTI-SCAN: Nilai ${val} kg melebihi batas wajar bal tembakau (maks 300 kg). Barcode scanner dilarang masuk ke kolom berat!`,
+                            });
+                            return;
+                          }
+                          setBeratBrutoInput(val);
+                        }}
                         onKeyDown={handleKeyDownWeight}
+                        onPaste={handleWeightPaste}
                         placeholder="0.0"
                         disabled={isActiveBalWeighed}
                         className={`w-full border rounded-sm px-4 py-2 text-xl font-mono font-semibold tabular-nums focus:outline-none placeholder:text-slate-300 ${isActiveBalWeighed ? 'bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed' : 'bg-white text-slate-900 border-slate-300 focus:border-slate-800 focus:ring-1 focus:ring-slate-800'}`}
-                        autoFocus
                       />
                       <span className="absolute right-4 top-2 text-slate-400 font-mono font-semibold text-sm">
                         KG
@@ -1090,10 +1293,10 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                     type="button"
                     onClick={handleApplyWeightForActiveBal}
                     disabled={isActiveBalWeighed}
-                    className={`w-full py-2.5 font-medium text-xs uppercase tracking-wider rounded-sm transition flex items-center justify-center space-x-2 shadow-2xs ${isActiveBalWeighed ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-slate-900 hover:bg-slate-800 text-white cursor-pointer'}`}
+                    className={`w-full py-2.5 font-medium text-xs uppercase tracking-wider rounded-sm transition flex items-center justify-center space-x-2 shadow-2xs ${isActiveBalWeighed ? 'bg-slate-200 text-slate-500 border border-slate-300 cursor-not-allowed font-semibold' : 'bg-slate-900 hover:bg-slate-800 text-white cursor-pointer'}`}
                   >
-                    <Check className={`w-4 h-4 ${isActiveBalWeighed ? 'text-slate-400' : 'text-slate-200'}`} />
-                    <span>{isActiveBalWeighed ? 'Sudah Disimpan' : 'Simpan Data Timbangan Bal (Enter)'}</span>
+                    <Check className={`w-4 h-4 ${isActiveBalWeighed ? 'text-emerald-600' : 'text-slate-200'}`} />
+                    <span>{isActiveBalWeighed ? `✓ Terkunci - Selesai Ditimbang (${activeBalItem.berat_kg} Kg Netto)` : 'Simpan Data Timbangan Bal (Enter)'}</span>
                   </button>
                 </div>
               </div>

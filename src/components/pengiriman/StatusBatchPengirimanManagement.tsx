@@ -104,7 +104,6 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
     message: string;
     itemRef?: SampleItemDetail;
   } | null>(null);
-  const [selectedBulkKodeHarga, setSelectedBulkKodeHarga] = useState<string>('');
   const [hasUnsavedSortir, setHasUnsavedSortir] = useState<boolean>(false);
   const [successToast, setSuccessToast] = useState<string>('');
 
@@ -274,39 +273,6 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
       setHasUnsavedSortir(true);
       setItemToRemove(null);
     }
-  };
-
-  // Quick Action: ACC All Items
-  const handleApproveAllItems = () => {
-    const nowStr = new Date().toISOString().split('T')[0];
-    setBatchItems((prev) =>
-      prev.map((it) => ({
-        ...it,
-        status_item: 'disetujui',
-        harga_deal_kg: it.harga_deal_kg || it.harga_tawaran_kg,
-        tanggal_evaluasi: nowStr,
-      }))
-    );
-    setHasUnsavedSortir(true);
-  };
-
-  // Quick Action: Apply Master Kode Harga Jual to All Bales
-  const handleApplyBulkKodeHarga = () => {
-    if (!selectedBulkKodeHarga) return;
-    const matched = hargaJualList.find((h) => h.kode === selectedBulkKodeHarga);
-    if (!matched) return;
-
-    setBatchItems((prev) =>
-      prev.map((it) => ({
-        ...it,
-        kode_harga_jual: matched.kode,
-        harga_deal_kg: matched.harga_jual,
-        catatan_nego: `Pembaruan harga massal mengikuti ${matched.kode}`,
-      }))
-    );
-    setHasUnsavedSortir(true);
-    setSuccessToast(`Kode ${matched.kode} (${formatRupiah(matched.harga_jual)}/kg) berhasil diterapkan ke seluruh bal`);
-    setTimeout(() => setSuccessToast(''), 3000);
   };
 
   // Save Batch Evaluation Changes
@@ -645,45 +611,6 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                   className="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold rounded-xs cursor-pointer"
                 >
                   Cari Bal
-                </button>
-              </div>
-
-              {/* Mass Action Tools */}
-              <div className="flex flex-wrap items-center gap-2">
-                {/* Mass Price Code Assignment */}
-                <div className="flex items-center space-x-1.5">
-                  <span className="text-[11px] font-semibold text-gray-600">Kode Harga:</span>
-                  <select
-                    value={selectedBulkKodeHarga}
-                    onChange={(e) => setSelectedBulkKodeHarga(e.target.value)}
-                    className="px-2 py-1 text-xs bg-white border border-gray-300 rounded-xs font-mono font-bold"
-                  >
-                    <option value="">-- Pilih Kode Master Harga Jual --</option>
-                    {hargaJualList.filter((h) => h.status_aktif !== false).map((h) => (
-                      <option key={h.harga_jual_id} value={h.kode}>
-                        {h.kode} ({formatRupiah(h.harga_jual)}/kg)
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={handleApplyBulkKodeHarga}
-                    disabled={!selectedBulkKodeHarga}
-                    className="px-2.5 py-1 text-xs font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-100 disabled:opacity-50 rounded-xs cursor-pointer"
-                  >
-                    Terapkan Semua
-                  </button>
-                </div>
-
-                <div className="h-4 w-px bg-gray-300" />
-
-                <button
-                  type="button"
-                  onClick={handleApproveAllItems}
-                  className="px-3 py-1 text-xs font-bold text-emerald-800 bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 rounded-xs cursor-pointer transition flex items-center space-x-1"
-                >
-                  <Check className="w-3.5 h-3.5" />
-                  <span>ACC Semua Bal</span>
                 </button>
               </div>
             </div>

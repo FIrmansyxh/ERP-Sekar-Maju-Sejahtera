@@ -101,13 +101,25 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
     return filteredData.slice(start, start + itemsPerPage);
   }, [filteredData, currentPage, itemsPerPage]);
 
+  // Render clean single sort arrow indicator
   const handleSort = (field: string) => {
     if (sortBy === field) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+      setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
     } else {
       setSortBy(field);
       setSortOrder('asc');
     }
+  };
+
+  const renderSortIcon = (field: string) => {
+    if (sortBy !== field) {
+      return null;
+    }
+    return (
+      <span className="text-xs font-black text-[#b81d24] ml-1">
+        {sortOrder === 'asc' ? '↑' : '↓'}
+      </span>
+    );
   };
 
   const canManagePetani = canUserPerform(userRole, 'canCreatePetani');
@@ -238,8 +250,8 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
         <div className="p-3 bg-white flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
           <div className="flex flex-wrap items-center gap-3 sm:gap-4">
             {/* Tampil X Data Per Halaman */}
-            <div className="flex items-center space-x-2">
-              <span className="text-gray-600">Tampil</span>
+            <div className="flex items-center space-x-1.5">
+              <span className="text-gray-600 font-medium">Tampil</span>
               <select
                 id="select-items-per-page-petani"
                 value={itemsPerPage}
@@ -247,14 +259,15 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
                   setItemsPerPage(Number(e.target.value));
                   setCurrentPage(1);
                 }}
-                className="border border-gray-300 rounded-sm px-2 py-1 bg-white text-xs text-gray-800 focus:outline-none focus:border-[#b81d24]"
+                className="border border-gray-300 rounded-sm px-2 py-1 bg-white text-xs font-semibold text-gray-800 focus:outline-none focus:border-[#b81d24] cursor-pointer"
               >
                 <option value={5}>5</option>
                 <option value={10}>10</option>
-                <option value={25}>25</option>
+                <option value={20}>20</option>
                 <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={data.length || 1000}>All</option>
               </select>
-              <span className="text-gray-600">Data Per Halaman</span>
             </div>
 
             {/* Dropdown Filter Status Cepat Petani */}
@@ -344,7 +357,7 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
                 >
                   <div className="flex items-center justify-between">
                     <span>Petani ID</span>
-                    <span className="text-[10px] text-gray-400">▲▼</span>
+                    {renderSortIcon('petani_id')}
                   </div>
                 </th>
                 <th 
@@ -353,7 +366,7 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
                 >
                   <div className="flex items-center justify-between">
                     <span>Nama Petani</span>
-                    <span className="text-[10px] text-gray-400">▲▼</span>
+                    {renderSortIcon('nama')}
                   </div>
                 </th>
                 <th className="py-2.5 px-3 border-r border-gray-200 w-36 text-center">Nomor HP</th>
@@ -393,7 +406,7 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
                   return (
                     <tr 
                       key={petani.petani_id}
-                      className="hover:bg-[#f8f9fa] transition-colors"
+                      className={`transition-colors hover:bg-amber-50/60 ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'}`}
                     >
                       {/* No */}
                       <td className="py-2.5 px-3 text-center border-r border-gray-200 font-mono text-gray-600">

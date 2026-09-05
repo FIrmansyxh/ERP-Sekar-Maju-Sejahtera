@@ -19,7 +19,9 @@ import {
   ShieldCheck,
   FileSpreadsheet,
   BarChart3,
-  Percent
+  Percent,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { Gudang, Barang, Petani, TransaksiPembelian, UserRole } from '../../types';
 import { GRADE_COLOR_MAP } from '../../data/initialHargaData';
@@ -64,6 +66,7 @@ export const LaporanGudangView: React.FC<LaporanGudangViewProps> = ({
   });
 
   // UI States
+  const [showSummaryCards, setShowSummaryCards] = useState<boolean>(true);
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(true);
   const [itemsPerPage, setItemsPerPage] = useState<number>(10);
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -367,6 +370,25 @@ export const LaporanGudangView: React.FC<LaporanGudangViewProps> = ({
 
         <div className="flex items-center flex-wrap gap-2">
           <button
+            type="button"
+            onClick={() => setShowSummaryCards(!showSummaryCards)}
+            className="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-xs transition flex items-center space-x-1.5 cursor-pointer"
+            title={showSummaryCards ? 'Sembunyikan Ringkasan' : 'Tampilkan Ringkasan'}
+          >
+            {showSummaryCards ? (
+              <>
+                <EyeOff className="w-3.5 h-3.5 text-gray-600" />
+                <span>Sembunyikan Ringkasan</span>
+              </>
+            ) : (
+              <>
+                <Eye className="w-3.5 h-3.5 text-gray-600" />
+                <span>Tampilkan Ringkasan</span>
+              </>
+            )}
+          </button>
+
+          <button
             onClick={handleResetFilter}
             className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
             title="Muat Ulang / Reset Filter"
@@ -397,99 +419,101 @@ export const LaporanGudangView: React.FC<LaporanGudangViewProps> = ({
       </div>
 
       {/* 2. Top Executive KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        
-        {/* Card 1: Total Bal Tersimpan (Stok Aktif) */}
-        <div className="bg-white border border-gray-200 p-3.5 rounded-none shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex items-center justify-between">
-          <div className="space-y-0.5">
-            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-              Bal Tersimpan (Stok Aktif)
-            </p>
-            <div className="flex items-baseline space-x-2">
-              <span className="text-xl font-black text-gray-900 font-mono">
-                {overallTotals.totalActiveBal.toLocaleString('id-ID')}
-              </span>
-              <span className="text-xs font-bold text-gray-500">Bal</span>
+      {showSummaryCards && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          
+          {/* Card 1: Total Bal Tersimpan (Stok Aktif) */}
+          <div className="bg-white border border-gray-200 p-3.5 rounded-none shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex items-center justify-between">
+            <div className="space-y-0.5">
+              <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                Bal Tersimpan (Stok Aktif)
+              </p>
+              <div className="flex items-baseline space-x-2">
+                <span className="text-xl font-black text-gray-900 font-mono">
+                  {overallTotals.totalActiveBal.toLocaleString('id-ID')}
+                </span>
+                <span className="text-xs font-bold text-gray-500">Bal</span>
+              </div>
+              <p className="text-[11px] text-gray-600 font-medium">
+                Total Berat: <strong className="text-gray-900 font-mono">{overallTotals.totalKg.toLocaleString('id-ID')} Kg</strong> ({(overallTotals.totalKg / 1000).toFixed(1)} Ton)
+              </p>
             </div>
-            <p className="text-[11px] text-gray-600 font-medium">
-              Total Berat: <strong className="text-gray-900 font-mono">{overallTotals.totalKg.toLocaleString('id-ID')} Kg</strong> ({(overallTotals.totalKg / 1000).toFixed(1)} Ton)
-            </p>
+            <div className="w-9 h-9 rounded-sm bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700 shrink-0">
+              <Package className="w-4.5 h-4.5" />
+            </div>
           </div>
-          <div className="w-9 h-9 rounded-sm bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700 shrink-0">
-            <Package className="w-4.5 h-4.5" />
-          </div>
-        </div>
 
-        {/* Card 2: Kapasitas Total Penampungan */}
-        <div className="bg-white border border-gray-200 p-3.5 rounded-none shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex items-center justify-between">
-          <div className="space-y-0.5">
-            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-              Total Kapasitas Tampung
-            </p>
-            <div className="flex items-baseline space-x-2">
-              <span className="text-xl font-black text-gray-900 font-mono">
-                {overallTotals.totalCapacity.toLocaleString('id-ID')}
-              </span>
-              <span className="text-xs font-bold text-gray-500">Bal</span>
+          {/* Card 2: Kapasitas Total Penampungan */}
+          <div className="bg-white border border-gray-200 p-3.5 rounded-none shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex items-center justify-between">
+            <div className="space-y-0.5">
+              <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                Total Kapasitas Tampung
+              </p>
+              <div className="flex items-baseline space-x-2">
+                <span className="text-xl font-black text-gray-900 font-mono">
+                  {overallTotals.totalCapacity.toLocaleString('id-ID')}
+                </span>
+                <span className="text-xs font-bold text-gray-500">Bal</span>
+              </div>
+              <p className="text-[11px] text-gray-600 font-medium">
+                Sisa Ruang: <strong className="text-emerald-700 font-mono">{overallTotals.totalSisaKapasitas.toLocaleString('id-ID')} Bal</strong>
+              </p>
             </div>
-            <p className="text-[11px] text-gray-600 font-medium">
-              Sisa Ruang: <strong className="text-emerald-700 font-mono">{overallTotals.totalSisaKapasitas.toLocaleString('id-ID')} Bal</strong>
-            </p>
+            <div className="w-9 h-9 rounded-sm bg-purple-50 border border-purple-200 flex items-center justify-center text-purple-700 shrink-0">
+              <Warehouse className="w-4.5 h-4.5" />
+            </div>
           </div>
-          <div className="w-9 h-9 rounded-sm bg-purple-50 border border-purple-200 flex items-center justify-center text-purple-700 shrink-0">
-            <Warehouse className="w-4.5 h-4.5" />
-          </div>
-        </div>
 
-        {/* Card 3: % Okupansi Terisi Rata-Rata */}
-        <div className="bg-white border border-gray-200 p-3.5 rounded-none shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex items-center justify-between">
-          <div className="space-y-0.5 flex-1 pr-2">
-            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-              % Okupansi Gudang Terisi
-            </p>
-            <div className="flex items-baseline space-x-2">
-              <span className={`text-xl font-black font-mono ${getOccupancyColor(overallTotals.overallOccupancyPct).text}`}>
-                {overallTotals.overallOccupancyPct}%
-              </span>
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-xs bg-gray-100 text-gray-700 border border-gray-200">
-                {getOccupancyColor(overallTotals.overallOccupancyPct).status}
-              </span>
+          {/* Card 3: % Okupansi Terisi Rata-Rata */}
+          <div className="bg-white border border-gray-200 p-3.5 rounded-none shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex items-center justify-between">
+            <div className="space-y-0.5 flex-1 pr-2">
+              <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                % Okupansi Gudang Terisi
+              </p>
+              <div className="flex items-baseline space-x-2">
+                <span className={`text-xl font-black font-mono ${getOccupancyColor(overallTotals.overallOccupancyPct).text}`}>
+                  {overallTotals.overallOccupancyPct}%
+                </span>
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-xs bg-gray-100 text-gray-700 border border-gray-200">
+                  {getOccupancyColor(overallTotals.overallOccupancyPct).status}
+                </span>
+              </div>
+              {/* Progress bar */}
+              <div className="w-full bg-gray-200 h-1.5 rounded-full overflow-hidden mt-1.5">
+                <div 
+                  className={`h-full ${getOccupancyColor(overallTotals.overallOccupancyPct).bar}`}
+                  style={{ width: `${Math.min(overallTotals.overallOccupancyPct, 100)}%` }}
+                />
+              </div>
             </div>
-            {/* Progress bar */}
-            <div className="w-full bg-gray-200 h-1.5 rounded-full overflow-hidden mt-1.5">
-              <div 
-                className={`h-full ${getOccupancyColor(overallTotals.overallOccupancyPct).bar}`}
-                style={{ width: `${Math.min(overallTotals.overallOccupancyPct, 100)}%` }}
-              />
+            <div className="w-9 h-9 rounded-sm bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0">
+              <Percent className="w-4.5 h-4.5" />
             </div>
           </div>
-          <div className="w-9 h-9 rounded-sm bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0">
-            <Percent className="w-4.5 h-4.5" />
-          </div>
-        </div>
 
-        {/* Card 4: Akumulasi Bal Masuk & Fasilitas */}
-        <div className="bg-white border border-gray-200 p-3.5 rounded-none shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex items-center justify-between">
-          <div className="space-y-0.5">
-            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-              Total Bal Masuk (Akumulasi)
-            </p>
-            <div className="flex items-baseline space-x-2">
-              <span className="text-xl font-black text-gray-900 font-mono">
-                {overallTotals.totalBalMasuk.toLocaleString('id-ID')}
-              </span>
-              <span className="text-xs font-bold text-gray-500">Bal</span>
+          {/* Card 4: Akumulasi Bal Masuk & Fasilitas */}
+          <div className="bg-white border border-gray-200 p-3.5 rounded-none shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex items-center justify-between">
+            <div className="space-y-0.5">
+              <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                Total Bal Masuk (Akumulasi)
+              </p>
+              <div className="flex items-baseline space-x-2">
+                <span className="text-xl font-black text-gray-900 font-mono">
+                  {overallTotals.totalBalMasuk.toLocaleString('id-ID')}
+                </span>
+                <span className="text-xs font-bold text-gray-500">Bal</span>
+              </div>
+              <p className="text-[11px] text-gray-600 font-medium">
+                Bal Terkirim Pabrik: <strong className="text-blue-700 font-mono">{overallTotals.totalBalKeluar} Bal</strong>
+              </p>
             </div>
-            <p className="text-[11px] text-gray-600 font-medium">
-              Bal Terkirim Pabrik: <strong className="text-blue-700 font-mono">{overallTotals.totalBalKeluar} Bal</strong>
-            </p>
+            <div className="w-9 h-9 rounded-sm bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0">
+              <TrendingUp className="w-4.5 h-4.5" />
+            </div>
           </div>
-          <div className="w-9 h-9 rounded-sm bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0">
-            <TrendingUp className="w-4.5 h-4.5" />
-          </div>
-        </div>
 
-      </div>
+        </div>
+      )}
 
       {/* 3. Filter Section */}
       <div className="bg-white border border-gray-200 rounded-none shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
@@ -686,7 +710,7 @@ export const LaporanGudangView: React.FC<LaporanGudangViewProps> = ({
                 return (
                   <tr 
                     key={g.gudang_id}
-                    className={`hover:bg-red-50/30 transition-colors ${isSelected ? 'bg-red-50/60 font-medium' : ''}`}
+                    className={`${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'} hover:bg-red-50/30 transition-colors ${isSelected ? 'bg-red-50/60 font-medium' : ''}`}
                   >
                     <td className="py-2.5 px-3 text-center border-r border-gray-200 font-mono text-gray-600">
                       {index + 1}
@@ -869,19 +893,22 @@ export const LaporanGudangView: React.FC<LaporanGudangViewProps> = ({
           </div>
 
           <div className="flex items-center space-x-2 text-xs">
-            <span className="text-gray-500">Tampilkan:</span>
+            <span className="text-gray-500 font-medium">Tampil</span>
             <select
-              value={itemsPerPage}
+              value={itemsPerPage >= 100000 ? 'ALL' : itemsPerPage}
               onChange={(e) => {
-                setItemsPerPage(Number(e.target.value));
+                const val = e.target.value;
+                setItemsPerPage(val === 'ALL' ? 100000 : Number(val));
                 setCurrentPage(1);
               }}
               className="border border-gray-300 rounded-sm px-2 py-1 bg-white text-xs text-gray-800 focus:outline-none focus:border-[#b81d24]"
             >
-              <option value={10}>10 Baris</option>
-              <option value={25}>25 Baris</option>
-              <option value={50}>50 Baris</option>
-              <option value={100}>100 Baris</option>
+              <option value={5}>5</option>
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+              <option value="ALL">Semua</option>
             </select>
           </div>
         </div>
@@ -926,7 +953,7 @@ export const LaporanGudangView: React.FC<LaporanGudangViewProps> = ({
                   return (
                     <tr 
                       key={b.barang_id || idx}
-                      className="hover:bg-[#f8f9fa] transition-colors"
+                      className={`${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'} hover:bg-[#f8f9fa] transition-colors`}
                     >
                       <td className="py-2.5 px-3 text-center border-r border-gray-200 font-mono text-gray-600">
                         {rowNumber}

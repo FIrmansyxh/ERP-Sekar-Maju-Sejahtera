@@ -17,14 +17,17 @@ import {
   X,
   Zap
 } from 'lucide-react';
-import { Barang, PengirimanSample } from '../../types';
+import { Barang, PengirimanSample, BatchPengirimanSample } from '../../types';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
+import { loadBatchSampleData } from '../../utils/storage';
 
 interface SampleWizardModalProps {
   isOpen: boolean;
   onClose: () => void;
   barangList: Barang[];
+  sampleList?: PengirimanSample[];
+  batchSampleList?: BatchPengirimanSample[];
   onSaveBatchSamples: (
     newSamples: PengirimanSample[],
     updatedBarangList: Barang[]
@@ -35,6 +38,8 @@ export const SampleWizardModal: React.FC<SampleWizardModalProps> = ({
   isOpen,
   onClose,
   barangList,
+  sampleList = [],
+  batchSampleList = [],
   onSaveBatchSamples,
 }) => {
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -48,26 +53,69 @@ export const SampleWizardModal: React.FC<SampleWizardModalProps> = ({
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
   const [beratGramPerBal, setBeratGramPerBal] = useState<number>(250);
-  const [tujuanBuyer, setTujuanBuyer] = useState<string>('PT Djarum Kudus - Lab QC & R&D');
-  const [customTujuan, setCustomTujuan] = useState<string>('');
+  const [tujuanBuyer, setTujuanBuyer] = useState<string>('');
   const [sumberGudang, setSumberGudang] = useState<string>('Gudang Utama Tembakau A1');
   const [dikirimOleh, setDikirimOleh] = useState<string>('Petugas QC & Sortir');
   const [catatan, setCatatan] = useState<string>('Pengujian organoleptik dan kadar air laboratorium');
 
   const scannerInputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    if (isOpen) {
+      setTujuanBuyer('');
+      setStep(1);
+      setSelectedBarangIds([]);
+      setScanFeedback(null);
+      setIsConfirmOpen(false);
+    }
+  }, [isOpen]);
+
+  const activeBatchList = batchSampleList.length > 0 ? batchSampleList : loadBatchSampleData();
+
+  // Helper untuk cek penggunaan nomor bal di modul sample
+  const checkBalUsage = (bal: Barang) => {
+    const isSelectedInCurrent = selectedBarangIds.includes(bal.barang_id);
+    if (isSelectedInCurrent) {
+      return {
+        isAvailable: false,
+        statusType: 'in_current_batch' as const,
+        badgeText: 'SUDAH DIPILIH',
+        badgeClass: 'bg-amber-100 text-amber-800 border-amber-300',
+        message: `⚠️ BAL SUDAH DIPILIH: Bal #${bal.no_bal || bal.barang_id} (${bal.kode_grade}) sudah ada dalam daftar sampel yang dipilih!`,
+      };
+    }
+
+    const matchedBatch = activeBatchList.find(
+      (b) =>
+        b.status !== 'dibatalkan' &&
+        b.items?.some(
+          (it) =>
+            it.barang_id === bal.barang_id ||
+            (it.no_bal && bal.no_bal && it.no_bal.trim().toLowerCase() === bal.no_bal.trim().toLowerCase())
+        )
+    );
+    if (matchedBatch) {
+      return {
+        isAvailable: false,
+        statusType: 'used_in_batch' as const,
+        badgeText: `SUDAH DIPAKAI (${matchedBatch.kode_batch})`,
+        badgeClass: 'bg-red-100 text-red-800 border-red-300',
+        message: `⚠️ NO BAL SUDAH DIPAKAI: Bal #${bal.no_bal || bal.barang_id} (Grade ${bal.kode_grade}) SUDAH DIGUNAKAN pada Batch Sample "${matchedBatch.kode_batch}" (${matchedBatch.tujuan_buyer})!`,
+      };
+    }
+
+    return {
+      isAvailable: true,
+      statusType: 'available' as const,
+      badgeText: 'TERSEDIA',
+      badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+      message: `Bal #${bal.no_bal || bal.barang_id} siap digunakan.`,
+    };
+  };
+
   const availableBal = barangList.filter(
     (b) => b.status_stok === 'di_gudang' || b.status_stok === 'terkirim_sample'
   );
-
-  const popularBuyers = [
-    'PT Djarum Kudus - Lab QC & R&D',
-    'PT Gudang Garam Tbk Kediri - QC Tembakau',
-    'PT HM Sampoerna Surabaya - QA Plant',
-    'Bentoel Group Malang - Lab Pengujian',
-    'Pabrik Rokok Sukun Kudus',
-    'PT Wismilak Inti Makmur Surabaya',
-  ];
 
   const handleScanNoBal = (codeToScan: string) => {
     const trimmed = codeToScan.trim();
@@ -88,13 +136,21 @@ export const SampleWizardModal: React.FC<SampleWizardModalProps> = ({
       return;
     }
 
-    if (selectedBarangIds.includes(matched.barang_id)) {
+    const usage = checkBalUsage(matched);
+    if (!usage.isAvailable) {
       setScanFeedback({
         type: 'info',
-        message: `Bal ${matched.no_bal} sudah tercentang dalam daftar sampel.`,
+        message: usage.message,
       });
       setBalInput('');
       return;
+    }
+
+    if (matched.status_stok === 'terkirim_sample') {
+      setScanFeedback({
+        type: 'info',
+        message: `ℹ️ PERHATIAN: Bal #${matched.no_bal || matched.barang_id} berstatus sampel (${matched.catatan || 'Dalam proses pengujian'}), namun dapat dipilih ulang untuk batch sampel baru.`,
+      });
     }
 
     setSelectedBarangIds((prev) => [...prev, matched.barang_id]);
@@ -162,7 +218,8 @@ export const SampleWizardModal: React.FC<SampleWizardModalProps> = ({
 
   const handleConfirmSubmit = () => {
     const today = new Date().toISOString().split('T')[0];
-    const finalTujuan = tujuanBuyer === 'Lainnya / Input Manual' ? customTujuan : tujuanBuyer;
+    const finalTujuan = tujuanBuyer.trim();
+    if (!finalTujuan) return;
 
     // Generate batch sample records
     const newSamples: PengirimanSample[] = selectedBalObjects.map((bal, idx) => {
@@ -371,12 +428,15 @@ export const SampleWizardModal: React.FC<SampleWizardModalProps> = ({
                   ) : (
                     filteredAvailableBal.map((b) => {
                       const isSelected = selectedBarangIds.includes(b.barang_id);
+                      const usage = checkBalUsage(b);
                       return (
                         <label
                           key={b.barang_id}
                           className={`flex items-center justify-between p-2 cursor-pointer transition text-xs ${
                             isSelected
                               ? 'bg-gray-100 border border-gray-400 text-gray-900 font-bold'
+                              : !usage.isAvailable
+                              ? 'bg-red-50/40 border border-red-200 text-gray-700'
                               : 'bg-white hover:bg-gray-50 border border-gray-200 text-gray-700'
                           }`}
                         >
@@ -384,13 +444,25 @@ export const SampleWizardModal: React.FC<SampleWizardModalProps> = ({
                             <input
                               type="checkbox"
                               checked={isSelected}
-                              onChange={() => toggleSelectBal(b.barang_id)}
+                              onChange={() => {
+                                if (!isSelected && !usage.isAvailable) {
+                                  setScanFeedback({
+                                    type: 'info',
+                                    message: usage.message,
+                                  });
+                                  return;
+                                }
+                                toggleSelectBal(b.barang_id);
+                              }}
                               className="w-3.5 h-3.5 text-gray-900 rounded-none focus:ring-0 cursor-pointer"
                             />
                             <div>
                               <div className="flex items-center space-x-2">
                                 <span className="font-mono font-bold text-gray-900">
                                   Bal #{b.no_bal}
+                                </span>
+                                <span className={`px-1.5 py-0.2 text-[9px] font-bold border rounded-2xs ${usage.badgeClass}`}>
+                                  {usage.badgeText}
                                 </span>
                               </div>
                               <span className="text-[11px] text-gray-500 font-normal">
@@ -464,31 +536,22 @@ export const SampleWizardModal: React.FC<SampleWizardModalProps> = ({
               </div>
 
               {/* Tujuan Pabrik / Buyer */}
-              <div className="p-3.5 bg-white border border-gray-200 space-y-3">
+              <div className="p-3.5 bg-white border border-gray-200 space-y-2">
                 <label className="block font-bold text-gray-900 text-xs">
-                  Tujuan Lab / Perusahaan Penguji:
+                  Tujuan Gudang / Pabrik Penguji: <span className="text-red-500">*</span>
                 </label>
-                <select
+                <input
+                  type="text"
                   value={tujuanBuyer}
                   onChange={(e) => setTujuanBuyer(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-[#ced4da] rounded-none text-xs font-semibold focus:outline-none focus:border-gray-800"
-                >
-                  {popularBuyers.map((pb) => (
-                    <option key={pb} value={pb}>
-                      {pb}
-                    </option>
-                  ))}
-                  <option value="Lainnya / Input Manual">Lainnya (Tulis Manual)...</option>
-                </select>
-
-                {tujuanBuyer === 'Lainnya / Input Manual' && (
-                  <input
-                    type="text"
-                    value={customTujuan}
-                    onChange={(e) => setCustomTujuan(e.target.value)}
-                    placeholder="Ketik nama pabrik/laboratorium tujuan..."
-                    className="w-full px-3 py-1.5 bg-white border border-[#ced4da] rounded-none text-xs focus:outline-none focus:border-gray-800"
-                  />
+                  placeholder="Ketik nama gudang / pabrik / lab tujuan..."
+                  required
+                  className="w-full px-3 py-2 bg-white border border-[#ced4da] rounded-none text-xs text-gray-900 focus:outline-none focus:border-gray-800"
+                />
+                {!tujuanBuyer.trim() && (
+                  <p className="text-[10px] text-red-600 font-medium">
+                    * Wajib diisi, ketik tujuan gudang secara manual (bukan dropdown).
+                  </p>
                 )}
               </div>
 
@@ -549,7 +612,7 @@ export const SampleWizardModal: React.FC<SampleWizardModalProps> = ({
                   <div>
                     <span className="text-gray-500 block">Tujuan Buyer / Lab:</span>
                     <span className="font-bold text-gray-900">
-                      {tujuanBuyer === 'Lainnya / Input Manual' ? customTujuan : tujuanBuyer}
+                      {tujuanBuyer || '-'}
                     </span>
                   </div>
                   <div>
@@ -623,8 +686,18 @@ export const SampleWizardModal: React.FC<SampleWizardModalProps> = ({
           {step < 3 ? (
             <button
               type="button"
-              disabled={selectedBarangIds.length === 0}
-              onClick={() => setStep((s) => (s + 1) as 1 | 2 | 3)}
+              disabled={selectedBarangIds.length === 0 || (step === 2 && !tujuanBuyer.trim())}
+              onClick={() => {
+                if (step === 2 && !tujuanBuyer.trim()) {
+                  setScanFeedback({
+                    type: 'error',
+                    message: 'Tujuan gudang / pabrik penguji sampel wajib diisi!',
+                  });
+                  return;
+                }
+                setScanFeedback(null);
+                setStep((s) => (s + 1) as 1 | 2 | 3);
+              }}
               className="px-4 py-1.5 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed rounded-none transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
             >
               <span>Lanjut ({selectedBarangIds.length} Bal Terpilih)</span>
@@ -633,8 +706,18 @@ export const SampleWizardModal: React.FC<SampleWizardModalProps> = ({
           ) : (
             <button
               type="button"
-              onClick={() => setIsConfirmOpen(true)}
-              className="px-5 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-black rounded-none transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
+              disabled={!tujuanBuyer.trim()}
+              onClick={() => {
+                if (!tujuanBuyer.trim()) {
+                  setScanFeedback({
+                    type: 'error',
+                    message: 'Tujuan gudang / pabrik penguji sampel wajib diisi!',
+                  });
+                  return;
+                }
+                setIsConfirmOpen(true);
+              }}
+              className="px-5 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-black disabled:opacity-40 disabled:cursor-not-allowed rounded-none transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
             >
               <CheckCircle2 className="w-4 h-4" />
               <span>Simpan & Terbitkan Sample Batch</span>
@@ -650,7 +733,7 @@ export const SampleWizardModal: React.FC<SampleWizardModalProps> = ({
           isOpen={isConfirmOpen}
           title="Konfirmasi Pengiriman Sampel QC"
           message={`Apakah Anda yakin ingin memproses pengiriman sampel untuk ${selectedBalObjects.length} bal tembakau ke ${
-            tujuanBuyer === 'Lainnya / Input Manual' ? customTujuan : tujuanBuyer
+            tujuanBuyer
           }?\n\nBerat stok gudang akan otomatis dipotong total sebesar ${totalPenguranganKg} Kg.`}
           confirmLabel="Proses & Potong Stok"
           onConfirm={handleConfirmSubmit}

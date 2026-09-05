@@ -13,6 +13,35 @@ import {
   User,
   LogAktivitas 
 } from '../types';
+import LZString from 'lz-string';
+
+const safeSetItem = (key: string, data: any) => {
+  try {
+    const jsonStr = JSON.stringify(data);
+    const compressed = LZString.compressToUTF16(jsonStr);
+    localStorage.setItem(key, compressed);
+  } catch (err) {
+    console.error(`Failed to save data for ${key}:`, err);
+  }
+};
+
+const safeGetItem = (key: string) => {
+  try {
+    const compressed = localStorage.getItem(key);
+    if (!compressed) return null;
+    
+    // Fallback for older uncompressed data
+    if (compressed.startsWith('[') || compressed.startsWith('{')) {
+      return compressed;
+    }
+    
+    const decompressed = LZString.decompressFromUTF16(compressed);
+    return decompressed;
+  } catch (err) {
+    console.error(`Failed to load data for ${key}:`, err);
+    return null;
+  }
+};
 
 import { INITIAL_PETANI_DATA } from '../data/initialPetaniData';
 import { INITIAL_BARANG_DATA } from '../data/initialBarangData';
@@ -26,20 +55,20 @@ import { INITIAL_GUDANG_DATA } from '../data/initialGudangData';
 import { INITIAL_USER_DATA } from '../data/initialUserData';
 import { INITIAL_LOG_AKTIVITAS_DATA } from '../data/initialLogAktivitasData';
 
-const KEY_PETANI = 'erp_tembakau_petani_v8';
-const KEY_BARANG = 'erp_tembakau_barang_v10';
-const KEY_MASTER_BARANG = 'erp_tembakau_master_barang_v8';
-const KEY_STOCK_OPNAME = 'erp_tembakau_stock_opname_v8';
-const KEY_HARGA = 'erp_tembakau_harga_v8';
-const KEY_HARGA_JUAL = 'erp_tembakau_harga_jual_v8';
-const KEY_TRANSAKSI = 'erp_tembakau_transaksi_v10';
-const KEY_SAMPLE = 'erp_tembakau_sample_v10';
-const KEY_BATCH_SAMPLE = 'erp_tembakau_batch_sample_v10';
-const KEY_PENGIRIMAN = 'erp_tembakau_pengiriman_v10';
-const KEY_GUDANG = 'erp_tembakau_gudang_v8';
-const KEY_USERS = 'erp_tembakau_users_v8';
-const KEY_CURRENT_USER = 'erp_tembakau_current_user_v8';
-const KEY_LOG_AKTIVITAS = 'erp_tembakau_log_aktivitas_v8';
+const KEY_PETANI = 'erp_tembakau_petani_v14';
+const KEY_BARANG = 'erp_tembakau_barang_v14';
+const KEY_MASTER_BARANG = 'erp_tembakau_master_barang_v14';
+const KEY_STOCK_OPNAME = 'erp_tembakau_stock_opname_v14';
+const KEY_HARGA = 'erp_tembakau_harga_v14';
+const KEY_HARGA_JUAL = 'erp_tembakau_harga_jual_v14';
+const KEY_TRANSAKSI = 'erp_tembakau_transaksi_v14';
+const KEY_SAMPLE = 'erp_tembakau_sample_v14';
+const KEY_BATCH_SAMPLE = 'erp_tembakau_batch_sample_v14';
+const KEY_PENGIRIMAN = 'erp_tembakau_pengiriman_v14';
+const KEY_GUDANG = 'erp_tembakau_gudang_v14';
+const KEY_USERS = 'erp_tembakau_users_v14';
+const KEY_CURRENT_USER = 'erp_tembakau_current_user_v14';
+const KEY_LOG_AKTIVITAS = 'erp_tembakau_log_aktivitas_v14';
 
 // Clean up old version demo caches
 (function purgeLegacyDemoCaches() {
@@ -62,7 +91,7 @@ const KEY_LOG_AKTIVITAS = 'erp_tembakau_log_aktivitas_v8';
 // --- USER MANAGEMENT & AUTH (RBAC) ---
 export function loadUserData(): User[] {
   try {
-    const saved = localStorage.getItem(KEY_USERS);
+    const saved = safeGetItem(KEY_USERS);
     if (saved !== null) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
@@ -90,7 +119,7 @@ export function loadUserData(): User[] {
 
 export function saveUserData(data: User[]): void {
   try {
-    localStorage.setItem(KEY_USERS, JSON.stringify(data));
+    safeSetItem(KEY_USERS, data);
   } catch (err) {
     console.error('Failed to save user data:', err);
   }
@@ -98,7 +127,7 @@ export function saveUserData(data: User[]): void {
 
 export function loadCurrentUser(): User | null {
   try {
-    const saved = localStorage.getItem(KEY_CURRENT_USER);
+    const saved = safeGetItem(KEY_CURRENT_USER);
     if (saved) {
       const parsed = JSON.parse(saved);
       if (parsed && typeof parsed === 'object' && parsed.user_id) {
@@ -118,7 +147,7 @@ export function loadCurrentUser(): User | null {
 export function saveCurrentUser(user: User | null): void {
   try {
     if (user) {
-      localStorage.setItem(KEY_CURRENT_USER, JSON.stringify(user));
+      safeSetItem(KEY_CURRENT_USER, user);
     } else {
       localStorage.removeItem(KEY_CURRENT_USER);
     }
@@ -162,7 +191,7 @@ export function authenticateUser(usernameInput: string, passwordInput: string): 
 // --- MASTER BARANG ---
 export function loadMasterBarangData(): MasterBarang[] {
   try {
-    const saved = localStorage.getItem(KEY_MASTER_BARANG);
+    const saved = safeGetItem(KEY_MASTER_BARANG);
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -176,7 +205,7 @@ export function loadMasterBarangData(): MasterBarang[] {
 
 export function saveMasterBarangData(data: MasterBarang[]): void {
   try {
-    localStorage.setItem(KEY_MASTER_BARANG, JSON.stringify(data));
+    safeSetItem(KEY_MASTER_BARANG, data);
   } catch (err) {
     console.error('Failed to save master barang data:', err);
   }
@@ -185,7 +214,7 @@ export function saveMasterBarangData(data: MasterBarang[]): void {
 // --- STOCK OPNAME SESSIONS ---
 export function loadStockOpnameData(): StockOpnameSession[] {
   try {
-    const saved = localStorage.getItem(KEY_STOCK_OPNAME);
+    const saved = safeGetItem(KEY_STOCK_OPNAME);
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed)) return parsed;
@@ -198,7 +227,7 @@ export function loadStockOpnameData(): StockOpnameSession[] {
 
 export function saveStockOpnameData(data: StockOpnameSession[]): void {
   try {
-    localStorage.setItem(KEY_STOCK_OPNAME, JSON.stringify(data));
+    safeSetItem(KEY_STOCK_OPNAME, data);
   } catch (err) {
     console.error('Failed to save stock opname data:', err);
   }
@@ -207,7 +236,7 @@ export function saveStockOpnameData(data: StockOpnameSession[]): void {
 // --- PETANI ---
 export function loadPetaniData(): Petani[] {
   try {
-    const saved = localStorage.getItem(KEY_PETANI);
+    const saved = safeGetItem(KEY_PETANI);
     if (saved !== null) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed)) return parsed;
@@ -221,7 +250,7 @@ export function loadPetaniData(): Petani[] {
 
 export function savePetaniData(data: Petani[]): void {
   try {
-    localStorage.setItem(KEY_PETANI, JSON.stringify(data));
+    safeSetItem(KEY_PETANI, data);
   } catch (err) {
     console.error('Failed to save petani data:', err);
   }
@@ -241,7 +270,7 @@ const MASTER_WH_LOCATIONS = [
 // --- BARANG ---
 export function loadBarangData(): Barang[] {
   try {
-    const saved = localStorage.getItem(KEY_BARANG);
+    const saved = safeGetItem(KEY_BARANG);
     if (saved !== null) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed)) {
@@ -273,7 +302,7 @@ export function loadBarangData(): Barang[] {
 
 export function saveBarangData(data: Barang[]): void {
   try {
-    localStorage.setItem(KEY_BARANG, JSON.stringify(data));
+    safeSetItem(KEY_BARANG, data);
   } catch (err) {
     console.error('Failed to save barang data:', err);
   }
@@ -282,7 +311,7 @@ export function saveBarangData(data: Barang[]): void {
 // --- TABEL HARGA ---
 export function loadHargaData(): TabelHarga[] {
   try {
-    const saved = localStorage.getItem(KEY_HARGA);
+    const saved = safeGetItem(KEY_HARGA);
     if (saved !== null) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -296,7 +325,7 @@ export function loadHargaData(): TabelHarga[] {
 
 export function saveHargaData(data: TabelHarga[]): void {
   try {
-    localStorage.setItem(KEY_HARGA, JSON.stringify(data));
+    safeSetItem(KEY_HARGA, data);
   } catch (err) {
     console.error('Failed to save harga data:', err);
   }
@@ -305,7 +334,7 @@ export function saveHargaData(data: TabelHarga[]): void {
 // --- MASTER HARGA JUAL ---
 export function loadHargaJualData(): MasterHargaJual[] {
   try {
-    const saved = localStorage.getItem(KEY_HARGA_JUAL);
+    const saved = safeGetItem(KEY_HARGA_JUAL);
     if (saved !== null) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -319,7 +348,7 @@ export function loadHargaJualData(): MasterHargaJual[] {
 
 export function saveHargaJualData(data: MasterHargaJual[]): void {
   try {
-    localStorage.setItem(KEY_HARGA_JUAL, JSON.stringify(data));
+    safeSetItem(KEY_HARGA_JUAL, data);
   } catch (err) {
     console.error('Failed to save harga jual data:', err);
   }
@@ -328,7 +357,7 @@ export function saveHargaJualData(data: MasterHargaJual[]): void {
 // --- TRANSAKSI PEMBELIAN ---
 export function loadTransaksiData(): TransaksiPembelian[] {
   try {
-    const saved = localStorage.getItem(KEY_TRANSAKSI);
+    const saved = safeGetItem(KEY_TRANSAKSI);
     if (saved !== null) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed)) {
@@ -359,7 +388,7 @@ export function loadTransaksiData(): TransaksiPembelian[] {
 
 export function saveTransaksiData(data: TransaksiPembelian[]): void {
   try {
-    localStorage.setItem(KEY_TRANSAKSI, JSON.stringify(data));
+    safeSetItem(KEY_TRANSAKSI, data);
   } catch (err) {
     console.error('Failed to save transaksi data:', err);
   }
@@ -368,10 +397,10 @@ export function saveTransaksiData(data: TransaksiPembelian[]): void {
 // --- PENGIRIMAN SAMPLE ---
 export function loadSampleData(): PengirimanSample[] {
   try {
-    const saved = localStorage.getItem(KEY_SAMPLE);
+    const saved = safeGetItem(KEY_SAMPLE);
     if (saved !== null) {
       const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
     }
   } catch (err) {
     console.error('Failed to load sample data:', err);
@@ -382,7 +411,7 @@ export function loadSampleData(): PengirimanSample[] {
 
 export function saveSampleData(data: PengirimanSample[]): void {
   try {
-    localStorage.setItem(KEY_SAMPLE, JSON.stringify(data));
+    safeSetItem(KEY_SAMPLE, data);
   } catch (err) {
     console.error('Failed to save sample data:', err);
   }
@@ -391,7 +420,7 @@ export function saveSampleData(data: PengirimanSample[]): void {
 // --- BATCH PENGIRIMAN SAMPLE ---
 export function loadBatchSampleData(): BatchPengirimanSample[] {
   try {
-    const saved = localStorage.getItem(KEY_BATCH_SAMPLE);
+    const saved = safeGetItem(KEY_BATCH_SAMPLE);
     if (saved !== null) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -405,7 +434,7 @@ export function loadBatchSampleData(): BatchPengirimanSample[] {
 
 export function saveBatchSampleData(data: BatchPengirimanSample[]): void {
   try {
-    localStorage.setItem(KEY_BATCH_SAMPLE, JSON.stringify(data));
+    safeSetItem(KEY_BATCH_SAMPLE, data);
   } catch (err) {
     console.error('Failed to save batch sample data:', err);
   }
@@ -414,10 +443,10 @@ export function saveBatchSampleData(data: BatchPengirimanSample[]): void {
 // --- PENGIRIMAN BARANG ---
 export function loadPengirimanData(): PengirimanBarang[] {
   try {
-    const saved = localStorage.getItem(KEY_PENGIRIMAN);
+    const saved = safeGetItem(KEY_PENGIRIMAN);
     if (saved !== null) {
       const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
     }
   } catch (err) {
     console.error('Failed to load pengiriman data:', err);
@@ -428,7 +457,7 @@ export function loadPengirimanData(): PengirimanBarang[] {
 
 export function savePengirimanData(data: PengirimanBarang[]): void {
   try {
-    localStorage.setItem(KEY_PENGIRIMAN, JSON.stringify(data));
+    safeSetItem(KEY_PENGIRIMAN, data);
   } catch (err) {
     console.error('Failed to save pengiriman data:', err);
   }
@@ -437,7 +466,7 @@ export function savePengirimanData(data: PengirimanBarang[]): void {
 // --- MASTER GUDANG ---
 export function loadGudangData(): Gudang[] {
   try {
-    const saved = localStorage.getItem(KEY_GUDANG);
+    const saved = safeGetItem(KEY_GUDANG);
     if (saved !== null) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -451,7 +480,7 @@ export function loadGudangData(): Gudang[] {
 
 export function saveGudangData(data: Gudang[]): void {
   try {
-    localStorage.setItem(KEY_GUDANG, JSON.stringify(data));
+    safeSetItem(KEY_GUDANG, data);
   } catch (err) {
     console.error('Failed to save gudang data:', err);
   }
@@ -460,7 +489,7 @@ export function saveGudangData(data: Gudang[]): void {
 // --- LOG AKTIVITAS & AUDIT TRAIL (SUPER ADMIN EXCLUSIVE) ---
 export function loadLogAktivitasData(): LogAktivitas[] {
   try {
-    const saved = localStorage.getItem(KEY_LOG_AKTIVITAS);
+    const saved = safeGetItem(KEY_LOG_AKTIVITAS);
     if (saved !== null) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -474,7 +503,7 @@ export function loadLogAktivitasData(): LogAktivitas[] {
 
 export function saveLogAktivitasData(data: LogAktivitas[]): void {
   try {
-    localStorage.setItem(KEY_LOG_AKTIVITAS, JSON.stringify(data));
+    safeSetItem(KEY_LOG_AKTIVITAS, data);
   } catch (err) {
     console.error('Failed to save log aktivitas data:', err);
   }
@@ -497,6 +526,9 @@ export function recordLogAktivitas(entry: Omit<LogAktivitas, 'log_id' | 'timesta
     updated.length = 1000;
   }
   saveLogAktivitasData(updated);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('log-aktivitas-updated', { detail: newLog }));
+  }
   return newLog;
 }
 

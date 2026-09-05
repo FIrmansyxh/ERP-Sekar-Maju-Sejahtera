@@ -52,6 +52,13 @@ export const MODULES_CONFIG = [
     moduleKey: 'dashboard-analytic',
   },
   {
+    id: 'modul-6-laporan-bal',
+    title: 'Laporan Bal',
+    subtitle: 'Detail Bal, Berat, Harga & Status',
+    icon: 'Package',
+    moduleKey: 'laporan-bal',
+  },
+  {
     id: 'modul-6-laporan-grade',
     title: 'Laporan Mutu Grade',
     subtitle: 'Stok, Intake & Valuasi per Grade',
@@ -214,7 +221,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const checkAccess = (modId: string) => hasModuleAccess(userRole, modId);
 
-  const canSeeReport = checkAccess('modul-6-dashboard-analytic') || checkAccess('modul-6-laporan-grade') || checkAccess('modul-6-laporan-harga-jual') || checkAccess('modul-6-laporan-pembelian') || checkAccess('modul-6-laporan-gudang') || checkAccess('modul-6-laporan-petani') || checkAccess('modul-6-laporan-pengiriman');
+  const canSeeReport = checkAccess('modul-6-dashboard-analytic') || checkAccess('modul-6-laporan-bal') || checkAccess('modul-6-laporan-grade') || checkAccess('modul-6-laporan-harga-jual') || checkAccess('modul-6-laporan-pembelian') || checkAccess('modul-6-laporan-gudang') || checkAccess('modul-6-laporan-petani') || checkAccess('modul-6-laporan-pengiriman');
   const canSeeMaster = checkAccess('modul-1-petani') || checkAccess('modul-3-harga') || checkAccess('modul-3-harga-jual') || checkAccess('modul-7-gudang') || checkAccess('modul-2-barang');
   const canSeePembelian = checkAccess('modul-0-sortir') || checkAccess('modul-0-timbangan') || checkAccess('modul-0-kasir') || checkAccess('modul-0-transaksi');
   const canSeePengiriman = checkAccess('modul-5-pengiriman') || checkAccess('modul-4-sample') || checkAccess('modul-status-batch');
@@ -223,6 +230,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const isReportActive = [
     'modul-6-dashboard-analytic',
+    'modul-6-laporan-bal',
     'modul-6-laporan-grade',
     'modul-6-laporan-harga-jual',
     'modul-6-laporan-pembelian',
@@ -313,6 +321,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     }`}
                   >
                     <span>Dashboard Analytic</span>
+                  </button>
+                )}
+
+                {checkAccess('modul-6-laporan-bal') && (
+                  <button
+                    onClick={() => onSelectModule('modul-6-laporan-bal')}
+                    className={`w-full text-left py-1.5 px-2 rounded-xs flex items-center justify-between cursor-pointer ${
+                      activeModuleId === 'modul-6-laporan-bal'
+                        ? 'text-slate-900 font-semibold bg-slate-100'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span>Laporan Bal</span>
                   </button>
                 )}
 

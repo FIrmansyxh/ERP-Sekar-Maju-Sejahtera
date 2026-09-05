@@ -8,7 +8,8 @@ import {
   CheckCircle2,
   AlertTriangle,
   Info,
-  Clock
+  Clock,
+  Edit3
 } from 'lucide-react';
 import { TransaksiPembelian } from '../../types';
 import { formatRupiah, formatNumber, angkaTerbilang, formatDateHariBulanTahun } from '../../utils/formatters';
@@ -19,7 +20,8 @@ interface TransaksiDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   transaksi: TransaksiPembelian | null;
-  onDeleteTransaksi?: (transaksiId: string) => void;
+  onDeleteTransaksi?: (transaksiId: string, alasan?: string) => void;
+  onOpenEditModal?: (transaksi: TransaksiPembelian) => void;
   onUpdateNotaStatus?: (transaksiId: string) => void;
   onMarkAsLunas?: (transaksiId: string) => void;
   onOpenBayarModal?: (tx: TransaksiPembelian) => void;
@@ -30,12 +32,14 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
   onClose,
   transaksi,
   onDeleteTransaksi,
+  onOpenEditModal,
   onUpdateNotaStatus,
   onMarkAsLunas,
   onOpenBayarModal,
 }) => {
   const receiptRef = useRef<HTMLDivElement>(null);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
+  const [alasanHapus, setAlasanHapus] = useState('');
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   if (!isOpen || !transaksi) return null;
@@ -155,10 +159,28 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
               <span>Tutup</span>
             </button>
 
+            {onOpenEditModal && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenEditModal(transaksi);
+                }}
+                className="px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-sm transition flex items-center space-x-1 cursor-pointer"
+                title="Edit / Koreksi data transaksi ini"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>Edit</span>
+              </button>
+            )}
+
             {onDeleteTransaksi && (
               <button
                 type="button"
-                onClick={() => setIsConfirmDeleteOpen(true)}
+                onClick={() => {
+                  setAlasanHapus('');
+                  setIsConfirmDeleteOpen(true);
+                }}
                 className="px-3 py-1.5 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-sm transition flex items-center space-x-1 cursor-pointer"
                 title="Hapus transaksi ini"
               >
@@ -168,6 +190,26 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
             )}
           </div>
         </div>
+
+        {/* Riwayat Pengubahan Data (Audit Trail History Banner) */}
+        {transaksi.terakhir_diubah_oleh && (
+          <div className="bg-slate-50 border-b border-slate-200 px-5 py-2.5 flex items-start space-x-2 text-slate-700 text-xs">
+            <Info className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
+            <div className="space-y-0.5">
+              <div>
+                <span className="font-semibold text-slate-900">Riwayat Pengubahan:</span> Terakhir diubah oleh <strong className="text-slate-900">{transaksi.terakhir_diubah_oleh}</strong>
+                {transaksi.terakhir_diubah_pada && (
+                  <span className="text-slate-500"> pada {new Date(transaksi.terakhir_diubah_pada).toLocaleString('id-ID')} WIB</span>
+                )}
+              </div>
+              {transaksi.alasan_perubahan_terakhir && (
+                <div className="text-[11px] text-slate-600 font-mono italic">
+                  Alasan Koreksi: "{transaksi.alasan_perubahan_terakhir}"
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Warning if items are not weighed yet */}
         {hasZeroWeightItem && (
@@ -481,21 +523,88 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
 
       </div>
 
-      {/* Konfirmasi Hapus Transaksi */}
+      {/* Konfirmasi Hapus Transaksi dengan Alasan Audit Trail */}
       {isConfirmDeleteOpen && onDeleteTransaksi && (
-        <ConfirmModal
-          isOpen={isConfirmDeleteOpen}
-          title="Konfirmasi Hapus Transaksi"
-          message={`Apakah Anda yakin ingin menghapus transaksi "${transaksi.transaksi_id}" milik petani "${transaksi.nama_petani}" (${transaksi.berat_kg} Kg)?\n\nSemua bal tembakau inventaris gudang yang terkait transaksi ini juga akan dihapus.`}
-          confirmLabel="Hapus Transaksi"
-          isDestructive={true}
-          onConfirm={() => {
-            onDeleteTransaksi(transaksi.transaksi_id);
-            setIsConfirmDeleteOpen(false);
-            onClose();
-          }}
-          onCancel={() => setIsConfirmDeleteOpen(false)}
-        />
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white border border-rose-200 rounded-sm shadow-2xl max-w-md w-full p-5 space-y-4 animate-in fade-in">
+            <div className="flex items-center space-x-3 text-rose-600">
+              <div className="w-9 h-9 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-rose-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Konfirmasi Hapus Transaksi</h3>
+                <p className="text-xs text-slate-500 font-mono">
+                  {transaksi.no_kupon} ({transaksi.transaksi_id})
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-rose-50/70 border border-rose-200 rounded-xs text-xs text-rose-950 space-y-1">
+              <p>
+                Apakah Anda yakin ingin menghapus transaksi milik Petani <strong>{transaksi.nama_petani}</strong>?
+              </p>
+              <p className="text-[11px] text-rose-700">
+                • Berat Netto: {transaksi.berat_kg} Kg ({transaksi.total_bal || (transaksi.items ? transaksi.items.length : 1)} Bal)
+                <br />
+                • Total Nilai: {formatRupiah(transaksi.harga_final || transaksi.total_harga_beli)}
+                <br />
+                • Semua bal tembakau inventaris gudang terkait transaksi ini juga akan dihapus.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 flex items-center space-x-1">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                <span>Alasan Penghapusan (Wajib untuk Audit Trail Admin):</span>
+              </label>
+              <input
+                type="text"
+                placeholder="Contoh: Salah input nomor kupon / Duplikasi / Dibatalkan petani"
+                value={alasanHapus}
+                onChange={(e) => setAlasanHapus(e.target.value)}
+                className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded-xs focus:ring-1 focus:ring-slate-900 focus:outline-none"
+              />
+              <div className="flex flex-wrap gap-1 pt-1">
+                {['Salah input nomor kupon', 'Duplikasi transaksi timbangan', 'Dibatalkan oleh petani penyetor', 'Koreksi administratif'].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setAlasanHapus(preset)}
+                    className="text-[10px] px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xs border border-slate-200 transition cursor-pointer"
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsConfirmDeleteOpen(false);
+                  setAlasanHapus('');
+                }}
+                className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-xs transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onDeleteTransaksi(transaksi.transaksi_id, alasanHapus.trim() || 'Dihapus dari popup detail transaksi');
+                  setIsConfirmDeleteOpen(false);
+                  setAlasanHapus('');
+                  onClose();
+                }}
+                className="px-4 py-1.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xs transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Hapus & Rekam Audit Log</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

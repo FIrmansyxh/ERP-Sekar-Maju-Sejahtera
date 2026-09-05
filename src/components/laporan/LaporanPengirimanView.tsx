@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Truck, 
   Search, 
@@ -20,7 +20,11 @@ import {
   ShieldCheck,
   AlertCircle,
   TrendingUp,
-  UserCheck
+  UserCheck,
+  Eye,
+  EyeOff,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import { PengirimanBarang, PengirimanSample, Barang, Gudang, UserRole } from '../../types';
 import { downloadCsvFile, downloadElementAsPdf } from '../../utils/printDownload';
@@ -69,10 +73,65 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
   });
 
   // UI & Drawer States
+  const [showSummaryCards, setShowSummaryCards] = useState(true);
   const [selectedDOForDetail, setSelectedDOForDetail] = useState<PengirimanBarang | null>(null);
+  
+  // Tab 1 (Surat Jalan DO) Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(15);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  // Tab 3 (Pengiriman Sample QC) Pagination
+  const [sampleCurrentPage, setSampleCurrentPage] = useState(1);
+  const [sampleItemsPerPage, setSampleItemsPerPage] = useState(10);
+
+  // Tab 4 (Log Bal Fisik Terkirim) Pagination
+  const [balCurrentPage, setBalCurrentPage] = useState(1);
+  const [balItemsPerPage, setBalItemsPerPage] = useState(10);
+
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+
+  // Scroll Position State for Scroll-To-Top and Scroll-To-Bottom buttons (seperti pada menu Laporan Pembelian)
+  const [showScrollButtons, setShowScrollButtons] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollY = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop;
+      const windowHeight = window.innerHeight || document.documentElement.clientHeight;
+      const docHeight = Math.max(
+        document.documentElement.scrollHeight,
+        document.body.scrollHeight
+      );
+
+      // Sembunyikan ketika di paling atas (<= 100px) ATAU ketika sudah di paling bawah (>= docHeight - 80px)
+      // Muncul kembali ketika di-scroll ke atas dari bawah atau di-scroll ke bawah dari atas
+      const isAtTop = scrollY <= 100;
+      const isAtBottom = scrollY + windowHeight >= docHeight - 80;
+
+      setShowScrollButtons(!isAtTop && !isAtBottom);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', handleScroll, { passive: true });
+    handleScroll();
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleScroll);
+    };
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth',
+    });
+  };
+
+  const scrollToBottom = () => {
+    window.scrollTo({
+      top: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight),
+      behavior: 'smooth',
+    });
+  };
 
   const printDocumentRef = useRef<HTMLDivElement>(null);
 
@@ -304,11 +363,47 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
     }
   };
 
-  // Pagination for Tab 1
+  // Tab 1: Paginated Data & Total Pages
   const paginatedData = useMemo(() => {
+    if (itemsPerPage >= 100000) {
+      return filteredPengirimanList;
+    }
     const start = (currentPage - 1) * itemsPerPage;
     return filteredPengirimanList.slice(start, start + itemsPerPage);
   }, [filteredPengirimanList, currentPage, itemsPerPage]);
+
+  const totalPages = useMemo(() => {
+    if (itemsPerPage >= 100000 || filteredPengirimanList.length === 0) return 1;
+    return Math.ceil(filteredPengirimanList.length / itemsPerPage);
+  }, [filteredPengirimanList.length, itemsPerPage]);
+
+  // Tab 3: Paginated Sample Data & Total Pages
+  const paginatedSampleData = useMemo(() => {
+    if (sampleItemsPerPage >= 100000) {
+      return sampleList;
+    }
+    const start = (sampleCurrentPage - 1) * sampleItemsPerPage;
+    return sampleList.slice(start, start + sampleItemsPerPage);
+  }, [sampleList, sampleCurrentPage, sampleItemsPerPage]);
+
+  const sampleTotalPages = useMemo(() => {
+    if (sampleItemsPerPage >= 100000 || sampleList.length === 0) return 1;
+    return Math.ceil(sampleList.length / sampleItemsPerPage);
+  }, [sampleList.length, sampleItemsPerPage]);
+
+  // Tab 4: Paginated Bal Keluar Data & Total Pages
+  const paginatedBalKeluarData = useMemo(() => {
+    if (balItemsPerPage >= 100000) {
+      return balKeluarList;
+    }
+    const start = (balCurrentPage - 1) * balItemsPerPage;
+    return balKeluarList.slice(start, start + balItemsPerPage);
+  }, [balKeluarList, balCurrentPage, balItemsPerPage]);
+
+  const balTotalPages = useMemo(() => {
+    if (balItemsPerPage >= 100000 || balKeluarList.length === 0) return 1;
+    return Math.ceil(balKeluarList.length / balItemsPerPage);
+  }, [balKeluarList.length, balItemsPerPage]);
 
   return (
     <div className="space-y-4 font-sans text-gray-800">
@@ -327,6 +422,25 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
 
         {/* Action Controls: Unduh CSV & Unduh PDF */}
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowSummaryCards(!showSummaryCards)}
+            className="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-xs transition flex items-center space-x-1.5 cursor-pointer"
+            title={showSummaryCards ? 'Sembunyikan Ringkasan' : 'Tampilkan Ringkasan'}
+          >
+            {showSummaryCards ? (
+              <>
+                <EyeOff className="w-3.5 h-3.5 text-gray-600" />
+                <span>Sembunyikan Ringkasan</span>
+              </>
+            ) : (
+              <>
+                <Eye className="w-3.5 h-3.5 text-gray-600" />
+                <span>Tampilkan Ringkasan</span>
+              </>
+            )}
+          </button>
+
           {onNavigateToPengiriman && (
             <button
               onClick={onNavigateToPengiriman}
@@ -359,91 +473,93 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
       </div>
 
       {/* 2. Executive KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-        <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
-          <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-            Total Surat Jalan
-          </div>
-          <div className="mt-1">
-            <div className="text-xl font-bold font-mono text-gray-900">
-              {overallKPIs.totalDO} DO
+      {showSummaryCards && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+          <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
+            <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+              Total Surat Jalan
             </div>
-            <div className="text-[10px] text-gray-500 font-medium mt-0.5">
-              Trip Pengiriman
+            <div className="mt-1">
+              <div className="text-xl font-bold font-mono text-gray-900">
+                {overallKPIs.totalDO} DO
+              </div>
+              <div className="text-[10px] text-gray-500 font-medium mt-0.5">
+                Trip Pengiriman
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
-          <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-            Total Bal Terkirim
-          </div>
-          <div className="mt-1">
-            <div className="text-xl font-bold font-mono text-gray-900">
-              {overallKPIs.totalBalKirim.toLocaleString('id-ID')}
+          <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
+            <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+              Total Bal Terkirim
             </div>
-            <div className="text-[10px] text-gray-500 font-medium mt-0.5">
-              Bal Keluar Gudang
+            <div className="mt-1">
+              <div className="text-xl font-bold font-mono text-gray-900">
+                {overallKPIs.totalBalKirim.toLocaleString('id-ID')}
+              </div>
+              <div className="text-[10px] text-gray-500 font-medium mt-0.5">
+                Bal Keluar Gudang
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
-          <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-            Total Tonase Keluar
-          </div>
-          <div className="mt-1">
-            <div className="text-xl font-bold font-mono text-blue-900">
-              {overallKPIs.totalKgKirim.toLocaleString('id-ID')} kg
+          <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
+            <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+              Total Tonase Keluar
             </div>
-            <div className="text-[10px] text-gray-500 font-medium mt-0.5">
-              {(overallKPIs.totalKgKirim / 1000).toFixed(2)} Ton Netto
+            <div className="mt-1">
+              <div className="text-xl font-bold font-mono text-blue-900">
+                {overallKPIs.totalKgKirim.toLocaleString('id-ID')} kg
+              </div>
+              <div className="text-[10px] text-gray-500 font-medium mt-0.5">
+                {(overallKPIs.totalKgKirim / 1000).toFixed(2)} Ton Netto
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
-          <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-            Diterima Pabrik
-          </div>
-          <div className="mt-1">
-            <div className="text-xl font-bold font-mono text-emerald-600">
-              {overallKPIs.countDiterima} DO
+          <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
+            <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+              Diterima Pabrik
             </div>
-            <div className="text-[10px] text-emerald-700 font-semibold mt-0.5">
-              Pengiriman Sukses
+            <div className="mt-1">
+              <div className="text-xl font-bold font-mono text-emerald-600">
+                {overallKPIs.countDiterima} DO
+              </div>
+              <div className="text-[10px] text-emerald-700 font-semibold mt-0.5">
+                Pengiriman Sukses
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
-          <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-            Dalam Perjalanan
-          </div>
-          <div className="mt-1">
-            <div className="text-xl font-bold font-mono text-amber-600">
-              {overallKPIs.countDalamPerjalanan + overallKPIs.countDimuat} DO
+          <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
+            <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+              Dalam Perjalanan
             </div>
-            <div className="text-[10px] text-gray-500 font-medium mt-0.5">
-              Proses Distribusi
+            <div className="mt-1">
+              <div className="text-xl font-bold font-mono text-amber-600">
+                {overallKPIs.countDalamPerjalanan + overallKPIs.countDimuat} DO
+              </div>
+              <div className="text-[10px] text-gray-500 font-medium mt-0.5">
+                Proses Distribusi
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
-          <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-            Sample QC Lab
-          </div>
-          <div className="mt-1">
-            <div className="text-xl font-bold font-mono text-purple-900">
-              {overallKPIs.totalSample} Sample
+          <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
+            <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+              Sample QC Lab
             </div>
-            <div className="text-[10px] text-purple-700 font-semibold mt-0.5">
-              {overallKPIs.sampleApproved} Disetujui Pabrik
+            <div className="mt-1">
+              <div className="text-xl font-bold font-mono text-purple-900">
+                {overallKPIs.totalSample} Sample
+              </div>
+              <div className="text-[10px] text-purple-700 font-semibold mt-0.5">
+                {overallKPIs.sampleApproved} Disetujui Pabrik
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* 3. Filter Controls Panel */}
       <form onSubmit={handleApplyFilter} className="bg-white p-3.5 border border-gray-200 shadow-2xs space-y-3">
@@ -621,6 +737,32 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
       {/* 5. Tab Content 1: Surat Jalan Table */}
       {activeTab === 'surat-jalan' && (
         <div className="bg-white border border-gray-200 shadow-2xs overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-gray-200 bg-[#f8f9fa] flex items-center justify-between">
+            <div className="text-xs font-bold text-gray-800">
+              Daftar Surat Jalan Distribusi (DO) ({filteredPengirimanList.length} Data)
+            </div>
+            <div className="flex items-center space-x-1.5 text-xs text-gray-600">
+              <span className="font-medium">Tampil</span>
+              <select
+                value={itemsPerPage >= 100000 ? 'all' : itemsPerPage}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setItemsPerPage(val === 'all' ? 100000 : Number(val));
+                  setCurrentPage(1);
+                }}
+                className="border border-gray-300 rounded-xs px-2 py-1 bg-white text-xs text-gray-800 font-semibold focus:outline-none focus:border-[#b81d24]"
+              >
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value="all">All</option>
+              </select>
+            </div>
+          </div>
+
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
@@ -646,11 +788,12 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
                   </tr>
                 ) : (
                   paginatedData.map((p, idx) => {
-                    const rowNumber = (currentPage - 1) * itemsPerPage + idx + 1;
+                    const effectiveLimit = itemsPerPage >= 100000 ? filteredPengirimanList.length : itemsPerPage;
+                    const rowNumber = (currentPage - 1) * effectiveLimit + idx + 1;
                     return (
                       <tr 
                         key={p.pengiriman_id}
-                        className="hover:bg-gray-50/80 transition-colors cursor-pointer"
+                        className={`${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'} hover:bg-gray-100/80 transition-colors cursor-pointer`}
                         onClick={() => setSelectedDOForDetail(p)}
                       >
                         <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono text-gray-500">
@@ -702,16 +845,47 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
 
           {/* Pagination Controls */}
           {filteredPengirimanList.length > 0 && (
-            <div className="p-3 bg-[#f8f9fa] border-t border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div className="text-xs text-gray-600">
-                Menampilkan <strong>{(currentPage - 1) * itemsPerPage + 1}</strong> - <strong>{Math.min(currentPage * itemsPerPage, filteredPengirimanList.length)}</strong> dari <strong>{filteredPengirimanList.length}</strong> pengiriman
+            <div className="p-3 bg-[#f8f9fa] border-t border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center space-x-1.5 text-xs text-gray-600">
+                  <span className="font-medium">Tampil</span>
+                  <select
+                    value={itemsPerPage >= 100000 ? 'all' : itemsPerPage}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setItemsPerPage(val === 'all' ? 100000 : Number(val));
+                      setCurrentPage(1);
+                    }}
+                    className="border border-gray-300 rounded-xs px-2 py-1 bg-white text-xs text-gray-800 font-semibold focus:outline-none focus:border-[#b81d24]"
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                    <option value="all">All</option>
+                  </select>
+                </div>
+                <div className="text-xs text-gray-600">
+                  Menampilkan <strong>{(currentPage - 1) * (itemsPerPage >= 100000 ? filteredPengirimanList.length : itemsPerPage) + 1}</strong> - <strong>{Math.min(currentPage * (itemsPerPage >= 100000 ? filteredPengirimanList.length : itemsPerPage), filteredPengirimanList.length)}</strong> dari <strong>{filteredPengirimanList.length}</strong> pengiriman
+                </div>
+                {itemsPerPage >= 100000 && (
+                  <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-xs border border-emerald-200 font-semibold">
+                    Semua {filteredPengirimanList.length} data ditampilkan dalam 1 halaman
+                  </span>
+                )}
               </div>
-              <Pagination
-                currentPage={currentPage}
-                totalItems={filteredPengirimanList.length}
-                itemsPerPage={itemsPerPage}
-                onPageChange={(page) => setCurrentPage(page)}
-              />
+
+              {itemsPerPage < 100000 && totalPages > 1 && (
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  totalItems={filteredPengirimanList.length}
+                  itemsPerPage={itemsPerPage}
+                  onPageChange={(page) => setCurrentPage(page)}
+                />
+              )}
             </div>
           )}
         </div>
@@ -748,7 +922,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
                   const totalAllKg = overallKPIs.totalKgKirim || 1;
                   const persen = ((item.totalKg / totalAllKg) * 100).toFixed(1);
                   return (
-                    <tr key={item.pabrik} className="hover:bg-gray-50">
+                    <tr key={item.pabrik} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'} hover:bg-gray-100/80 transition-colors`}>
                       <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono text-gray-500">
                         {idx + 1}
                       </td>
@@ -787,19 +961,41 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
       {/* 7. Tab Content 3: Pengiriman Sample */}
       {activeTab === 'sample-qc' && (
         <div className="bg-white border border-gray-200 shadow-2xs overflow-hidden">
-          <div className="p-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+          <div className="p-3 border-b border-gray-200 bg-gray-50 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
-              Log Pengiriman Sampel Uji Laboratorium & Quality Control
+              Log Pengiriman Sampel Uji Laboratorium & Quality Control ({sampleList.length} Data)
             </h3>
-            {onNavigateToSample && (
-              <button
-                onClick={onNavigateToSample}
-                className="px-2.5 py-1 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 text-xs font-semibold rounded-xs transition flex items-center space-x-1 cursor-pointer"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span>Modul Sample QC</span>
-              </button>
-            )}
+            <div className="flex items-center space-x-3">
+              <div className="flex items-center space-x-1.5 text-xs text-gray-600">
+                <span className="font-medium">Tampil</span>
+                <select
+                  value={sampleItemsPerPage >= 100000 ? 'all' : sampleItemsPerPage}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSampleItemsPerPage(val === 'all' ? 100000 : Number(val));
+                    setSampleCurrentPage(1);
+                  }}
+                  className="border border-gray-300 rounded-xs px-2 py-1 bg-white text-xs text-gray-800 font-semibold focus:outline-none focus:border-[#b81d24]"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                  <option value="all">All</option>
+                </select>
+              </div>
+              {onNavigateToSample && (
+                <button
+                  onClick={onNavigateToSample}
+                  className="px-2.5 py-1 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 text-xs font-semibold rounded-xs transition flex items-center space-x-1 cursor-pointer"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Modul Sample QC</span>
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="overflow-x-auto">
@@ -825,58 +1021,125 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
                     </td>
                   </tr>
                 ) : (
-                  sampleList.map((s, idx) => (
-                    <tr key={s.sample_id} className="hover:bg-gray-50">
-                      <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono text-gray-500">{idx + 1}</td>
-                      <td className="py-2.5 px-3 border-r border-gray-200 font-mono font-bold text-gray-900">{s.sample_id}</td>
-                      <td className="py-2.5 px-3 border-r border-gray-200">
-                        <span className="px-2 py-0.5 bg-zinc-900 text-white rounded-xs text-[10px] font-bold">
-                          Grade {s.kode_grade}
-                        </span>
-                      </td>
-                      <td className="py-2.5 px-3 border-r border-gray-200 font-mono text-gray-700">
-                        {s.tanggal_kirim ? s.tanggal_kirim.split('T')[0] : '-'}
-                      </td>
-                      <td className="py-2.5 px-3 border-r border-gray-200 font-semibold text-gray-800">{s.tujuan}</td>
-                      <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono font-bold text-gray-900">
-                        {s.berat_sample_gram} gram
-                      </td>
-                      <td className="py-2.5 px-3 border-r border-gray-200 text-center">
-                        {s.status === 'disetujui' ? (
-                          <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xs text-[10px] font-bold">
-                            Disetujui Lab
+                  paginatedSampleData.map((s, idx) => {
+                    const effectiveLimit = sampleItemsPerPage >= 100000 ? sampleList.length : sampleItemsPerPage;
+                    const rowNumber = (sampleCurrentPage - 1) * effectiveLimit + idx + 1;
+                    return (
+                      <tr key={s.sample_id} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'} hover:bg-gray-100/80 transition-colors`}>
+                        <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono text-gray-500">{rowNumber}</td>
+                        <td className="py-2.5 px-3 border-r border-gray-200 font-mono font-bold text-gray-900">{s.sample_id}</td>
+                        <td className="py-2.5 px-3 border-r border-gray-200">
+                          <span className="px-2 py-0.5 bg-zinc-900 text-white rounded-xs text-[10px] font-bold">
+                            Grade {s.kode_grade}
                           </span>
-                        ) : s.status === 'ditolak' ? (
-                          <span className="px-2 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded-xs text-[10px] font-bold">
-                            Ditolak
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-xs text-[10px] font-bold">
-                            Dalam Pengujian
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-2.5 px-3 border-r border-gray-200 text-gray-600">{s.dikirim_oleh}</td>
-                      <td className="py-2.5 px-3 text-gray-500 text-[11px] italic">{s.catatan || '-'}</td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="py-2.5 px-3 border-r border-gray-200 font-mono text-gray-700">
+                          {s.tanggal_kirim ? s.tanggal_kirim.split('T')[0] : '-'}
+                        </td>
+                        <td className="py-2.5 px-3 border-r border-gray-200 font-semibold text-gray-800">{s.tujuan}</td>
+                        <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono font-bold text-gray-900">
+                          {s.berat_sample_gram} gram
+                        </td>
+                        <td className="py-2.5 px-3 border-r border-gray-200 text-center">
+                          {s.status === 'disetujui' ? (
+                            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xs text-[10px] font-bold">
+                              Disetujui Lab
+                            </span>
+                          ) : s.status === 'ditolak' ? (
+                            <span className="px-2 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded-xs text-[10px] font-bold">
+                              Ditolak
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-xs text-[10px] font-bold">
+                              Dalam Pengujian
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 border-r border-gray-200 text-gray-600">{s.dikirim_oleh}</td>
+                        <td className="py-2.5 px-3 text-gray-500 text-[11px] italic">{s.catatan || '-'}</td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
           </div>
+
+          {/* Sample QC Pagination Controls */}
+          {sampleList.length > 0 && (
+            <div className="p-3 bg-[#f8f9fa] border-t border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center space-x-1.5 text-xs text-gray-600">
+                  <span className="font-medium">Tampil</span>
+                  <select
+                    value={sampleItemsPerPage >= 100000 ? 'all' : sampleItemsPerPage}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSampleItemsPerPage(val === 'all' ? 100000 : Number(val));
+                      setSampleCurrentPage(1);
+                    }}
+                    className="border border-gray-300 rounded-xs px-2 py-1 bg-white text-xs text-gray-800 font-semibold focus:outline-none focus:border-[#b81d24]"
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                    <option value="all">All</option>
+                  </select>
+                </div>
+                <div className="text-xs text-gray-600">
+                  Menampilkan <strong>{(sampleCurrentPage - 1) * (sampleItemsPerPage >= 100000 ? sampleList.length : sampleItemsPerPage) + 1}</strong> - <strong>{Math.min(sampleCurrentPage * (sampleItemsPerPage >= 100000 ? sampleList.length : sampleItemsPerPage), sampleList.length)}</strong> dari <strong>{sampleList.length}</strong> sampel
+                </div>
+                {sampleItemsPerPage >= 100000 && (
+                  <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-xs border border-emerald-200 font-semibold">
+                    Semua {sampleList.length} data sampel ditampilkan dalam 1 halaman
+                  </span>
+                )}
+              </div>
+
+              {sampleItemsPerPage < 100000 && sampleTotalPages > 1 && (
+                <Pagination
+                  currentPage={sampleCurrentPage}
+                  totalPages={sampleTotalPages}
+                  totalItems={sampleList.length}
+                  itemsPerPage={sampleItemsPerPage}
+                  onPageChange={(page) => setSampleCurrentPage(page)}
+                />
+              )}
+            </div>
+          )}
         </div>
       )}
 
       {/* 8. Tab Content 4: Log Bal Fisik Terkirim */}
       {activeTab === 'log-bal' && (
         <div className="bg-white border border-gray-200 shadow-2xs overflow-hidden">
-          <div className="p-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+          <div className="p-3 border-b border-gray-200 bg-gray-50 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
-              Log Seluruh Bal Fisik Berstatus Keluar (Terkirim Pabrik)
+              Log Seluruh Bal Fisik Berstatus Keluar (Terkirim Pabrik) ({balKeluarList.length} Data)
             </h3>
-            <span className="text-xs text-gray-500">
-              Total {balKeluarList.length} Bal Keluar
-            </span>
+            <div className="flex items-center space-x-1.5 text-xs text-gray-600">
+              <span className="font-medium">Tampil</span>
+              <select
+                value={balItemsPerPage >= 100000 ? 'all' : balItemsPerPage}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setBalItemsPerPage(val === 'all' ? 100000 : Number(val));
+                  setBalCurrentPage(1);
+                }}
+                className="border border-gray-300 rounded-xs px-2 py-1 bg-white text-xs text-gray-800 font-semibold focus:outline-none focus:border-[#b81d24]"
+              >
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value="all">All</option>
+              </select>
+            </div>
           </div>
 
           <div className="overflow-x-auto">
@@ -901,34 +1164,110 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
                     </td>
                   </tr>
                 ) : (
-                  balKeluarList.map((b, idx) => (
-                    <tr key={b.barang_id} className="hover:bg-gray-50">
-                      <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono text-gray-500">{idx + 1}</td>
-                      <td className="py-2.5 px-3 border-r border-gray-200 font-mono font-bold text-gray-900">{b.barang_id}</td>
-                      <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono font-bold text-gray-800">{b.no_bal}</td>
-                      <td className="py-2.5 px-3 border-r border-gray-200 text-center">
-                        <span className="px-2 py-0.5 bg-zinc-900 text-white rounded-none text-[10px] font-bold">
-                          Grade {b.kode_grade}
-                        </span>
-                      </td>
-                      <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono font-bold text-gray-900">
-                        {b.berat_kg} kg
-                      </td>
-                      <td className="py-2.5 px-3 border-r border-gray-200 font-semibold text-gray-800">
-                        {b.nama_petani || '-'}
-                      </td>
-                      <td className="py-2.5 px-3 border-r border-gray-200 text-gray-600">{b.lokasi_gudang}</td>
-                      <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono text-gray-600">
-                        {b.tanggal_keluar || b.tanggal_masuk}
-                      </td>
-                    </tr>
-                  ))
+                  paginatedBalKeluarData.map((b, idx) => {
+                    const effectiveLimit = balItemsPerPage >= 100000 ? balKeluarList.length : balItemsPerPage;
+                    const rowNumber = (balCurrentPage - 1) * effectiveLimit + idx + 1;
+                    return (
+                      <tr key={b.barang_id} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'} hover:bg-gray-100/80 transition-colors`}>
+                        <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono text-gray-500">{rowNumber}</td>
+                        <td className="py-2.5 px-3 border-r border-gray-200 font-mono font-bold text-gray-900">{b.barang_id}</td>
+                        <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono font-bold text-gray-800">{b.no_bal}</td>
+                        <td className="py-2.5 px-3 border-r border-gray-200 text-center">
+                          <span className="px-2 py-0.5 bg-zinc-900 text-white rounded-none text-[10px] font-bold">
+                            Grade {b.kode_grade}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono font-bold text-gray-900">
+                          {b.berat_kg} kg
+                        </td>
+                        <td className="py-2.5 px-3 border-r border-gray-200 font-semibold text-gray-800">
+                          {b.nama_petani || '-'}
+                        </td>
+                        <td className="py-2.5 px-3 border-r border-gray-200 text-gray-600">{b.lokasi_gudang}</td>
+                        <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono text-gray-600">
+                          {b.tanggal_keluar || b.tanggal_masuk}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
           </div>
+
+          {/* Bal Keluar Pagination Controls */}
+          {balKeluarList.length > 0 && (
+            <div className="p-3 bg-[#f8f9fa] border-t border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center space-x-1.5 text-xs text-gray-600">
+                  <span className="font-medium">Tampil</span>
+                  <select
+                    value={balItemsPerPage >= 100000 ? 'all' : balItemsPerPage}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setBalItemsPerPage(val === 'all' ? 100000 : Number(val));
+                      setBalCurrentPage(1);
+                    }}
+                    className="border border-gray-300 rounded-xs px-2 py-1 bg-white text-xs text-gray-800 font-semibold focus:outline-none focus:border-[#b81d24]"
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                    <option value="all">All</option>
+                  </select>
+                </div>
+                <div className="text-xs text-gray-600">
+                  Menampilkan <strong>{(balCurrentPage - 1) * (balItemsPerPage >= 100000 ? balKeluarList.length : balItemsPerPage) + 1}</strong> - <strong>{Math.min(balCurrentPage * (balItemsPerPage >= 100000 ? balKeluarList.length : balItemsPerPage), balKeluarList.length)}</strong> dari <strong>{balKeluarList.length}</strong> bal fisik
+                </div>
+                {balItemsPerPage >= 100000 && (
+                  <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-xs border border-emerald-200 font-semibold">
+                    Semua {balKeluarList.length} bal ditampilkan dalam 1 halaman
+                  </span>
+                )}
+              </div>
+
+              {balItemsPerPage < 100000 && balTotalPages > 1 && (
+                <Pagination
+                  currentPage={balCurrentPage}
+                  totalPages={balTotalPages}
+                  totalItems={balKeluarList.length}
+                  itemsPerPage={balItemsPerPage}
+                  onPageChange={(page) => setBalCurrentPage(page)}
+                />
+              )}
+            </div>
+          )}
         </div>
       )}
+
+      {/* Floating Scroll Controls (Otomatis Geser ke Paling Atas & Paling Bawah seperti pada Laporan Pembelian) */}
+      <div 
+        className={`fixed bottom-6 right-6 z-40 flex flex-col items-center space-y-2 transition-all duration-300 ${
+          showScrollButtons ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-4 pointer-events-none'
+        }`}
+      >
+        <button
+          type="button"
+          onClick={scrollToTop}
+          className="p-2.5 bg-white/90 hover:bg-white text-gray-600 hover:text-[#b81d24] rounded-full shadow-[0_4px_10px_rgba(0,0,0,0.1)] border border-gray-200 hover:border-red-200 backdrop-blur-sm transition-all cursor-pointer group flex items-center justify-center hover:scale-110 active:scale-95"
+          title="Geser ke Paling Atas"
+        >
+          <ArrowUp className="w-4 h-4 group-hover:-translate-y-0.5 transition-transform" />
+          <span className="sr-only">Geser ke Paling Atas</span>
+        </button>
+        <button
+          type="button"
+          onClick={scrollToBottom}
+          className="p-2.5 bg-white/90 hover:bg-white text-gray-600 hover:text-[#b81d24] rounded-full shadow-[0_4px_10px_rgba(0,0,0,0.1)] border border-gray-200 hover:border-red-200 backdrop-blur-sm transition-all cursor-pointer group flex items-center justify-center hover:scale-110 active:scale-95"
+          title="Geser ke Paling Bawah"
+        >
+          <ArrowDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
+          <span className="sr-only">Geser ke Paling Bawah</span>
+        </button>
+      </div>
 
       {/* 9. Modal: Detail Surat Jalan Delivery Order */}
       {selectedDOForDetail && (

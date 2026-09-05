@@ -208,6 +208,9 @@ export interface TransaksiPembelian {
   barcode_terkait?: string;
   catatan_qc?: string;
   catatan?: string;
+  terakhir_diubah_oleh?: string;
+  terakhir_diubah_pada?: string;
+  alasan_perubahan_terakhir?: string;
 }
 
 export type StatusSample = 'sample' | 'dikirim' | 'diterima' | 'disetujui' | 'ditolak' | 'nego';
@@ -375,12 +378,18 @@ export interface LogAktivitas {
   username: string;
   nama_lengkap: string;
   role: UserRole;
-  modul: 'timbangan' | 'sortir' | 'kasir' | 'pengiriman' | 'sample' | 'master_harga' | 'master_petani' | 'master_gudang' | 'users' | 'sistem';
-  aksi: string; // e.g. "Penimbangan Bal", "Sortir Kupon & Grade", "Pencairan Kasir"
+  modul: 'transaksi' | 'timbangan' | 'sortir' | 'kasir' | 'pengiriman' | 'sample' | 'master_harga' | 'master_petani' | 'master_gudang' | 'barang' | 'users' | 'sistem';
+  aksi: string; // e.g. "Penimbangan Bal", "Sortir Kupon & Grade", "Pencairan Kasir", "Edit Transaksi", "Hapus Transaksi", "Koreksi Timbangan Bal"
+  tipe_aksi?: 'edit' | 'hapus' | 'tambah' | 'bayar' | 'timbang' | 'sortir' | 'lainnya';
   no_kupon?: string;
   no_bal?: string;
   kode_grade?: string;
   berat_kg?: number;
+  transaksi_id?: string;
+  nama_petani?: string;
+  data_sebelum?: string;
+  data_sesudah?: string;
+  alasan?: string;
   rincian: string; // Detail deskripsi perubahan & pertanggungjawaban
   status?: 'sukses' | 'peringatan' | 'gagal';
 }

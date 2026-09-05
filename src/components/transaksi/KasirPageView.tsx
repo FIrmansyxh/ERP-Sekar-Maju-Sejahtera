@@ -19,12 +19,15 @@ import {
   Tag,
   Filter,
   Eye,
-  CreditCard
+  CreditCard,
+  Edit3
 } from 'lucide-react';
-import { TransaksiPembelian, Petani, TabelHarga, Barang, Gudang, UserRole } from '../../types';
+import { TransaksiPembelian, Petani, TabelHarga, Barang, Gudang, UserRole, User as UserType } from '../../types';
 import { formatRupiah, formatNoKupon, formatDateHariBulanTahun } from '../../utils/formatters';
+import { recordLogAktivitas } from '../../utils/storage';
 import { TransaksiDetailModal } from './TransaksiDetailModal';
 import { PembayaranKasirModal } from './PembayaranKasirModal';
+import { TransaksiEditModal } from './TransaksiEditModal';
 import { Pagination } from '../common/Pagination';
 import { ConfirmModal } from '../common/ConfirmModal';
 
@@ -35,10 +38,11 @@ interface KasirPageViewProps {
   barangList: Barang[];
   gudangList?: Gudang[];
   userRole: UserRole;
+  currentUser?: UserType | null;
   initialKuponNo?: string;
   initialTxId?: string;
   onSaveTransaksi: (newTx: TransaksiPembelian, generatedBarang: Barang | Barang[]) => void;
-  onDeleteTransaksi?: (transaksiId: string) => void;
+  onDeleteTransaksi?: (transaksiId: string, alasan?: string) => void;
   onNavigateToSortir: () => void;
   onNavigateToTimbangan: (kuponNo?: string, txId?: string) => void;
 }
@@ -50,6 +54,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
   barangList = [],
   gudangList = [],
   userRole,
+  currentUser,
   initialKuponNo,
   initialTxId,
   onSaveTransaksi,
@@ -65,6 +70,8 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
   const [filterStatusBayar, setFilterStatusBayar] = useState('all'); // all, lunas, belum_lunas
   const [filterStatusNota, setFilterStatusNota] = useState('all'); // all, sudah_cetak, belum_cetak
   const [sortOrderKupon, setSortOrderKupon] = useState<'desc' | 'asc'>('desc');
+  const [selectedTxForEdit, setSelectedTxForEdit] = useState<TransaksiPembelian | null>(null);
+  const [alasanHapus, setAlasanHapus] = useState<string>('');
 
 
   // Pagination
@@ -110,6 +117,28 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     const relatedBarang = barangList.filter((b) => tx.barang_ids?.includes(b.barang_id));
     onSaveTransaksi(updatedTx, relatedBarang);
     handleUpdateNotaStatus(txId);
+
+    // Record audit log for payment
+    const currentNilai = tx.harga_final || tx.total_harga_beli || 0;
+    recordLogAktivitas({
+      user_id: currentUser?.user_id || 'USR-KASIR',
+      username: currentUser?.username || 'kasir',
+      nama_lengkap: currentUser?.nama_lengkap || details.dibayarOleh || 'Petugas Kasir',
+      role: currentUser?.role || userRole,
+      modul: 'kasir',
+      aksi: 'Pencairan Kasir',
+      tipe_aksi: 'bayar',
+      no_kupon: tx.no_kupon,
+      no_bal: tx.no_bal,
+      kode_grade: tx.kode_grade,
+      berat_kg: tx.berat_kg,
+      transaksi_id: tx.transaksi_id,
+      nama_petani: tx.nama_petani,
+      status: 'sukses',
+      rincian: `PEMBAYARAN KASIR LUNAS: Kupon ${tx.no_kupon} (${tx.transaksi_id}) milik petani "${tx.nama_petani}" telah dilunasi tunai sebesar ${formatRupiah(currentNilai)}. No. Bukti Kas: ${details.noBuktiKas}. Petugas: ${details.dibayarOleh}. Catatan: "${details.catatanKasir || '-'}"`,
+      data_sebelum: JSON.stringify({ status_pembayaran: tx.status_pembayaran }),
+      data_sesudah: JSON.stringify({ status_pembayaran: 'lunas', no_bukti_kas: details.noBuktiKas }),
+    });
 
     if (selectedTxForDetail && selectedTxForDetail.transaksi_id === txId) {
       setSelectedTxForDetail(updatedTx);
@@ -281,7 +310,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
             onClick={() => onNavigateToSortir()}
             className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-medium text-xs rounded-sm transition cursor-pointer shadow-2xs"
           >
-            + Intake Sortir Baru
+            Intake Sortir Baru
           </button>
           <button
             type="button"
@@ -711,6 +740,16 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                             <Receipt className="w-3.5 h-3.5" />
                           </button>
 
+                          {/* Edit / Koreksi Transaksi */}
+                          <button
+                            type="button"
+                            onClick={() => setSelectedTxForEdit(tx)}
+                            className="p-1.5 bg-slate-100 hover:bg-amber-100 text-slate-700 hover:text-amber-800 border border-slate-200 hover:border-amber-300 rounded-xs transition cursor-pointer"
+                            title="Koreksi & Edit Data Transaksi (Petani, Bal, Grade, Berat, Harga)"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+
                           {/* Print Sample Label */}
 
                           {/* Timbang if not complete */}
@@ -767,6 +806,11 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
         onUpdateNotaStatus={handleUpdateNotaStatus}
         onMarkAsLunas={handleMarkAsLunas}
         onOpenBayarModal={(tx) => setSelectedTxForBayar(tx)}
+        onOpenEditModal={(tx) => setSelectedTxForEdit(tx)}
+        onDeleteTransaksi={(txId, alasan) => {
+          if (onDeleteTransaksi) onDeleteTransaksi(txId, alasan);
+          setSelectedTxForDetail(null);
+        }}
       />
 
       {/* Pembayaran Kasir Cash Modal */}
@@ -777,21 +821,110 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
         onConfirmPembayaran={handleConfirmCashPayment}
       />
 
-      {/* Delete Confirmation Modal */}
-      <ConfirmModal
-        isOpen={Boolean(txToDelete)}
-        onClose={() => setTxToDelete(null)}
-        onConfirm={() => {
-          if (txToDelete && onDeleteTransaksi) {
-            onDeleteTransaksi(txToDelete.transaksi_id);
-            setTxToDelete(null);
-          }
-        }}
-        title="Hapus Transaksi Pembelian"
-        message={`Apakah Anda yakin ingin menghapus transaksi "${txToDelete?.transaksi_id}" (Kupon: ${txToDelete?.no_kupon}, Petani: ${txToDelete?.nama_petani})? Data bal dan inventaris terkait akan ikut dihapus.`}
-        confirmText="Ya, Hapus Transaksi"
-        confirmVariant="danger"
-      />
+      {/* Edit Transaksi Modal with Audit Trail Diff */}
+      {selectedTxForEdit && (
+        <TransaksiEditModal
+          isOpen={Boolean(selectedTxForEdit)}
+          onClose={() => setSelectedTxForEdit(null)}
+          transaksi={selectedTxForEdit}
+          petaniList={petaniList}
+          hargaList={hargaList}
+          barangList={barangList}
+          gudangList={gudangList}
+          currentUser={currentUser}
+          onSaveTransaksi={(newTx, generatedBarang) => {
+            onSaveTransaksi(newTx, generatedBarang);
+            if (selectedTxForDetail && selectedTxForDetail.transaksi_id === newTx.transaksi_id) {
+              setSelectedTxForDetail(newTx);
+            }
+          }}
+        />
+      )}
+
+      {/* Delete Confirmation Modal with Audit Reason */}
+      {txToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white border border-rose-200 rounded-sm shadow-2xl max-w-md w-full p-5 space-y-4 animate-in fade-in">
+            <div className="flex items-center space-x-3 text-rose-600">
+              <div className="w-9 h-9 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-rose-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Konfirmasi Hapus Transaksi</h3>
+                <p className="text-xs text-slate-500 font-mono">
+                  {txToDelete.no_kupon} ({txToDelete.transaksi_id})
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-rose-50/70 border border-rose-200 rounded-xs text-xs text-rose-950 space-y-1">
+              <p>
+                Apakah Anda yakin ingin menghapus transaksi milik Petani <strong>{txToDelete.nama_petani}</strong>?
+              </p>
+              <p className="text-[11px] text-rose-700">
+                • Berat Netto: {txToDelete.berat_kg} Kg ({txToDelete.total_bal || txToDelete.items?.length || 1} Bal)
+                <br />
+                • Total Nilai: {formatRupiah(txToDelete.harga_final || txToDelete.total_harga_beli)}
+                <br />
+                • Bal tembakau inventaris gudang terkait transaksi ini juga akan dihapus.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 flex items-center space-x-1">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                <span>Alasan Penghapusan (Wajib untuk Audit Trail Admin):</span>
+              </label>
+              <input
+                type="text"
+                placeholder="Contoh: Salah input nomor kupon / Duplikasi / Dibatalkan petani"
+                value={alasanHapus}
+                onChange={(e) => setAlasanHapus(e.target.value)}
+                className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded-xs focus:ring-1 focus:ring-slate-900 focus:outline-none"
+              />
+              <div className="flex flex-wrap gap-1 pt-1">
+                {['Salah input nomor kupon', 'Duplikasi transaksi timbangan', 'Dibatalkan oleh petani penyetor', 'Koreksi administratif data ganda'].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setAlasanHapus(preset)}
+                    className="text-[10px] px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xs border border-slate-200 transition cursor-pointer"
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => {
+                  setTxToDelete(null);
+                  setAlasanHapus('');
+                }}
+                className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-xs transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (txToDelete && onDeleteTransaksi) {
+                    onDeleteTransaksi(txToDelete.transaksi_id, alasanHapus.trim() || 'Dihapus oleh user via menu kasir');
+                    setTxToDelete(null);
+                    setAlasanHapus('');
+                  }
+                }}
+                className="px-4 py-1.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xs transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Hapus & Rekam Audit Log</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

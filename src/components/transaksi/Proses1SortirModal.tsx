@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Petani, TabelHarga, TransaksiPembelian, TransaksiItemBal, Gudang, User as UserType, Barang } from '../../types';
 import { formatRupiah, formatNoKupon } from '../../utils/formatters';
+import { recordLogAktivitas } from '../../utils/storage';
 import { ConfirmModal } from '../common/ConfirmModal';
 
 interface Proses1SortirModalProps {
@@ -385,6 +386,26 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
     };
 
     onSaveSortir(newTx);
+
+    // Record audit log for Sortir & Intake Bal registration
+    recordLogAktivitas({
+      user_id: currentUser?.user_id || 'USR-SORTIR',
+      username: currentUser?.username || 'sortir',
+      nama_lengkap: currentUser?.nama_lengkap || petugasSortirNama || 'Petugas Sortir',
+      role: currentUser?.role || 'operator_sortir',
+      modul: 'sortir',
+      aksi: 'Sortir Kupon & Registrasi Bal',
+      tipe_aksi: 'sortir',
+      no_kupon: newTx.no_kupon,
+      no_bal: newTx.no_bal,
+      kode_grade: newTx.kode_grade,
+      transaksi_id: newTx.transaksi_id,
+      nama_petani: newTx.nama_petani,
+      status: 'sukses',
+      rincian: `REGISTRASI SORTIR BAL: Kupon ${newTx.no_kupon} (${newTx.transaksi_id}) untuk Petani "${newTx.nama_petani}" berhasil diregistrasi (${newTx.total_bal} Bal: ${newTx.no_bal}). Grade utama: ${newTx.kode_grade}. Petugas Sortir: ${petugasSortirNama}. Menunggu penimbangan di Proses 2.`,
+      data_sesudah: JSON.stringify(newTx, null, 2),
+    });
+
     setIsConfirmOpen(false);
   };
 
@@ -640,7 +661,7 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
                   onClick={() => handleScannerSubmit()}
                   className="px-4 py-2 bg-indigo-700 hover:bg-indigo-800 text-white font-bold rounded-sm transition cursor-pointer text-xs shrink-0 shadow-xs"
                 >
-                  + Scan Bal
+                  Scan Bal
                 </button>
               </div>
             </div>

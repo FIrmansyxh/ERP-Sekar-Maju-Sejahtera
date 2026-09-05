@@ -111,8 +111,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   
   const [noSuratJalan, setNoSuratJalan] = useState('');
   const [tanggalKirim, setTanggalKirim] = useState(new Date().toISOString().split('T')[0]);
-  const [tujuanBuyer, setTujuanBuyer] = useState('PT Djarum Kudus - Plant Pengolahan');
-  const [customTujuan, setCustomTujuan] = useState('');
+  const [tujuanBuyer, setTujuanBuyer] = useState('');
   const [driverNama, setDriverNama] = useState('Bpk. Slamet Riyadi (Trans Logistik Madura)');
   const [platNomor, setPlatNomor] = useState('M 8921 UA');
   const [noKontrak, setNoKontrak] = useState(`PO-DJA-${new Date().getFullYear()}-089`);
@@ -156,17 +155,52 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     return (batchSampleList && batchSampleList.length > 0) ? batchSampleList : loadBatchSampleData();
   }, [batchSampleList]);
 
-  // Available batches that have sample bales
-  const availableBatches = useMemo(() => {
-    return activeBatchSampleList.filter(
-      (b) => (b.items || []).length > 0
+  // Helper to check if a batch is already shipped (sudah dikirim) or currently being shipped (sedang dikirim)
+  const getBatchShipmentStatus = (batch: BatchPengirimanSample) => {
+    const linkedShipments = pengirimanList.filter(
+      (p) =>
+        p.status !== 'batal' &&
+        (p.batch_sample_id_ref === batch.batch_id ||
+         p.batch_sample_id_ref === batch.kode_batch ||
+         p.batch_sample_id_ref?.toLowerCase() === batch.batch_id.toLowerCase() ||
+         p.batch_sample_id_ref?.toLowerCase() === batch.kode_batch.toLowerCase())
     );
-  }, [activeBatchSampleList]);
+
+    const isAlreadyShipped = 
+      linkedShipments.length > 0 || 
+      batch.status === 'selesai' || 
+      batch.status === 'dibatalkan' ||
+      ((batch.items || []).length > 0 && (batch.items || []).every((it) => it.sudah_dikirim_do));
+
+    const isCurrentlyShipping = 
+      batch.status === 'dikirim' || 
+      linkedShipments.some((p) => p.status === 'dalam_perjalanan' || p.status === 'dikirim');
+
+    const isPendingSampleEvaluation =
+      (batch.status === 'diproses' || batch.status === 'sample') &&
+      !(batch.items || []).some((it) => (it.status_item === 'disetujui' || it.status_item === 'nego') && !it.sudah_dikirim_do);
+
+    return {
+      isAlreadyShipped,
+      isCurrentlyShipping,
+      isPendingSampleEvaluation,
+      isEligibleForRegularDO: !isAlreadyShipped && !isCurrentlyShipping && !isPendingSampleEvaluation && (batch.items || []).length > 0,
+      linkedShipments,
+    };
+  };
+
+  // Available batches that have sample bales and are eligible for regular shipment (not currently shipping or already shipped)
+  const availableBatches = useMemo(() => {
+    return activeBatchSampleList.filter((b) => {
+      const statusInfo = getBatchShipmentStatus(b);
+      return statusInfo.isEligibleForRegularDO;
+    });
+  }, [activeBatchSampleList, pengirimanList]);
 
   const batchSuggestions = useMemo(() => {
     const qRaw = scanBatchId.trim().toLowerCase();
     const qClean = qRaw.replace(/[^a-z0-9]/g, '');
-    if (!qRaw) return availableBatches.slice(0, 8); // show recent 8 by default
+    if (!qRaw) return availableBatches.slice(0, 8); // show recent 8 eligible batches by default
     return availableBatches.filter((b) => {
       const kodeClean = (b.kode_batch || '').toLowerCase().replace(/[^a-z0-9]/g, '');
       const idClean = (b.batch_id || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -200,8 +234,8 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     if (!qRaw) return;
     const qClean = qRaw.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-    // 1. Exact match on kode_batch or batch_id
-    const exactMatch = activeBatchSampleList.find(
+    // 1. Exact match on kode_batch or batch_id within availableBatches
+    const exactMatch = availableBatches.find(
       (b) => (b.kode_batch || '').toLowerCase().replace(/[^a-z0-9]/g, '') === qClean ||
              (b.batch_id || '').toLowerCase().replace(/[^a-z0-9]/g, '') === qClean
     );
@@ -210,15 +244,15 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       return;
     }
 
-    // 2. First suggestion
+    // 2. First suggestion in availableBatches
     if (batchSuggestions.length > 0) {
       const chosen = batchSuggestions[highlightedBatchIndex] || batchSuggestions[0];
       handleSelectSuggestedBatch(chosen.batch_id);
       return;
     }
 
-    // 3. Partial match in activeBatchSampleList
-    const partialMatch = activeBatchSampleList.find(
+    // 3. Partial match in availableBatches
+    const partialMatch = availableBatches.find(
       (b) => (b.kode_batch || '').toLowerCase().includes(qRaw.toLowerCase()) ||
              (b.batch_id || '').toLowerCase().includes(qRaw.toLowerCase()) ||
              (b.tujuan_buyer || '').toLowerCase().includes(qRaw.toLowerCase())
@@ -228,9 +262,43 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       return;
     }
 
+    // 4. Check if it exists in activeBatchSampleList to give precise feedback why it's not available
+    const anyMatch = activeBatchSampleList.find(
+      (b) => (b.kode_batch || '').toLowerCase().replace(/[^a-z0-9]/g, '') === qClean ||
+             (b.batch_id || '').toLowerCase().replace(/[^a-z0-9]/g, '') === qClean ||
+             (b.kode_batch || '').toLowerCase().includes(qRaw.toLowerCase()) ||
+             (b.batch_id || '').toLowerCase().includes(qRaw.toLowerCase())
+    );
+
+    if (anyMatch) {
+      const statusInfo = getBatchShipmentStatus(anyMatch);
+      if (statusInfo.isAlreadyShipped) {
+        const sjStr = statusInfo.linkedShipments.map(s => s.no_surat_jalan).join(', ') || 'DO Selesai';
+        setScanAlert({
+          type: 'error',
+          message: `Batch "${anyMatch.kode_batch}" SUDAH SELESAI DIKIRIM (${sjStr}) dan tidak dapat dipilih kembali untuk pengiriman reguler.`,
+        });
+        return;
+      }
+      if (statusInfo.isCurrentlyShipping) {
+        setScanAlert({
+          type: 'error',
+          message: `Batch "${anyMatch.kode_batch}" SEDANG DALAM PENGIRIMAN (Status: Sedang Berangkat/Dalam Perjalanan) dan tidak dapat dibuatkan DO baru.`,
+        });
+        return;
+      }
+      if (statusInfo.isPendingSampleEvaluation) {
+        setScanAlert({
+          type: 'warning',
+          message: `Batch "${anyMatch.kode_batch}" masih dalam proses pengujian sample / lab QC buyer. Tunggu hasil sortir/approval sebelum membuat DO reguler.`,
+        });
+        return;
+      }
+    }
+
     setScanAlert({
       type: 'error',
-      message: `Batch "${qRaw}" tidak ditemukan di sistem! Pastikan kode batch benar (misal: SPL0001) atau pilih dari daftar batch yang tersedia.`,
+      message: `Batch "${qRaw}" tidak ditemukan atau tidak tersedia untuk pengiriman reguler baru.`,
     });
   };
 
@@ -241,13 +309,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       setViewMode('create');
     }
   }, [selectedBatchId]);
-
-  // Auto-select first batch if sample_batch mode is active and no batch is selected yet
-  useEffect(() => {
-    if (sourceMode === 'sample_batch' && !selectedBatchSampleId && availableBatches.length > 0) {
-      handleSelectBatchForShipment(availableBatches[0].batch_id);
-    }
-  }, [sourceMode, selectedBatchSampleId, availableBatches]);
 
   // Select a batch sample: automatically load items to table with editable status & prices
   const handleSelectBatchForShipment = (batchId: string) => {
@@ -262,7 +323,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     setSelectedBatchSampleId(targetBatch.batch_id);
     setScanBatchId(targetBatch.kode_batch);
     setSourceMode('sample_batch');
-    setTujuanBuyer(targetBatch.tujuan_buyer || 'PT Djarum Kudus - Plant Pengolahan');
+    setTujuanBuyer(targetBatch.tujuan_buyer || '');
     setNoKontrak(`PO-${targetBatch.kode_batch}`);
 
     const items = targetBatch.items || [];
@@ -393,27 +454,38 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
         (b.batch_id || '').toLowerCase() === trimmed.toLowerCase()
     );
     if (matchedBatch) {
-      handleSelectSuggestedBatch(matchedBatch.batch_id);
-      const batchShipments = pengirimanList.filter(
-        (p) =>
-          p.status !== 'batal' &&
-          (p.batch_sample_id_ref === matchedBatch.batch_id ||
-           p.batch_sample_id_ref === matchedBatch.kode_batch ||
-           p.batch_sample_id_ref?.toLowerCase() === matchedBatch.batch_id.toLowerCase() ||
-           p.batch_sample_id_ref?.toLowerCase() === matchedBatch.kode_batch.toLowerCase())
-      );
-      const alreadySent = batchShipments.length > 0 || matchedBatch.status === 'selesai';
-      if (alreadySent) {
+      const statusInfo = getBatchShipmentStatus(matchedBatch);
+      if (statusInfo.isAlreadyShipped) {
+        const sjListStr = statusInfo.linkedShipments.map((s) => s.no_surat_jalan).join(', ') || 'DO Selesai';
         setScanAlert({
           type: 'error',
-          message: `⚠️ PERINGATAN PENGIRIMAN GANDA: Batch ${matchedBatch.kode_batch} SUDAH DALAM STATUS PENGIRIMAN (${batchShipments.map(s => s.no_surat_jalan).join(', ') || 'DO Selesai'})! Periksa kembali agar tidak terjadi pengiriman ganda.`,
+          message: `⚠️ BATCH SUDAH DIKIRIM: Batch ${matchedBatch.kode_batch} sudah selesai dikirim (${sjListStr}) dan tidak dapat dipilih untuk pengiriman reguler baru.`,
         });
-      } else {
-        setScanAlert({
-          type: 'success',
-          message: `Batch ${matchedBatch.kode_batch} dipilih. Silakan scan barcode atau ketik ID setiap bal untuk mencentang muatan siap kirim.`,
-        });
+        setScanInputText('');
+        return;
       }
+      if (statusInfo.isCurrentlyShipping) {
+        setScanAlert({
+          type: 'error',
+          message: `⚠️ BATCH SEDANG DIKIRIM: Batch ${matchedBatch.kode_batch} sedang dalam proses perjalanan logistik ekspedisi. Tidak dapat dibuatkan DO baru.`,
+        });
+        setScanInputText('');
+        return;
+      }
+      if (statusInfo.isPendingSampleEvaluation) {
+        setScanAlert({
+          type: 'warning',
+          message: `Batch ${matchedBatch.kode_batch} masih dalam tahap pengujian sample / QC buyer. Belum siap untuk pembuatan DO reguler.`,
+        });
+        setScanInputText('');
+        return;
+      }
+
+      handleSelectSuggestedBatch(matchedBatch.batch_id);
+      setScanAlert({
+        type: 'success',
+        message: `Batch ${matchedBatch.kode_batch} dipilih. Silakan scan barcode atau ketik ID setiap bal untuk mencentang muatan siap kirim.`,
+      });
       setScanInputText('');
       return;
     }
@@ -532,16 +604,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       handleProcessScan(scanned);
     }
   });
-
-  const popularBuyers = [
-    'PT Djarum Kudus - Plant Pengolahan',
-    'PT Gudang Garam Tbk Kediri - Gudang Produksi',
-    'PT HM Sampoerna Surabaya - Kraksaan Plant',
-    'Bentoel Group Malang - Pabrik Sukun',
-    'PT Wismilak Inti Makmur Surabaya',
-    'PR. Sukun Kudus',
-    'Lainnya (Tulis Manual)',
-  ];
 
   // Available bal in warehouse (status_stok === 'di_gudang' or 'terkirim_sample')
   const availableBalList = useMemo(() => {
@@ -840,13 +902,15 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   // Syarat tombol "Terbitkan Surat Jalan" bisa diklik:
   // Jika sample_batch: semua bal yang harus dikirim wajib dicentang (isAllEligibleChecked)
   // Jika gudang_reguler: minimal 1 bal dan semua bal dalam tabel muatan harus dicentang
+  // Dan tujuan gudang / buyer wajib diisi
   const canSubmitShipment = useMemo(() => {
+    if (!tujuanBuyer.trim()) return false;
     if (sourceMode === 'sample_batch') {
       return isAllEligibleChecked;
     } else {
       return regulerManifestBalIds.length > 0 && regulerManifestBalIds.every((id) => selectedBalIds.includes(id));
     }
-  }, [sourceMode, isAllEligibleChecked, regulerManifestBalIds, selectedBalIds]);
+  }, [sourceMode, isAllEligibleChecked, regulerManifestBalIds, selectedBalIds, tujuanBuyer]);
 
 
   // List View Filtering
@@ -872,6 +936,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     const nextSeq = pengirimanList.length + 1;
     setNoSuratJalan(generateNoSuratJalanSimple(nextSeq));
     setTanggalKirim(new Date().toISOString().split('T')[0]);
+    setTujuanBuyer('');
     setSelectedBalIds([]);
     setRegulerManifestBalIds([]);
     setCustomKodeHargaMap({});
@@ -882,12 +947,10 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     setFilterSearchBal('');
     setErrorMessage('');
 
-    // Default to first available batch if exists
-    if (availableBatches.length > 0) {
-      handleSelectBatchForShipment(availableBatches[0].batch_id);
-    } else {
-      setSourceMode('gudang_reguler');
-    }
+    // Do not auto-populate batch code, leave blank initially
+    setSelectedBatchSampleId('');
+    setScanBatchId('');
+    setSourceMode('sample_batch');
 
     setViewMode('create');
   };
@@ -895,6 +958,10 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   
   const handleSubmitShipment = () => {
     if (sourceMode === 'sample_batch') {
+      if (!selectedBatchSampleId || !activeBatchObj) {
+        setErrorMessage('Silakan cari dan pilih kode batch sample terlebih dahulu.');
+        return;
+      }
       if (isBatchAlreadyShipped && eligibleBatchItems.length === 0) {
         setErrorMessage(`PENGIRIMAN GANDA DIBLOKIR: Seluruh bal pada Batch ${activeBatchObj?.kode_batch} sudah pernah dikirimkan via Surat Jalan sebelumnya.`);
         return;
@@ -915,9 +982,9 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       }
     }
 
-    const finalTujuan = tujuanBuyer === 'Lainnya (Tulis Manual)' ? customTujuan : tujuanBuyer;
-    if (!finalTujuan.trim()) {
-      setErrorMessage('Tujuan pengiriman pabrik wajib diisi.');
+    const finalTujuan = tujuanBuyer.trim();
+    if (!finalTujuan) {
+      setErrorMessage('Tujuan gudang / pabrik buyer wajib diisi.');
       return;
     }
     if (!driverNama.trim()) {
@@ -934,7 +1001,8 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   };
 
   const handleConfirmSave = () => {
-    const finalTujuan = tujuanBuyer === 'Lainnya (Tulis Manual)' ? customTujuan : tujuanBuyer;
+    const finalTujuan = tujuanBuyer.trim();
+    if (!finalTujuan) return;
 
     // Group grades
     const gradesBreakdown: Record<string, { bal: number; kg: number }> = {};
@@ -990,6 +1058,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
 
     onSaveNewPengiriman(newPengiriman, selectedBalIds);
     setIsConfirmOpen(false);
+    setTujuanBuyer('');
     setViewMode('list');
     setPrintingSuratJalan(newPengiriman);
   };
@@ -1041,9 +1110,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                   type="button"
                   onClick={() => {
                     setSourceMode('sample_batch');
-                    if (availableBatches.length > 0) {
-                      handleSelectBatchForShipment(availableBatches[0].batch_id);
-                    }
                   }}
                   className={`px-3.5 py-1.5 text-xs font-bold rounded-xs transition flex items-center space-x-1.5 cursor-pointer ${
                     sourceMode === 'sample_batch'
@@ -1077,202 +1143,202 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
 
             {/* Batch Sample Selector Dropdown */}
             {sourceMode === 'sample_batch' && (
-              <div className="bg-amber-50/70 border border-amber-200 p-3 rounded-xs space-y-2">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div className="flex-1">
-                    <label className="block text-xs font-bold text-amber-900 mb-1">
-                      Pilih Batch yang Sudah Dikirim Sampelnya:
-                    </label>
-                    <div className="relative">
-                      <div className="flex items-stretch gap-2">
-                        <div className="relative flex-1">
-                          <div className="flex items-center absolute left-3 top-2.5 text-amber-600 pointer-events-none">
-                            <Search className="w-3.5 h-3.5" />
-                          </div>
-                          <input
-                            ref={inputBatchRef}
-                            type="text"
-                            placeholder="Ketik kode batch (Misal: SPL0001)..."
-                            value={scanBatchId}
-                            onChange={(e) => {
-                              setScanBatchId(e.target.value);
-                              setIsBatchDropdownOpen(true);
-                              setHighlightedBatchIndex(0);
-                            }}
-                            onFocus={() => {
-                              setIsBatchDropdownOpen(true);
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'ArrowDown') {
-                                e.preventDefault();
-                                if (batchSuggestions.length > 0) {
-                                  setIsBatchDropdownOpen(true);
-                                  setHighlightedBatchIndex((prev) => Math.min(prev + 1, batchSuggestions.length - 1));
-                                }
-                              } else if (e.key === 'ArrowUp') {
-                                e.preventDefault();
-                                if (batchSuggestions.length > 0) {
-                                  setIsBatchDropdownOpen(true);
-                                  setHighlightedBatchIndex((prev) => Math.max(prev - 1, 0));
-                                }
-                              } else if (e.key === 'Enter') {
-                                e.preventDefault();
-                                handleCommitBatchSearch();
-                              } else if (e.key === 'Escape') {
-                                setIsBatchDropdownOpen(false);
-                              }
-                            }}
-                            className="w-full pl-8 pr-8 py-2 text-xs font-mono font-bold bg-white border-2 border-amber-400 focus:border-amber-600 focus:ring-0 rounded-xs text-gray-900 placeholder-gray-400 uppercase shadow-2xs"
-                          />
-                          {scanBatchId && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setScanBatchId('');
-                                setIsBatchDropdownOpen(false);
-                                inputBatchRef.current?.focus();
-                              }}
-                              className="absolute right-2.5 top-2.5 text-gray-400 hover:text-gray-600 cursor-pointer text-xs"
-                              title="Bersihkan input"
-                            >
-                              ✕
-                            </button>
-                          )}
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={handleCommitBatchSearch}
-                          className="px-4 py-2 text-xs font-bold text-white bg-amber-700 hover:bg-amber-800 rounded-xs flex items-center space-x-1.5 cursor-pointer shadow-xs whitespace-nowrap transition"
-                        >
-                          <Search className="w-3.5 h-3.5" />
-                          <span>Pilih Batch</span>
-                        </button>
+              <div className="bg-slate-50 border border-slate-300 p-3 rounded-xs space-y-2">
+                {availableBatches.length === 0 ? (
+                  <div className="p-3 bg-slate-100 border border-slate-300 rounded-xs text-slate-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div className="text-xs space-y-0.5">
+                      <div className="font-bold text-slate-900 flex items-center space-x-1.5">
+                        <AlertCircle className="w-4 h-4 text-slate-600 shrink-0" />
+                        <span>Tidak Ada Batch Sample Siap Kirim (0 Batch Tersedia)</span>
                       </div>
-                      
-                      {/* Dropdown Autocomplete Batch */}
-                      {isBatchDropdownOpen && (
-                        <div
-                          ref={batchDropdownRef}
-                          className="absolute left-0 right-0 top-full mt-1 z-50 bg-white border border-gray-300 rounded-sm shadow-xl max-h-64 overflow-y-auto divide-y divide-gray-100"
-                        >
-                          {batchSuggestions.length > 0 ? (
-                            batchSuggestions.map((b, idx) => {
-                              const isHighlighted = idx === highlightedBatchIndex;
-                              const items = b.items || [];
-                              const accCount = items.filter((it) => it.status_item === 'disetujui' && !it.sudah_dikirim_do).length;
-                              const isSelected = selectedBatchSampleId === b.batch_id || selectedBatchSampleId === b.kode_batch;
-                              
-                              return (
-                                <button
-                                  key={b.batch_id}
-                                  type="button"
-                                  onClick={() => {
-                                    handleSelectSuggestedBatch(b.batch_id);
-                                    setScanBatchId(b.kode_batch);
-                                  }}
-                                  onMouseEnter={() => setHighlightedBatchIndex(idx)}
-                                  className={`w-full px-3 py-2 text-left flex flex-col gap-1 transition cursor-pointer ${
-                                    isSelected
-                                      ? 'bg-amber-100/70 text-amber-950 border-l-4 border-amber-600'
-                                      : isHighlighted
-                                      ? 'bg-amber-50 text-amber-950 border-l-4 border-amber-500'
-                                      : 'hover:bg-gray-50 text-gray-800 border-l-4 border-transparent'
-                                  }`}
-                                >
-                                  <div className="flex items-center justify-between gap-2">
-                                    <div className="flex items-center space-x-2">
-                                      <span className="font-mono font-bold text-xs text-amber-900 bg-amber-200/70 px-1.5 py-0.5 rounded-xs">
-                                        {b.kode_batch}
-                                      </span>
-                                      <span className="font-bold text-xs text-gray-900">{b.tujuan_buyer}</span>
-                                    </div>
-                                    <div className="flex items-center space-x-1">
-                                      {(() => {
-                                        const isBatchShipped = pengirimanList.some(
-                                          (p) =>
-                                            p.status !== 'batal' &&
-                                            (p.batch_sample_id_ref === b.batch_id ||
-                                             p.batch_sample_id_ref === b.kode_batch ||
-                                             p.batch_sample_id_ref?.toLowerCase() === b.batch_id.toLowerCase() ||
-                                             p.batch_sample_id_ref?.toLowerCase() === b.kode_batch.toLowerCase())
-                                        ) || b.status === 'selesai';
-
-                                        if (isBatchShipped) {
-                                          return (
-                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-xs bg-red-100 text-red-800 border border-red-300">
-                                              ⚠️ SUDAH DIKIRIM
-                                            </span>
-                                          );
-                                        }
-
-                                        return (
-                                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-xs ${
-                                            b.status === 'selesai_deal'
-                                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                              : b.status === 'deal_sebagian'
-                                              ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                                              : 'bg-blue-100 text-blue-800 border border-blue-300'
-                                          }`}>
-                                            {b.status === 'selesai_deal'
-                                              ? 'ACC Semua'
-                                              : b.status === 'deal_sebagian'
-                                              ? 'ACC Sebagian'
-                                              : 'Sample Terkirim'}
-                                          </span>
-                                        );
-                                      })()}
-                                    </div>
-                                  </div>
-                                  <div className="text-[10px] text-gray-500 flex items-center gap-2">
-                                    <span className="font-medium">Total: {items.length} Bal</span>
-                                    {accCount > 0 ? (
-                                      <span className="text-emerald-700 font-bold">Di-ACC: {accCount} Bal</span>
-                                    ) : (
-                                      <span className="text-blue-700 font-medium">Siap Muat: {items.length} Bal</span>
-                                    )}
-                                    <span className="text-gray-300">|</span>
-                                    <span>Tgl Kirim: {b.tanggal_kirim}</span>
-                                    {b.total_nilai_deal ? (
-                                      <>
-                                        <span className="text-gray-300">|</span>
-                                        <span className="font-semibold text-emerald-800">Deal: {formatRupiah(b.total_nilai_deal)}</span>
-                                      </>
-                                    ) : null}
-                                  </div>
-                                </button>
-                              );
-                            })
-                          ) : (
-                            <div className="p-4 text-xs text-gray-500 text-center space-y-1">
-                              <div>Tidak ada batch yang cocok dengan "<strong>{scanBatchId}</strong>"</div>
-                              <div className="text-[11px] text-gray-400">Total batch tersedia di sistem: {activeBatchSampleList.length} Batch</div>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                      <p className="text-slate-600 text-[11px]">
+                        Semua batch sample saat ini berstatus <strong>Sedang Dikirim / Dalam Perjalanan</strong> atau <strong>Sudah Selesai Dikirim (DO Terbit)</strong>.
+                      </p>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSourceMode('gudang_reguler');
+                        setSelectedBatchSampleId('');
+                        setSelectedBalIds([]);
+                        setRegulerManifestBalIds([]);
+                      }}
+                      className="px-3.5 py-1.5 text-xs font-bold text-white bg-gray-900 hover:bg-black rounded-xs whitespace-nowrap cursor-pointer shadow-xs transition"
+                    >
+                      Pilih Bebas dari Stok Gudang →
+                    </button>
                   </div>
+                ) : (
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex-1">
+                      <label className="block text-xs font-bold text-slate-900 mb-1">
+                        Pilih Batch Sample Siap Kirim (Evaluasi Selesai / Disetujui):
+                      </label>
+                      <div className="relative">
+                        <div className="flex items-stretch gap-2">
+                          <div className="relative flex-1">
+                            <div className="flex items-center absolute left-3 top-2.5 text-slate-400 pointer-events-none">
+                              <Search className="w-3.5 h-3.5" />
+                            </div>
+                            <input
+                              ref={inputBatchRef}
+                              type="text"
+                              placeholder="Ketik kode batch siap kirim..."
+                              value={scanBatchId}
+                              onChange={(e) => {
+                                setScanBatchId(e.target.value);
+                                setIsBatchDropdownOpen(true);
+                                setHighlightedBatchIndex(0);
+                              }}
+                              onFocus={() => {
+                                setIsBatchDropdownOpen(true);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'ArrowDown') {
+                                  e.preventDefault();
+                                  if (batchSuggestions.length > 0) {
+                                    setIsBatchDropdownOpen(true);
+                                    setHighlightedBatchIndex((prev) => Math.min(prev + 1, batchSuggestions.length - 1));
+                                  }
+                                } else if (e.key === 'ArrowUp') {
+                                  e.preventDefault();
+                                  if (batchSuggestions.length > 0) {
+                                    setIsBatchDropdownOpen(true);
+                                    setHighlightedBatchIndex((prev) => Math.max(prev - 1, 0));
+                                  }
+                                } else if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  handleCommitBatchSearch();
+                                } else if (e.key === 'Escape') {
+                                  setIsBatchDropdownOpen(false);
+                                }
+                              }}
+                              className="w-full pl-8 pr-8 py-2 text-xs font-mono font-bold bg-white border border-slate-300 focus:border-slate-800 focus:ring-1 focus:ring-slate-800 rounded-xs text-gray-900 placeholder-gray-400 uppercase shadow-2xs"
+                            />
+                            {scanBatchId && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setScanBatchId('');
+                                  setIsBatchDropdownOpen(false);
+                                  inputBatchRef.current?.focus();
+                                }}
+                                className="absolute right-2.5 top-2.5 text-gray-400 hover:text-gray-600 cursor-pointer text-xs"
+                                title="Bersihkan input"
+                              >
+                                ✕
+                              </button>
+                            )}
+                          </div>
 
-                  {activeBatchObj && (
-                    <div className="text-right text-xs bg-white px-3 py-2 border border-amber-300 rounded-xs shadow-2xs">
-                      <div className="font-bold text-gray-900">{activeBatchObj.tujuan_buyer}</div>
-                      <div className="text-[11px] text-gray-600">
-                        Kode: <span className="font-mono font-bold text-amber-900">{activeBatchObj.kode_batch}</span>
+                          <button
+                            type="button"
+                            onClick={handleCommitBatchSearch}
+                            className="px-4 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xs flex items-center space-x-1.5 cursor-pointer shadow-xs whitespace-nowrap transition"
+                          >
+                            <Search className="w-3.5 h-3.5" />
+                            <span>Pilih Batch</span>
+                          </button>
+                        </div>
+                        
+                        {/* Dropdown Autocomplete Batch */}
+                        {isBatchDropdownOpen && (
+                          <div
+                            ref={batchDropdownRef}
+                            className="absolute left-0 right-0 top-full mt-1 z-50 bg-white border border-gray-300 rounded-sm shadow-xl max-h-64 overflow-y-auto divide-y divide-gray-100"
+                          >
+                            {batchSuggestions.length > 0 ? (
+                              batchSuggestions.map((b, idx) => {
+                                const isHighlighted = idx === highlightedBatchIndex;
+                                const items = b.items || [];
+                                const accCount = items.filter((it) => it.status_item === 'disetujui' && !it.sudah_dikirim_do).length;
+                                const isSelected = selectedBatchSampleId === b.batch_id || selectedBatchSampleId === b.kode_batch;
+                                
+                                return (
+                                  <button
+                                    key={b.batch_id}
+                                    type="button"
+                                    onClick={() => {
+                                      handleSelectSuggestedBatch(b.batch_id);
+                                      setScanBatchId(b.kode_batch);
+                                    }}
+                                    onMouseEnter={() => setHighlightedBatchIndex(idx)}
+                                    className={`w-full px-3 py-2 text-left flex flex-col gap-1 transition cursor-pointer ${
+                                      isSelected
+                                        ? 'bg-slate-100 text-slate-950 border-l-4 border-slate-800'
+                                        : isHighlighted
+                                        ? 'bg-slate-50 text-slate-950 border-l-4 border-slate-500'
+                                        : 'hover:bg-gray-50 text-gray-800 border-l-4 border-transparent'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="flex items-center space-x-2">
+                                        <span className="font-mono font-bold text-xs text-slate-800 bg-slate-200 px-1.5 py-0.5 rounded-xs">
+                                          {b.kode_batch}
+                                        </span>
+                                        <span className="font-bold text-xs text-gray-900">{b.tujuan_buyer}</span>
+                                      </div>
+                                      <div className="flex items-center space-x-1">
+                                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-xs ${
+                                          b.status === 'selesai_deal'
+                                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                            : b.status === 'deal_sebagian'
+                                            ? 'bg-slate-100 text-slate-800 border border-slate-300'
+                                            : 'bg-blue-100 text-blue-800 border border-blue-300'
+                                        }`}>
+                                          {b.status === 'selesai_deal'
+                                            ? 'ACC Semua'
+                                            : b.status === 'deal_sebagian'
+                                            ? 'ACC Sebagian'
+                                            : 'Siap Kirim'}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <div className="text-[10px] text-gray-500 flex items-center gap-2">
+                                      <span className="font-medium">Total: {items.length} Bal</span>
+                                      {accCount > 0 ? (
+                                        <span className="text-emerald-700 font-bold">Di-ACC: {accCount} Bal</span>
+                                      ) : (
+                                        <span className="text-blue-700 font-medium">Siap Muat: {items.length} Bal</span>
+                                      )}
+                                      <span className="text-gray-300">|</span>
+                                      <span>Tgl Kirim: {b.tanggal_kirim}</span>
+                                      {b.total_nilai_deal ? (
+                                        <>
+                                          <span className="text-gray-300">|</span>
+                                          <span className="font-semibold text-emerald-800">Deal: {formatRupiah(b.total_nilai_deal)}</span>
+                                        </>
+                                      ) : null}
+                                    </div>
+                                  </button>
+                                );
+                              })
+                            ) : (
+                              <div className="p-4 text-xs text-gray-500 text-center space-y-1">
+                                <div>Tidak ada batch siap kirim yang cocok dengan "<strong>{scanBatchId}</strong>"</div>
+                                <div className="text-[11px] text-gray-400">Batch yang sedang dikirim atau sudah selesai dikirim disembunyikan.</div>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      {isBatchAlreadyShipped && (
-                        <div className="text-[10px] font-bold text-red-700 bg-red-100 px-1.5 py-0.5 rounded-xs mt-1 border border-red-300 inline-block">
-                          ⚠️ STATUS: SUDAH DIKIRIM (DO AKTIF)
-                        </div>
-                      )}
-                      {activeBatchObj.total_nilai_deal ? (
-                        <div className="text-[11px] text-emerald-700 font-semibold font-mono mt-0.5">
-                          Deal Disepakati: {formatRupiah(activeBatchObj.total_nilai_deal)}
-                        </div>
-                      ) : null}
                     </div>
-                  )}
-                </div>
+
+                    {activeBatchObj && (
+                      <div className="text-right text-xs bg-white px-3 py-2 border border-slate-300 rounded-xs shadow-2xs">
+                        <div className="font-bold text-gray-900">{activeBatchObj.tujuan_buyer}</div>
+                        <div className="text-[11px] text-gray-600">
+                          Kode: <span className="font-mono font-bold text-slate-900">{activeBatchObj.kode_batch}</span>
+                        </div>
+                        {activeBatchObj.total_nilai_deal ? (
+                          <div className="text-[11px] text-emerald-700 font-semibold font-mono mt-0.5">
+                            Deal Disepakati: {formatRupiah(activeBatchObj.total_nilai_deal)}
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Banner Peringatan Pengiriman Ganda (Double Shipment) */}
                 {isBatchAlreadyShipped && (
@@ -1298,7 +1364,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                 )}
 
                 {activeBatchObj?.permintaan_buyer && (
-                  <div className="text-[11px] text-amber-800 bg-white/70 p-2 rounded-xs border border-amber-100">
+                  <div className="text-[11px] text-slate-700 bg-white p-2 rounded-xs border border-slate-200">
                     <strong>Catatan Permintaan Buyer:</strong> {activeBatchObj.permintaan_buyer}
                   </div>
                 )}
@@ -1306,7 +1372,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                 {/* Quick Bal list badges */}
                 {activeBatchObj && (
                   <div className="pt-1">
-                    <div className="text-[11px] font-bold text-amber-900 mb-1 flex items-center justify-between">
+                    <div className="text-[11px] font-bold text-slate-900 mb-1 flex items-center justify-between">
                       <span>
                         Daftar Bal pada Batch {activeBatchObj.kode_batch} (
                         {(activeBatchObj.items || []).filter(it => it.status_item !== 'ditolak' && !it.sudah_dikirim_do).length} Bal Siap Dimuat):
@@ -1331,11 +1397,11 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                                   ? 'bg-emerald-100 border-emerald-400 text-emerald-900 shadow-2xs'
                                   : isApproved
                                   ? 'bg-white border-emerald-300 text-emerald-900 hover:bg-emerald-50'
-                                  : 'bg-white border-amber-300 text-amber-900 hover:bg-amber-100'
+                                  : 'bg-white border-slate-300 text-slate-800 hover:bg-slate-100'
                               }`}
                               title={isLoaded ? 'Sudah dimuat ke DO (Klik untuk hapus)' : 'Klik untuk muat ke DO'}
                             >
-                              <span>{isLoaded ? '✓' : '+'}</span>
+                              {isLoaded && <Check className="w-3 h-3 text-emerald-700" />}
                               <span>{it.no_bal || it.barang_id}</span>
                               <span className="text-[10px] text-gray-500">({it.kode_grade})</span>
                               {isApproved && (
@@ -1389,26 +1455,23 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                 />
               </div>
 
-              {/* Tujuan Pabrik */}
+              {/* Tujuan Pabrik / Gudang */}
               <div className="space-y-1">
-                <label className="block font-semibold text-gray-700">Tujuan Pabrik / Gudang Buyer:</label>
-                <select
+                <label className="block font-semibold text-gray-700">
+                  Tujuan Gudang / Pabrik Buyer: <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ketik tujuan gudang / pabrik buyer..."
                   value={tujuanBuyer}
                   onChange={(e) => setTujuanBuyer(e.target.value)}
-                  className="w-full px-2.5 py-1.5 bg-white border border-gray-300 rounded-xs"
-                >
-                  {popularBuyers.map((b) => (
-                    <option key={b} value={b}>{b}</option>
-                  ))}
-                </select>
-                {tujuanBuyer === 'Lainnya (Tulis Manual)' && (
-                  <input
-                    type="text"
-                    placeholder="Nama Pabrik / Tujuan..."
-                    value={customTujuan}
-                    onChange={(e) => setCustomTujuan(e.target.value)}
-                    className="w-full mt-1 px-2.5 py-1 text-xs bg-white border border-gray-300 rounded-xs"
-                  />
+                  required
+                  className="w-full px-2.5 py-1.5 bg-white border border-gray-300 rounded-xs text-xs text-gray-900 focus:outline-none focus:border-gray-800"
+                />
+                {!tujuanBuyer.trim() && (
+                  <p className="text-[10px] text-red-600 font-medium">
+                    * Wajib diisi, ketik tujuan gudang secara manual (bukan dropdown).
+                  </p>
                 )}
               </div>
 
@@ -1583,7 +1646,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                           >
                             <div className="space-y-0.5">
                               <div className="flex items-center space-x-2">
-                                <span className="font-mono font-bold text-xs text-gray-900 bg-amber-100 px-1.5 py-0.5 rounded-xs border border-amber-300">
+                                <span className="font-mono font-bold text-xs text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded-xs border border-slate-300">
                                   #{bal.no_bal || bal.barang_id}
                                 </span>
                                 <span className="px-1.5 py-0.5 bg-gray-100 text-gray-700 border border-gray-300 text-[10px] font-bold rounded-xs">
@@ -1606,8 +1669,8 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                                   ✓ Sudah Dicentang
                                 </span>
                               ) : (
-                                <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-xs border border-blue-200">
-                                  + Klik untuk Centang
+                                <span className="text-[10px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-xs border border-slate-300">
+                                  Klik untuk Centang
                                 </span>
                               )}
                             </div>
@@ -1631,7 +1694,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                       ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-medium'
                       : scanAlert.type === 'error'
                       ? 'bg-red-100 border-red-400 text-red-900 font-bold'
-                      : 'bg-amber-50 border-amber-300 text-amber-900'
+                      : 'bg-slate-50 border-slate-300 text-slate-800'
                   }`}
                 >
                   {scanAlert.type === 'success' ? (
@@ -1639,7 +1702,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                   ) : scanAlert.type === 'error' ? (
                     <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
                   ) : (
-                    <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <Info className="w-4 h-4 text-slate-600 shrink-0 mt-0.5" />
                   )}
                   <div className="flex-1">{scanAlert.message}</div>
                 </div>
@@ -1705,7 +1768,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                         className="px-2.5 py-1 text-[11px] font-bold text-white bg-gray-900 hover:bg-black rounded-xs cursor-pointer transition flex items-center space-x-1 shadow-2xs"
                       >
                         <Plus className="w-3 h-3" />
-                        <span>+ Pilih dari Stok Gudang ({availableBalList.length} Bal)</span>
+                        <span>Pilih dari Stok Gudang ({availableBalList.length} Bal)</span>
                       </button>
                       {selectedBalIds.length > 0 && (
                         <button
@@ -1793,8 +1856,14 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                           <td colSpan={8} className="p-8 text-center bg-gray-50/50">
                             <div className="max-w-md mx-auto space-y-2">
                               <Package className="w-8 h-8 mx-auto text-gray-300" />
-                              <div className="text-sm font-bold text-gray-800">Tidak ada bal pada batch ini</div>
-                              <p className="text-xs text-gray-500">Silakan pilih batch sample lainnya pada dropdown di atas.</p>
+                              <div className="text-sm font-bold text-gray-800">
+                                {!selectedBatchSampleId ? 'Belum Ada Batch Sample yang Dipilih' : 'Tidak ada bal pada batch ini'}
+                              </div>
+                              <p className="text-xs text-gray-500">
+                                {!selectedBatchSampleId 
+                                  ? 'Silakan cari atau pilih kode batch sample pada kolom pencarian di atas untuk memuat daftar bal tembakau.' 
+                                  : 'Silakan pilih batch sample lainnya pada dropdown di atas.'}
+                              </p>
                             </div>
                           </td>
                         </tr>
@@ -1853,7 +1922,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
 
                               {/* Grade */}
                               <td className="p-2 text-center font-bold">
-                                <span className="px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded-xs font-mono text-[11px]">
+                                <span className="px-2 py-0.5 bg-slate-100 text-slate-800 border border-slate-200 rounded-xs font-mono text-[11px]">
                                   {it.kode_grade}
                                 </span>
                               </td>
@@ -1870,7 +1939,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                                     ✓ Di-ACC
                                   </span>
                                 ) : it.status_item === 'nego' ? (
-                                  <span className="px-2 py-0.5 bg-amber-100 text-amber-800 border border-amber-300 rounded-xs font-bold text-[10px]">
+                                  <span className="px-2 py-0.5 bg-slate-100 text-slate-800 border border-slate-300 rounded-xs font-bold text-[10px]">
                                     Nego Harga
                                   </span>
                                 ) : it.status_item === 'ditolak' ? (
@@ -1983,7 +2052,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                                 </div>
                               </td>
                               <td className="p-2 text-center font-bold">
-                                <span className="px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded-xs font-mono">
+                                <span className="px-2 py-0.5 bg-slate-100 text-slate-800 border border-slate-200 rounded-xs font-mono">
                                   {bal.kode_grade}
                                 </span>
                               </td>
@@ -2062,13 +2131,15 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
           <div className="bg-white p-4 border border-gray-300 rounded-sm shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="space-y-1">
               <div className="text-xs text-gray-600">
-                Muatan Siap Kirim: <strong className="text-gray-900">{totalSelectedBal} Bal</strong> ({formatNumber(totalSelectedBerat, 1)} Kg) tujuan <strong>{tujuanBuyer}</strong>.
+                Muatan Siap Kirim: <strong className="text-gray-900">{totalSelectedBal} Bal</strong> ({formatNumber(totalSelectedBerat, 1)} Kg) tujuan <strong className={tujuanBuyer ? 'text-gray-900' : 'text-red-600 italic'}>{tujuanBuyer || '(Wajib diisi)'}</strong>.
               </div>
               {!canSubmitShipment && (
-                <div className="text-[11px] font-semibold text-amber-800 bg-amber-50 px-2.5 py-1 rounded-xs border border-amber-200 inline-flex items-center space-x-1.5">
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                <div className="text-[11px] font-semibold text-slate-700 bg-slate-50 px-2.5 py-1 rounded-xs border border-slate-200 inline-flex items-center space-x-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 text-slate-600 shrink-0" />
                   <span>
-                    {sourceMode === 'sample_batch'
+                    {!tujuanBuyer.trim()
+                      ? 'Tujuan gudang / pabrik buyer wajib diisi sebelum menerbitkan surat jalan.'
+                      : sourceMode === 'sample_batch'
                       ? `Belum semua bal dicentang (${checkedEligibleCount}/${eligibleBatchItems.length} Bal). Scan barcode atau centang setiap bal fisik satu per satu sesuai SOP sebelum menerbitkan surat jalan.`
                       : regulerManifestBalIds.length === 0
                       ? 'Tabel muatan masih kosong. Silakan scan barcode atau masukkan bal tembakau terlebih dahulu.'
@@ -2105,7 +2176,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                 disabled={!canSubmitShipment}
                 onClick={handleSubmitShipment}
                 className="px-5 py-2 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#a0181e] disabled:opacity-40 disabled:cursor-not-allowed rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-md"
-                title={!canSubmitShipment ? 'Wajib scan atau centang seluruh bal muatan terlebih dahulu' : 'Terbitkan Surat Jalan'}
+                title={!tujuanBuyer.trim() ? 'Tujuan gudang / pabrik buyer wajib diisi' : !canSubmitShipment ? 'Wajib scan atau centang seluruh bal muatan terlebih dahulu' : 'Terbitkan Surat Jalan'}
               >
                 <Truck className="w-4 h-4" />
                 <span>Terbitkan Surat Jalan & Kirim ({totalSelectedBal} Bal)</span>
@@ -2177,7 +2248,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
 
             <div className="bg-gray-900 text-white p-3.5 border border-gray-900 rounded-sm shadow-xs">
               <div className="text-[11px] font-medium text-gray-300">Estimasi Nilai DO</div>
-              <div className="text-base font-bold text-yellow-400 mt-0.5 truncate">
+              <div className="text-base font-bold text-emerald-400 mt-0.5 truncate font-mono">
                 {formatRupiah(pengirimanList.reduce((sum, p) => sum + (p.total_nilai_deal || (p.total_berat_kg * 125000)), 0))}
               </div>
               <div className="text-[10px] text-gray-400">Transaksi Terbit</div>
@@ -2242,7 +2313,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                               {krm.nomor_kontrak || '-'} • Kirim: {krm.tanggal_kirim}
                             </div>
                             {krm.batch_sample_id_ref && (
-                              <span className="inline-block mt-0.5 px-1.5 py-0.2 text-[9px] font-bold bg-amber-100 text-amber-800 rounded-xs font-mono">
+                              <span className="inline-block mt-0.5 px-1.5 py-0.2 text-[9px] font-bold bg-slate-100 text-slate-800 border border-slate-200 rounded-xs font-mono">
                                 Ref Sample: {krm.batch_sample_id_ref}
                               </span>
                             )}
@@ -2334,7 +2405,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
             {/* Modal Header */}
             <div className="px-5 py-3.5 bg-gray-900 text-white flex items-center justify-between">
               <div className="flex items-center space-x-2.5">
-                <Package className="w-5 h-5 text-amber-400" />
+                <Package className="w-5 h-5 text-slate-300" />
                 <div>
                   <h3 className="font-bold text-sm">Pilih Bal Tembakau dari Stok Gudang</h3>
                   <p className="text-[11px] text-gray-300">
@@ -2429,7 +2500,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                           }}
                           className={`transition cursor-pointer ${
                             isChecked
-                              ? 'bg-amber-50/80 font-medium'
+                              ? 'bg-slate-100 font-medium'
                               : isAlreadyInManifest
                               ? 'bg-emerald-50/40 text-gray-600 hover:bg-emerald-50/60'
                               : 'hover:bg-gray-50'
@@ -2453,7 +2524,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                             #{b.no_bal || b.barang_id}
                           </td>
                           <td className="p-2.5 text-center">
-                            <span className="px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded-xs font-mono font-bold text-[11px]">
+                            <span className="px-2 py-0.5 bg-slate-100 text-slate-800 border border-slate-200 rounded-xs font-mono font-bold text-[11px]">
                               {b.kode_grade}
                             </span>
                           </td>

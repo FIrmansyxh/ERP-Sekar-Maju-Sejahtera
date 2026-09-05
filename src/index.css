@@ -10,6 +10,19 @@
   }
 }
 
+/* ERP Global Table Zebra Striping for High Readability */
+table:not(.no-zebra) > tbody > tr:nth-child(odd):not(.no-zebra-row) {
+  background-color: #ffffff;
+}
+
+table:not(.no-zebra) > tbody > tr:nth-child(even):not(.no-zebra-row) {
+  background-color: #f8fafc;
+}
+
+table:not(.no-zebra) > tbody > tr:not(.no-zebra-row):hover {
+  background-color: #f1f5f9 !important;
+}
+
 /* ERP Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

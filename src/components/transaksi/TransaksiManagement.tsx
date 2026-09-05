@@ -27,12 +27,14 @@ import {
   Check,
   Sparkles,
   CalendarDays,
-  ListFilter
+  ListFilter,
+  Edit3
 } from 'lucide-react';
 import { TransaksiPembelian, Petani, TabelHarga, Barang, UserRole, Gudang, User as UserType } from '../../types';
 import { formatRupiah, formatDateHariBulanTahun } from '../../utils/formatters';
 import { TransaksiFormModal } from './TransaksiFormModal';
 import { TransaksiDetailModal } from './TransaksiDetailModal';
+import { TransaksiEditModal } from './TransaksiEditModal';
 import { Proses1SortirModal } from './Proses1SortirModal';
 import { Proses2TimbangModal } from './Proses2TimbangModal';
 import { Pagination } from '../common/Pagination';
@@ -48,7 +50,7 @@ interface TransaksiManagementProps {
   userRole: UserRole;
   currentUser?: UserType | null;
   onSaveTransaksi: (newTx: TransaksiPembelian, generatedBarang: Barang | Barang[]) => void;
-  onDeleteTransaksi?: (transaksiId: string) => void;
+  onDeleteTransaksi?: (transaksiId: string, alasan?: string) => void;
 }
 
 type TabType = 'semua' | 'sortir' | 'timbang' | 'kasir';
@@ -87,7 +89,9 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
   const [selectedTxForTimbang, setSelectedTxForTimbang] = useState<TransaksiPembelian | null>(null);
   const [selectedBarcodeForTimbang, setSelectedBarcodeForTimbang] = useState<string | undefined>(undefined);
   const [selectedTxForDetail, setSelectedTxForDetail] = useState<TransaksiPembelian | null>(null);
+  const [selectedTxForEdit, setSelectedTxForEdit] = useState<TransaksiPembelian | null>(null);
   const [txToDelete, setTxToDelete] = useState<TransaksiPembelian | null>(null);
+  const [alasanHapus, setAlasanHapus] = useState<string>('');
 
   // In-memory update for nota print status
   const [localPrintedTxIds, setLocalPrintedTxIds] = useState<Set<string>>(new Set());
@@ -349,7 +353,7 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
               className="px-3 py-1.5 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#a0181e] rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs whitespace-nowrap"
             >
               <Scan className="w-3.5 h-3.5" />
-              <span>+ Input Meja Sortir (Proses 1)</span>
+              <span>Input Meja Sortir (Proses 1)</span>
             </button>
 
             <button
@@ -362,7 +366,7 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
               className="px-3 py-1.5 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs whitespace-nowrap"
             >
               <Scale className="w-3.5 h-3.5" />
-              <span>+ Buka Meja Timbang (Proses 2)</span>
+              <span>Buka Meja Timbang (Proses 2)</span>
             </button>
           </div>
 
@@ -778,6 +782,15 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
                               <div className="text-[10px] text-gray-500 font-mono">
                                 {tx.nomor_kartu || tx.petani_id} • {tx.desa_kecamatan || '-'}
                               </div>
+                              {tx.terakhir_diubah_oleh && (
+                                <div 
+                                  className="mt-1 inline-flex items-center space-x-1 px-1.5 py-0.5 bg-slate-100 text-slate-700 text-[10px] rounded-xs border border-slate-300 font-sans" 
+                                  title={`Diubah oleh: ${tx.terakhir_diubah_oleh}${tx.terakhir_diubah_pada ? ` (${new Date(tx.terakhir_diubah_pada).toLocaleString('id-ID')})` : ''}${tx.alasan_perubahan_terakhir ? ` - "${tx.alasan_perubahan_terakhir}"` : ''}`}
+                                >
+                                  <Edit3 className="w-2.5 h-2.5 text-slate-500 shrink-0" />
+                                  <span className="truncate max-w-[130px]">Diedit: {tx.terakhir_diubah_oleh.split(' ')[0]}</span>
+                                </div>
+                              )}
                             </td>
 
                             {/* Grade / Bal */}
@@ -872,6 +885,16 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
                                   <Receipt className="w-3.5 h-3.5" />
                                 </button>
 
+                                {/* 3.5. Edit / Koreksi Transaksi (Slate) */}
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedTxForEdit(tx)}
+                                  className="w-7 h-7 rounded-sm bg-slate-700 hover:bg-slate-800 text-white flex items-center justify-center transition cursor-pointer shadow-xs"
+                                  title="Edit & Koreksi Data Transaksi (Petani, Bal, Grade, Berat, Harga)"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+
                                 {/* 4. Delete Transaction (Red) */}
                                 {onDeleteTransaksi && (
                                   <button
@@ -934,6 +957,15 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
                         <div className="text-[10px] text-gray-500 font-mono">
                           {tx.nomor_kartu || tx.petani_id} • {tx.desa_kecamatan || '-'}
                         </div>
+                        {tx.terakhir_diubah_oleh && (
+                          <div 
+                            className="mt-1 inline-flex items-center space-x-1 px-1.5 py-0.5 bg-slate-100 text-slate-700 text-[10px] rounded-xs border border-slate-300 font-sans" 
+                            title={`Diubah oleh: ${tx.terakhir_diubah_oleh}${tx.terakhir_diubah_pada ? ` (${new Date(tx.terakhir_diubah_pada).toLocaleString('id-ID')})` : ''}${tx.alasan_perubahan_terakhir ? ` - "${tx.alasan_perubahan_terakhir}"` : ''}`}
+                          >
+                            <Edit3 className="w-2.5 h-2.5 text-slate-500 shrink-0" />
+                            <span className="truncate max-w-[130px]">Diedit: {tx.terakhir_diubah_oleh.split(' ')[0]}</span>
+                          </div>
+                        )}
                       </td>
 
                       {/* Grade / Bal */}
@@ -1028,6 +1060,16 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
                             <Receipt className="w-3.5 h-3.5" />
                           </button>
 
+                          {/* 3.5. Edit / Koreksi Transaksi (Slate) */}
+                          <button
+                            type="button"
+                            onClick={() => setSelectedTxForEdit(tx)}
+                            className="w-7 h-7 rounded-sm bg-slate-700 hover:bg-slate-800 text-white flex items-center justify-center transition cursor-pointer shadow-xs"
+                            title="Edit & Koreksi Data Transaksi (Petani, Bal, Grade, Berat, Harga)"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+
                           {/* 4. Delete Transaction (Red) */}
                           {onDeleteTransaksi && (
                             <button
@@ -1104,10 +1146,31 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
           onClose={() => setSelectedTxForDetail(null)}
           transaksi={selectedTxForDetail}
           onUpdateNotaStatus={handleUpdateNotaStatus}
-          onDeleteTransaksi={onDeleteTransaksi ? (id) => {
-            onDeleteTransaksi(id);
+          onOpenEditModal={(tx) => setSelectedTxForEdit(tx)}
+          onDeleteTransaksi={onDeleteTransaksi ? (id, alasan) => {
+            onDeleteTransaksi(id, alasan);
             setSelectedTxForDetail(null);
           } : undefined}
+        />
+      )}
+
+      {/* Modal Edit & Koreksi Transaksi */}
+      {selectedTxForEdit && (
+        <TransaksiEditModal
+          isOpen={Boolean(selectedTxForEdit)}
+          onClose={() => setSelectedTxForEdit(null)}
+          transaksi={selectedTxForEdit}
+          petaniList={petaniList}
+          hargaList={hargaList}
+          barangList={barangList}
+          gudangList={gudangList}
+          currentUser={currentUser}
+          onSaveTransaksi={(newTx, generatedBarang) => {
+            onSaveTransaksi(newTx, generatedBarang);
+            if (selectedTxForDetail && selectedTxForDetail.transaksi_id === newTx.transaksi_id) {
+              setSelectedTxForDetail(newTx);
+            }
+          }}
         />
       )}
 
@@ -1122,22 +1185,89 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
         onSaveTransaksi={onSaveTransaksi}
       />
 
-      {/* Konfirmasi Hapus Transaksi */}
+      {/* Konfirmasi Hapus Transaksi dengan Alasan Audit Trail */}
       {txToDelete && (
-        <ConfirmModal
-          isOpen={Boolean(txToDelete)}
-          title="Konfirmasi Hapus Transaksi"
-          message={`Apakah Anda yakin ingin menghapus transaksi "${txToDelete.transaksi_id}" milik petani "${txToDelete.nama_petani}" (${txToDelete.berat_kg} Kg)?\n\nData bal inventaris gudang yang terkait transaksi ini juga akan dihapus dari stok aktif.`}
-          confirmLabel="Hapus Transaksi"
-          isDestructive={true}
-          onConfirm={() => {
-            if (onDeleteTransaksi && txToDelete) {
-              onDeleteTransaksi(txToDelete.transaksi_id);
-            }
-            setTxToDelete(null);
-          }}
-          onCancel={() => setTxToDelete(null)}
-        />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white border border-rose-200 rounded-sm shadow-2xl max-w-md w-full p-5 space-y-4 animate-in fade-in">
+            <div className="flex items-center space-x-3 text-rose-600">
+              <div className="w-9 h-9 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-rose-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Konfirmasi Hapus Transaksi</h3>
+                <p className="text-xs text-slate-500 font-mono">
+                  {txToDelete.no_kupon} ({txToDelete.transaksi_id})
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-rose-50/70 border border-rose-200 rounded-xs text-xs text-rose-950 space-y-1">
+              <p>
+                Apakah Anda yakin ingin menghapus transaksi milik Petani <strong>{txToDelete.nama_petani}</strong>?
+              </p>
+              <p className="text-[11px] text-rose-700">
+                • Berat Netto: {txToDelete.berat_kg} Kg ({txToDelete.total_bal || (txToDelete.items ? txToDelete.items.length : 1)} Bal)
+                <br />
+                • Total Nilai: {formatRupiah(txToDelete.harga_final || txToDelete.total_harga_beli)}
+                <br />
+                • Data bal inventaris gudang terkait transaksi ini juga akan dihapus dari stok aktif.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 flex items-center space-x-1">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                <span>Alasan Penghapusan (Wajib untuk Audit Trail Admin):</span>
+              </label>
+              <input
+                type="text"
+                placeholder="Contoh: Salah input nomor kupon / Duplikasi / Dibatalkan petani"
+                value={alasanHapus}
+                onChange={(e) => setAlasanHapus(e.target.value)}
+                className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded-xs focus:ring-1 focus:ring-slate-900 focus:outline-none"
+              />
+              <div className="flex flex-wrap gap-1 pt-1">
+                {['Salah input nomor kupon', 'Duplikasi transaksi timbangan', 'Dibatalkan oleh petani penyetor', 'Koreksi administratif'].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setAlasanHapus(preset)}
+                    className="text-[10px] px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xs border border-slate-200 transition cursor-pointer"
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => {
+                  setTxToDelete(null);
+                  setAlasanHapus('');
+                }}
+                className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-xs transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onDeleteTransaksi && txToDelete) {
+                    onDeleteTransaksi(txToDelete.transaksi_id, alasanHapus.trim() || 'Dihapus via antarmuka transaksi pembelian');
+                  }
+                  setTxToDelete(null);
+                  setAlasanHapus('');
+                }}
+                className="px-4 py-1.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xs transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Hapus & Rekam Audit Log</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>
