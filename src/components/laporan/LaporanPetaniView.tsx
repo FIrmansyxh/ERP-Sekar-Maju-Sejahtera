@@ -1013,7 +1013,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
       {/* 8. Drawer / Modal: Detail Riwayat Setoran Petani */}
       {selectedPetaniForDetail && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-3 animate-in fade-in duration-150">
-          <div className="bg-white w-full max-w-3xl max-h-[90vh] overflow-y-auto border border-gray-300 shadow-2xl flex flex-col">
+          <div className="bg-white w-full max-w-6xl max-h-[90vh] overflow-y-auto border border-gray-300 shadow-2xl flex flex-col">
             
             {/* Modal Header */}
             <div className="p-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
@@ -1085,7 +1085,8 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
                         <th className="py-2 px-2.5">ID Transaksi</th>
                         <th className="py-2 px-2.5">Tanggal</th>
                         <th className="py-2 px-2.5 text-center">Kupon</th>
-                        <th className="py-2 px-2.5">No Bal / Grade</th>
+                        <th className="py-2 px-2.5">No Bal</th>
+                        <th className="py-2 px-2.5">Grade</th>
                         <th className="py-2 px-2.5 text-right">Netto (Kg)</th>
                         <th className="py-2 px-2.5 text-right">Harga/kg</th>
                         <th className="py-2 px-2.5 text-right">Potongan</th>
@@ -1104,9 +1105,15 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
                             <td className="py-2 px-2.5 text-center font-mono font-bold text-gray-700">{t.no_kupon || '-'}</td>
                             <td className="py-2 px-2.5">
                               <span className="font-semibold text-gray-900">{t.no_bal}</span>
-                              <span className="ml-1.5 px-1.5 py-0.2 bg-zinc-900 text-white text-[10px] font-bold">
-                                {t.kode_grade}
-                              </span>
+                            </td>
+                            <td className="py-2 px-2.5 max-w-[150px]">
+                              <div className="flex flex-wrap gap-1">
+                                {String(t.kode_grade).split(',').map((g, i) => (
+                                  <span key={i} className="px-1.5 py-0.5 bg-zinc-900 text-white text-[10px] font-bold rounded-xs whitespace-nowrap">
+                                    {g.trim()}
+                                  </span>
+                                ))}
+                              </div>
                             </td>
                             <td className="py-2 px-2.5 text-right font-mono font-bold text-blue-900">
                               {t.berat_kg} kg

@@ -31,6 +31,7 @@ export const PetaniImportExportModal: React.FC<PetaniImportExportModalProps> = (
   const [csvText, setCsvText] = useState<string>('');
   const [importErrors, setImportErrors] = useState<string[]>([]);
   const [successCount, setSuccessCount] = useState<number | null>(null);
+  const [showExportConfirm, setShowExportConfirm] = useState(false);
 
   if (!isOpen) return null;
 
@@ -206,7 +207,7 @@ export const PetaniImportExportModal: React.FC<PetaniImportExportModalProps> = (
               <div className="flex justify-end">
                 <button
                   type="button"
-                  onClick={handleExportCSV}
+                  onClick={() => setShowExportConfirm(true)}
                   className="px-4 py-2 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#a0181e] rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
                 >
                   <Download className="w-3.5 h-3.5" />
@@ -258,6 +259,45 @@ export const PetaniImportExportModal: React.FC<PetaniImportExportModalProps> = (
           )}
         </div>
 
+        {/* Modal Konfirmasi Ekspor */}
+        {showExportConfirm && (
+          <div className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white border border-gray-300 w-full max-w-sm rounded-none shadow-xl flex flex-col overflow-hidden">
+              <div className="p-4 border-b border-gray-200 flex items-center space-x-2 bg-yellow-50">
+                <AlertTriangle className="w-4 h-4 text-yellow-700" />
+                <h2 className="text-sm font-bold text-yellow-900 tracking-tight">Konfirmasi Ekspor Data</h2>
+              </div>
+              <div className="p-4 space-y-2">
+                <p className="text-xs text-gray-700 leading-relaxed">
+                  Apakah Anda yakin ingin mengekspor seluruh data master petani?
+                </p>
+                <p className="text-[11px] font-medium text-yellow-800 bg-yellow-100/50 p-2 border border-yellow-200">
+                  Data yang diekspor berisi informasi yang mungkin bersifat sensitif (Nomor HP, Alamat, dll). Pastikan Anda menjaga kerahasiaan file unduhan.
+                </p>
+              </div>
+              <div className="bg-[#f8f9fa] px-4 py-3 border-t border-gray-200 flex justify-end space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setShowExportConfirm(false)}
+                  className="px-3 py-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-sm text-xs font-bold transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleExportCSV();
+                    setShowExportConfirm(false);
+                  }}
+                  className="px-3 py-1.5 bg-[#b81d24] hover:bg-[#a0181e] text-white rounded-sm text-xs font-bold transition cursor-pointer shadow-xs flex items-center space-x-1.5"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Ya, Ekspor Data</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

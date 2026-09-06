@@ -354,7 +354,7 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
       harga_per_kg: balRows[0]?.harga_per_kg || transaksi.harga_per_kg,
       total_kotor: totalKotorBaru,
       total_potongan: totalPotonganBaru,
-      total_harga_beli: totalHargaFinalBaru,
+      total_harga_beli: totalKotorBaru,
       harga_final: totalHargaFinalBaru,
       status_pembayaran: statusPembayaran,
       metode_pembayaran: statusPembayaran === 'lunas' ? (transaksi.metode_pembayaran || 'cash') : undefined,

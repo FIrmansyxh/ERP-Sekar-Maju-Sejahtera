@@ -19,7 +19,7 @@ import {
   User,
   Filter
 } from 'lucide-react';
-import { Petani, UserRole } from '../../types';
+import { Petani, UserRole, TransaksiPembelian } from '../../types';
 import { formatNumber } from '../../utils/formatters';
 import { canUserPerform } from '../../utils/rbac';
 import { Pagination } from '../common/Pagination';
@@ -28,6 +28,7 @@ import { ConfirmModal } from '../common/ConfirmModal';
 interface PetaniTableProps {
   data: Petani[];
   userRole: UserRole;
+  transaksiList?: TransaksiPembelian[];
   onAddPetani: () => void;
   onEditPetani: (petani: Petani) => void;
   onViewDetail: (petani: Petani) => void;
@@ -39,6 +40,7 @@ interface PetaniTableProps {
 }
 
 export const PetaniTable: React.FC<PetaniTableProps> = ({
+  transaksiList = [],
   data = [],
   userRole,
   onAddPetani,
@@ -446,7 +448,11 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
 
                       {/* Total Bal */}
                       <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono font-medium text-gray-800">
-                        {petani.statistik?.total_setoran_bal || 0} Bal
+                        {(() => {
+                          const realTransactions = transaksiList.filter((tx) => tx.petani_id === petani.petani_id);
+                          const totalBal = realTransactions.reduce((acc, tx) => acc + (tx.total_bal || (tx.items ? tx.items.length : 0)), 0);
+                          return totalBal;
+                        })()} Bal
                       </td>
 
                       {/* Action Buttons */}

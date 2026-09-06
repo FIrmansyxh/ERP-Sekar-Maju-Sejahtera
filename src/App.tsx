@@ -554,8 +554,18 @@ export default function App() {
 
     const updatedPetaniList = petaniList.map((p) => {
       if (p.petani_id === newTx.petani_id) {
-        const totalBal = (p.statistik?.total_setoran_bal || 0) + balCount;
-        const totalKg = (p.statistik?.total_berat_kg || 0) + newTx.berat_kg;
+        let totalBalDelta = balCount;
+        let totalKgDelta = newTx.berat_kg || 0;
+
+        if (exists && oldTx) {
+          const oldBalCount = oldTx.total_bal || (oldTx.items ? oldTx.items.length : 1);
+          totalBalDelta -= oldBalCount;
+          totalKgDelta -= (oldTx.berat_kg || 0);
+        }
+
+        const totalBal = Math.max(0, (p.statistik?.total_setoran_bal || 0) + totalBalDelta);
+        const totalKg = Math.max(0, (p.statistik?.total_berat_kg || 0) + totalKgDelta);
+
         return {
           ...p,
           statistik: {
@@ -1134,6 +1144,7 @@ export default function App() {
               <PetaniTable
                 data={petaniList}
                 userRole={currentRole}
+                transaksiList={transaksiList}
                 onAddPetani={() => {
                   setEditingPetani(null);
                   setIsFormModalOpen(true);
@@ -1382,6 +1393,7 @@ export default function App() {
         onClose={() => setViewingPetani(null)}
         petani={viewingPetani}
         userRole={currentRole}
+        transaksiList={transaksiList}
         onEdit={(p) => {
           setViewingPetani(null);
           setEditingPetani(p);

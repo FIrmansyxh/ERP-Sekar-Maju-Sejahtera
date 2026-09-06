@@ -31,6 +31,7 @@ interface LogAktivitasManagementProps {
   currentUser?: User | null;
   allUsers?: User[];
   onRefreshLogs?: () => void;
+  onClearLogs?: () => void;
 }
 
 export const LogAktivitasManagement: React.FC<LogAktivitasManagementProps> = ({
@@ -38,12 +39,14 @@ export const LogAktivitasManagement: React.FC<LogAktivitasManagementProps> = ({
   currentUser,
   allUsers = [],
   onRefreshLogs,
+  onClearLogs,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedModul, setSelectedModul] = useState<string>('all');
   const [selectedUser, setSelectedUser] = useState<string>('all');
   const [selectedDateFilter, setSelectedDateFilter] = useState<string>('all');
   const [selectedDetailLog, setSelectedDetailLog] = useState<LogAktivitas | null>(null);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   // Security Check: strictly Super Admin only
   const isSuperAdmin = currentUser?.role === 'superadmin';

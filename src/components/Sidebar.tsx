@@ -520,7 +520,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   >
                     <span>Inventaris Bal Gudang</span>
                     <span className="text-[10px] font-mono font-medium px-1 bg-slate-100 text-slate-600 rounded-xs">
-                      {barangCount} Bal
+                      {barangCount > 9999 ? "9999+" : barangCount} Bal
                     </span>
                   </button>
                 )}

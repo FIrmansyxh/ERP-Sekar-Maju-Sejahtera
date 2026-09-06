@@ -56,7 +56,8 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
 }) => {
   // Pending or all transactions
   const pendingOrRecentTxList = useMemo(() => {
-    return transaksiList.filter((t) => (t.items || []).length > 0);
+    const filtered = transaksiList.filter((t) => (t.items || []).length > 0);
+    return filtered.sort((a, b) => b.no_kupon.localeCompare(a.no_kupon));
   }, [transaksiList]);
 
   // Initial lookup if initialBalNo is provided
@@ -83,10 +84,10 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
       if (found) return found.transaksi_id;
     }
     // Default to first pending tx or first tx
-    const firstPending = transaksiList.find((t) => (t.items || []).some((it) => (it.berat_kg || 0) <= 0));
-    return firstPending?.transaksi_id || transaksiList[0]?.transaksi_id || '';
+    return '';
   });
   const [kuponInput, setKuponInput] = useState<string>('');
+  const [showKuponDropdown, setShowKuponDropdown] = useState(false);
   
   // Sync kuponInput when selectedTxId changes from elsewhere
   useEffect(() => {
@@ -670,6 +671,24 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
 
     setWorkingItems(updatedItems);
     setBeratBrutoInput('');
+    
+    // Save to global state so it's persisted immediately
+    if (currentTx) {
+      const updatedTx = {
+        ...currentTx,
+        items: updatedItems,
+        berat_kg: updatedItems.reduce((sum, item) => sum + (item.berat_kg || 0), 0),
+        total_kotor: updatedItems.reduce((sum, item) => sum + (item.total_kotor || 0), 0),
+        total_potongan: updatedItems.reduce((sum, item) => sum + (item.potongan || 0), 0),
+        total_bersih: updatedItems.reduce((sum, item) => sum + (item.subtotal_bersih || 0), 0),
+        status_transaksi: 'menunggu',
+        status_tahap: 'menunggu_timbang',
+      };
+      // For updatedBarangs we pass empty array or we find and modify the associated barang?
+      // Actually we just pass [] because the barang might have been created before, but in this case the global App state in App.tsx might need to be notified. 
+      // Passing [] is safe for onSaveTransaksi if we only update the TX.
+      onSaveTransaksi(updatedTx, []);
+    }
     setScanFeedback({
       text: `🔓 Kunci berat Bal "${item.no_bal}" telah dibuka. Silakan timbang ulang dan masukkan berat bruto.`,
       isError: false,
@@ -945,61 +964,58 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
             <div className="relative">
               <input
                 type="text"
-                list="kupon-list"
+                placeholder="Ketik min. 3 karakter No. Kupon..."
                 value={kuponInput}
                 onChange={(e) => {
-                  const val = formatNoKupon(e.target.value);
+                  const val = e.target.value.toUpperCase();
                   setKuponInput(val);
-                  
-                  // Auto-select if matches a no_kupon
-                  const matchedTx = pendingOrRecentTxList.find(t => t.no_kupon.toLowerCase() === val.toLowerCase());
-                  if (matchedTx) {
-                    handleManualChangeKupon(matchedTx.transaksi_id);
-                  }
+                  setShowKuponDropdown(val.length >= 3);
                 }}
-                onKeyDown={(e) => {
-                   if (e.key === 'Enter') {
-                     e.preventDefault();
-                     lookupBal(kuponInput, false); // If they type a bal instead of kupon here, try to look it up!
-                   }
+                onFocus={() => {
+                  if (kuponInput.length >= 3) setShowKuponDropdown(true);
                 }}
-                placeholder="Ketik No. Kupon / Ketik No Bal / Pilih dari daftar..."
-                className="w-full bg-white border border-slate-300 rounded-sm px-2.5 py-2 text-xs font-medium text-slate-900 focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800 uppercase"
+                onBlur={() => {
+                  // Small delay to allow click on dropdown to register
+                  setTimeout(() => setShowKuponDropdown(false), 200);
+                }}
+                className="w-full bg-white border border-slate-300 rounded-sm px-2.5 py-2 text-xs font-medium text-slate-900 focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800"
               />
-              <datalist id="kupon-list">
-                {pendingOrRecentTxList.map((tx) => {
-                  const items = tx.items || [];
-                  const weighed = items.filter((i) => (i.berat_kg || 0) > 0).length;
-                  const isComplete = items.length > 0 && weighed === items.length;
-                  return (
-                    <option key={tx.transaksi_id} value={tx.no_kupon}>
-                      {isComplete ? '✓ [LENGKAP]' : '⏳ [PROSES]'} {tx.nama_petani} ({weighed}/{items.length} Bal)
-                    </option>
-                  );
-                })}
-              </datalist>
+              
+              {showKuponDropdown && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-sm shadow-lg overflow-y-auto max-h-60 z-50">
+                  {pendingOrRecentTxList
+                    .filter((tx) => tx.no_kupon.includes(kuponInput))
+                    .map((tx) => {
+                      const items = tx.items || [];
+                      const weighed = items.filter((i) => (i.berat_kg || 0) > 0).length;
+                      const isComplete = items.length > 0 && weighed === items.length;
+                      return (
+                        <div
+                          key={tx.transaksi_id}
+                          onClick={() => {
+                            handleManualChangeKupon(tx.transaksi_id);
+                            setKuponInput(tx.no_kupon);
+                            setShowKuponDropdown(false);
+                          }}
+                          className="px-3 py-2 cursor-pointer hover:bg-slate-50 border-b border-slate-100 last:border-0"
+                        >
+                          <div className="flex justify-between items-center mb-0.5">
+                            <strong className="text-slate-800 font-mono text-xs">{tx.no_kupon}</strong>
+                            <span className="text-[10px] text-slate-500 font-medium">{isComplete ? '✓ LENGKAP' : '⏳ PROSES'}</span>
+                          </div>
+                          <div className="text-[10px] text-slate-600">
+                            {tx.nama_petani} • {weighed}/{items.length} Bal ditimbang
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {pendingOrRecentTxList.filter((tx) => tx.no_kupon.includes(kuponInput)).length === 0 && (
+                      <div className="px-3 py-2 text-xs text-slate-500 text-center">Tidak ada kupon ditemukan</div>
+                    )}
+                </div>
+              )}
             </div>
 
-            {currentTx && (
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-sm text-xs space-y-1.5">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Petani Penyetor:</span>
-                  <strong className="text-slate-900">{currentTx.nama_petani}</strong>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">No. Kupon:</span>
-                  <span className="font-mono font-semibold text-slate-900">{currentTx.no_kupon}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Tanggal Sortir:</span>
-                  <span className="text-slate-700 font-mono font-medium">{formatDateHariBulanTahun(currentTx.tanggal_transaksi)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Gudang Intake:</span>
-                  <span className="text-slate-700">{currentTx.lokasi_gudang}</span>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* List of Bals in Selected Kupon */}
@@ -1109,7 +1125,6 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                       <Lock className="w-4 h-4 text-amber-700 mt-0.5 shrink-0" />
                       <div>
                         <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wider mb-0.5">Bal Selesai Ditimbang & Terkunci ({activeBalItem.berat_kg} Kg Netto)</h4>
-                        <p className="text-[11px] text-amber-800">Data berat bal ini terkunci demi keamanan audit. Kursor otomatis disiapkan pada kolom No Bal untuk bal berikutnya.</p>
                       </div>
                     </div>
                     <button
@@ -1234,24 +1249,6 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                     </div>
                   </div>
 
-                  {/* Realtime Potongan & Subtotal Calculation */}
-                  <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-sm text-[11px] space-y-1.5">
-                    <div className="flex justify-between text-slate-600">
-                      <span>Total Kotor ({liveNetto} kg × {formatRupiah(activeBalItem.harga_per_kg)}):</span>
-                      <span className="font-mono font-semibold text-slate-900">{formatRupiah(liveTotalKotor)}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-600">
-                      <span>
-                        Potongan (Kuli, Tali{activeBalItem.ganti_tikar ? ', Tikar' : ''}):
-                      </span>
-                      <span className="font-mono font-medium text-slate-700">-{formatRupiah(livePotTotal)}</span>
-                    </div>
-                    <div className="pt-1.5 border-t border-slate-200 flex justify-between text-xs font-semibold text-slate-900">
-                      <span>Subtotal Bersih:</span>
-                      <span className="font-mono font-bold text-slate-900">{formatRupiah(liveSubtotalBersih)}</span>
-                    </div>
-                  </div>
-
                   {/* Lokasi Gudang Blok */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
                     <div>
@@ -1311,31 +1308,6 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
             </div>
           )}
 
-          {/* Kupon Batch Completion Notification */}
-          {allCurrentWeighed && (
-            <div className="bg-slate-50 border border-slate-200 p-4 rounded-sm shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="flex items-center space-x-3">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                <div>
-                  <h4 className="text-xs font-semibold text-slate-900 uppercase tracking-wide">
-                    Kupon {currentTx?.no_kupon} Telah Selesai Ditimbang
-                  </h4>
-                  <p className="text-xs text-slate-600">
-                    Total {workingItems.length} bal ({currentTx?.berat_kg} Kg Netto) siap dicairkan dan dicetak notanya di Kasir.
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => onNavigateToKasir(currentTx?.no_kupon, currentTx?.transaksi_id)}
-                className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-2xs whitespace-nowrap"
-              >
-                <span>Buka di Kasir & Cetak Nota</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
 
         </div>
 
