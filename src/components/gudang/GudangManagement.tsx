@@ -280,45 +280,6 @@ export const GudangManagement: React.FC<GudangManagementProps> = ({
               </select>
               <span className="text-gray-600">Data Per Halaman</span>
             </div>
-
-            {/* Quick Status Filter Dropdown */}
-            <div className="flex items-center space-x-2 pl-0 sm:pl-3 sm:border-l sm:border-gray-200">
-              <span className="text-gray-600 font-medium">Status:</span>
-              <div className="relative">
-                <select
-                  value={statusFilter}
-                  onChange={(e) => {
-                    setStatusFilter(e.target.value as 'all' | 'active' | 'inactive');
-                    setCurrentPage(1);
-                  }}
-                  className={`border rounded-sm px-2.5 py-1 text-xs font-medium focus:outline-none transition-colors ${
-                    statusFilter === 'active'
-                      ? 'border-emerald-500 bg-emerald-50 text-emerald-800 font-bold'
-                      : statusFilter === 'inactive'
-                      ? 'border-amber-500 bg-amber-50 text-amber-800 font-bold'
-                      : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
-                  }`}
-                >
-                  <option value="all">Semua Status ({gudangList.length})</option>
-                  <option value="active">✓ Hanya Aktif ({countActive})</option>
-                  <option value="inactive">✕ Nonaktif ({countInactive})</option>
-                </select>
-              </div>
-
-              {statusFilter !== 'all' && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setStatusFilter('all');
-                    setCurrentPage(1);
-                  }}
-                  className="px-2 py-1 text-[11px] text-gray-500 hover:text-gray-800 hover:bg-gray-100 border border-gray-300 rounded-sm transition cursor-pointer"
-                  title="Reset Filter Status"
-                >
-                  Reset
-                </button>
-              )}
-            </div>
           </div>
 
           <div className="flex items-center space-x-2">

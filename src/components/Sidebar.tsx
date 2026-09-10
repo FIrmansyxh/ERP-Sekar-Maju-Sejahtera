@@ -59,6 +59,13 @@ export const MODULES_CONFIG = [
     moduleKey: 'laporan-bal',
   },
   {
+    id: 'modul-6-laporan-kode-bal',
+    title: 'Laporan Kode Bal',
+    subtitle: 'Analisa Kode Bal',
+    icon: 'PackageSearch',
+    moduleKey: 'laporan-kode-bal',
+  },
+  {
     id: 'modul-6-laporan-grade',
     title: 'Laporan Mutu Grade',
     subtitle: 'Stok, Intake & Valuasi per Grade',
@@ -325,6 +332,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     }`}
                   >
                     <span>Laporan Bal</span>
+                  </button>
+                )}
+
+                {checkAccess('modul-6-laporan-kode-bal') && (
+                  <button
+                    onClick={() => onSelectModule('modul-6-laporan-kode-bal')}
+                    className={`w-full text-left py-1.5 px-2 rounded-xs flex items-center justify-between cursor-pointer ${
+                      activeModuleId === 'modul-6-laporan-kode-bal'
+                        ? 'text-slate-900 font-semibold bg-slate-100'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span>Laporan Kode Bal</span>
                   </button>
                 )}
 

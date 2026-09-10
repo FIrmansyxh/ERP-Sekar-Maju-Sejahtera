@@ -55,6 +55,7 @@ import { DashboardAnalyticView } from './components/laporan/DashboardAnalyticVie
 
 // Laporan Detail Bal Tembakau
 import { LaporanBalView } from './components/laporan/LaporanBalView';
+import { LaporanKodeBalView } from './components/laporan/LaporanKodeBalView';
 
 // Laporan Mutu Grade & Analisis Stok Inventaris
 import { LaporanHargaJualView } from './components/laporan/LaporanHargaJualView';
@@ -971,6 +972,8 @@ export default function App() {
         return { title: 'Dashboard Laporan & Analytic ERP', breadcrumb: 'Beranda / Dashboard Analytic' };
       case 'modul-6-laporan-bal':
         return { title: 'Laporan Detail Bal Tembakau', breadcrumb: 'Beranda / Laporan Detail Bal' };
+      case 'modul-6-laporan-kode-bal':
+        return { title: 'Laporan Kode Bal', breadcrumb: 'Beranda / Laporan Kode Bal' };
       case 'modul-6-laporan-grade':
         return { title: 'Laporan Stok & Mutu Grade', breadcrumb: 'Beranda / Laporan Mutu Grade' };
       case 'modul-6-laporan-pembelian':
@@ -1163,6 +1166,11 @@ export default function App() {
                 onNavigateToTransaksi={() => handleSelectModule('modul-0-transaksi')}
                 onNavigateToGudang={() => handleSelectModule('modul-7-gudang')}
               />
+            )}
+
+            {/* Laporan Kode Bal */}
+            {activeModuleId === 'modul-6-laporan-kode-bal' && (
+              <LaporanKodeBalView barangList={barangList} />
             )}
 
             {/* Laporan Harga Jual / Laporan Harga */}

@@ -1,12 +1,15 @@
 import React from 'react';
 import { TransaksiPembelian } from '../../types';
 import { formatRupiah, formatDateHariBulanTahun, terbilangRupiah } from '../../utils/formatters';
+import { loadCurrentUser } from '../../utils/storage';
 
 export interface NotaTimbangContentProps {
   transaksi: TransaksiPembelian;
 }
 
 export const NotaTimbangContent: React.FC<NotaTimbangContentProps> = ({ transaksi }) => {
+  const currentUser = loadCurrentUser();
+  
   const items = transaksi.items && transaksi.items.length > 0
     ? transaksi.items
     : [
@@ -269,9 +272,9 @@ export const NotaTimbangContent: React.FC<NotaTimbangContentProps> = ({ transaks
       </div>
 
       {/* Signature Grid */}
-      <div className="pt-4 grid grid-cols-3 gap-4 text-center text-xs avoid-page-break">
+      <div className="pt-4 grid grid-cols-2 gap-4 text-center text-xs avoid-page-break">
         <div>
-          <p className="text-gray-600 font-medium">Petani / Penjual</p>
+          <p className="text-gray-600 font-medium">Penjual</p>
           <div className="h-14 flex items-end justify-center">
             <span className="font-semibold border-b border-gray-800 pb-0.5 min-w-[130px] inline-block text-gray-900">
               {transaksi.nama_petani || <>&nbsp;</>}
@@ -279,18 +282,10 @@ export const NotaTimbangContent: React.FC<NotaTimbangContentProps> = ({ transaks
           </div>
         </div>
         <div>
-          <p className="text-gray-600 font-medium">Petugas Sortir</p>
+          <p className="text-gray-600 font-medium">Petugas Kasir</p>
           <div className="h-14 flex items-end justify-center">
             <span className="font-semibold border-b border-gray-800 pb-0.5 min-w-[130px] inline-block text-gray-900">
-              {transaksi.operator_nama || <>&nbsp;</>}
-            </span>
-          </div>
-        </div>
-        <div>
-          <p className="text-gray-600 font-medium">Kasir Pemroses</p>
-          <div className="h-14 flex items-end justify-center">
-            <span className="font-semibold border-b border-gray-800 pb-0.5 min-w-[130px] inline-block text-gray-900">
-              {transaksi.dibayar_oleh || transaksi.operator_nama || 'Petugas Kasir'}
+              {currentUser?.nama_lengkap || currentUser?.username || 'Petugas Kasir'}
             </span>
           </div>
         </div>
