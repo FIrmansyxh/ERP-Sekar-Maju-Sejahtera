@@ -1,3 +1,4 @@
+import { SearchableSelect } from '../common/SearchableSelect';
 import React, { useState, useMemo } from 'react';
 import { 
   Package, 
@@ -280,18 +281,14 @@ export const MasterBarangManagement: React.FC<MasterBarangManagementProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center space-x-1">
               <span className="text-gray-500 font-semibold text-[11px]">Grade:</span>
-              <select
+              <SearchableSelect
                 value={selectedGrade}
-                onChange={(e) => setSelectedGrade(e.target.value)}
-                className="bg-white border border-gray-300 rounded-sm px-2.5 py-1 text-xs font-semibold focus:border-[#b81d24] focus:outline-none"
-              >
-                <option value="all">Semua Grade ({availableGrades.length})</option>
-                {availableGrades.map((gr) => (
-                  <option key={gr} value={gr}>
-                    Grade {gr}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => setSelectedGrade(val)}
+                options={[
+                  { value: 'all', label: `Semua Grade (${availableGrades.length})` },
+                  ...availableGrades.map(gr => ({ value: gr, label: `Grade ${gr}` }))
+                ]}
+              />
             </div>
 
             <div className="flex items-center space-x-1">
@@ -338,7 +335,7 @@ export const MasterBarangManagement: React.FC<MasterBarangManagementProps> = ({
                 </tr>
               ) : (
                 filteredItems.map((item) => {
-                  const gradeBadge = GRADE_COLOR_MAP[item.kode_grade] || {
+                  const gradeBadge: any = GRADE_COLOR_MAP[item.kode_grade] || {
                     bg: 'bg-gray-100',
                     text: 'text-gray-800',
                     border: 'border-gray-300',

@@ -128,16 +128,24 @@ export const LaporanGudangView: React.FC<LaporanGudangViewProps> = ({
       const readyBales = allAssignedBales.filter((b) => b.status_stok === 'siap_kirim');
 
       // Shipped / Out
-      const outBales = allAssignedBales.filter((b) => b.status_stok === 'keluar' || b.status_stok === 'terkirim_sample');
+      // Active Pengiriman mapping
+      const activePengirimanIds = new Set(
+        (window as any).pengirimanList?.filter((p: any) => p.status !== 'diterima' && p.status !== 'selesai').map((p: any) => p.pengiriman_id) || []
+      );
 
-      // Total entered (akumulasi bal masuk)
-      const totalMasukBal = allAssignedBales.length;
+      // A bale is considered in warehouse if it's literally there, OR if it's on a truck (keluar) but the DO is not yet selesai, OR if it's in lab (terkirim_sample).
+      const actuallyInWarehouseBales = allAssignedBales.filter(b => {
+        if (b.status_stok === 'di_gudang' || b.status_stok === 'siap_kirim' || b.status_stok === 'terkirim_sample') return true;
+        if (b.status_stok === 'keluar' && b.pengiriman_id && activePengirimanIds.has(b.pengiriman_id)) return true;
+        return false;
+      });
 
-      // Currently occupying capacity (di_gudang + siap_kirim)
-      const currentOccupiedBal = activeBales.length + readyBales.length;
+      const outBales = allAssignedBales.filter((b) => !actuallyInWarehouseBales.includes(b));
       
-      const currentKg = activeBales.reduce((acc, b) => acc + (b.berat_kg || 0), 0) + 
-                        readyBales.reduce((acc, b) => acc + (b.berat_kg || 0), 0);
+      const totalMasukBal = allAssignedBales.length;
+      const currentOccupiedBal = actuallyInWarehouseBales.length;
+      
+      const currentKg = actuallyInWarehouseBales.reduce((acc, b) => acc + (b.berat_kg || 0), 0);
 
       const capacity = g.kapasitas_bal || 1000;
       const occupancyPct = capacity > 0 ? (currentOccupiedBal / capacity) * 100 : 0;
@@ -296,7 +304,7 @@ export const LaporanGudangView: React.FC<LaporanGudangViewProps> = ({
     const headers = [
       'No',
       'No Bal',
-      'No Bal',
+      'ID Bal',
       'Lokasi Gudang / Rak',
       'Kode Grade',
       'Berat Netto (Kg)',
@@ -919,8 +927,8 @@ export const LaporanGudangView: React.FC<LaporanGudangViewProps> = ({
             <thead>
               <tr className="bg-[#f1f3f5] border-b border-gray-200 text-gray-700 font-bold">
                 <th className="py-2.5 px-3 text-center border-r border-gray-200 w-10">No</th>
-                <th className="py-2.5 px-3 border-r border-gray-200">No Bal</th>
-                <th className="py-2.5 px-3 border-r border-gray-200">No Bal</th>
+                <th className="py-2.5 px-3 border-r border-gray-200 w-28 whitespace-nowrap">No Bal</th>
+                <th className="py-2.5 px-3 border-r border-gray-200 w-32 whitespace-nowrap">ID Bal</th>
                 <th className="py-2.5 px-3 border-r border-gray-200">Lokasi / Fasilitas Gudang</th>
                 <th className="py-2.5 px-3 border-r border-gray-200 text-center">Grade</th>
                 <th className="py-2.5 px-3 border-r border-gray-200 text-right">Berat Netto (Kg)</th>
@@ -959,11 +967,11 @@ export const LaporanGudangView: React.FC<LaporanGudangViewProps> = ({
                         {rowNumber}
                       </td>
 
-                      <td className="py-2.5 px-3 border-r border-gray-200 font-mono font-bold text-gray-900">
+                      <td className="py-2.5 px-3 border-r border-gray-200 font-mono font-bold text-gray-900 w-28 whitespace-nowrap">
                         {b.no_bal}
                       </td>
 
-                      <td className="py-2.5 px-3 border-r border-gray-200 font-mono text-gray-600">
+                      <td className="py-2.5 px-3 border-r border-gray-200 font-mono text-gray-600 w-32 whitespace-nowrap">
                         {b.barang_id}
                       </td>
 
@@ -1003,11 +1011,34 @@ export const LaporanGudangView: React.FC<LaporanGudangViewProps> = ({
                             Siap Kirim (DO)
                           </span>
                         )}
-                        {(b.status_stok === 'keluar' || b.status_stok === 'terkirim_sample') && (
-                          <span className="px-2 py-0.5 text-[10px] font-bold rounded-xs bg-blue-50 text-blue-800 border border-blue-300">
-                            Terkirim ke Pabrik
-                          </span>
-                        )}
+                        {(() => {
+                          let label = '';
+                          let color = '';
+                          
+                          if (b.status_stok === 'terkirim_sample') {
+                             label = 'Diuji Lab (Sample)';
+                             color = 'bg-purple-50 text-purple-800 border-purple-300';
+                          } else if (b.status_stok === 'keluar') {
+                             const doId = b.pengiriman_id;
+                             const isActive = false;
+                             if (isActive) {
+                               label = 'Dimuat di Truk';
+                               color = 'bg-orange-50 text-orange-800 border-orange-300';
+                             } else {
+                               label = 'Terjual / Diterima Pabrik';
+                               color = 'bg-blue-50 text-blue-800 border-blue-300';
+                             }
+                          }
+                          
+                          if (label) {
+                            return (
+                              <span className={`px-2 py-0.5 text-[10px] font-bold rounded-xs border ${color}`}>
+                                {label}
+                              </span>
+                            );
+                          }
+                          return null;
+                        })()}
                       </td>
                     </tr>
                   );
@@ -1134,7 +1165,7 @@ export const LaporanGudangView: React.FC<LaporanGudangViewProps> = ({
               <thead>
                 <tr className="bg-gray-100 border-b border-gray-300 font-bold text-gray-800">
                   <th className="p-1.5 text-center border-r border-gray-300 w-8">No</th>
-                  <th className="p-1.5 border-r border-gray-300">No Bal</th>
+                  <th className="p-1.5 border-r border-gray-300 w-20">No Bal</th>
                   <th className="p-1.5 border-r border-gray-300">Lokasi Gudang</th>
                   <th className="p-1.5 text-center border-r border-gray-300">Grade</th>
                   <th className="p-1.5 text-right border-r border-gray-300">Berat (Kg)</th>
@@ -1162,15 +1193,15 @@ export const LaporanGudangView: React.FC<LaporanGudangViewProps> = ({
           <div className="pt-6 grid grid-cols-3 text-center text-[10px] text-gray-800">
             <div className="space-y-12">
               <p className="font-semibold">Petugas Logistik Gudang,</p>
-              <p className="font-bold underline">( ............................................ )</p>
+              <p className="font-bold underline min-h-[16px]">&nbsp;</p>
             </div>
             <div className="space-y-12">
               <p className="font-semibold">QC / Mutu Tembakau,</p>
-              <p className="font-bold underline">( ............................................ )</p>
+              <p className="font-bold underline min-h-[16px]">&nbsp;</p>
             </div>
             <div className="space-y-12">
               <p className="font-semibold">Kepala Gudang Utama,</p>
-              <p className="font-bold underline">( Bambang Sutrisno, S.T. )</p>
+              <p className="font-bold underline">Bambang Sutrisno, S.T.</p>
             </div>
           </div>
 

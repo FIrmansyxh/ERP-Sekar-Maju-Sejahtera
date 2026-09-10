@@ -1,3 +1,4 @@
+import { SearchableSelect } from '../common/SearchableSelect';
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Scan, 
@@ -16,8 +17,8 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { Petani, TabelHarga, TransaksiPembelian, TransaksiItemBal, Gudang, User as UserType, Barang } from '../../types';
-import { formatRupiah, formatNoKupon } from '../../utils/formatters';
-import { recordLogAktivitas } from '../../utils/storage';
+import { formatRupiah, formatNoKupon, generateTransaksiId, hitungPotonganTaraKg } from '../../utils/formatters';
+import { loadTransaksiData } from '../../utils/storage';
 import { ConfirmModal } from '../common/ConfirmModal';
 
 interface Proses1SortirModalProps {
@@ -37,11 +38,9 @@ interface SortirBalItem {
   noBal: string;   // Nomor bal identik dengan stiker
   kodeGrade: string;
   hargaPerKg: number;
-  gantiTikar: boolean; // true = +75.000 (tara 2kg), false = 0 (tara 3kg)
   potonganKuli: number; // 7.000
   potonganTali: number; // 3.000
-  potonganTikar: number; // 75.000 jika gantiTikar else 0
-  catatan?: string;
+    catatan?: string;
   scannedAt?: string;
 }
 
@@ -55,10 +54,25 @@ export const Proses1SortirModal: React.FC<Proses1SortirModalProps> = ({
   currentUser,
   onSaveSortir,
 }) => {
-  const [noKupon, setNoKupon] = useState(`KUP${String(Math.floor(1 + Math.random() * 9999)).padStart(4, '0')}`);
+  const [noKupon, setNoKupon] = useState(() => {
+    try {
+      const existingTx = loadTransaksiData();
+      let maxNum = 0;
+      existingTx.forEach((tx) => {
+        const m = (tx.no_kupon || '').match(/\d+/);
+        if (m) {
+          const n = parseInt(m[0], 10);
+          if (n > maxNum) maxNum = n;
+        }
+      });
+      return `KUP${String(maxNum + 1).padStart(4, '0')}`;
+    } catch {
+      return 'KUP0001';
+    }
+  });
   const [selectedPetaniId, setSelectedPetaniId] = useState('');
   const [tanggal, setTanggal] = useState(new Date().toISOString().split('T')[0]);
-  const [lokasiGudang, setLokasiGudang] = useState('Gudang Pusat Induk - Pamekasan');
+  const [lokasiGudang, setLokasiGudang] = useState(gudangList?.[0]?.nama_gudang || 'Gudang Utama Pamekasan');
   const [adminSortirNama, setAdminSortirNama] = useState('Admin 1 & 2 (Meja Sortir Intake)');
   const [petugasSortirNama, setPetugasSortirNama] = useState(currentUser?.nama_lengkap || 'Sistem');
   const [catatan, setCatatan] = useState('');
@@ -66,8 +80,8 @@ export const Proses1SortirModal: React.FC<Proses1SortirModalProps> = ({
   // Default active options for new scanned rows
   const activeFarmers = petaniList.filter((p) => p.status_aktif);
   const activeGrades = hargaList.filter((h) => h.status === 'aktif');
-  const defaultGrade = activeGrades[0]?.kode_grade || 'A';
-  const defaultPrice = activeGrades[0]?.harga_per_kg || 140000;
+  const defaultGrade = activeGrades[0]?.kode_grade || '50';
+  const defaultPrice = activeGrades[0]?.harga_per_kg || 50000;
 
   const [activeDefaultGrade, setActiveDefaultGrade] = useState('');
   const [activeDefaultGantiTikar, setActiveDefaultGantiTikar] = useState(false);
@@ -86,6 +100,18 @@ export const Proses1SortirModal: React.FC<Proses1SortirModalProps> = ({
   // Initialize on open
   useEffect(() => {
     if (isOpen) {
+      const existingTx = loadTransaksiData();
+      let maxNum = 0;
+      existingTx.forEach(tx => {
+        const match = (tx.no_kupon || '').match(/\d+/);
+        if (match) {
+          const num = parseInt(match[0], 10);
+          if (num > maxNum) maxNum = num;
+        }
+      });
+      const nextNum = maxNum + 1;
+      setNoKupon(`KUP${String(nextNum).padStart(4, '0')}`);
+
       if (activeFarmers.length > 0 && !selectedPetaniId) {
         setSelectedPetaniId(activeFarmers[0].petani_id);
       }
@@ -121,6 +147,11 @@ export const Proses1SortirModal: React.FC<Proses1SortirModalProps> = ({
       alert('Pilih Mutu/Grade terlebih dahulu sebelum menambah baris!');
       return;
     }
+    const isValidGrade = activeGrades.some(g => g.kode_grade === activeDefaultGrade);
+    if (!isValidGrade) {
+      alert(`Grade "${activeDefaultGrade}" tidak terdaftar di Master Harga Beli!`);
+      return;
+    }
     const newId = `sortir-${Date.now()}-${balItems.length + 1}`;
     const price = getPriceForGrade(activeDefaultGrade);
     const newRow: SortirBalItem = {
@@ -129,11 +160,9 @@ export const Proses1SortirModal: React.FC<Proses1SortirModalProps> = ({
       noBal: '',
       kodeGrade: activeDefaultGrade,
       hargaPerKg: price,
-      gantiTikar: activeDefaultGantiTikar,
-      potonganKuli: 7000,
+            potonganKuli: 7000,
       potonganTali: 3000,
-      potonganTikar: activeDefaultGantiTikar ? 75000 : 0,
-      catatan: '',
+            catatan: '',
       scannedAt: new Date().toLocaleTimeString('id-ID'),
     };
     setBalItems((prev) => [...prev, newRow]);
@@ -150,6 +179,12 @@ export const Proses1SortirModal: React.FC<Proses1SortirModalProps> = ({
     if (!activeDefaultGrade) {
       gradeSelectRef.current?.focus();
       setScannerFeedback({ text: 'Pilih Mutu/Grade terlebih dahulu!', isError: true });
+      return;
+    }
+    const isValidGrade = activeGrades.some(g => g.kode_grade === activeDefaultGrade);
+    if (!isValidGrade) {
+      gradeSelectRef.current?.focus();
+      setScannerFeedback({ text: `Grade "${activeDefaultGrade}" tidak terdaftar di Master Harga Beli!`, isError: true });
       return;
     }
     if (e) e.preventDefault();
@@ -191,9 +226,7 @@ export const Proses1SortirModal: React.FC<Proses1SortirModalProps> = ({
                 noBal: cleanCode,
                 kodeGrade: activeDefaultGrade,
                 hargaPerKg: price,
-                gantiTikar: activeDefaultGantiTikar,
-                potonganTikar: activeDefaultGantiTikar ? 75000 : 0,
-                scannedAt: new Date().toLocaleTimeString('id-ID'),
+                                                scannedAt: new Date().toLocaleTimeString('id-ID'),
               }
             : it
         )
@@ -207,11 +240,9 @@ export const Proses1SortirModal: React.FC<Proses1SortirModalProps> = ({
         noBal: cleanCode,
         kodeGrade: activeDefaultGrade,
         hargaPerKg: price,
-        gantiTikar: activeDefaultGantiTikar,
-        potonganKuli: 7000,
+                potonganKuli: 7000,
         potonganTali: 3000,
-        potonganTikar: activeDefaultGantiTikar ? 75000 : 0,
-        catatan: '',
+                catatan: '',
         scannedAt: new Date().toLocaleTimeString('id-ID'),
       };
       setBalItems((prev) => [...prev, newRow]);
@@ -219,7 +250,7 @@ export const Proses1SortirModal: React.FC<Proses1SortirModalProps> = ({
     }
 
     setScannerFeedback({
-      text: `✓ Stiker Barcode "${cleanCode}" BERHASIL MASUK (Grade ${activeDefaultGrade} • ${activeDefaultGantiTikar ? 'Ganti Tikar' : 'Tikar Standar'}). Siap scan bal berikutnya...`,
+      text: `✓ Stiker Barcode "${cleanCode}" BERHASIL MASUK (Grade ${activeDefaultGrade}). Siap scan bal berikutnya...`,
       isError: false,
       code: cleanCode,
     });
@@ -242,9 +273,6 @@ export const Proses1SortirModal: React.FC<Proses1SortirModalProps> = ({
         const updated = { ...item, [field]: value };
         if (field === 'kodeGrade') {
           updated.hargaPerKg = getPriceForGrade(value);
-        }
-        if (field === 'gantiTikar') {
-          updated.potonganTikar = value ? 75000 : 0;
         }
         return updated;
       })
@@ -312,9 +340,10 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
   };
 
   const handleConfirmSave = () => {
-    const seqNum = Math.floor(1 + Math.random() * 9999);
-    const txId = `TRX-${tanggal.replace(/-/g, '')}-${String(seqNum).padStart(3, '0')}`;
-    const kuponNo = noKupon.trim() || `KUP${String(seqNum).padStart(4, '0')}`;
+    const existingTx = loadTransaksiData();
+    const txId = generateTransaksiId(tanggal, existingTx);
+    const seqPart = txId.split('-')[2] || '001';
+    const kuponNo = noKupon.trim() || `KUP${seqPart.padStart(4, '0')}`;
 
     // Distinct grades summary
     const uniqueGrades: string[] = Array.from(new Set(balItems.map((i) => i.kodeGrade)));
@@ -324,7 +353,7 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
     const transactionItems: TransaksiItemBal[] = balItems.map((item, idx) => {
       const potonganTikarVal = item.gantiTikar ? 75000 : 0;
       const totalPotonganPerBal = 7000 + 3000 + potonganTikarVal;
-      const taraKg = item.gantiTikar ? 2 : 3;
+      const taraKg = 2; // Default tara
 
       return {
         item_id: `tx-item-${idx + 1}`,
@@ -332,7 +361,7 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
         barcode: item.barcode.trim() || item.noBal.trim(),
         kode_grade: item.kodeGrade,
         harga_per_kg: item.hargaPerKg,
-        ganti_tikar: item.gantiTikar,
+        ganti_tikar: false,
         berat_bruto_kg: 0, // Belum ditimbang di proses 1
         potongan_tara_kg: taraKg,
         berat_kg: 0, // Menunggu proses timbang
@@ -364,9 +393,9 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
       barang_ids: [],
       jenis_timbang: 'bruto',
       berat_terukur_kg: 0,
-      potongan_tara_kg: balItems.reduce((acc, curr) => acc + (curr.gantiTikar ? 2 : 3), 0),
+      potongan_tara_kg: balItems.reduce((acc, curr) => acc + hitungPotonganTaraKg(0, curr.gantiTikar || false, curr.noBal), 0),
       berat_kg: 0,
-      lokasi_gudang: lokasiGudang.trim() || 'Gudang Pusat Induk - Pamekasan',
+      lokasi_gudang: lokasiGudang.trim() || 'Gudang Utama Pamekasan',
       harga_per_kg: balItems[0]?.hargaPerKg || 0,
       total_kotor: 0,
       potongan_kuli: totalPotonganKuli,
@@ -387,23 +416,7 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
     onSaveSortir(newTx);
 
     // Record audit log for Sortir & Intake Bal registration
-    recordLogAktivitas({
-      user_id: currentUser?.user_id || 'USR-SORTIR',
-      username: currentUser?.username || 'sortir',
-      nama_lengkap: currentUser?.nama_lengkap || petugasSortirNama || 'Petugas Sortir',
-      role: currentUser?.role || 'operator_sortir',
-      modul: 'sortir',
-      aksi: 'Sortir Kupon & Registrasi Bal',
-      tipe_aksi: 'sortir',
-      no_kupon: newTx.no_kupon,
-      no_bal: newTx.no_bal,
-      kode_grade: newTx.kode_grade,
-      transaksi_id: newTx.transaksi_id,
-      nama_petani: newTx.nama_petani,
-      status: 'sukses',
-      rincian: `REGISTRASI SORTIR BAL: Kupon ${newTx.no_kupon} (${newTx.transaksi_id}) untuk Petani "${newTx.nama_petani}" berhasil diregistrasi (${newTx.total_bal} Bal: ${newTx.no_bal}). Grade utama: ${newTx.kode_grade}. Petugas Sortir: ${petugasSortirNama}. Menunggu penimbangan di Proses 2.`,
-      data_sesudah: JSON.stringify(newTx, null, 2),
-    });
+    
 
     setIsConfirmOpen(false);
   };
@@ -420,14 +433,7 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
                 <Scan className="w-4 h-4 text-[#b81d24]" />
               </div>
               <div className="min-w-0">
-                <div className="flex items-center space-x-2">
-                  <span className="px-2 py-0.5 bg-[#b81d24] text-white text-[10px] font-black rounded-xs uppercase">
-                    PROSES 1 • MEJA SORTIR & SCAN STIKER
-                  </span>
-                  <span className="text-[11px] text-gray-500 font-medium">
-                    Barcode Stiker Fisik Eksternal (Continuous Gun Scan)
-                  </span>
-                </div>
+                <div className="flex items-center space-x-2"></div>
                 <h2 className="text-sm font-bold text-gray-900 tracking-tight truncate mt-0.5">
                   Input Sortir & Perekaman Stiker Barcode Tembakau
                 </h2>
@@ -503,18 +509,12 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
                 <label className="block text-gray-700 font-bold mb-1">
                   2. Petani Penyetor <span className="text-red-500">*</span>
                 </label>
-                <select
+                <SearchableSelect
                   value={selectedPetaniId}
-                  onChange={(e) => setSelectedPetaniId(e.target.value)}
-                  className="w-full bg-white border border-gray-300 rounded-sm px-2.5 py-1.5 text-xs text-gray-900 font-semibold focus:outline-none focus:border-[#b81d24]"
-                  required
-                >
-                  {activeFarmers.map((p) => (
-                    <option key={p.petani_id} value={p.petani_id}>
-                      {p.nama_petani} ({p.petani_id})
-                    </option>
-                  ))}
-                </select>
+                  onChange={(v) => setSelectedPetaniId(v)}
+                  options={activeFarmers.map(p => ({ value: p.petani_id, label: `${p.nama_petani} (${p.petani_id})` }))}
+                  placeholder="Cari Petani..."
+                />
                 {currentPetani && (
                   <p className="text-[10px] text-gray-500 mt-1 font-mono truncate">
                     Desa: {currentPetani.alamat}
@@ -541,15 +541,17 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
                 <label className="block text-gray-700 font-bold mb-1">
                   4. Gudang Intake
                 </label>
-                <select
+                <SearchableSelect
                   value={lokasiGudang}
-                  onChange={(e) => setLokasiGudang(e.target.value)}
-                  className="w-full bg-white border border-gray-300 rounded-sm px-2.5 py-1.5 text-xs text-gray-900 focus:outline-none focus:border-[#b81d24]"
-                >
-                  <option value="Gudang Pusat Induk - Pamekasan">Gudang Pusat Induk - Pamekasan</option>
-                  <option value="Gudang Cabang Larangan - Pamekasan">Gudang Cabang Larangan - Pamekasan</option>
-                  <option value="Gudang Penyangga Sumenep">Gudang Penyangga Sumenep</option>
-                </select>
+                  onChange={(val) => setLokasiGudang(val)}
+                  options={gudangList && gudangList.length > 0
+                    ? gudangList.map((g) => ({ value: g.nama_gudang, label: g.nama_gudang }))
+                    : [
+                        { value: 'Gudang Utama Pamekasan', label: 'Gudang Utama Pamekasan' },
+                        { value: 'Gudang Produksi Rokok', label: 'Gudang Produksi Rokok' },
+                        { value: 'Gudang Sumenep', label: 'Gudang Sumenep' }
+                      ]}
+                />
               </div>
 
               {/* Petugas Sortir & Grader */}
@@ -577,10 +579,11 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
               <div className="flex flex-wrap items-center space-x-4">
                 <div className="flex items-center space-x-2">
                   <span className="text-gray-600">Grade Default:</span>
-                  <select
-                    ref={gradeSelectRef}
+                  <SearchableSelect
                     value={activeDefaultGrade}
-                    onChange={(e) => setActiveDefaultGrade(e.target.value)}
+                    onChange={(val) => {
+                       setActiveDefaultGrade(val);
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
@@ -593,14 +596,10 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
                         }
                       }
                     }}
-                    className="bg-gray-50 border border-gray-300 rounded-sm px-2 py-1 font-bold text-gray-900 text-xs focus:outline-none focus:border-[#b81d24]"
-                  >
-                    {activeGrades.map((g) => (
-                      <option key={g.kode_grade} value={g.kode_grade}>
-                        Grade {g.kode_grade} ({formatRupiah(g.harga_per_kg)}/kg)
-                      </option>
-                    ))}
-                  </select>
+                    allowCustom={true}
+                    options={activeGrades.map(g => ({ value: g.kode_grade, label: `Grade ${g.kode_grade} (${formatRupiah(g.harga_per_kg)}/kg)` }))}
+                    placeholder="Contoh: A0001..."
+                  />
                 </div>
 
                 <label className="inline-flex items-center space-x-1.5 cursor-pointer select-none">
@@ -723,9 +722,7 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
                       <th className="py-2 px-3 border-r border-gray-200 w-36 text-right">
                         Tarif Acuan / Kg (Rp)
                       </th>
-                      <th className="py-2 px-3 border-r border-gray-200 w-48 text-center">
-                        Opsi Ganti Tikar
-                      </th>
+                      
                       <th className="py-2 px-3 border-r border-gray-200 text-right w-36">
                         Potongan Biaya Bal
                       </th>
@@ -755,8 +752,8 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
                       </tr>
                     ) : (
                       balItems.map((item, index) => {
-                        const totalPotonganItem = item.potonganKuli + item.potonganTali + item.potonganTikar;
-                        const taraKg = item.gantiTikar ? 2 : 3;
+                        const totalPotonganItem = item.potonganKuli + item.potonganTali;
+                        const taraKg = 2; // Default tara
                         const isLatest = item.id === lastScannedId;
 
                         return (
@@ -781,6 +778,13 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
                                 return (
                                   <>
                                     <input
+                                      id={`nobal-${item.id}`}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          e.preventDefault();
+                                          document.getElementById(`grade-${item.id}`)?.focus();
+                                        }
+                                      }}
                                       type="text"
                                       autoComplete="off"
                                       value={item.barcode}
@@ -812,45 +816,36 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
 
                             {/* Grade Selection */}
                             <td className="py-2 px-3 border-r border-gray-200">
-                              <select
+                              <SearchableSelect
+                                inputId={`grade-${item.id}`}
                                 value={item.kodeGrade}
-                                onChange={(e) => handleUpdateItem(item.id, 'kodeGrade', e.target.value)}
-                                className="w-full bg-white border border-gray-300 rounded-sm px-2 py-1 font-bold text-gray-800 text-xs focus:outline-none focus:border-[#b81d24]"
-                              >
-                                {activeGrades.map((g) => (
-                                  <option key={g.kode_grade} value={g.kode_grade}>
-                                    Grade {g.kode_grade} ({formatRupiah(g.harga_per_kg)}/kg)
-                                  </option>
-                                ))}
-                              </select>
+                                onChange={(v) => {
+                                  handleUpdateItem(item.id, 'kodeGrade', v);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleAddManualRow();
+                                  }
+                                }}
+                                options={activeGrades.map(g => ({ value: g.kode_grade, label: `Grade ${g.kode_grade} (${formatRupiah(g.harga_per_kg)}/kg)` }))}
+                                placeholder="Grade..."
+                              />
                             </td>
 
                             {/* Harga / Kg */}
                             <td className="py-2 px-3 border-r border-gray-200 text-right font-mono">
                               <input
+                                id={`harga-${item.id}`}
                                 type="number"
+                                disabled
                                 value={item.hargaPerKg}
                                 onChange={(e) => handleUpdateItem(item.id, 'hargaPerKg', Number(e.target.value) || 0)}
-                                className="w-28 bg-white border border-gray-300 rounded-sm px-2 py-1 text-right font-mono font-bold text-gray-900 text-xs focus:outline-none focus:border-[#b81d24]"
+                                className="w-28 bg-gray-100 border border-gray-300 rounded-sm px-2 py-1 text-right font-mono font-bold text-gray-500 text-xs focus:outline-none cursor-not-allowed"
                               />
                             </td>
 
-                            {/* Ganti Tikar Checkbox */}
-                            <td className="py-2 px-3 border-r border-gray-200 text-center">
-                              <label className="inline-flex items-center space-x-2 cursor-pointer select-none">
-                                <input
-                                  type="checkbox"
-                                  checked={item.gantiTikar}
-                                  onChange={(e) => handleUpdateItem(item.id, 'gantiTikar', e.target.checked)}
-                                  className="w-4 h-4 text-[#b81d24] rounded-xs border-gray-300 focus:ring-[#b81d24]"
-                                />
-                                <span className={`text-[11px] font-bold ${
-                                  item.gantiTikar ? 'text-[#b81d24]' : 'text-gray-600'
-                                }`}>
-                                  {item.gantiTikar ? 'Ganti Tikar (+Rp 75rb)' : 'Tidak Ganti (Rp 0)'}
-                                </span>
-                              </label>
-                            </td>
+                            
 
                             {/* Potongan Biaya Rincian */}
                             <td className="py-2 px-3 border-r border-gray-200 text-right font-mono">
@@ -858,7 +853,7 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
                                 -{formatRupiah(totalPotonganItem)}
                               </div>
                               <div className="text-[9px] text-gray-500">
-                                Kuli 7rb + Tali 3rb {item.gantiTikar ? '+ Tikar 75rb' : ''}
+                                Kuli 7rb + Tali 3rb 
                               </div>
                             </td>
 
@@ -870,7 +865,7 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
                                 {taraKg} kg
                               </span>
                               <div className="text-[9px] text-gray-400 mt-0.5">
-                                {item.gantiTikar ? 'Tara Ganti Tikar' : 'Tara Standar'}
+                                'Tara Standar'
                               </div>
                             </td>
 
@@ -914,17 +909,6 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
                 </div>
               </div>
 
-            </div>
-
-            {/* Note & Sample Instructions */}
-            <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-none text-xs space-y-2">
-              <div className="flex items-center space-x-2 text-amber-900 font-bold">
-                <Tag className="w-4 h-4 text-amber-700" />
-                <span>Petunjuk Meja Sortir (Admin 1, 2 & 3):</span>
-              </div>
-              <p className="text-gray-700 leading-relaxed text-[11px]">
-                Stiker barcode fisik yang discan akan menjadi identitas resmi bal tembakau. Setelah menekan <strong>"Simpan Sortir & Buka Label Sample (Admin 3)"</strong>, dokumen antrian timbang akan tercipta dan jendela label sampel QC langsung terbuka sesuai stiker fisik yang ditembak.
-              </p>
             </div>
 
             {/* Catatan Tambahan */}

@@ -30,8 +30,7 @@ export const ROLE_DEFINITIONS: Record<UserRole, RolePermissionInfo> = {
       'modul-4-sample',
       'modul-status-batch',
       'modul-users',
-      'modul-log-aktivitas',
-    ],
+      ],
     capabilities: {
       canManageUsers: true,
       canViewAuditLog: true,

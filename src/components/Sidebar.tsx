@@ -184,14 +184,7 @@ export const MODULES_CONFIG = [
     icon: 'UserCheck',
     moduleKey: 'users',
   },
-  {
-    id: 'modul-log-aktivitas',
-    title: 'Log Aktivitas (Audit Trail)',
-    subtitle: 'Akuntabilitas & Jejak Akun',
-    icon: 'ShieldCheck',
-    moduleKey: 'log-aktivitas',
-  },
-];
+  ];
 
 export const Sidebar: React.FC<SidebarProps> = ({
   activeModuleId,
@@ -226,8 +219,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const canSeePembelian = checkAccess('modul-0-sortir') || checkAccess('modul-0-timbangan') || checkAccess('modul-0-kasir') || checkAccess('modul-0-transaksi');
   const canSeePengiriman = checkAccess('modul-5-pengiriman') || checkAccess('modul-4-sample') || checkAccess('modul-status-batch');
   const canSeeUsers = checkAccess('modul-users');
-  const canSeeAuditLog = checkAccess('modul-log-aktivitas');
-
+  
   const isReportActive = [
     'modul-6-dashboard-analytic',
     'modul-6-laporan-bal',
@@ -242,8 +234,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const isPembelianActive = ['modul-0-sortir', 'modul-0-timbangan', 'modul-0-kasir', 'modul-0-transaksi'].includes(activeModuleId);
   const isPengirimanActive = ['modul-5-pengiriman', 'modul-4-sample', 'modul-status-batch'].includes(activeModuleId);
   const isUsersActive = activeModuleId === 'modul-users';
-  const isAuditLogActive = activeModuleId === 'modul-log-aktivitas';
-  const isHomeActive = activeModuleId === 'modul-home';
+    const isHomeActive = activeModuleId === 'modul-home';
 
   return (
     <aside className={`${isCollapsed ? 'w-16' : 'w-60 sm:w-64'} bg-white border-r border-gray-200 flex flex-col shrink-0 min-h-[calc(100vh-4rem)] select-none transition-all duration-200`}>
@@ -353,13 +344,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 {checkAccess('modul-6-laporan-harga-jual') && (
                   <button
                     onClick={() => onSelectModule('modul-6-laporan-harga-jual')}
-                    className={`w-full flex items-center space-x-3 px-3 py-2 rounded-sm transition text-xs font-semibold ${
+                    className={`w-full text-left py-1.5 px-2 rounded-xs flex items-center justify-between cursor-pointer ${
                       activeModuleId === 'modul-6-laporan-harga-jual'
-                        ? 'bg-slate-800 text-slate-100 shadow-sm'
-                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                        ? 'text-slate-900 font-semibold bg-slate-100'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                     }`}
                   >
-                    <div className="w-1.5 h-1.5 rounded-full bg-current opacity-70"></div>
                     <span>Laporan Harga Jual</span>
                   </button>
                 )}
@@ -715,33 +705,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
           </div>
         )}
-
-        {/* 7. Log Aktivitas & Audit Trail (Super Admin Only) */}
-        {canSeeAuditLog && (
-          <div className="pt-1">
-            <button
-              onClick={() => onSelectModule('modul-log-aktivitas')}
-              className={`w-full text-left px-3 py-2.5 rounded-sm flex items-center justify-between text-xs transition cursor-pointer ${
-                isAuditLogActive
-                  ? 'bg-slate-900 text-white font-medium shadow-2xs'
-                  : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
-              }`}
-            >
-              <div className="flex items-center space-x-3 min-w-0">
-                <ShieldCheck className={`w-4 h-4 shrink-0 ${isAuditLogActive ? 'text-emerald-400' : 'text-slate-500'}`} />
-                {!isCollapsed && <span>Log Aktivitas (Audit)</span>}
-              </div>
-              {!isCollapsed && (
-                <span className="text-[9px] font-semibold px-1 py-0.5 rounded-xs bg-red-100 text-[#b81d24] border border-red-200">
-                  Super Admin
-                </span>
-              )}
-            </button>
-          </div>
-        )}
-
       </div>
-
     </aside>
   );
 };

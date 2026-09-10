@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { PengirimanBarang, Barang } from '../../types';
 import { formatDateDDMMYY } from '../../utils/formatters';
+import { loadPengirimanData } from '../../utils/storage';
 import { ConfirmModal } from '../common/ConfirmModal';
 
 interface PemakaianProduksiFormModalProps {
@@ -145,12 +146,16 @@ export const PemakaianProduksiFormModal: React.FC<PemakaianProduksiFormModalProp
   const handleConfirmSave = () => {
     const finalUnit = unitProduksi === 'lainnya' ? (customUnit.trim() || 'Unit Produksi Khusus') : unitProduksi;
     const now = new Date();
-    const noBon = `BPP-SA-${formatDateDDMMYY(now)}-${Math.floor(100 + Math.random() * 900)}`;
+    const existingList = loadPengirimanData();
+    const todayStr = formatDateDDMMYY(now);
+    const countToday = existingList.filter((p) => (p.no_surat_jalan || '').includes(`BPP-SA-${todayStr}`)).length + 1;
+    const noBon = `BPP-SA-${todayStr}-${String(countToday).padStart(3, '0')}`;
+    const nextSeq = String(existingList.length + 1).padStart(4, '0');
 
     const selectedBarcodes = selectedBalObjects.map((b) => b.barcode);
 
     const newPengeluaran: PengirimanBarang = {
-      pengiriman_id: `BPP-${Date.now()}`,
+      pengiriman_id: `BPP-${todayStr}-${nextSeq}`,
       jenis_pengeluaran: 'produksi_sendiri',
       no_surat_jalan: noBon,
       tanggal_kirim: now.toISOString().split('T')[0],
@@ -343,7 +348,7 @@ export const PemakaianProduksiFormModal: React.FC<PemakaianProduksiFormModalProp
                         handleScanBarcode(barcodeInput);
                       }
                     }}
-                    placeholder="Arahkan scanner ke bal tembakau..."
+                    placeholder="Scan barcode / ketik No Bal..."
                     className="flex-1 bg-white border border-[#ced4da] rounded-sm px-2.5 py-1.5 text-xs font-mono font-bold text-gray-900 focus:outline-none focus:border-[#b81d24]"
                   />
                   <button

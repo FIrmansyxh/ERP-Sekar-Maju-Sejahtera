@@ -5,6 +5,11 @@ export function formatRupiah(amount?: number | null): string {
   return `Rp ${Math.round(amount).toLocaleString('id-ID')}`;
 }
 
+export function formatAccounting(amount?: number | null): string {
+  if (amount === undefined || amount === null || isNaN(amount)) return '0,-';
+  return `${Math.round(amount).toLocaleString('id-ID')},-`;
+}
+
 export function formatDateIndo(dateStr?: string | null): string {
   if (!dateStr) return '-';
   try {
@@ -63,20 +68,67 @@ export function formatDateHariBulanTahun(dateStr?: string | null): string {
 }
 
 /**
- * Aturan Potongan Tara Berat Kg:
- * - Berat < 50 kg: potongan 2 kg (tikar diganti), 3 kg (tikar madura/bawaan)
- * - Berat 50 kg hingga 59 kg: potongan 3 kg (tikar diganti), 4 kg (tikar madura/bawaan)
- * - Berat >= 60 kg: potongan 4 kg (tikar diganti), 5 kg (tikar madura/bawaan)
+ * Periksa apakah Kode / No Bal berawalan 'SB' (case-insensitive, trimmed)
  */
-export function hitungPotonganTaraKg(beratBrutoKg: number, isGantiTikar: boolean): number {
-  if (beratBrutoKg < 50) {
-    return isGantiTikar ? 2 : 3;
-  } else if (beratBrutoKg < 60) {
-    return isGantiTikar ? 3 : 4;
+export function isBalKodeSB(noBal?: string | null): boolean {
+  if (!noBal) return false;
+  return noBal.trim().toUpperCase().startsWith('SB');
+}
+
+/**
+ * Aturan Potongan Tara Berat Bersih / Netto:
+ * 1. Kode/No Bal berawalan SB potongan 2kg rata untuk semua berat
+ * 2. Selain SB:
+ *    - BERAT 49kg kebawah potongan 3 kg
+ *    - BERAT 50-59 potongan 5 kg
+ *    - BERAT 60-seterusnya potongan 6 kg
+ */
+export function hitungPotonganTaraKg(
+  beratBrutoKg: number,
+  isGantiTikarOrNoBal?: boolean | string | null,
+  noBal?: string | null
+): number {
+  let resolvedNoBal: string | undefined | null = noBal;
+  if (typeof isGantiTikarOrNoBal === 'string' && !noBal) {
+    resolvedNoBal = isGantiTikarOrNoBal;
+  }
+
+  // 1. Kode/No Bal berawalan SB: potongan 2kg rata untuk semua
+  if (isBalKodeSB(resolvedNoBal)) {
+    return 2;
+  }
+
+  // 2. Selain SB:
+  // - BERAT 49kg kebawah potongan 3
+  // - BERAT 50-59 potongan 5
+  // - BERAT 60-seterusnya potongan 6
+  const bruto = Number(beratBrutoKg) || 0;
+  if (bruto >= 60) {
+    return 6;
+  } else if (bruto >= 50) {
+    return 5;
   } else {
-    return isGantiTikar ? 4 : 5;
+    return 3;
   }
 }
+
+/**
+ * Memberikan label acuan potongan tara bal
+ */
+export function getKeteranganPotonganTara(beratBrutoKg: number, noBal?: string | null): string {
+  if (isBalKodeSB(noBal)) {
+    return 'Kode SB: Potongan 2 kg (Rata)';
+  }
+  const bruto = Number(beratBrutoKg) || 0;
+  if (bruto >= 60) {
+    return 'Berat ≥ 60 kg: Potongan 6 kg';
+  } else if (bruto >= 50) {
+    return 'Berat 50-59 kg: Potongan 5 kg';
+  } else {
+    return 'Berat ≤ 49 kg: Potongan 3 kg';
+  }
+}
+
 
 export function formatDateTimeIndo(isoString?: string | null): string {
   if (!isoString) return 'Belum Pernah';
@@ -198,7 +250,7 @@ export function generateNextUniqueNoBal(
   existingList: { no_bal?: string; barang_id?: string; barcode?: string }[] = [],
   currentBatch: { noBal: string }[] = []
 ): string {
-  const cleanGrade = (grade || 'A').toUpperCase().trim();
+  const cleanGrade = (grade || '50').toUpperCase().trim();
   let maxSeq = 0;
   const regex = new RegExp(`^${cleanGrade}(\\d+)$`, 'i');
 
@@ -256,9 +308,9 @@ export function generateBatchSampleId(sequenceNumber: number = 1, _date?: Date |
   return `SPL${paddedNum}`;
 }
 
-export function generateSuggestedCardNumber(regionCode: string = 'TMG'): string {
-  const randomNum = Math.floor(1000 + Math.random() * 9000);
-  return `KRT-${regionCode.toUpperCase()}-${randomNum}`;
+export function generateSuggestedCardNumber(regionCode: string = 'WRA', sequenceNumber: number = 1): string {
+  const paddedNum = String(Math.max(1, Math.floor(sequenceNumber))).padStart(4, '0');
+  return `KRT-${regionCode.toUpperCase()}-${paddedNum}`;
 }
 
 // Simple pseudo QR Matrix renderer for printable ID card
@@ -351,7 +403,74 @@ export function angkaTerbilang(nilai?: number | null): string {
   return `${hasil} Rupiah`;
 }
 
+export const terbilangRupiah = angkaTerbilang;
+
 export function formatNoKupon(kupon: string): string {
   if (!kupon) return kupon;
   return kupon.replace(/-/g, '').toUpperCase();
+}
+
+/**
+ * Formats a date into DDMMYYYY compact format (e.g. "08092026")
+ */
+export function formatDDMMYYYY(dateStr?: string | null): string {
+  if (!dateStr) {
+    const now = new Date();
+    const d = String(now.getDate()).padStart(2, '0');
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const y = String(now.getFullYear());
+    return `${d}${m}${y}`;
+  }
+  const clean = (dateStr.includes('T') ? dateStr.split('T')[0] : dateStr.split(' ')[0]).trim();
+  const ymd = clean.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+  if (ymd) {
+    const [, y, m, d] = ymd;
+    return `${d.padStart(2, '0')}${m.padStart(2, '0')}${y}`;
+  }
+  const dmy = clean.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+  if (dmy) {
+    const [, d, m, y] = dmy;
+    return `${d.padStart(2, '0')}${m.padStart(2, '0')}${y}`;
+  }
+  try {
+    const dt = new Date(dateStr);
+    if (!isNaN(dt.getTime())) {
+      const d = String(dt.getDate()).padStart(2, '0');
+      const m = String(dt.getMonth() + 1).padStart(2, '0');
+      const y = String(dt.getFullYear());
+      return `${d}${m}${y}`;
+    }
+  } catch {
+    // fallback
+  }
+  return dateStr.replace(/\D/g, '');
+}
+
+/**
+ * Generates standardized Transaksi ID: TRX-Tanggal-Urutan
+ * Example: TRX-08092026-001
+ */
+export function generateTransaksiId(
+  dateStr?: string | null,
+  existingTransactions?: { transaksi_id?: string }[]
+): string {
+  const dateCode = formatDDMMYYYY(dateStr);
+  const prefix = `TRX-${dateCode}-`;
+
+  if (!existingTransactions || existingTransactions.length === 0) {
+    return `${prefix}001`;
+  }
+
+  let maxSeq = 0;
+  for (const item of existingTransactions) {
+    if (item.transaksi_id && item.transaksi_id.startsWith(prefix)) {
+      const seqStr = item.transaksi_id.replace(prefix, '');
+      const parsed = parseInt(seqStr, 10);
+      if (!isNaN(parsed) && parsed > maxSeq) {
+        maxSeq = parsed;
+      }
+    }
+  }
+
+  return `${prefix}${String(maxSeq + 1).padStart(3, '0')}`;
 }

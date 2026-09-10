@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Barang, PengirimanBarang, PengirimanSample } from '../../types';
 import { formatDateDDMMYY, generateNoSuratJalanSimple } from '../../utils/formatters';
+import { loadPengirimanData } from '../../utils/storage';
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
 
 interface PengirimanFormModalProps {
@@ -253,7 +254,13 @@ export const PengirimanFormModal: React.FC<PengirimanFormModalProps> = ({
     const finalTujuan = tujuanPabrik.trim();
     if (!finalTujuan) return;
     const now = new Date();
-    const nextSeq = Math.floor(1 + Math.random() * 999);
+    const existing = loadPengirimanData();
+    const nextSeq = existing.length > 0
+      ? Math.max(...existing.map(p => {
+          const n = parseInt(p.pengiriman_id, 10);
+          return isNaN(n) ? 0 : n;
+        })) + 1
+      : 1;
     const noSurat = generateNoSuratJalanSimple(nextSeq);
 
     const newPengiriman: PengirimanBarang = {
@@ -586,7 +593,6 @@ export const PengirimanFormModal: React.FC<PengirimanFormModalProps> = ({
                   </div>
 
                   <div className="flex items-center space-x-1.5 text-[11px]">
-                    <span className="text-[10px] text-gray-500 italic hidden sm:inline">*SOP: Pilih satu per satu / barcode</span>
                     {selectedBarangIds.length > 0 && (
                       <button
                         type="button"

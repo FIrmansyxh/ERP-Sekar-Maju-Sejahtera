@@ -1,3 +1,4 @@
+import { SearchableSelect } from '../common/SearchableSelect';
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   Plus, 
@@ -18,7 +19,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { TransaksiPembelian, Petani, TabelHarga, Barang, Gudang, TransaksiItemBal, UserRole, User as UserType } from '../../types';
-import { formatRupiah, formatNoKupon, formatDateHariBulanTahun } from '../../utils/formatters';
+import { formatRupiah, formatNoKupon, formatDateHariBulanTahun, generateTransaksiId, hitungPotonganTaraKg } from '../../utils/formatters';
 
 interface SortirPageViewProps {
   petaniList: Petani[];
@@ -58,7 +59,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
   });
   const [selectedPetaniId, setSelectedPetaniId] = useState('');
   const [tanggal, setTanggal] = useState(new Date().toISOString().split('T')[0]);
-  const [lokasiGudang, setLokasiGudang] = useState('Gudang Pusat Induk - Pamekasan');
+  const [lokasiGudang, setLokasiGudang] = useState(gudangList?.[0]?.nama_gudang || 'Gudang Utama Pamekasan');
   const [petugasSortirNama, setPetugasSortirNama] = useState(currentUser?.nama_lengkap || 'Sistem');
 
   // Active bal items state for current batch
@@ -188,6 +189,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
     const found = hargaList.find((h) => h.kode_grade === gradeCode);
     if (found) {
       setHargaSatuan(found.harga_per_kg);
+      // Auto submit removed as per user request
     } else {
       setHargaSatuan(0);
     }
@@ -206,8 +208,15 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
   // Add bal item into list
   const handleAddBalItem = () => {
     if (!selectedGrade) {
-      gradeSelectRef.current?.focus();
-      setScanFeedback({ text: 'Silakan pilih Grade / Mutu Barang terlebih dahulu.', isError: false });
+      document.getElementById('grade-input')?.focus();
+      setScanFeedback({ text: 'Silakan pilih Mutu Barang terlebih dahulu.', isError: false });
+      return;
+    }
+
+    const isValidGrade = hargaList.some((h) => h.kode_grade === selectedGrade);
+    if (!isValidGrade) {
+      document.getElementById('grade-input')?.focus();
+      setScanFeedback({ text: `Gagal: Mutu Barang (Grade) "${selectedGrade}" tidak terdaftar di Master Harga Beli!`, isError: true });
       return;
     }
 
@@ -231,7 +240,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
       return;
     }
 
-    const tara = isGantiTikar ? 2 : 3;
+    const tara = hitungPotonganTaraKg(0, isGantiTikar, cleanedBalCode);
     const potTikar = isGantiTikar ? 75000 : 0;
     const potKuli = 7000;
     const potTali = 3000;
@@ -264,6 +273,11 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
     setInputNoBal('');
     setSelectedGrade('');
     setHargaSatuan(0);
+    setTimeout(() => {
+      barcodeInputRef.current?.focus();
+    }, 50);
+    setSelectedGrade('');
+    setHargaSatuan(0);
     setIsGantiTikar(false);
 
     // Re-focus barcode input
@@ -292,7 +306,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
           return {
             ...it,
             ganti_tikar: nextVal,
-            potongan_tara_kg: nextVal ? 2 : 3,
+            potongan_tara_kg: hitungPotonganTaraKg(0, nextVal, it.no_bal),
             potongan_tikar: nextVal ? 75000 : 0,
             potongan: (it.potongan_kuli || 7000) + (it.potongan_tali || 3000) + (nextVal ? 75000 : 0),
           };
@@ -314,9 +328,9 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
       return;
     }
 
-    const seqNum = Math.floor(1 + Math.random() * 9999);
-    const txId = `TRX-${tanggal.replace(/-/g, '')}-${String(seqNum).padStart(3, '0')}`;
-    const kuponFinal = noKupon.trim() || `KUP${String(seqNum).padStart(4, '0')}`;
+    const txId = generateTransaksiId(tanggal, transaksiList);
+    const seqPart = txId.split('-')[2] || '001';
+    const kuponFinal = noKupon.trim() || `KUP${seqPart.padStart(4, '0')}`;
 
     const uniqueGrades: string[] = Array.from(new Set(balItems.map((i) => i.kodeGrade || i.kode_grade)));
     const gradeSummary = uniqueGrades.length === 1 ? uniqueGrades[0] : `Multi (${uniqueGrades.join(', ')})`;
@@ -325,13 +339,13 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
     );
 
     const generatedBarangList: Barang[] = balItems.map((item, idx) => ({
-      barang_id: `BAL-${tanggal.replace(/-/g, '')}-${String(seqNum).padStart(3, '0')}-${String(idx + 1).padStart(2, '0')}`,
+      barang_id: `BAL-${txId.replace('TRX-', '')}-${String(idx + 1).padStart(2, '0')}`,
       barcode: item.barcode || item.no_bal,
       kode_grade: item.kode_grade,
       no_bal: item.no_bal,
       berat_kg: 0,
       status_stok: 'di_gudang',
-      lokasi_gudang: item.lokasi_simpan || lokasiGudang || 'Gudang Pusat Induk - Pamekasan',
+      lokasi_gudang: item.lokasi_simpan || lokasiGudang || 'Gudang Utama Pamekasan',
       tanggal_masuk: tanggal,
       petani_id: currentPetani.petani_id,
       nama_petani: currentPetani.nama_petani,
@@ -358,7 +372,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
       barang_ids: generatedBarangList.map((b) => b.barang_id),
       jenis_timbang: 'bruto',
       berat_terukur_kg: 0,
-      potongan_tara_kg: balItems.reduce((acc, i) => acc + (i.potongan_tara_kg || 3), 0),
+      potongan_tara_kg: balItems.reduce((acc, i) => acc + (i.potongan_tara_kg || 0), 0),
       berat_kg: 0,
       lokasi_gudang: lokasiGudang,
       harga_per_kg: avgHarga,
@@ -398,7 +412,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
          const currentNum = parseInt(currentMatch[0], 10);
          if (currentNum > maxNum) maxNum = currentNum;
       }
-      setNoKupon((maxNum + 1).toString());
+      setNoKupon(`KUP${String(maxNum + 1).padStart(4, '0')}`);
     setInputNoBal('');
     setScanFeedback(null);
 
@@ -477,18 +491,12 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 2. Petani Penyetor <span className="text-rose-500">*</span>
               </label>
-              <select
+              <SearchableSelect
                 value={selectedPetaniId}
-                onChange={(e) => setSelectedPetaniId(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-sm px-2.5 py-1.5 text-xs text-slate-900 font-medium focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800"
-                required
-              >
-                {activeFarmers.map((p) => (
-                  <option key={p.petani_id} value={p.petani_id}>
-                    {p.nama_petani} ({p.petani_id})
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => setSelectedPetaniId(val)}
+                options={activeFarmers.map(p => ({ value: p.petani_id, label: `${p.nama_petani} (${p.petani_id})` }))}
+                placeholder="Pilih Petani..."
+              />
               {currentPetani && (
                 <p className="text-[10px] text-slate-400 mt-1 truncate">
                   Desa: {currentPetani.alamat || currentPetani.desa_kecamatan || '-'}
@@ -515,24 +523,16 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 4. Gudang Intake
               </label>
-              <select
+              <SearchableSelect
                 value={lokasiGudang}
-                onChange={(e) => setLokasiGudang(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-sm px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800"
-              >
-                {gudangList && gudangList.length > 0 ? (
-                  gudangList.map((g) => (
-                    <option key={g.gudang_id} value={g.nama_gudang}>
-                      {g.nama_gudang}
-                    </option>
-                  ))
-                ) : (
-                  <>
-                    <option value="Gudang Pusat Induk - Pamekasan">Gudang Pusat Induk - Pamekasan</option>
-                    <option value="Gudang Timur - Larangan">Gudang Timur - Larangan</option>
-                  </>
-                )}
-              </select>
+                onChange={(val) => setLokasiGudang(val)}
+                options={gudangList && gudangList.length > 0 ? gudangList.map(g => ({ value: g.nama_gudang, label: g.nama_gudang })) : [
+                  { value: 'Gudang Utama Pamekasan', label: 'Gudang Utama Pamekasan' },
+                  { value: 'Gudang Produksi Rokok', label: 'Gudang Produksi Rokok' },
+                  { value: 'Gudang Sumenep', label: 'Gudang Sumenep' }
+                ]}
+                placeholder="Pilih Gudang Intake..."
+              />
             </div>
 
             {/* 5. Petugas Sortir */}
@@ -584,7 +584,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
-                        handleKeyDownAdder(e);
+                        document.getElementById('grade-input')?.focus();
                       }
                     }}
                     placeholder={`Contoh: ${getNextSuggestedNoBal().replace(/-/g, '')}`}
@@ -607,71 +607,48 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
               </div>
               <div className="md:col-span-3">
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Grade / Mutu Barang <span className="text-rose-500">*</span>
+                  Mutu Barang <span className="text-rose-500">*</span>
                 </label>
-                <select
-                  ref={gradeSelectRef}
+                <SearchableSelect
+                  inputId="grade-input"
                   value={selectedGrade}
-                  onChange={(e) => handleGradeChange(e.target.value)}
+                  onChange={(val) => handleGradeChange(val)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
-                      // Only save if a grade is actually selected
                       if (selectedGrade) {
                         handleAddBalItem();
                       }
                     }
                   }}
-                  className="w-full bg-white border border-slate-300 rounded-sm px-2.5 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800"
-                >
-                  <option value="">-- Pilih Grade --</option>
-                  {hargaList.map((h) => (
-                    <option key={h.harga_id} value={h.kode_grade}>
-                      Grade {h.kode_grade} — {formatRupiah(h.harga_per_kg)}/kg
-                    </option>
-                  ))}
-                </select>
+                  allowCustom={true}
+                  options={hargaList.map(h => ({ value: h.kode_grade, label: `Grade ${h.kode_grade} — ${formatRupiah(h.harga_per_kg)}/kg` }))}
+                  placeholder="Ketik Grade (Contoh: A0001)..."
+                  className="w-full"
+                />
               </div>
 
               {/* Harga Satuan */}
-              <div className="md:col-span-2">
+              <div className="md:col-span-3">
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Harga Satuan (Rp/Kg)
                 </label>
                 <input
+                  id="harga-input"
                   type="number"
                   value={hargaSatuan || ''}
+                  disabled
                   onChange={(e) => setHargaSatuan(parseFloat(e.target.value) || 0)}
-                  onKeyDown={handleKeyDownAdder}
-                  className="w-full bg-white border border-slate-300 rounded-sm px-2.5 py-2 text-xs font-mono font-semibold text-slate-900 focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-sm px-2.5 py-2 text-xs font-mono font-semibold text-slate-500 cursor-not-allowed focus:outline-none"
                   placeholder="Rp per kg"
                 />
               </div>
 
-              {/* Ganti Tikar Toggle */}
-              <div className="md:col-span-2">
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Opsi Tikar
-                </label>
-                <label className={`w-full flex items-center space-x-2 px-2.5 py-2 border rounded-sm cursor-pointer transition ${
-                  isGantiTikar ? 'bg-slate-200/80 border-slate-300 text-slate-900 font-semibold' : 'bg-white border-slate-300 text-slate-700'
-                }`}>
-                  <input
-                    type="checkbox"
-                    checked={isGantiTikar}
-                    onChange={(e) => setIsGantiTikar(e.target.checked)}
-                    className="rounded-xs border-slate-300 text-slate-900 focus:ring-slate-900 w-4 h-4 cursor-pointer"
-                  />
-                  <span className="text-[11px] whitespace-nowrap">
-                    {isGantiTikar ? 'Ganti Tikar (+75rb)' : 'Tikar Standar'}
-                  </span>
-                </label>
-              </div>
-
               {/* Button Tambah Bal */}
-              <div className="md:col-span-2">
+              <div className="md:col-span-3">
                 <button
                   type="button"
+                  id="btn-tambah-bal"
                   onClick={handleAddBalItem}
                   className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs rounded-sm transition flex items-center justify-center space-x-1.5 cursor-pointer shadow-2xs"
                 >
@@ -715,7 +692,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                     <th className="py-2.5 px-3">No Bal</th>
                     <th className="py-2.5 px-3">Mutu Grade</th>
                     <th className="py-2.5 px-3 text-right">Harga Satuan</th>
-                    <th className="py-2.5 px-3 text-center">Ganti Tikar</th>
+                    
                     <th className="py-2.5 px-3 text-center">Status Berat</th>
                     <th className="py-2.5 px-3 w-20 text-center">Aksi</th>
                   </tr>
@@ -750,20 +727,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                         <td className="py-2 px-3 text-right font-mono font-bold text-gray-800">
                           {formatRupiah(item.harga_per_kg)}/kg
                         </td>
-                        <td className="py-2 px-3 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleToggleItemGantiTikar(index)}
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold border transition cursor-pointer ${
-                              item.ganti_tikar
-                                ? 'bg-amber-100 text-amber-900 border-amber-300 font-black'
-                                : 'bg-gray-50 text-gray-600 border-gray-200'
-                            }`}
-                            title="Klik untuk ubah status ganti tikar"
-                          >
-                            {item.ganti_tikar ? 'Ya (+Rp 75rb • 2kg)' : 'Tidak (Tara 3kg)'}
-                          </button>
-                        </td>
+                        
                         <td className="py-2 px-3 text-center">
                           <span className="px-2 py-0.5 bg-slate-100 text-slate-700 border border-slate-200 rounded-xs text-[10px] font-medium">
                             Menunggu Timbang

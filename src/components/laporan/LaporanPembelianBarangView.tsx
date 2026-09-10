@@ -42,8 +42,7 @@ interface ResizableHeaderProps {
   align?: 'left' | 'center' | 'right';
   className?: string;
   sortField?: SortField;
-  currentSortField?: SortField;
-  sortDirection?: 'asc' | 'desc' | 'none';
+  sortConfigs?: { field: SortField; direction: 'asc' | 'desc' }[];
   onSort?: (field: SortField) => void;
 }
 
@@ -56,8 +55,7 @@ const ResizableHeader: React.FC<ResizableHeaderProps> = ({
   align = 'left',
   className = '',
   sortField,
-  currentSortField,
-  sortDirection = 'none',
+  sortConfigs = [],
   onSort
 }) => {
   const width = colWidths[colKey];
@@ -65,6 +63,9 @@ const ResizableHeader: React.FC<ResizableHeaderProps> = ({
   const alignClass = align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left';
   const baseClass = `py-2.5 px-2.5 border-r border-gray-200 relative group select-none whitespace-nowrap ${onSort && sortField ? 'cursor-pointer hover:bg-gray-200/80 transition' : ''}`;
   
+  const configIndex = sortField ? sortConfigs.findIndex(c => c.field === sortField) : -1;
+  const sortConfig = configIndex >= 0 ? sortConfigs[configIndex] : null;
+
   return (
     <th 
       className={`${baseClass} ${alignClass} ${className}`}
@@ -78,16 +79,11 @@ const ResizableHeader: React.FC<ResizableHeaderProps> = ({
     >
       <div className={`flex items-center ${align === 'center' ? 'justify-center' : align === 'right' ? 'justify-end' : 'justify-start'} space-x-1`}>
         <span className="truncate">{title}</span>
-        {sortField && currentSortField === sortField && sortDirection !== 'none' && (
-          sortDirection === 'asc' ? (
-            <span className="inline-flex items-center text-[#b81d24] bg-red-50 p-0.5 rounded-xs border border-red-200 ml-1 flex-shrink-0" title="Urutan Terendah / Naik / A-Z">
-              <ArrowUp className="w-3.5 h-3.5 text-[#b81d24]" />
-            </span>
-          ) : (
-            <span className="inline-flex items-center text-[#b81d24] bg-red-50 p-0.5 rounded-xs border border-red-200 ml-1 flex-shrink-0" title="Urutan Tertinggi / Turun / Z-A">
-              <ArrowDown className="w-3.5 h-3.5 text-[#b81d24]" />
-            </span>
-          )
+        {sortConfig && (
+          <span className="inline-flex items-center text-[#b81d24] bg-red-50 p-0.5 px-1 rounded-xs border border-red-200 ml-1 flex-shrink-0" title={sortConfig.direction === 'asc' ? "Urutan Terendah / Naik / A-Z" : "Urutan Tertinggi / Turun / Z-A"}>
+            {sortConfig.direction === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-[#b81d24]" /> : <ArrowDown className="w-3.5 h-3.5 text-[#b81d24]" />}
+            {sortConfigs.length > 1 && <span className="text-[10px] font-bold ml-0.5 leading-none">{configIndex + 1}</span>}
+          </span>
         )}
       </div>
       <div
@@ -145,7 +141,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
       tanggal: 80,
       kupon: 100,
       petani: 140,
-      noBal: 120,
+      noBal: 100,
       kodeBeli: 80,
       bruto: 80,
       netto: 80,
@@ -155,9 +151,9 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
     };
   });
 
-  // Sort State
-  const [sortField, setSortField] = useState<SortField>('default');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | 'none'>('none');
+  // Multi-column Sort State (max 3 columns)
+  type SortConfig = { field: SortField; direction: 'asc' | 'desc' };
+  const [sortConfigs, setSortConfigs] = useState<SortConfig[]>([]);
 
   // Applied Filter State (updates on "Cari Data" or reset)
   const [appliedFilters, setAppliedFilters] = useState({
@@ -304,36 +300,48 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
   };
 
   const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      if (sortDirection === 'asc') setSortDirection('desc');
-      else if (sortDirection === 'desc') {
-        setSortDirection('none');
-        setSortField('default');
-      }
-      else setSortDirection('asc');
-    } else {
-      setSortField(field);
-      setSortDirection('asc');
+    if (field === 'default') {
+      setSortConfigs([]);
+      return;
     }
+
+    setSortConfigs(prev => {
+      const existingIndex = prev.findIndex(c => c.field === field);
+      
+      if (existingIndex >= 0) {
+        const existing = prev[existingIndex];
+        if (existing.direction === 'desc') {
+          // Toggle to asc (second click)
+          const newConfigs = [...prev];
+          newConfigs[existingIndex] = { ...existing, direction: 'asc' };
+          return newConfigs;
+        } else {
+          // Remove from sort (third click)
+          return prev.filter((_, idx) => idx !== existingIndex);
+        }
+      } else {
+        // Add new sort, desc first (first click)
+        const newConfigs = [...prev, { field, direction: 'desc' as const }];
+        // Keep only max 3 columns for sorting
+        if (newConfigs.length > 3) {
+          newConfigs.shift();
+        }
+        return newConfigs;
+      }
+    });
   };
 
   // Render Sort Header Icon - Single clean arrow when active
   const renderSortIndicator = (field: SortField) => {
-    if (sortField !== field || sortDirection === 'none') {
-      return null;
-    }
-    if (sortDirection === 'asc') {
+    if (field === 'default') {
+      if (sortConfigs.length === 0) return null;
       return (
-        <span className="inline-flex items-center text-[#b81d24] bg-red-50 p-0.5 rounded-xs border border-red-200 ml-1" title="Urutan Terendah / Naik / A-Z">
-          <ArrowUp className="w-3.5 h-3.5 text-[#b81d24]" />
-        </span>
+        <button type="button" onClick={() => setSortConfigs([])} className="text-[10px] bg-red-100 hover:bg-red-200 text-red-700 px-2 py-0.5 rounded-sm transition ml-2 cursor-pointer font-semibold border border-red-200">
+          Reset Urutan
+        </button>
       );
     }
-    return (
-      <span className="inline-flex items-center text-[#b81d24] bg-red-50 p-0.5 rounded-xs border border-red-200 ml-1" title="Urutan Tertinggi / Turun / Z-A">
-        <ArrowDown className="w-3.5 h-3.5 text-[#b81d24]" />
-      </span>
-    );
+    return null; // The column indicator is handled inside ResizableHeader
   };
 
   // Filtered Transaksi Data
@@ -364,7 +372,8 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
       // Filter No Ball
       if (appliedFilters.noBall) {
         const query = appliedFilters.noBall.toLowerCase();
-        if (!item.no_bal?.toLowerCase().includes(query)) return false;
+        const hasItemMatch = (item.items || []).some(i => i.no_bal?.toLowerCase().includes(query) || i.barcode?.toLowerCase().includes(query) || i.sample_label_code?.toLowerCase().includes(query));
+        if (!item.no_bal?.toLowerCase().includes(query) && !hasItemMatch) return false;
       }
       // Filter Supplier
       if (appliedFilters.supplier && appliedFilters.supplier !== 'ALL' && item.petani_id !== appliedFilters.supplier) {
@@ -376,90 +385,96 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
 
   // Sorted Transaksi Data
   const sortedData = useMemo(() => {
-    if (sortField === 'default' || sortDirection === 'none') {
+    if (sortConfigs.length === 0) {
       return filteredData;
     }
 
     return [...filteredData].sort((a, b) => {
-      let comparison = 0;
-      switch (sortField) {
-        case 'tanggal': {
-          const tA = a.tanggal_transaksi ? new Date(a.tanggal_transaksi).getTime() : 0;
-          const tB = b.tanggal_transaksi ? new Date(b.tanggal_transaksi).getTime() : 0;
-          comparison = tA - tB;
-          break;
+      for (const config of sortConfigs) {
+        let comparison = 0;
+        switch (config.field) {
+          case 'tanggal': {
+            const tA = a.tanggal_transaksi ? new Date(a.tanggal_transaksi).getTime() : 0;
+            const tB = b.tanggal_transaksi ? new Date(b.tanggal_transaksi).getTime() : 0;
+            comparison = tA - tB;
+            break;
+          }
+          case 'kupon': {
+            const kA = a.no_kupon || '';
+            const kB = b.no_kupon || '';
+            comparison = kA.localeCompare(kB, undefined, { numeric: true, sensitivity: 'base' });
+            break;
+          }
+          case 'petani': {
+            const pA = a.nama_petani || '';
+            const pB = b.nama_petani || '';
+            comparison = pA.localeCompare(pB, undefined, { numeric: true, sensitivity: 'base' });
+            break;
+          }
+          case 'no_bal': {
+            const bA = a.no_bal || '';
+            const bB = b.no_bal || '';
+            comparison = bA.localeCompare(bB, undefined, { numeric: true, sensitivity: 'base' });
+            break;
+          }
+          case 'kode_beli': {
+            const getUniqueStr = (t: TransaksiPembelian) => {
+              const rowGrades = Array.from(new Set(t.items?.map(i => i.kode_grade?.toUpperCase()) || [])).filter(Boolean);
+              if (rowGrades.length > 0) return rowGrades.sort().join(',');
+              return t.kode_grade || '';
+            };
+            const kA = getUniqueStr(a);
+            const kB = getUniqueStr(b);
+            comparison = kA.localeCompare(kB, undefined, { numeric: true, sensitivity: 'base' });
+            break;
+          }
+          case 'bruto': {
+            const brA = a.jenis_timbang === 'bruto' ? (a.berat_terukur_kg || a.berat_kg + 2) : 0;
+            const brB = b.jenis_timbang === 'bruto' ? (b.berat_terukur_kg || b.berat_kg + 2) : 0;
+            comparison = brA - brB;
+            break;
+          }
+          case 'netto': {
+            const ntA = a.berat_kg || 0;
+            const ntB = b.berat_kg || 0;
+            comparison = ntA - ntB;
+            break;
+          }
+          case 'potongan': {
+            const ptA = a.total_potongan || 7000;
+            const ptB = b.total_potongan || 7000;
+            comparison = ptA - ptB;
+            break;
+          }
+          case 'total_harga': {
+            const ntA = a.berat_kg || 0;
+            const thA = a.total_harga_beli || (ntA * (a.harga_per_kg || 0));
+            const ntB = b.berat_kg || 0;
+            const thB = b.total_harga_beli || (ntB * (b.harga_per_kg || 0));
+            comparison = thA - thB;
+            break;
+          }
+          case 'jumlah_bayar': {
+            const ptA = a.total_potongan || 7000;
+            const thA = a.total_harga_beli || ((a.berat_kg || 0) * (a.harga_per_kg || 0));
+            const jA = a.harga_final || (thA - ptA);
+            
+            const ptB = b.total_potongan || 7000;
+            const thB = b.total_harga_beli || ((b.berat_kg || 0) * (b.harga_per_kg || 0));
+            const jB = b.harga_final || (thB - ptB);
+            
+            comparison = jA - jB;
+            break;
+          }
         }
-        case 'kupon': {
-          const kA = a.no_kupon || '';
-          const kB = b.no_kupon || '';
-          comparison = kA.localeCompare(kB, undefined, { numeric: true, sensitivity: 'base' });
-          break;
-        }
-        case 'petani': {
-          const pA = a.nama_petani || '';
-          const pB = b.nama_petani || '';
-          comparison = pA.localeCompare(pB, undefined, { numeric: true, sensitivity: 'base' });
-          break;
-        }
-        case 'no_bal': {
-          const bA = a.no_bal || '';
-          const bB = b.no_bal || '';
-          comparison = bA.localeCompare(bB, undefined, { numeric: true, sensitivity: 'base' });
-          break;
-        }
-        case 'kode_beli': {
-          const getUniqueStr = (t: TransaksiPembelian) => {
-            const rowGrades = Array.from(new Set(t.items?.map(i => i.kode_grade?.toUpperCase()) || [])).filter(Boolean);
-            if (rowGrades.length > 0) return rowGrades.sort().join(',');
-            return t.kode_grade || '';
-          };
-          const kA = getUniqueStr(a);
-          const kB = getUniqueStr(b);
-          comparison = kA.localeCompare(kB, undefined, { numeric: true, sensitivity: 'base' });
-          break;
-        }
-        case 'bruto': {
-          const brA = a.jenis_timbang === 'bruto' ? (a.berat_terukur_kg || a.berat_kg + 2) : 0;
-          const brB = b.jenis_timbang === 'bruto' ? (b.berat_terukur_kg || b.berat_kg + 2) : 0;
-          comparison = brA - brB;
-          break;
-        }
-        case 'netto': {
-          const ntA = a.berat_kg || 0;
-          const ntB = b.berat_kg || 0;
-          comparison = ntA - ntB;
-          break;
-        }
-        case 'potongan': {
-          const ptA = a.total_potongan || 7000;
-          const ptB = b.total_potongan || 7000;
-          comparison = ptA - ptB;
-          break;
-        }
-        case 'total_harga': {
-          const ntA = a.berat_kg || 0;
-          const thA = a.total_harga_beli || (ntA * (a.harga_per_kg || 0));
-          const ntB = b.berat_kg || 0;
-          const thB = b.total_harga_beli || (ntB * (b.harga_per_kg || 0));
-          comparison = thA - thB;
-          break;
-        }
-        case 'jumlah_bayar': {
-          const ptA = a.total_potongan || 7000;
-          const thA = a.total_harga_beli || ((a.berat_kg || 0) * (a.harga_per_kg || 0));
-          const jA = a.harga_final || (thA - ptA);
-          
-          const ptB = b.total_potongan || 7000;
-          const thB = b.total_harga_beli || ((b.berat_kg || 0) * (b.harga_per_kg || 0));
-          const jB = b.harga_final || (thB - ptB);
-          
-          comparison = jA - jB;
-          break;
+        
+        if (comparison !== 0) {
+          return config.direction === 'asc' ? comparison : -comparison;
         }
       }
-      return sortDirection === 'asc' ? comparison : -comparison;
+      return 0;
     });
-  }, [filteredData, sortField, sortDirection]);
+  }, [filteredData, sortConfigs]);
 
   // Totals Calculation 
   const totals = useMemo(() => {
@@ -540,7 +555,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
             };
           }
           const bNetto = it.berat_kg || 0;
-          const bBruto = it.berat_bruto_kg || (bNetto > 0 ? bNetto + (it.potongan_tara_kg || 2) : 0);
+          const bBruto = it.berat_bruto_kg || (bNetto > 0 ? bNetto + (it.potongan_tara_kg || 0) : 0);
           const pot = it.potongan || ((it.potongan_kuli || 7000) + (it.potongan_tali || 0) + (it.potongan_tikar || 0));
           const subtotal = it.total_kotor || (bNetto * (it.harga_per_kg || 0));
           const jmlBayar = it.subtotal_bersih || (subtotal - pot);
@@ -593,7 +608,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
       'Tanggal',
       'Kupon',
       'Petani',
-      'No Ball',
+      'No Bal',
       'Kode Beli',
       'Bruto (kg)',
       'Netto (kg)',
@@ -614,7 +629,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
         row.tanggal_transaksi ? row.tanggal_transaksi.split('T')[0] : '-',
         row.no_kupon || '-',
         row.nama_petani || '-',
-        row.no_bal || '-',
+        (row.items && row.items.length > 0) ? row.items.map(it => it.no_bal || it.barcode || it.sample_label_code).filter(Boolean).join(', ') : (row.no_bal || '-'),
         gradeStr,
         bruto,
         row.berat_kg || 0,
@@ -1034,14 +1049,14 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
             </datalist>
           </div>
 
-          {/* No Ball */}
+          {/* No Bal */}
           <div>
             <label className="block text-[11px] font-semibold text-gray-600 mb-1">
-              No Ball
+              No Bal
             </label>
             <input
               type="text"
-              placeholder="Semua Ball / Cari..."
+              placeholder="Semua Bal / Cari..."
               value={filterNoBall}
               onChange={(e) => setFilterNoBall(e.target.value)}
               className="w-full text-xs px-2.5 py-1.5 bg-gray-50 border border-gray-300 focus:bg-white focus:border-[#b81d24] focus:outline-none rounded-none"
@@ -1135,22 +1150,21 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
           </span>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto overflow-y-auto max-h-[60vh] border border-gray-200 shadow-sm relative scrollbar-thin">
           <table className="w-full text-left text-xs border-collapse min-w-[1100px]">
-            <thead>
-              <tr className="bg-gray-100/90 text-gray-700 font-bold border-b border-gray-200 uppercase text-[10px] tracking-wider">
+            <thead className="sticky top-0 z-10 shadow-sm">
+              <tr className="bg-gray-100 text-gray-700 font-bold border-b border-gray-200 uppercase text-[10px] tracking-wider">
                 <th 
                   className="py-2.5 px-2.5 text-center border-r border-gray-200 cursor-pointer hover:bg-gray-200/80 transition select-none"
                   style={{ width: colWidths.no, minWidth: 40, maxWidth: colWidths.no }}
                   onClick={() => {
-                    setSortField('default');
-                    setSortDirection('none');
+                    setSortConfigs([]);
                   }}
                   title="Klik untuk reset urutan default"
                 >
                   <div className="flex items-center justify-center space-x-1">
                     <span className="truncate">No</span>
-                    {sortField === 'default' && sortDirection !== 'none' && renderSortIndicator('default')}
+                    {sortConfigs.length > 0 && renderSortIndicator('default')}
                   </div>
                   <div
                     className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-[#b81d24] active:bg-[#b81d24] z-10"
@@ -1182,16 +1196,16 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
                     }}
                   />
                 </th>
-                <ResizableHeader colKey="tanggal" title="Tanggal" colWidths={colWidths} setColWidths={setColWidths} minWidth={70} sortField="tanggal" currentSortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
-                <ResizableHeader colKey="kupon" title="Kupon" colWidths={colWidths} setColWidths={setColWidths} minWidth={70} sortField="kupon" currentSortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
-                <ResizableHeader colKey="petani" title="Petani" colWidths={colWidths} setColWidths={setColWidths} minWidth={80} sortField="petani" currentSortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
-                <ResizableHeader colKey="noBal" title="No Ball" colWidths={colWidths} setColWidths={setColWidths} align="center" minWidth={60} sortField="no_bal" currentSortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
-                <ResizableHeader colKey="kodeBeli" title="Kode Beli" colWidths={colWidths} setColWidths={setColWidths} align="center" minWidth={60} sortField="kode_beli" currentSortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
-                <ResizableHeader colKey="bruto" title="Bruto (kg)" colWidths={colWidths} setColWidths={setColWidths} align="right" minWidth={60} sortField="bruto" currentSortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
-                <ResizableHeader colKey="netto" title="Netto (kg)" colWidths={colWidths} setColWidths={setColWidths} align="right" minWidth={60} sortField="netto" currentSortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
-                <ResizableHeader colKey="potongan" title="Potongan" colWidths={colWidths} setColWidths={setColWidths} align="right" minWidth={70} sortField="potongan" currentSortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
-                <ResizableHeader colKey="totalHarga" title="Total Harga Beli" colWidths={colWidths} setColWidths={setColWidths} align="right" minWidth={80} sortField="total_harga" currentSortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
-                <ResizableHeader colKey="jumlahBayar" title="Jumlah Bayar" colWidths={colWidths} setColWidths={setColWidths} align="right" minWidth={90} className="bg-red-50/50 font-extrabold text-[#b81d24]" sortField="jumlah_bayar" currentSortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                <ResizableHeader colKey="tanggal" title="Tanggal" colWidths={colWidths} setColWidths={setColWidths} minWidth={70} sortField="tanggal" sortConfigs={sortConfigs} onSort={handleSort} />
+                <ResizableHeader colKey="kupon" title="Kupon" colWidths={colWidths} setColWidths={setColWidths} minWidth={70} sortField="kupon" sortConfigs={sortConfigs} onSort={handleSort} />
+                <ResizableHeader colKey="petani" title="Petani" colWidths={colWidths} setColWidths={setColWidths} minWidth={80} sortField="petani" sortConfigs={sortConfigs} onSort={handleSort} />
+                <ResizableHeader colKey="noBal" title="No Bal" colWidths={colWidths} setColWidths={setColWidths} align="center" minWidth={60} sortField="no_bal" sortConfigs={sortConfigs} onSort={handleSort} />
+                <ResizableHeader colKey="kodeBeli" title="Kode Beli" colWidths={colWidths} setColWidths={setColWidths} align="center" minWidth={60} sortField="kode_beli" sortConfigs={sortConfigs} onSort={handleSort} />
+                <ResizableHeader colKey="bruto" title="Bruto (kg)" colWidths={colWidths} setColWidths={setColWidths} align="right" minWidth={60} sortField="bruto" sortConfigs={sortConfigs} onSort={handleSort} />
+                <ResizableHeader colKey="netto" title="Netto (kg)" colWidths={colWidths} setColWidths={setColWidths} align="right" minWidth={60} sortField="netto" sortConfigs={sortConfigs} onSort={handleSort} />
+                <ResizableHeader colKey="potongan" title="Potongan" colWidths={colWidths} setColWidths={setColWidths} align="right" minWidth={70} sortField="potongan" sortConfigs={sortConfigs} onSort={handleSort} />
+                <ResizableHeader colKey="totalHarga" title="Total Harga Beli" colWidths={colWidths} setColWidths={setColWidths} align="right" minWidth={80} sortField="total_harga" sortConfigs={sortConfigs} onSort={handleSort} />
+                <ResizableHeader colKey="jumlahBayar" title="Jumlah Bayar" colWidths={colWidths} setColWidths={setColWidths} align="right" minWidth={90} className="bg-red-50/50 font-extrabold text-[#b81d24]" sortField="jumlah_bayar" sortConfigs={sortConfigs} onSort={handleSort} />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -1249,7 +1263,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
 
                       {/* 5. No Ball */}
                       <td className="py-2 px-2.5 text-center font-mono font-semibold text-gray-800 border-r border-gray-100" style={{ maxWidth: colWidths.noBal }}>
-                        <div className="break-words whitespace-normal leading-tight">{row.no_bal}</div>
+                        <div className="break-words whitespace-normal leading-tight">{(row.items && row.items.length > 0) ? row.items.map(it => it.no_bal || it.barcode || it.sample_label_code).filter(Boolean).join(', ') : (row.no_bal || '-')}</div>
                       </td>
 
                       {/* 6. Kode Beli */}
@@ -1474,7 +1488,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
                     <td className="p-1 border border-gray-300 font-mono">{tglDisplay}</td>
                     <td className="p-1 border border-gray-300 font-mono">{row.no_kupon || '-'}</td>
                     <td className="p-1 border border-gray-300 font-medium">{row.nama_petani}</td>
-                    <td className="p-1 border border-gray-300 text-center font-mono max-w-[150px] break-words whitespace-normal">{row.no_bal}</td>
+                    <td className="p-1 border border-gray-300 text-center font-mono max-w-[150px] break-words whitespace-normal">{(row.items && row.items.length > 0) ? row.items.map(it => it.no_bal || it.barcode || it.sample_label_code).filter(Boolean).join(', ') : (row.no_bal || '-')}</td>
                     <td className="p-1 border border-gray-300 text-center font-bold">
                       {(() => {
                         const rowGrades = getTransactionUniqueGrades(row);
@@ -1556,17 +1570,17 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
             <div>
               <p className="text-gray-600">Operator Loket Timbang</p>
               <div className="h-14"></div>
-              <p className="font-bold underline text-gray-900">( Siti Rahayu )</p>
+              <p className="font-bold underline text-gray-900">Siti Rahayu</p>
             </div>
             <div>
               <p className="text-gray-600">Petugas QC & Mutu</p>
               <div className="h-14"></div>
-              <p className="font-bold underline text-gray-900">( drg. Hendra Kusuma )</p>
+              <p className="font-bold underline text-gray-900">drg. Hendra Kusuma</p>
             </div>
             <div>
               <p className="text-gray-600">Kepala Gudang / Mengetahui</p>
               <div className="h-14"></div>
-              <p className="font-bold underline text-gray-900">( Bambang Sutrisno, S.T. )</p>
+              <p className="font-bold underline text-gray-900">Bambang Sutrisno, S.T.</p>
             </div>
           </div>
         </div>

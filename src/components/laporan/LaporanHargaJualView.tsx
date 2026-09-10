@@ -303,11 +303,11 @@ export const LaporanHargaJualView: React.FC<LaporanHargaJualViewProps> = ({
           <div className="pt-6 grid grid-cols-2 gap-6 text-center text-xs">
             <div>
               <p className="text-gray-500 mb-12">Supervisor Pemasaran,</p>
-              <p className="font-bold border-t border-gray-400 pt-1 w-48 mx-auto">(................................)</p>
+              <p className="font-bold border-t border-gray-400 pt-1 w-48 mx-auto min-h-[22px]">&nbsp;</p>
             </div>
             <div>
               <p className="text-gray-500 mb-12">Direktur Utama,</p>
-              <p className="font-bold border-t border-gray-400 pt-1 w-48 mx-auto">(................................)</p>
+              <p className="font-bold border-t border-gray-400 pt-1 w-48 mx-auto min-h-[22px]">&nbsp;</p>
             </div>
           </div>
         </div>

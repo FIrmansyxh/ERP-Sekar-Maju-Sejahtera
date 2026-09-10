@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Lock, Save, ArrowLeft, Warehouse } from 'lucide-react';
+import { SearchableSelect } from '../common/SearchableSelect';
 import { Barang } from '../../types';
 import { STANDARD_GUDANG_LOCATIONS } from '../../data/initialGudangData';
 import { ConfirmModal } from '../common/ConfirmModal';
@@ -39,7 +40,7 @@ export const BarangEditLocationModal: React.FC<BarangEditLocationModalProps> = (
   const handleConfirmSave = () => {
     onSave({
       ...barang,
-      lokasi_gudang: lokasiGudang.trim() || 'Gudang Pusat Induk - Pamekasan / Blok A-01',
+      lokasi_gudang: lokasiGudang.trim() || 'Gudang Utama Pamekasan',
       catatan: catatan.trim(),
     });
     setIsConfirmOpen(false);
@@ -95,7 +96,7 @@ export const BarangEditLocationModal: React.FC<BarangEditLocationModalProps> = (
             <div className="bg-white border border-gray-200 p-3 text-gray-700 flex items-start space-x-2.5 shadow-xs">
               <Lock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
               <p className="leading-relaxed text-[11px]">
-                Grade (<span className="font-bold text-gray-900">Grade {barang.kode_grade}</span>) dan Berat Timbang (<span className="font-bold text-gray-900">{barang.berat_kg} kg</span>) terkunci permanen sesuai standar audit transaksi pembelian.
+                Grade (<span className="font-bold text-gray-900">Grade {barang.kode_grade}</span>) dan Berat Timbang (<span className="font-bold text-gray-900">{barang.berat_kg} kg</span>) terkunci permanen sesuai standar transaksi pembelian.
               </p>
             </div>
 
@@ -116,18 +117,12 @@ export const BarangEditLocationModal: React.FC<BarangEditLocationModalProps> = (
               <label className="font-bold text-gray-700 block">
                 Pilihan Fasilitas Gudang & Blok Rak <span className="text-red-500">*</span>
               </label>
-              <select
-                required
+              <SearchableSelect
                 value={lokasiGudang}
-                onChange={(e) => setLokasiGudang(e.target.value)}
-                className="w-full px-3 py-2 text-xs font-semibold border border-[#ced4da] rounded-sm focus:outline-none focus:border-[#b81d24] bg-white text-gray-900 cursor-pointer"
-              >
-                {STANDARD_GUDANG_LOCATIONS.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => setLokasiGudang(val)}
+                options={STANDARD_GUDANG_LOCATIONS.map(opt => ({ value: opt, label: opt }))}
+                placeholder="Pilih Fasilitas Gudang..."
+              />
             </div>
 
             {/* Editable Field: Catatan */}
@@ -154,7 +149,7 @@ export const BarangEditLocationModal: React.FC<BarangEditLocationModalProps> = (
         isOpen={isConfirmOpen}
         title="Konfirmasi Pemindahan / Update Lokasi Bal"
         message={`Apakah Anda yakin ingin memperbarui penempatan bal ${barang.no_bal}?`}
-        detail={`Lokasi Baru: ${lokasiGudang || 'Gudang Pusat Induk - Pamekasan'} | Catatan: ${catatan || 'Tanpa catatan khusus'}`}
+        detail={`Lokasi Baru: ${lokasiGudang || 'Gudang Utama Pamekasan'} | Catatan: ${catatan || 'Tanpa catatan khusus'}`}
         variant="primary"
         confirmText="Ya, Simpan Lokasi"
         cancelText="Batal"

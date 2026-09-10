@@ -142,7 +142,8 @@ export interface TransaksiItemBal {
   harga_per_kg: number;
   ganti_tikar?: boolean; // true = potongan 75rb & tara 2kg; false = potongan 0 & tara 3kg
   berat_bruto_kg?: number; // Berat kotor timbangan saat proses 2
-  potongan_tara_kg?: number; // 2kg jika ganti tikar, 3kg jika tidak ganti tikar
+  potongan_tara_kg?: number; // SB = 2kg rata; selain SB: <=49kg=3kg, 50-59kg=5kg, >=60kg=6kg
+  is_netto_manual?: boolean; // True jika berat netto diinput/diedit secara manual
   berat_kg: number; // Berat netto final (0 jika belum ditimbang di proses 2)
   potongan_kuli?: number; // Rp 7.000 per bal
   potongan_tali?: number; // Rp 3.000 per bal
@@ -184,6 +185,7 @@ export interface TransaksiPembelian {
   potongan_tali?: number; // Rp 3.000 per bal
   potongan_tikar: number; // Rp 75.000 per bal jika ganti tikar
   total_potongan: number; // potongan_kuli + potongan_tali + potongan_tikar
+  pajak?: number; // PPH 22 / potongan pajak jika ada
   total_harga_beli: number; // berat_kg * harga_per_kg
   harga_final: number; // Jumlah Bayar = total_harga_beli - total_potongan
   status_transaksi: 'lengkap' | 'menunggu';
@@ -222,8 +224,11 @@ export interface SampleItemDetail {
   kode_bal_pembeli?: string;
   kode_grade: string;
   kode_harga_jual?: string; // Dropdown sumber Master Harga Jual
-  berat_bal_kg: number;
+  berat_bal_kg: number; // Netto weight in kg
+  berat_bruto_kg?: number; // Bruto weight in kg
+  potongan_tara_kg?: number; // Tara weight in kg
   berat_sample_gram?: number;
+  harga_beli_kg?: number; // Harga beli per kg
   harga_tawaran_kg: number; // Unit price offered (Rp/kg)
   harga_deal_kg?: number; // Final agreed price (Rp/kg)
   status_item: StatusSample;
@@ -239,7 +244,8 @@ export interface SampleItemDetail {
 export interface BatchPengirimanSample {
   batch_id: string; // e.g. SMP-BATCH-20260901-001
   kode_batch: string;
-  tujuan_buyer: string; // e.g. PT Djarum Kudus - Lab QC & R&D
+  tujuan_buyer: string;
+  is_locked?: boolean; // e.g. PT Djarum Kudus - Lab QC & R&D
   permintaan_buyer?: string; // Description of requested grade / price range
   sumber_gudang: string; // Warehouse source
   tanggal_kirim: string;
@@ -268,6 +274,9 @@ export interface PengirimanSample {
   tujuan: string; // e.g. PT Djarum Kudus - Lab QC
   berat_sample_gram: number;
   berat_bal_kg?: number;
+  berat_bruto_kg?: number;
+  potongan_tara_kg?: number;
+  harga_beli_kg?: number;
   harga_tawaran_kg?: number;
   harga_deal_kg?: number;
   tanggal_kirim: string;
@@ -283,7 +292,7 @@ export interface PengirimanSample {
   permintaan_buyer?: string;
 }
 
-export type StatusPengiriman = 'dimuat' | 'dalam_perjalanan' | 'diterima' | 'dikirim';
+export type StatusPengiriman = 'dimuat' | 'dalam_perjalanan' | 'diterima' | 'dikirim' | 'selesai';
 
 export interface PengirimanBarang {
   pengiriman_id: string;
@@ -369,25 +378,3 @@ export interface ModuleNav {
   description: string;
 }
 
-export interface LogAktivitas {
-  log_id: string; // e.g. "LOG-20260902-0001"
-  timestamp: string; // ISO string e.g. "2026-09-02T10:15:00.000Z"
-  user_id: string;
-  username: string;
-  nama_lengkap: string;
-  role: UserRole;
-  modul: 'transaksi' | 'timbangan' | 'sortir' | 'kasir' | 'pengiriman' | 'sample' | 'master_harga' | 'master_petani' | 'master_gudang' | 'barang' | 'users' | 'sistem';
-  aksi: string; // e.g. "Penimbangan Bal", "Sortir Kupon & Grade", "Pencairan Kasir", "Edit Transaksi", "Hapus Transaksi", "Koreksi Timbangan Bal"
-  tipe_aksi?: 'edit' | 'hapus' | 'tambah' | 'bayar' | 'timbang' | 'sortir' | 'lainnya';
-  no_kupon?: string;
-  no_bal?: string;
-  kode_grade?: string;
-  berat_kg?: number;
-  transaksi_id?: string;
-  nama_petani?: string;
-  data_sebelum?: string;
-  data_sesudah?: string;
-  alasan?: string;
-  rincian: string; // Detail deskripsi perubahan & pertanggungjawaban
-  status?: 'sukses' | 'peringatan' | 'gagal';
-}

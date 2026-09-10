@@ -1,3 +1,4 @@
+import { SearchableSelect } from '../common/SearchableSelect';
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Save, 
@@ -15,7 +16,8 @@ import {
 } from 'lucide-react';
 import { Petani, TabelHarga, TransaksiPembelian, Barang, Gudang, TransaksiItemBal } from '../../types';
 import { getGudangLocationOptions } from '../../data/initialGudangData';
-import { formatRupiah, generateBalId, generateNoBalSimple, generateNextUniqueNoBal } from '../../utils/formatters';
+import { formatRupiah, generateBalId, generateNoBalSimple, generateNextUniqueNoBal, generateTransaksiId } from '../../utils/formatters';
+import { loadTransaksiData } from '../../utils/storage';
 import { ConfirmModal } from '../common/ConfirmModal';
 
 interface TransaksiFormModalProps {
@@ -49,7 +51,7 @@ export const TransaksiFormModal: React.FC<TransaksiFormModalProps> = ({
   const gudangOptions = getGudangLocationOptions(gudangList);
   const [selectedPetaniId, setSelectedPetaniId] = useState('');
   const [operatorNama, setOperatorNama] = useState('Budi Hartono (Loket 1 - Pamekasan)');
-  const [lokasiGudang, setLokasiGudang] = useState(gudangOptions[0] || 'Gudang Pusat Induk - Pamekasan');
+  const [lokasiGudang, setLokasiGudang] = useState(gudangOptions[0] || 'Gudang Utama Pamekasan');
   const [catatan, setCatatan] = useState('');
   const [tanggal, setTanggal] = useState(new Date().toISOString().split('T')[0]);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
@@ -57,7 +59,7 @@ export const TransaksiFormModal: React.FC<TransaksiFormModalProps> = ({
   // Active farmers & active grades
   const activePetani = petaniList.filter((p) => p.status_aktif);
   const activeGrades = hargaList.filter((h) => h.status === 'aktif');
-  const defaultGrade = activeGrades[0]?.kode_grade || 'A';
+  const defaultGrade = activeGrades[0]?.kode_grade || '50';
 
   // Batch Bal Items
   const [balItems, setBalItems] = useState<FormBalItem[]>([]);
@@ -170,7 +172,7 @@ export const TransaksiFormModal: React.FC<TransaksiFormModalProps> = ({
     const berat = Number(item.beratKg) || 0;
     const totalKotor = berat * tarif;
     const potongan = Number(item.potongan) || 0;
-    const subtotalBersih = Math.max(0, totalKotor - potongan);
+    const subtotalBersih = Math.round(Math.max(0, totalKotor - potongan));
 
     const cleanNoBal = (item.noBal || '').trim();
     const isEmpty = cleanNoBal.length === 0;
@@ -192,7 +194,7 @@ export const TransaksiFormModal: React.FC<TransaksiFormModalProps> = ({
       : undefined;
 
     let validationError: string | null = null;
-    let errorType: 'empty' | 'batch_duplicate' | 'warehouse_exists' | null = null;
+    let errorType: 'empty' | 'batch_duplicate' | 'warehouse_exists' | 'invalid_grade' | null = null;
 
     if (isEmpty) {
       validationError = 'No Bal wajib diisi';
@@ -203,6 +205,9 @@ export const TransaksiFormModal: React.FC<TransaksiFormModalProps> = ({
     } else if (existingInGudang) {
       validationError = `No Bal sudah terdaftar di gudang (${existingInGudang.status_stok === 'di_gudang' ? 'Stok Aktif' : 'Terkirim'})`;
       errorType = 'warehouse_exists';
+    } else if (!activeGrades.some((g) => g.kode_grade === item.kodeGrade)) {
+      validationError = `Grade tidak valid / tidak terdaftar di Master Harga Beli`;
+      errorType = 'invalid_grade';
     }
 
     return {
@@ -251,8 +256,10 @@ export const TransaksiFormModal: React.FC<TransaksiFormModalProps> = ({
   const handleConfirmSave = () => {
     const now = new Date();
     const dateFormatted = `${tanggal} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    const seqNum = Math.floor(1 + Math.random() * 9999);
-    const txId = `OJ/${now.getFullYear()}/VIII/${String(seqNum).padStart(4, '0')}`;
+    const existingTx = loadTransaksiData();
+    const txId = generateTransaksiId(tanggal, existingTx);
+    const seqPart = txId.split('-')[2] || '001';
+    const seqNum = parseInt(seqPart, 10) || 1;
 
     // Distinct grades summary
     const uniqueGrades: string[] = Array.from(new Set(computedItems.map((i) => i.kodeGrade)));
@@ -287,8 +294,10 @@ export const TransaksiFormModal: React.FC<TransaksiFormModalProps> = ({
         kode_grade: item.kodeGrade,
         no_bal: cleanNoBal,
         berat_kg: Number(item.beratKg),
+        harga_per_kg: item.tarif,
+        total_harga: Number(item.beratKg) * item.tarif,
         status_stok: 'di_gudang',
-        lokasi_gudang: lokasiGudang.trim() || 'Gudang Pusat Induk - Pamekasan',
+        lokasi_gudang: lokasiGudang.trim() || 'Gudang Utama Pamekasan',
         tanggal_masuk: dateFormatted,
         petani_id: currentPetani.petani_id,
         transaksi_pembelian_id: txId,
@@ -314,7 +323,7 @@ export const TransaksiFormModal: React.FC<TransaksiFormModalProps> = ({
       berat_terukur_kg: totalBeratNetto + totalBalCount * 2,
       potongan_tara_kg: totalBalCount * 2,
       berat_kg: totalBeratNetto,
-      lokasi_gudang: lokasiGudang.trim() || 'Gudang Pusat Induk - Pamekasan',
+      lokasi_gudang: lokasiGudang.trim() || 'Gudang Utama Pamekasan',
       harga_per_kg: computedItems[0]?.tarif || 0,
       total_kotor: totalKotorKeseluruhan,
       potongan_kuli: 7000 * totalBalCount,
@@ -429,17 +438,13 @@ export const TransaksiFormModal: React.FC<TransaksiFormModalProps> = ({
 
                 <div className="flex items-center">
                   <label className="w-32 text-gray-700 font-bold">Lokasi Gudang Masuk</label>
-                  <select
+                  <SearchableSelect
                     value={lokasiGudang}
-                    onChange={(e) => setLokasiGudang(e.target.value)}
-                    className="flex-1 border border-[#ced4da] rounded-sm px-2.5 py-1.5 text-xs focus:outline-none focus:border-[#b81d24] bg-white font-medium text-gray-900 cursor-pointer"
-                  >
-                    {gudangOptions.map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(val) => setLokasiGudang(val)}
+                    options={gudangOptions.map(opt => ({ value: opt, label: opt }))}
+                    placeholder="Pilih Gudang..."
+                    className="flex-1"
+                  />
                 </div>
               </div>
 
@@ -447,17 +452,13 @@ export const TransaksiFormModal: React.FC<TransaksiFormModalProps> = ({
               <div className="space-y-3">
                 <div className="flex items-center">
                   <label className="w-32 text-gray-700 font-bold">Pilih Petani <span className="text-red-500">*</span></label>
-                  <select
+                  <SearchableSelect
                     value={selectedPetaniId}
-                    onChange={(e) => setSelectedPetaniId(e.target.value)}
-                    className="flex-1 border border-[#ced4da] rounded-sm px-2.5 py-1.5 text-xs focus:outline-none focus:border-[#b81d24] bg-white font-bold text-gray-900"
-                  >
-                    {activePetani.map((p) => (
-                      <option key={p.petani_id} value={p.petani_id}>
-                        {p.nama_petani} ({p.petani_id}) - {p.alamat || p.desa_kecamatan}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(val) => setSelectedPetaniId(val)}
+                    options={activePetani.map(p => ({ value: p.petani_id, label: `${p.nama_petani} (${p.petani_id}) - ${p.alamat || p.desa_kecamatan}` }))}
+                    placeholder="Pilih Petani..."
+                    className="flex-1"
+                  />
                 </div>
 
                 <div className="flex items-center">
@@ -604,17 +605,11 @@ export const TransaksiFormModal: React.FC<TransaksiFormModalProps> = ({
 
                         {/* Grade Tembakau Dropdown */}
                         <td className="py-2 px-3 border-r border-gray-200">
-                          <select
-                            value={item.kodeGrade}
-                            onChange={(e) => handleItemChange(item.id, 'kodeGrade', e.target.value)}
-                            className="w-full border border-gray-300 rounded-xs px-2 py-1 text-xs font-bold text-gray-900 focus:outline-none focus:border-[#b81d24] bg-white cursor-pointer"
-                          >
-                            {activeGrades.map((h) => (
-                              <option key={h.harga_id} value={h.kode_grade}>
-                                Grade {h.kode_grade} ({h.nama_grade}) - {formatRupiah(h.harga_per_kg)}/kg
-                              </option>
-                            ))}
-                          </select>
+                          <SearchableSelect allowCustom={true} value={item.kodeGrade}
+                            onChange={(val) => handleItemChange(item.id, 'kodeGrade', val)}
+                            options={activeGrades.map(h => ({ value: h.kode_grade, label: `Grade ${h.kode_grade} (${formatRupiah(h.harga_per_kg)}/kg)` }))}
+                            placeholder="Grade..."
+                          />
                         </td>
 
                         {/* Berat (Kg) */}

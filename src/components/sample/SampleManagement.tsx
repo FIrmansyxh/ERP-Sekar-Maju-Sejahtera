@@ -40,13 +40,16 @@ import {
   Gudang, 
   Petani, 
   UserRole,
-  MasterHargaJual 
+  MasterHargaJual,
+  TabelHarga,
+  TransaksiPembelian
 } from '../../types';
-import { loadHargaJualData, loadBatchSampleData } from '../../utils/storage';
+import { loadHargaJualData, loadBatchSampleData, loadHargaData, loadTransaksiData } from '../../utils/storage';
 import { SampleStatusUpdateModal } from './SampleStatusUpdateModal';
 import { BatchEvaluasiSortirModal } from './BatchEvaluasiSortirModal';
 import { BatchSamplePrintModal } from './BatchSamplePrintModal';
 import { ConfirmModal } from '../common/ConfirmModal';
+
 import { Pagination } from '../common/Pagination';
 import { generateBatchSampleId, generateSampleId, formatRupiah, formatNumber } from '../../utils/formatters';
 
@@ -57,6 +60,8 @@ interface SampleManagementProps {
   gudangList?: Gudang[];
   petaniList?: Petani[];
   hargaJualList?: MasterHargaJual[];
+  hargaList?: TabelHarga[];
+  transaksiList?: TransaksiPembelian[];
   userRole: UserRole;
   onSaveNewSample?: (sample: PengirimanSample) => void;
   onSaveBatchSamples: (samples: PengirimanSample[], updatedBarangs: Barang[]) => void;
@@ -74,6 +79,8 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
   gudangList = [],
   petaniList = [],
   hargaJualList = [],
+  hargaList = [],
+  transaksiList = [],
   userRole,
   onSaveNewSample,
   onSaveBatchSamples,
@@ -85,18 +92,78 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
 }) => {
   // Master Harga Jual reference list
   const activeHargaJualList = (hargaJualList && hargaJualList.length > 0) ? hargaJualList : loadHargaJualData();
+  const activeHargaList = (hargaList && hargaList.length > 0) ? hargaList : loadHargaData();
+  const activeTransaksiList = (transaksiList && transaksiList.length > 0) ? transaksiList : loadTransaksiData();
 
   // Active batches fallback to localStorage if prop is empty
   const activeBatchSampleList = useMemo(() => {
     return (batchSampleList && batchSampleList.length > 0) ? batchSampleList : loadBatchSampleData();
   }, [batchSampleList]);
 
+  // Transaksi item map to resolve purchase price (harga_beli) and farmer info
+  const txItemMap = useMemo(() => {
+    const map = new Map<string, { harga_per_kg: number; nama_petani: string; no_kupon: string }>();
+    activeTransaksiList.forEach((tx) => {
+      if (tx.items) {
+        tx.items.forEach((it) => {
+          if (it.barang_id || it.no_bal) {
+            const key = it.barang_id || it.no_bal;
+            map.set(key, {
+              harga_per_kg: it.harga_per_kg || 0,
+              nama_petani: tx.nama_petani || '',
+              no_kupon: tx.no_kupon || '',
+            });
+          }
+        });
+      }
+    });
+    return map;
+  }, [activeTransaksiList]);
+
+  // Resolver for purchase price (Harga Beli)
+  const resolveHargaBeli = (bal: Partial<Barang> | undefined): number => {
+    if (!bal) return 0;
+    if (bal.harga_per_kg && bal.harga_per_kg > 0) {
+      return bal.harga_per_kg;
+    }
+    const txItem = txItemMap.get(bal.barang_id || '') || txItemMap.get(bal.no_bal || '');
+    if (txItem && txItem.harga_per_kg > 0) {
+      return txItem.harga_per_kg;
+    }
+    if (bal.kode_grade) {
+      const foundHrg = activeHargaList.find((h) => h.kode_grade?.toUpperCase() === bal.kode_grade?.toUpperCase());
+      if (foundHrg && foundHrg.harga_per_kg > 0) {
+        return foundHrg.harga_per_kg;
+      }
+      const num = parseInt(bal.kode_grade, 10);
+      if (!isNaN(num) && num >= 10 && num <= 200) {
+        return num * 1000;
+      }
+    }
+    return 0;
+  };
+
+  // Resolver for Netto weight
+  const resolveBeratNetto = (bal: Partial<Barang> | undefined, fallbackKg: number = 0): number => {
+    if (!bal) return fallbackKg || 0;
+    return bal.berat_kg || fallbackKg || 0;
+  };
+
+  // Resolver for Bruto weight
+  const resolveBeratBruto = (bal: Partial<Barang> | undefined, fallbackNetto: number = 0): number => {
+    if (!bal) return fallbackNetto > 0 ? Number((fallbackNetto + 2).toFixed(1)) : 0;
+    if (bal.berat_bruto_kg && bal.berat_bruto_kg > 0) return bal.berat_bruto_kg;
+    const netto = bal.berat_kg || fallbackNetto || 0;
+    const tara = bal.potongan_tara_kg !== undefined ? bal.potongan_tara_kg : 2;
+    return netto > 0 ? Number((netto + tara).toFixed(1)) : 0;
+  };
+
   // Main view mode: 'list' (Daftar & Monitoring Batch) or 'create' (Input & Dispatch Sample Workstation)
   const [viewMode, setViewMode] = useState<'list' | 'create'>('list');
   const [activeTab, setActiveTab] = useState<'batches' | 'items'>('batches');
 
   // Barcode Scanner & Manual Bal Input for Sample Dispatch
-    const [scanSampleAlert, setScanSampleAlert] = useState<{ type: 'success' | 'error' | 'warning'; message: string } | null>(null);
+  const [scanSampleAlert, setScanSampleAlert] = useState<{ type: 'success' | 'error' | 'warning'; message: string } | null>(null);
   const [scanGudang, setScanGudang] = useState('');
   const [isBalDropdownOpen, setIsBalDropdownOpen] = useState(false);
   const [highlightedBalIndex, setHighlightedBalIndex] = useState(0);
@@ -114,7 +181,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
   const [pendingScanBal, setPendingScanBal] = useState<Barang | null>(null);
 
   // Dropdown Autocomplete State for Bal Input
-    // Close dropdown if clicked outside
+  // Close dropdown if clicked outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (balDropdownRef.current && !balDropdownRef.current.contains(e.target as Node)) {
@@ -128,9 +195,20 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-    // Selected Bales in Form with customizable offer price per bal
+  // Selected Bales in Form with customizable offer price per bal
   const [selectedBalItems, setSelectedBalItems] = useState<
-    { barangId: string; noBal: string; kodeBalPembeli: string; grade: string; beratBalKg: number; kodeHargaJual: string; hargaTawaranKg: number }[]
+    { 
+      barangId: string; 
+      noBal: string; 
+      kodeBalPembeli: string; 
+      grade: string; 
+      beratBalKg: number; 
+      beratBrutoKg: number;
+      potonganTaraKg: number;
+      hargaBeliKg: number;
+      kodeHargaJual: string; 
+      hargaTawaranKg: number; 
+    }[]
   >([]);
 
   const availableBalList = useMemo(() => {
@@ -161,9 +239,14 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
       (b) =>
         b.status !== 'dibatalkan' &&
         b.items?.some(
-          (it) =>
-            it.barang_id === bal.barang_id ||
-            (it.no_bal && bal.no_bal && it.no_bal.trim().toLowerCase() === bal.no_bal.trim().toLowerCase())
+          (it) => {
+            const isMatch = it.barang_id === bal.barang_id || (it.no_bal && bal.no_bal && it.no_bal.trim().toLowerCase() === bal.no_bal.trim().toLowerCase());
+            // If the item was rejected in the batch, it can be used again
+            if (isMatch && (it.status_item === 'ditolak' || (it as any).status === 'ditolak')) {
+              return false;
+            }
+            return isMatch;
+          }
         )
     );
     if (matchedBatch) {
@@ -281,15 +364,17 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
 
   // Modals State
   const [evaluatingBatch, setEvaluatingBatch] = useState<BatchPengirimanSample | null>(null);
+  const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
   const [printingBatch, setPrintingBatch] = useState<BatchPengirimanSample | null>(null);
   const [updatingSingleSample, setUpdatingSingleSample] = useState<PengirimanSample | null>(null);
   const [deletingBatchId, setDeletingBatchId] = useState<string | null>(null);
 
   // Create Batch Form State
   const [tujuanBuyer, setTujuanBuyer] = useState('');
-  const [sumberGudang, setSumberGudang] = useState(gudangList[0]?.nama_gudang || 'Gudang Pusat Induk & Intake Pamekasan');
+  const [permintaanBuyer, setPermintaanBuyer] = useState('');
+  const [sumberGudang, setSumberGudang] = useState(gudangList[0]?.nama_gudang || 'Gudang Utama Pamekasan');
   const [tanggalKirim, setTanggalKirim] = useState(new Date().toISOString().split('T')[0]);
-  const [dikirimOleh, setDikirimOleh] = useState('Hendra Gunawan (QC & Ekspedisi)');
+  const [dikirimOleh, setDikirimOleh] = useState('');
   const [catatanBatchForm, setCatatanBatchForm] = useState('Sample batch resmi untuk evaluasi organoleptik dan uji kadar air sebelum DO.');
 
   // Bal selection filters inside Create Form
@@ -302,6 +387,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
   const [bulkKodeHarga, setBulkKodeHarga] = useState<string>('');
 
   const [isConfirmCreateOpen, setIsConfirmCreateOpen] = useState(false);
+  const [batchToDelete, setBatchToDelete] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
 
   // Helper default price by grade
@@ -364,9 +450,39 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
     setTimeout(() => inputPembeliRef.current?.focus(), 100);
   };
 
+
+  const isNoJadiAlreadyUsed = (noJadi: string) => {
+    const target = noJadi.trim().toLowerCase();
+    if (!target) return false;
+    
+    // Check in current draft table
+    if (selectedBalItems.some(item => (item.kodeBalPembeli || '').toLowerCase() === target)) {
+      return true;
+    }
+    // Check in all existing batches
+    for (const batch of activeBatchSampleList) {
+      if (batch.items && batch.items.some(item => (item.kode_bal_pembeli || '').toLowerCase() === target)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+
   const handleScanPembeliSubmit = () => {
     const trimmed = scanPembeli.trim();
     if (!trimmed) return;
+    
+    if (isNoJadiAlreadyUsed(trimmed)) {
+      setScanSampleAlert({
+        type: 'error',
+        message: `Gagal: No Jadi "${trimmed}" sudah digunakan. No Jadi hanya bisa digunakan 1 kali.`,
+      });
+      setScanPembeli('');
+      setTimeout(() => inputPembeliRef.current?.focus(), 100);
+      return;
+    }
+
     
     setScanSampleAlert({
       type: 'success',
@@ -405,6 +521,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
     }, 50);
   };
 
+
   const handleScanHargaJualSubmitWithCode = (foundHJ: MasterHargaJual) => {
     if (!pendingScanBal) {
       setScanSampleAlert({
@@ -415,12 +532,31 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
       return;
     }
 
+    const finalKodeBalPembeli = scanPembeli.trim() || (pendingScanBal.no_bal || pendingScanBal.barang_id);
+    
+    if (isNoJadiAlreadyUsed(finalKodeBalPembeli)) {
+      setScanSampleAlert({
+        type: 'error',
+        message: `Gagal: No Jadi "${finalKodeBalPembeli}" sudah digunakan. No Jadi hanya bisa digunakan 1 kali. Silakan ketik No Jadi baru.`,
+      });
+      setTimeout(() => inputPembeliRef.current?.focus(), 100);
+      return;
+    }
+
+    const finalNetto = resolveBeratNetto(pendingScanBal);
+    const finalBruto = resolveBeratBruto(pendingScanBal, finalNetto);
+    const finalTara = pendingScanBal.potongan_tara_kg !== undefined ? pendingScanBal.potongan_tara_kg : 2;
+    const finalHargaBeli = resolveHargaBeli(pendingScanBal);
+
     const newItem = {
       barangId: pendingScanBal.barang_id,
       noBal: pendingScanBal.no_bal || pendingScanBal.barang_id,
-      kodeBalPembeli: scanPembeli.trim() || (pendingScanBal.no_bal || pendingScanBal.barang_id),
+      kodeBalPembeli: finalKodeBalPembeli,
       grade: pendingScanBal.kode_grade || '-',
-      beratBalKg: pendingScanBal.berat_kg,
+      beratBalKg: finalNetto,
+      beratBrutoKg: finalBruto,
+      potonganTaraKg: finalTara,
+      hargaBeliKg: finalHargaBeli,
       kodeHargaJual: foundHJ.kode,
       hargaTawaranKg: foundHJ.harga_jual,
     };
@@ -538,43 +674,86 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
     }
     
 
-    const nextBatchId = generateBatchSampleId(activeBatchSampleList.length + 1);
+    const nextBatchId = editingBatchId || generateBatchSampleId(activeBatchSampleList.length + 1);
+    const existingBatch = activeBatchSampleList.find(b => b.batch_id === editingBatchId);
+    
+    const items: SampleItemDetail[] = selectedBalItems.map((s, idx) => {
+      const existingItem = existingBatch?.items.find(i => i.barang_id === s.barangId);
+      const matchedBal = barangList.find(b => b.barang_id === s.barangId || b.no_bal === s.noBal);
+      const finalHargaBeli = s.hargaBeliKg || existingItem?.harga_beli_kg || resolveHargaBeli(matchedBal);
+      const finalNetto = s.beratBalKg || resolveBeratNetto(matchedBal);
+      const finalBruto = s.beratBrutoKg || existingItem?.berat_bruto_kg || resolveBeratBruto(matchedBal, finalNetto);
+      const finalTara = s.potonganTaraKg || existingItem?.potongan_tara_kg || matchedBal?.potongan_tara_kg || 0;
+      const finalPetani = matchedBal?.nama_petani || txItemMap.get(s.barangId)?.nama_petani || txItemMap.get(s.noBal)?.nama_petani || existingItem?.nama_petani || '-';
+      const finalGudang = matchedBal?.lokasi_gudang || existingItem?.lokasi_gudang || sumberGudang;
 
-    const items: SampleItemDetail[] = selectedBalItems.map((s, idx) => ({
-      sample_item_id: generateSampleId(s.grade, null, idx + 1),
-      barang_id: s.barangId,
-      no_bal: s.noBal,
-      kode_grade: s.grade,
-      kode_harga_jual: s.kodeHargaJual,
-      berat_bal_kg: s.beratBalKg,
-      harga_tawaran_kg: s.hargaTawaranKg,
-      status_item: 'dikirim',
-      sudah_dikirim_do: false,
-    }));
+      return {
+        sample_item_id: existingItem?.sample_item_id || generateSampleId(s.grade, null, idx + 1),
+        barang_id: s.barangId,
+        no_bal: s.noBal,
+        kode_bal_pembeli: s.kodeBalPembeli,
+        kode_grade: s.grade,
+        kode_harga_jual: s.kodeHargaJual,
+        berat_bal_kg: finalNetto,
+        berat_bruto_kg: finalBruto,
+        potongan_tara_kg: finalTara,
+        harga_beli_kg: finalHargaBeli,
+        harga_tawaran_kg: s.hargaTawaranKg,
+        status_item: existingItem?.status_item || 'dikirim',
+        sudah_dikirim_do: existingItem?.sudah_dikirim_do || false,
+        nama_petani: finalPetani,
+        lokasi_gudang: finalGudang,
+      };
+    });
 
     const totalEstimasiNilai = items.reduce((sum, it) => sum + it.berat_bal_kg * it.harga_tawaran_kg, 0);
 
     const newBatch: BatchPengirimanSample = {
+      ...existingBatch,
       batch_id: nextBatchId,
-      kode_batch: nextBatchId,
+      kode_batch: existingBatch?.kode_batch || nextBatchId,
       tujuan_buyer: finalTujuan,
+      permintaan_buyer: permintaanBuyer,
       sumber_gudang: sumberGudang,
       tanggal_kirim: tanggalKirim,
-      status: 'sample',
+      status: existingBatch?.status || 'sample',
       dikirim_oleh: dikirimOleh.trim(),
       catatan: catatanBatchForm.trim(),
       items: items,
       total_sample_bal: items.length,
-      total_bal_disetujui: 0,
-      total_bal_ditolak: 0,
-      total_bal_nego: 0,
+      total_bal_disetujui: existingBatch?.total_bal_disetujui || 0,
+      total_bal_ditolak: existingBatch?.total_bal_ditolak || 0,
+      total_bal_nego: existingBatch?.total_bal_nego || 0,
       total_estimasi_nilai: totalEstimasiNilai,
-      total_nilai_deal: 0,
+      total_nilai_deal: existingBatch?.total_nilai_deal || 0,
     };
 
-    // Update barang status to terkirim_sample
+    // Find removed items and restore to di_gudang
     const selectedIds = new Set(selectedBalItems.map((s) => s.barangId));
-    const updatedBarangs = barangList.map((b) => {
+    let finalBarangList = [...barangList];
+    
+    if (existingBatch) {
+      const removedItemIds = existingBatch.items
+        .filter(it => !selectedIds.has(it.barang_id))
+        .map(it => it.barang_id);
+        
+      if (removedItemIds.length > 0) {
+        const removedSet = new Set(removedItemIds);
+        finalBarangList = finalBarangList.map(b => {
+          if (removedSet.has(b.barang_id)) {
+            return {
+              ...b,
+              status_stok: 'di_gudang' as const,
+              catatan_qc: b.catatan_qc?.replace(`Sample Batch ${editingBatchId} dikirim ke ${existingBatch.tujuan_buyer}`, '').trim()
+            };
+          }
+          return b;
+        });
+      }
+    }
+
+    // Update new items to terkirim_sample
+    const updatedBarangs = finalBarangList.map((b) => {
       if (selectedIds.has(b.barang_id)) {
         return {
           ...b,
@@ -585,7 +764,11 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
       return b;
     });
 
-    if (onSaveBatchSample) {
+    if (editingBatchId && onUpdateBatchSample) {
+      onUpdateBatchSample(newBatch, updatedBarangs);
+      setEditingBatchId(null);
+      setViewMode('list');
+    } else if (onSaveBatchSample) {
       onSaveBatchSample(newBatch, updatedBarangs);
     } else {
       // Fallback
@@ -597,8 +780,11 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
         kode_grade: it.kode_grade,
         sumber: newBatch.sumber_gudang,
         tujuan: newBatch.tujuan_buyer,
-        berat_sample_gram: it.berat_sample_gram,
+        berat_sample_gram: it.berat_sample_gram || 0,
         berat_bal_kg: it.berat_bal_kg,
+        berat_bruto_kg: it.berat_bruto_kg,
+        potongan_tara_kg: it.potongan_tara_kg,
+        harga_beli_kg: it.harga_beli_kg,
         harga_tawaran_kg: it.harga_tawaran_kg,
         tanggal_kirim: newBatch.tanggal_kirim,
         status: 'sample',
@@ -771,53 +957,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                 </div>
               </div>
 
-              {/* Status Tabs */}
-              <div className="flex items-center space-x-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
-                <button
-                  type="button"
-                  onClick={() => setSelectedBatchStatus('all')}
-                  className={`px-2.5 py-1 text-xs rounded-xs font-semibold cursor-pointer whitespace-nowrap ${
-                    selectedBatchStatus === 'all'
-                      ? 'bg-gray-800 text-white'
-                      : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  Semua ({activeBatchSampleList.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedBatchStatus('diproses')}
-                  className={`px-2.5 py-1 text-xs rounded-xs font-semibold cursor-pointer whitespace-nowrap ${
-                    selectedBatchStatus === 'diproses'
-                      ? 'bg-amber-600 text-white'
-                      : 'bg-white text-amber-700 border border-amber-300 hover:bg-amber-50'
-                  }`}
-                >
-                  Sedang Pengiriman ({countDiproses})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedBatchStatus('dikirim')}
-                  className={`px-2.5 py-1 text-xs rounded-xs font-semibold cursor-pointer whitespace-nowrap ${
-                    selectedBatchStatus === 'dikirim'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white text-blue-700 border border-blue-300 hover:bg-blue-50'
-                  }`}
-                >
-                  Sedang Berangkat ({countDikirim})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedBatchStatus('selesai')}
-                  className={`px-2.5 py-1 text-xs rounded-xs font-semibold cursor-pointer whitespace-nowrap ${
-                    selectedBatchStatus === 'selesai'
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-white text-emerald-700 border border-emerald-300 hover:bg-emerald-50'
-                  }`}
-                >
-                  Selesai ({countSelesai})
-                </button>
-              </div>
+              
             </div>
 
             {/* Batch Table */}
@@ -829,9 +969,8 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                     <th className="px-3.5 py-2.5">Kode Batch & Info</th>
                     <th className="px-3.5 py-2.5">Tujuan Buyer / Pabrik</th>
                     <th className="px-3.5 py-2.5 text-center">Jml Bal</th>
+                    <th className="px-3.5 py-2.5 text-right">Berat (Bruto / Netto)</th>
                     <th className="px-3.5 py-2.5">Gudang Asal & Tanggal</th>
-                    <th className="px-3.5 py-2.5 text-center">Status Batch</th>
-                    <th className="px-3.5 py-2.5 text-center">Hasil Evaluasi</th>
                     <th className="px-3.5 py-2.5 text-right">Nilai Deal / Tawar</th>
                     <th className="px-3.5 py-2.5 text-center">Aksi</th>
                   </tr>
@@ -839,7 +978,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                 <tbody className="divide-y divide-gray-200">
                   {paginatedBatches.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="px-4 py-8 text-center text-gray-400">
+                      <td colSpan={8} className="px-4 py-8 text-center text-gray-400">
                         Tidak ada data batch sample yang sesuai dengan filter.
                       </td>
                     </tr>
@@ -849,6 +988,14 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                       const approved = batch.total_bal_disetujui || batch.items?.filter(it => it.status_item === 'disetujui').length || 0;
                       const rejected = batch.total_bal_ditolak || batch.items?.filter(it => it.status_item === 'ditolak').length || 0;
                       const nego = batch.total_bal_nego || batch.items?.filter(it => it.status_item === 'nego').length || 0;
+
+                      const batchNetto = batch.items?.reduce((sum, it) => sum + (it.berat_bal_kg || 0), 0) || 0;
+                      const batchBruto = batch.items?.reduce((sum, it) => {
+                        if (it.berat_bruto_kg && it.berat_bruto_kg > 0) return sum + it.berat_bruto_kg;
+                        const netto = it.berat_bal_kg || 0;
+                        const tara = it.potongan_tara_kg !== undefined ? it.potongan_tara_kg : 2;
+                        return sum + (netto > 0 ? (netto + tara) : 0);
+                      }, 0) || 0;
 
                       return (
                         <tr key={batch.batch_id} className="hover:bg-gray-50/80 transition">
@@ -878,6 +1025,14 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                               {balCount} Bal
                             </span>
                           </td>
+                          <td className="px-3.5 py-3 text-right font-mono">
+                            <div className="font-bold text-gray-900">
+                              Netto: {formatNumber(batchNetto, 1)} kg
+                            </div>
+                            <div className="text-[10px] text-gray-500">
+                              Bruto: {formatNumber(batchBruto, 1)} kg
+                            </div>
+                          </td>
                           <td className="px-3.5 py-3">
                             <div className="text-gray-800 font-medium text-[11px] truncate max-w-[180px]">
                               {batch.sumber_gudang}
@@ -885,46 +1040,6 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                             <div className="text-[10px] text-gray-500 flex items-center space-x-1 mt-0.5">
                               <Calendar className="w-3 h-3 text-gray-400" />
                               <span>Kirim: {batch.tanggal_kirim}</span>
-                            </div>
-                          </td>
-                          <td className="px-3.5 py-3 text-center">
-                            {batch.status === 'selesai' ? (
-                              <span className="inline-flex items-center px-2 py-0.5 text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xs">
-                                <CheckCircle2 className="w-3 h-3 mr-1 text-emerald-600" />
-                                Selesai
-                              </span>
-                            ) : batch.status === 'dikirim' ? (
-                              <span className="inline-flex items-center px-2 py-0.5 text-[11px] font-bold bg-blue-100 text-blue-800 border border-blue-300 rounded-xs">
-                                <Truck className="w-3 h-3 mr-1 text-blue-600" />
-                                Sedang Berangkat
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center px-2 py-0.5 text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300 rounded-xs">
-                                <Clock className="w-3 h-3 mr-1 text-amber-600" />
-                                Sedang Pengiriman
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-3.5 py-3 text-center">
-                            <div className="space-y-0.5 text-[10px]">
-                              {approved > 0 && (
-                                <span className="inline-block bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded-xs border border-emerald-200 font-bold mr-1">
-                                  {approved} Disetujui
-                                </span>
-                              )}
-                              {nego > 0 && (
-                                <span className="inline-block bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded-xs border border-amber-200 font-bold mr-1">
-                                  {nego} Nego
-                                </span>
-                              )}
-                              {rejected > 0 && (
-                                <span className="inline-block bg-red-50 text-red-700 px-1.5 py-0.5 rounded-xs border border-red-200 font-bold">
-                                  {rejected} Ditolak
-                                </span>
-                              )}
-                              {approved === 0 && nego === 0 && rejected === 0 && (
-                                <span className="text-gray-400 italic">Belum disortir</span>
-                              )}
                             </div>
                           </td>
                           <td className="px-3.5 py-3 text-right">
@@ -945,22 +1060,68 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                           </td>
                           <td className="px-3.5 py-3 text-center">
                             <div className="flex items-center justify-center space-x-1.5">
+                              
                               <button
                                 type="button"
-                                title="Evaluasi & Detail Sortir QC"
-                                onClick={() => setEvaluatingBatch(batch)}
+                                title="Edit Info Batch"
+                                onClick={() => {
+                                  setViewMode('create');
+                                  // Populate the form
+                                  setEditingBatchId(batch.batch_id);
+                                  setTujuanBuyer(batch.tujuan_buyer || '');
+                                  setPermintaanBuyer(batch.permintaan_buyer || '');
+                                  setSumberGudang(batch.sumber_gudang || '');
+                                  setTanggalKirim(batch.tanggal_kirim || '');
+                                  setDikirimOleh(batch.dikirim_oleh || '');
+                                  setCatatanBatchForm(batch.catatan || '');
+                                  
+                                  const items = batch.items?.map(it => {
+                                    const matchedBal = barangList.find(b => b.barang_id === it.barang_id || b.no_bal === it.no_bal);
+                                    const netto = it.berat_bal_kg || resolveBeratNetto(matchedBal);
+                                    const bruto = it.berat_bruto_kg || resolveBeratBruto(matchedBal, netto);
+                                    const tara = it.potongan_tara_kg !== undefined ? it.potongan_tara_kg : (matchedBal?.potongan_tara_kg || 0);
+                                    const hrgBeli = it.harga_beli_kg || resolveHargaBeli(matchedBal);
+
+                                    return {
+                                      barangId: it.barang_id,
+                                      noBal: it.no_bal,
+                                      kodeBalPembeli: it.kode_bal_pembeli || it.no_bal,
+                                      grade: it.kode_grade,
+                                      beratBalKg: netto,
+                                      beratBrutoKg: bruto,
+                                      potonganTaraKg: tara,
+                                      hargaBeliKg: hrgBeli,
+                                      kodeHargaJual: it.kode_harga_jual || '-',
+                                      hargaTawaranKg: it.harga_tawaran_kg
+                                    };
+                                  }) || [];
+                                  setSelectedBalItems(items);
+                                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                                }}
                                 className="px-2 py-1 text-[11px] font-semibold bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300 rounded-xs transition cursor-pointer flex items-center space-x-1"
                               >
-                                <Eye className="w-3 h-3 text-gray-600" />
-                                <span>Detail</span>
+                                <Edit3 className="w-3 h-3 text-gray-600" />
+                                <span>Edit</span>
                               </button>
                               <button
                                 type="button"
                                 title="Cetak Surat Dokumen Sample"
                                 onClick={() => setPrintingBatch(batch)}
-                                className="p-1 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xs border border-gray-200 transition cursor-pointer"
+                                className="px-2 py-1 text-[11px] font-semibold bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300 rounded-xs transition cursor-pointer flex items-center space-x-1"
                               >
-                                <Printer className="w-3.5 h-3.5" />
+                                <Printer className="w-3 h-3 text-gray-600" />
+                                <span>Cetak</span>
+                              </button>
+                              <button
+                                type="button"
+                                title="Hapus Batch"
+                                onClick={() => {
+                                  setBatchToDelete(batch.batch_id);
+                                }}
+                                className="px-2 py-1 text-[11px] font-semibold bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-xs transition cursor-pointer flex items-center space-x-1"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                <span>Hapus</span>
                               </button>
                             </div>
                           </td>
@@ -1047,7 +1208,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
               )}
             </div>
 
-            {/* Buyer Specification Request */}
+            
 
             {/* Tanggal Kirim */}
             <div className="space-y-1">
@@ -1281,7 +1442,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                             {hargaJualSuggestions.length > 0 ? (
                               hargaJualSuggestions.map((hj, idx) => (
                                 <button
-                                  key={hj.id}
+                                  key={hj.harga_jual_id}
                                   type="button"
                                   onClick={() => {
                                     handleScanHargaJualSubmitWithCode(hj);
@@ -1324,54 +1485,70 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                 <thead className="bg-gray-100 text-gray-700 font-bold border-b border-gray-300">
                   <tr>
                     <th className="p-2.5 w-10 text-center border-r border-gray-200">No</th>
-                    <th className="p-2.5 w-32 border-r border-gray-200">No Bal</th>
-                    <th className="p-2.5 w-32 border-r border-gray-200">No Jadi</th>
-                    <th className="p-2.5 text-center w-24 border-r border-gray-200">Grade</th>
-                    <th className="p-2.5 text-right w-24 border-r border-gray-200">Berat (Kg)</th>
+                    <th className="p-2.5 w-28 border-r border-gray-200">No Bal</th>
+                    <th className="p-2.5 w-28 border-r border-gray-200">No Jadi</th>
+                    <th className="p-2.5 w-16 text-center border-r border-gray-200">Grade</th>
+                    <th className="p-2.5 text-right w-32 border-r border-gray-200">Harga Beli (Rp/Kg)</th>
+                    <th className="p-2.5 text-right w-24 border-r border-gray-200">Bruto (Kg)</th>
+                    <th className="p-2.5 text-right w-24 border-r border-gray-200">Netto (Kg)</th>
                     <th className="p-2.5 text-right w-36 border-r border-gray-200">Harga Tawar/Deal (Rp)</th>
                     <th className="p-2.5 text-right w-36 border-r border-gray-200">Est. Subtotal (Rp)</th>
-                    <th className="p-2.5 text-center w-16">Aksi</th>
+                    <th className="p-2.5 text-center w-14">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {selectedBalItems.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="p-8 text-center text-gray-500">
+                      <td colSpan={10} className="p-8 text-center text-gray-500">
                         <Package className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                        <span className="font-semibold block">Belum ada bal dipilih</span>
-                        <span className="text-[10px]">Silakan scan atau ketik no bal di atas untuk mulai membuat sample batch.</span>
+                        <span className="font-semibold block text-gray-500">Belum ada bal dipilih</span>
                       </td>
                     </tr>
                   ) : (
-                    selectedBalItems.map((item, idx) => (
-                      <tr key={idx} className="hover:bg-gray-50 transition">
-                        <td className="p-2.5 text-center font-mono text-gray-500 border-r border-gray-200">{idx + 1}</td>
-                        <td className="p-2.5 font-mono font-bold text-gray-900 border-r border-gray-200">{item.noBal}</td>
-                        <td className="p-2.5 font-mono font-bold text-[#b81d24] border-r border-gray-200">{item.kodeBuyer}</td>
-                        <td className="p-2.5 text-center border-r border-gray-200">
-                          <span className="font-bold text-xs text-gray-800 bg-gray-200 px-2 py-0.5 rounded-sm">
-                            {item.grade}
-                          </span>
-                        </td>
-                        <td className="p-2.5 text-right font-mono border-r border-gray-200">{formatNumber(item.beratBalKg, 1)} kg</td>
-                        <td className="p-2.5 text-right font-mono border-r border-gray-200">
-                          {formatRupiah(item.hargaTawaranKg)}
-                        </td>
-                        <td className="p-2.5 text-right font-mono font-bold border-r border-gray-200">
-                          {formatRupiah(item.beratBalKg * item.hargaTawaranKg)}
-                        </td>
-                        <td className="p-2.5 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveBalFromSample(item.barangId)}
-                            className="text-gray-400 hover:text-red-600 transition cursor-pointer p-1"
-                            title="Hapus"
-                          >
-                            <Trash2 className="w-4 h-4 mx-auto" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))
+                    selectedBalItems.map((item, idx) => {
+                      const matchedBal = barangList.find(b => b.barang_id === item.barangId || b.no_bal === item.noBal);
+                      const hrgBeli = item.hargaBeliKg || resolveHargaBeli(matchedBal);
+                      const netto = item.beratBalKg || resolveBeratNetto(matchedBal);
+                      const bruto = item.beratBrutoKg || resolveBeratBruto(matchedBal, netto);
+
+                      return (
+                        <tr key={item.barangId} className="hover:bg-gray-50 transition">
+                          <td className="p-2.5 text-center font-mono text-gray-500 border-r border-gray-200">{idx + 1}</td>
+                          <td className="p-2.5 font-mono font-bold text-gray-900 border-r border-gray-200">{item.noBal}</td>
+                          <td className="p-2.5 font-mono font-bold text-[#b81d24] border-r border-gray-200">{item.kodeBalPembeli}</td>
+                          <td className="p-2.5 text-center border-r border-gray-200">
+                            <span className="px-1.5 py-0.5 bg-gray-900 text-white font-mono text-[10px] font-bold rounded-2xs">
+                              {item.grade}
+                            </span>
+                          </td>
+                          <td className="p-2.5 text-right font-mono border-r border-gray-200 font-bold text-emerald-800 bg-emerald-50/30">
+                            {formatRupiah(hrgBeli)}
+                          </td>
+                          <td className="p-2.5 text-right font-mono border-r border-gray-200 text-gray-700">
+                            {formatNumber(bruto, 1)} kg
+                          </td>
+                          <td className="p-2.5 text-right font-mono border-r border-gray-200 font-bold text-gray-900">
+                            {formatNumber(netto, 1)} kg
+                          </td>
+                          <td className="p-2.5 text-right font-mono border-r border-gray-200">
+                            {formatRupiah(item.hargaTawaranKg)}
+                          </td>
+                          <td className="p-2.5 text-right font-mono font-bold border-r border-gray-200 text-[#b81d24]">
+                            {formatRupiah(netto * item.hargaTawaranKg)}
+                          </td>
+                          <td className="p-2.5 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveBalFromSample(item.barangId)}
+                              className="text-gray-400 hover:text-red-600 transition cursor-pointer p-1"
+                              title="Hapus"
+                            >
+                              <Trash2 className="w-4 h-4 mx-auto" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
                 {selectedBalItems.length > 0 && (
@@ -1380,7 +1557,16 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                       <td colSpan={4} className="p-2.5 text-right uppercase text-[11px] text-gray-600 tracking-wide border-r border-gray-200">
                         Total {selectedBalItems.length} Bal
                       </td>
-                      <td className="p-2.5 text-right font-mono border-r border-gray-200">
+                      <td className="p-2.5 text-right font-mono border-r border-gray-200 text-[11px] text-gray-500">
+                        -
+                      </td>
+                      <td className="p-2.5 text-right font-mono border-r border-gray-200 text-gray-700">
+                        {formatNumber(selectedBalItems.reduce((s, it) => {
+                          const matchedBal = barangList.find(b => b.barang_id === it.barangId || b.no_bal === it.noBal);
+                          return s + (it.beratBrutoKg || resolveBeratBruto(matchedBal, it.beratBalKg));
+                        }, 0), 1)} kg
+                      </td>
+                      <td className="p-2.5 text-right font-mono border-r border-gray-200 font-bold text-gray-900">
                         {formatNumber(selectedBalItems.reduce((s, it) => s + it.beratBalKg, 0), 1)} kg
                       </td>
                       <td className="p-2.5 text-right border-r border-gray-200"></td>
@@ -1443,25 +1629,10 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
         </div>
       )}
 
+      
       {/* Modal 1: QC Sortir & Evaluation Modal */}
-      <BatchEvaluasiSortirModal
-        isOpen={!!evaluatingBatch}
-        onClose={() => setEvaluatingBatch(null)}
-        batch={evaluatingBatch}
-        barangList={barangList}
-        onSaveEvaluasi={(updatedBatch, updatedBarangs) => {
-          if (onUpdateBatchSample) {
-            onUpdateBatchSample(updatedBatch, updatedBarangs);
-          }
-          setEvaluatingBatch(null);
-        }}
-        onNavigateToPengiriman={(b) => {
-          setEvaluatingBatch(null);
-          if (onNavigateToPengiriman) {
-            onNavigateToPengiriman(b.batch_id);
-          }
-        }}
-      />
+      
+      
 
       {/* Modal 2: Printable Batch Sample PDF Document */}
       <BatchSamplePrintModal
@@ -1482,6 +1653,35 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
       />
 
       {/* Confirm Create Modal */}
+      <ConfirmModal
+        isOpen={!!batchToDelete}
+        title="Konfirmasi Hapus Batch"
+        message="Apakah Anda yakin ingin menghapus batch sample ini? Data yang sudah dihapus tidak dapat dikembalikan."
+        confirmText="Ya, Hapus"
+        cancelText="Batal"
+        onConfirm={() => {
+          if (batchToDelete && onDeleteBatchSample) {
+            const batchToDel = batchSampleList.find((b) => b.batch_id === batchToDelete);
+            if (batchToDel) {
+              const revertedBarangs = batchToDel.items
+                .map((item) => {
+                  const b = barangList.find((br) => br.barang_id === item.barang_id);
+                  if (b) {
+                    return { ...b, status_stok: 'di_gudang' as const };
+                  }
+                  return undefined;
+                })
+                .filter((b): b is Barang => !!b);
+              onDeleteBatchSample(batchToDelete, revertedBarangs);
+            } else {
+              onDeleteBatchSample(batchToDelete);
+            }
+          }
+          setBatchToDelete(null);
+        }}
+        onClose={() => setBatchToDelete(null)}
+      />
+
       <ConfirmModal
         isOpen={isConfirmCreateOpen}
         title="Konfirmasi Pengiriman Batch Sample Tembakau"

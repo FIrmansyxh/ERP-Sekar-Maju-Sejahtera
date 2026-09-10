@@ -108,7 +108,7 @@ export const PetaniDeactivateModal: React.FC<PetaniDeactivateModalProps> = ({
           {isDeactivating ? (
             <div className="space-y-3">
               <div className="bg-[#f8f9fa] border border-gray-300 p-2.5 text-xs text-gray-700 leading-relaxed">
-                <strong>Catatan Sistem:</strong> Petani yang dinonaktifkan tidak akan muncul di loket timbang, namun seluruh data historis dan audit tetap tersimpan aman.
+                <strong>Catatan Sistem:</strong> Petani yang dinonaktifkan tidak akan muncul di loket timbang, namun seluruh data historis dan data tetap tersimpan aman.
               </div>
 
               <div>

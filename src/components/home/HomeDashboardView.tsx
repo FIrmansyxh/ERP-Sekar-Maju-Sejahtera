@@ -54,8 +54,7 @@ export const HomeDashboardView: React.FC<HomeDashboardViewProps> = ({
     { no: 18, nama: 'Pengiriman Sample', judul: 'Uji Laboratorium Mutu & Approval Grade Sample (3 Sedang Pengiriman, 1 Sedang Berangkat, 4 Selesai)', modId: 'modul-4-sample' },
     { no: 19, nama: 'Status & Detail Batch', judul: 'Detail Evaluasi QC Sortir Buyer & Monitoring Distribusi Ekspedisi', modId: 'modul-status-batch' },
     { no: 20, nama: 'Manajemen Pengguna (RBAC)', judul: 'Otorisasi Staf & Hak Akses Role Kerja', modId: 'modul-users' },
-    { no: 21, nama: 'Log Aktivitas Sistem', judul: 'Audit Trail Riwayat Aktivitas & Perubahan Data Sistem', modId: 'modul-log-aktivitas' },
-  ];
+      ];
 
   // Filter menu list based on RBAC permissions
   const menuList = allMenus.filter((item) => {

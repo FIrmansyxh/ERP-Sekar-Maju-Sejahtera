@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Search, 
   Plus, 
@@ -17,13 +17,18 @@ import {
   Phone,
   MapPin,
   User,
-  Filter
+  Filter,
+  Zap,
+  FileText,
+  ArrowUp,
+  Sparkles
 } from 'lucide-react';
 import { Petani, UserRole, TransaksiPembelian } from '../../types';
 import { formatNumber } from '../../utils/formatters';
 import { canUserPerform } from '../../utils/rbac';
 import { Pagination } from '../common/Pagination';
 import { ConfirmModal } from '../common/ConfirmModal';
+import { useVirtualScroll } from '../../hooks/useVirtualScroll';
 
 interface PetaniTableProps {
   data: Petani[];
@@ -61,12 +66,45 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [deletingPetaniTarget, setDeletingPetaniTarget] = useState<Petani | null>(null);
 
-  const countActive = useMemo(() => data.filter((p) => p.status_aktif).length, [data]);
-  const countInactive = useMemo(() => data.filter((p) => !p.status_aktif).length, [data]);
+  // High performance view mode: 'paginasi' (paged) vs 'virtual' (windowed continuous 60fps scroll)
+  const [viewMode, setViewMode] = useState<'paginasi' | 'virtual'>('paginasi');
+  const [simulatedCount, setSimulatedCount] = useState<number>(0);
+
+  // Generator for stress-testing performance with 1,000+ records
+  const combinedData = useMemo(() => {
+    if (simulatedCount <= 0) return data;
+    const sampleNames = ['Slamet Rahardjo', 'Bambang Sugiono', 'Hasan Basri', 'Achmad Syafii', 'Muhammad Tohir', 'Suparman', 'Kuswanto', 'Haji Ridwan', 'Abdul Ghofur', 'Nur Hidayat', 'Imron Rosyadi', 'Agus Salim', 'Subakir', 'Mansur Hidayat', 'Zainul Fanani'];
+    const sampleLocations = ['Kec. Larangan, Pamekasan', 'Kec. Waru, Pamekasan', 'Kec. Guluk-Guluk, Sumenep', 'Kec. Sokobanah, Sampang', 'Kec. Robatal, Sampang', 'Kec. Bluto, Sumenep', 'Kec. Kadur, Pamekasan', 'Kec. Pegantenan, Pamekasan'];
+
+    const mockList: Petani[] = Array.from({ length: simulatedCount }, (_, i) => {
+      const idNum = String(i + 1).padStart(4, '0');
+      const name = `${sampleNames[i % sampleNames.length]} (${idNum})`;
+      const loc = sampleLocations[i % sampleLocations.length];
+      const balCount = (i % 25) + 1;
+      return {
+        petani_id: `SIM-PTN-${idNum}`,
+        nama_petani: name,
+        no_hp: `0812${String(10000000 + i).slice(0, 8)}`,
+        alamat: `Dusun Krajan, ${loc}`,
+        desa_kecamatan: loc,
+        status_aktif: i % 10 !== 0,
+        tanggal_daftar: '2024-01-15',
+        catatan: 'Data simulasi uji performa ribuan baris',
+        statistik: {
+          total_setoran_bal: balCount,
+          total_berat_kg: balCount * 45,
+        },
+      };
+    });
+    return [...data, ...mockList];
+  }, [data, simulatedCount]);
+
+  const countActive = useMemo(() => combinedData.filter((p) => p.status_aktif).length, [combinedData]);
+  const countInactive = useMemo(() => combinedData.filter((p) => !p.status_aktif).length, [combinedData]);
 
   // Filter & Sort Logic
   const filteredData = useMemo(() => {
-    return data
+    return combinedData
       .filter((p) => {
         if (statusFilter === 'active' && !p.status_aktif) return false;
         if (statusFilter === 'inactive' && p.status_aktif) return false;
@@ -94,7 +132,22 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
         }
         return sortOrder === 'asc' ? cmp : -cmp;
       });
-  }, [data, searchQuery, statusFilter, sortBy, sortOrder]);
+  }, [combinedData, searchQuery, statusFilter, sortBy, sortOrder]);
+
+  // Virtual scrolling hook for windowed rendering
+  const virtualizer = useVirtualScroll({
+    totalItems: filteredData.length,
+    rowHeight: 49,
+    overscan: 8,
+    containerHeight: 520,
+  });
+
+  // Reset virtual scroll when search/filter changes
+  useEffect(() => {
+    if (viewMode === 'virtual') {
+      virtualizer.scrollToTop();
+    }
+  }, [searchQuery, statusFilter, sortBy, sortOrder, viewMode]);
 
   // Pagination calculation
   const totalPages = Math.ceil(filteredData.length / itemsPerPage) || 1;
@@ -102,6 +155,20 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
     const start = (currentPage - 1) * itemsPerPage;
     return filteredData.slice(start, start + itemsPerPage);
   }, [filteredData, currentPage, itemsPerPage]);
+
+  // Data to render depending on view mode
+  const displayItems = useMemo(() => {
+    if (viewMode === 'virtual') {
+      return filteredData.slice(virtualizer.startIndex, virtualizer.endIndex).map((petani, idx) => ({
+        petani,
+        itemNumber: virtualizer.startIndex + idx + 1,
+      }));
+    }
+    return paginatedData.map((petani, idx) => ({
+      petani,
+      itemNumber: (currentPage - 1) * itemsPerPage + idx + 1,
+    }));
+  }, [viewMode, filteredData, virtualizer.startIndex, virtualizer.endIndex, paginatedData, currentPage, itemsPerPage]);
 
   // Render clean single sort arrow indicator
   const handleSort = (field: string) => {
@@ -227,7 +294,34 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
             )}
           </div>
 
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Stress-test simulation toggle */}
+            {simulatedCount === 0 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSimulatedCount(1000);
+                  setViewMode('virtual');
+                }}
+                className="px-2.5 py-1.5 text-xs font-semibold text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
+                title="Simulasikan 1.000 data petani untuk menguji virtual scrolling & performa UI"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                <span className="hidden sm:inline">Uji 1.000 Data</span>
+                <span className="sm:hidden">1.000 Data</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setSimulatedCount(0)}
+                className="px-2.5 py-1.5 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-300 rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
+                title="Hapus data simulasi dan kembalikan ke data asli"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Hapus Uji ({simulatedCount})</span>
+              </button>
+            )}
+
             <button
               onClick={onOpenImportExport}
               className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
@@ -248,29 +342,73 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
           </div>
         </div>
 
-        {/* Table Controls (Tampil X Data Per Halaman, Quick Filter Status & Pencarian) */}
+        {/* Table Controls (Mode Switcher, Tampil X Data, Quick Filter Status & Pencarian) */}
         <div className="p-3 bg-white flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
-          <div className="flex flex-wrap items-center gap-3 sm:gap-4">
-            {/* Tampil X Data Per Halaman */}
-            <div className="flex items-center space-x-1.5">
-              <span className="text-gray-600 font-medium">Tampil</span>
-              <select
-                id="select-items-per-page-petani"
-                value={itemsPerPage}
-                onChange={(e) => {
-                  setItemsPerPage(Number(e.target.value));
-                  setCurrentPage(1);
-                }}
-                className="border border-gray-300 rounded-sm px-2 py-1 bg-white text-xs font-semibold text-gray-800 focus:outline-none focus:border-[#b81d24] cursor-pointer"
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+            {/* View Mode Toggle: Paginasi vs Virtual Scroll */}
+            <div className="flex items-center bg-gray-100 p-0.5 border border-gray-300 rounded-sm">
+              <button
+                type="button"
+                onClick={() => setViewMode('paginasi')}
+                className={`px-2.5 py-1 text-xs font-bold rounded-sm transition flex items-center space-x-1 cursor-pointer ${
+                  viewMode === 'paginasi'
+                    ? 'bg-white text-gray-900 shadow-2xs border border-gray-200'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+                title="Mode Halaman Tradisional dengan Paginasi"
               >
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-                <option value={data.length || 1000}>All</option>
-              </select>
+                <FileText className="w-3.5 h-3.5 text-gray-500" />
+                <span>Paginasi</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('virtual')}
+                className={`px-2.5 py-1 text-xs font-bold rounded-sm transition flex items-center space-x-1 cursor-pointer ${
+                  viewMode === 'virtual'
+                    ? 'bg-[#b81d24] text-white shadow-2xs'
+                    : 'text-gray-600 hover:text-[#b81d24]'
+                }`}
+                title="Mode Virtual Windowing 60 FPS untuk ribuan baris"
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span>Virtual Scroll</span>
+              </button>
             </div>
+
+            {/* Tampil X Data Per Halaman (hanya saat mode paginasi) */}
+            {viewMode === 'paginasi' ? (
+              <div className="flex items-center space-x-1.5">
+                <span className="text-gray-600 font-medium">Tampil</span>
+                <select
+                  id="select-items-per-page-petani"
+                  value={itemsPerPage}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === 'virtual') {
+                      setViewMode('virtual');
+                    } else {
+                      setItemsPerPage(Number(val));
+                      setCurrentPage(1);
+                    }
+                  }}
+                  className="border border-gray-300 rounded-sm px-2 py-1 bg-white text-xs font-semibold text-gray-800 focus:outline-none focus:border-[#b81d24] cursor-pointer"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                  <option value={250}>250</option>
+                  <option value={500}>500</option>
+                  <option value="virtual">Semua (Virtual Scroll)</option>
+                </select>
+                <span className="text-gray-500 hidden sm:inline">per hal.</span>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-1 px-2 py-1 bg-amber-50 border border-amber-200 text-amber-900 rounded-sm text-[11px] font-bold">
+                <Zap className="w-3 h-3 text-amber-600" />
+                <span>Scroll Bebas ({filteredData.length} data)</span>
+              </div>
+            )}
 
             {/* Dropdown Filter Status Cepat Petani */}
             <div className="flex items-center space-x-2 pl-0 sm:pl-3 sm:border-l sm:border-gray-200">
@@ -294,7 +432,7 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
                       : 'border-gray-300 bg-white text-gray-800 hover:border-gray-400 focus:border-[#b81d24]'
                   }`}
                 >
-                  <option value="all">Semua Status ({data.length})</option>
+                  <option value="all">Semua Status ({combinedData.length})</option>
                   <option value="active">✓ Hanya Aktif ({countActive})</option>
                   <option value="inactive">✕ Nonaktif ({countInactive})</option>
                 </select>
@@ -347,11 +485,17 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
           </div>
         </div>
 
-        {/* Table View */}
-        <div className="overflow-x-auto border-t border-gray-200">
+        {/* Table View (Supports both standard Paged and 60 FPS Virtual Windowing) */}
+        <div 
+          ref={viewMode === 'virtual' ? virtualizer.containerRef : undefined}
+          onScroll={viewMode === 'virtual' ? virtualizer.onScroll : undefined}
+          className={`overflow-x-auto border-t border-gray-200 ${
+            viewMode === 'virtual' ? 'max-h-[550px] overflow-y-auto relative' : ''
+          }`}
+        >
           <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-[#f8f9fa] border-b border-gray-200 text-[11px] font-bold text-gray-700">
+            <thead className={viewMode === 'virtual' ? 'sticky top-0 z-10 bg-[#f8f9fa] shadow-2xs border-b border-gray-200' : 'bg-[#f8f9fa]'}>
+              <tr className="border-b border-gray-200 text-[11px] font-bold text-gray-700">
                 <th className="py-2.5 px-3 text-center w-12 border-r border-gray-200">No</th>
                 <th 
                   onClick={() => handleSort('petani_id')}
@@ -380,7 +524,7 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
             </thead>
 
             <tbody className="divide-y divide-gray-200 text-xs">
-              {paginatedData.length === 0 ? (
+              {displayItems.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="py-8 text-center text-gray-500">
                     <div>Tidak ada data petani yang sesuai dengan kriteria filter atau pencarian.</div>
@@ -402,133 +546,177 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
                   </td>
                 </tr>
               ) : (
-                paginatedData.map((petani, index) => {
-                  const itemNumber = (currentPage - 1) * itemsPerPage + index + 1;
-
-                  return (
-                    <tr 
-                      key={petani.petani_id}
-                      className={`transition-colors hover:bg-amber-50/60 ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'}`}
-                    >
-                      {/* No */}
-                      <td className="py-2.5 px-3 text-center border-r border-gray-200 font-mono text-gray-600">
-                        {itemNumber}
-                      </td>
-
-                      {/* ID Petani */}
-                      <td className="py-2.5 px-3 border-r border-gray-200 font-mono font-bold text-[#b81d24]">
-                        {petani.petani_id}
-                      </td>
-
-                      {/* Nama Petani */}
-                      <td className="py-2.5 px-3 border-r border-gray-200 font-bold text-gray-900">
-                        {petani.nama_petani}
-                      </td>
-
-                      {/* No HP */}
-                      <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono text-gray-700">
-                        {petani.no_hp || '-'}
-                      </td>
-
-                      {/* Alamat */}
-                      <td className="py-2.5 px-3 border-r border-gray-200 text-gray-700 truncate max-w-xs">
-                        {petani.alamat || petani.desa_kecamatan || '-'}
-                      </td>
-
-                      {/* Status */}
-                      <td className="py-2.5 px-3 border-r border-gray-200 text-center">
-                        <span className={`inline-block px-2 py-0.5 text-[10px] font-bold rounded ${
-                          petani.status_aktif 
-                            ? 'bg-green-50 text-green-700 border border-green-200' 
-                            : 'bg-gray-100 text-gray-500 border border-gray-200'
-                        }`}>
-                          {petani.status_aktif ? 'Aktif' : 'Nonaktif'}
-                        </span>
-                      </td>
-
-                      {/* Total Bal */}
-                      <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono font-medium text-gray-800">
-                        {(() => {
-                          const realTransactions = transaksiList.filter((tx) => tx.petani_id === petani.petani_id);
-                          const totalBal = realTransactions.reduce((acc, tx) => acc + (tx.total_bal || (tx.items ? tx.items.length : 0)), 0);
-                          return totalBal;
-                        })()} Bal
-                      </td>
-
-                      {/* Action Buttons */}
-                      <td className="py-2 px-3 text-center">
-                        <div className="flex items-center justify-center space-x-1.5">
-                          {/* Info Button */}
-                          <button
-                            onClick={() => onViewDetail(petani)}
-                            className="w-6 h-6 rounded-full bg-[#6c757d] hover:bg-[#5a6268] text-white flex items-center justify-center text-[10px] transition cursor-pointer shadow-xs"
-                            title="Detail Petani"
-                          >
-                            <Info className="w-3.5 h-3.5" />
-                          </button>
-
-                          {/* Print ID Card Button */}
-                          <button
-                            onClick={() => onPrintCard(petani)}
-                            className="w-6 h-6 rounded-full bg-[#17a2b8] hover:bg-[#138496] text-white flex items-center justify-center text-[10px] transition cursor-pointer shadow-xs"
-                            title="Cetak ID Card Petani"
-                          >
-                            <Printer className="w-3.5 h-3.5" />
-                          </button>
-
-                          {/* Edit Button */}
-                          {canManagePetani && (
-                            <button
-                              onClick={() => onEditPetani(petani)}
-                              className="w-6 h-6 rounded-full bg-[#b81d24] hover:bg-[#96141a] text-white flex items-center justify-center text-[10px] transition cursor-pointer shadow-xs"
-                              title="Edit Data"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-
-                          {/* Status Toggle Button */}
-                          {canManagePetani && (
-                            <button
-                              onClick={() => onToggleStatus(petani)}
-                              className={`w-6 h-6 rounded-full text-white flex items-center justify-center text-[10px] transition cursor-pointer shadow-xs ${
-                                petani.status_aktif ? 'bg-[#c82333] hover:bg-[#bd2130]' : 'bg-[#28a745] hover:bg-[#218838]'
-                              }`}
-                              title={petani.status_aktif ? 'Nonaktifkan Petani' : 'Aktifkan Kembali'}
-                            >
-                              {petani.status_aktif ? <Ban className="w-3 h-3" /> : <CheckCircle className="w-3 h-3" />}
-                            </button>
-                          )}
-                          {/* Delete Petani Button */}
-                          {canManagePetani && onDeletePetani && (
-                            <button
-                              onClick={() => setDeletingPetaniTarget(petani)}
-                              className="w-6 h-6 rounded-full bg-[#dc3545] hover:bg-[#c82333] text-white flex items-center justify-center text-[10px] transition cursor-pointer shadow-xs"
-                              title="Hapus Data Petani"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      </td>
+                <>
+                  {/* Virtual Scroll Top Spacer */}
+                  {viewMode === 'virtual' && virtualizer.paddingTop > 0 && (
+                    <tr style={{ height: `${virtualizer.paddingTop}px` }} aria-hidden="true">
+                      <td colSpan={8} className="p-0 border-0 m-0" />
                     </tr>
-                  );
-                })
+                  )}
+
+                  {displayItems.map(({ petani, itemNumber }, index) => {
+                    return (
+                      <tr 
+                        key={petani.petani_id}
+                        className={`transition-colors hover:bg-amber-50/60 ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'}`}
+                      >
+                        {/* No */}
+                        <td className="py-2.5 px-3 text-center border-r border-gray-200 font-mono text-gray-600">
+                          {itemNumber}
+                        </td>
+
+                        {/* ID Petani */}
+                        <td className="py-2.5 px-3 border-r border-gray-200 font-mono font-bold text-[#b81d24]">
+                          {petani.petani_id}
+                        </td>
+
+                        {/* Nama Petani */}
+                        <td className="py-2.5 px-3 border-r border-gray-200 font-bold text-gray-900">
+                          {petani.nama_petani}
+                        </td>
+
+                        {/* No HP */}
+                        <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono text-gray-700">
+                          {petani.no_hp || '-'}
+                        </td>
+
+                        {/* Alamat */}
+                        <td className="py-2.5 px-3 border-r border-gray-200 text-gray-700 truncate max-w-xs">
+                          {petani.alamat || petani.desa_kecamatan || '-'}
+                        </td>
+
+                        {/* Status */}
+                        <td className="py-2.5 px-3 border-r border-gray-200 text-center">
+                          <span className={`inline-block px-2 py-0.5 text-[10px] font-bold rounded ${
+                            petani.status_aktif 
+                              ? 'bg-green-50 text-green-700 border border-green-200' 
+                              : 'bg-gray-100 text-gray-500 border border-gray-200'
+                          }`}>
+                            {petani.status_aktif ? 'Aktif' : 'Nonaktif'}
+                          </span>
+                        </td>
+
+                        {/* Total Bal */}
+                        <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono font-medium text-gray-800">
+                          {(() => {
+                            const realTransactions = transaksiList.filter((tx) => tx.petani_id === petani.petani_id);
+                            const totalBal = realTransactions.reduce((acc, tx) => acc + (tx.total_bal || (tx.items ? tx.items.length : 0)), 0);
+                            return totalBal;
+                          })()} Bal
+                        </td>
+
+                        {/* Action Buttons */}
+                        <td className="py-2 px-3 text-center">
+                          <div className="flex items-center justify-center space-x-1.5">
+                            {/* Info Button */}
+                            <button
+                              onClick={() => onViewDetail(petani)}
+                              className="w-6 h-6 rounded-full bg-[#6c757d] hover:bg-[#5a6268] text-white flex items-center justify-center text-[10px] transition cursor-pointer shadow-xs"
+                              title="Detail Petani"
+                            >
+                              <Info className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Print ID Card Button */}
+                            <button
+                              onClick={() => onPrintCard(petani)}
+                              className="w-6 h-6 rounded-full bg-[#17a2b8] hover:bg-[#138496] text-white flex items-center justify-center text-[10px] transition cursor-pointer shadow-xs"
+                              title="Cetak ID Card Petani"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Edit Button */}
+                            {canManagePetani && (
+                              <button
+                                onClick={() => onEditPetani(petani)}
+                                className="w-6 h-6 rounded-full bg-[#b81d24] hover:bg-[#96141a] text-white flex items-center justify-center text-[10px] transition cursor-pointer shadow-xs"
+                                title="Edit Data"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+
+                            {/* Status Toggle Button */}
+                            {canManagePetani && (
+                              <button
+                                onClick={() => onToggleStatus(petani)}
+                                className={`w-6 h-6 rounded-full text-white flex items-center justify-center text-[10px] transition cursor-pointer shadow-xs ${
+                                  petani.status_aktif ? 'bg-[#c82333] hover:bg-[#bd2130]' : 'bg-[#28a745] hover:bg-[#218838]'
+                                }`}
+                                title={petani.status_aktif ? 'Nonaktifkan Petani' : 'Aktifkan Kembali'}
+                              >
+                                {petani.status_aktif ? <Ban className="w-3 h-3" /> : <CheckCircle className="w-3 h-3" />}
+                              </button>
+                            )}
+                            {/* Delete Petani Button */}
+                            {canManagePetani && onDeletePetani && (
+                              <button
+                                onClick={() => setDeletingPetaniTarget(petani)}
+                                className="w-6 h-6 rounded-full bg-[#dc3545] hover:bg-[#c82333] text-white flex items-center justify-center text-[10px] transition cursor-pointer shadow-xs"
+                                title="Hapus Data Petani"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+
+                  {/* Virtual Scroll Bottom Spacer */}
+                  {viewMode === 'virtual' && virtualizer.paddingBottom > 0 && (
+                    <tr style={{ height: `${virtualizer.paddingBottom}px` }} aria-hidden="true">
+                      <td colSpan={8} className="p-0 border-0 m-0" />
+                    </tr>
+                  )}
+                </>
               )}
             </tbody>
           </table>
         </div>
 
-        {/* Sliding 3-Number Window Pagination */}
-        <div className="p-3 bg-white border-t border-gray-200">
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            totalItems={filteredData.length}
-            itemsPerPage={itemsPerPage}
-            onPageChange={(page) => setCurrentPage(page)}
-          />
-        </div>
+        {/* Footer: Pagination OR Virtual Scroll Live Info */}
+        {viewMode === 'paginasi' ? (
+          <div className="p-3 bg-white border-t border-gray-200">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={filteredData.length}
+              itemsPerPage={itemsPerPage}
+              showQuickJumper={true}
+              showFirstLast={true}
+              onPageChange={(page) => setCurrentPage(page)}
+            />
+          </div>
+        ) : (
+          <div className="p-3 bg-slate-50 border-t border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs text-gray-700">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-sm font-bold text-[11px] bg-amber-100 text-amber-900 border border-amber-300">
+                <Zap className="w-3 h-3 mr-1 text-amber-600 animate-pulse" />
+                Virtual Scrolling 60 FPS
+              </span>
+              <span>
+                Merender <strong className="font-mono text-gray-900">{virtualizer.visibleCount}</strong> baris aktif (baris ke-<strong className="font-mono">{filteredData.length > 0 ? virtualizer.startIndex + 1 : 0}</strong> s/d <strong className="font-mono">{virtualizer.endIndex}</strong>) dari <strong className="font-mono text-gray-900">{filteredData.length}</strong> total data petani
+              </span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <span className="text-[11px] text-gray-500 hidden md:inline">
+                DOM ringan (&lt; 35 nodes) bebas lag
+              </span>
+              <button
+                type="button"
+                onClick={virtualizer.scrollToTop}
+                className="px-2.5 py-1 bg-white hover:bg-gray-100 border border-gray-300 rounded-sm text-xs font-semibold text-gray-700 cursor-pointer transition shadow-2xs flex items-center space-x-1"
+                title="Gulir ke baris paling atas"
+              >
+                <ArrowUp className="w-3.5 h-3.5 text-gray-500" />
+                <span>Ke Paling Atas</span>
+              </button>
+            </div>
+          </div>
+        )}
 
       </div>
 

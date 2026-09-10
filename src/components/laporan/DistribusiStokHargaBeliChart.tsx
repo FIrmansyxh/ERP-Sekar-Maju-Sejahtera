@@ -738,9 +738,6 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
                     <span className="text-xs font-bold text-gray-900">
                       Grafik Batang: Distribusi {currentMetricLabel} Berdasarkan Kode Harga Beli
                     </span>
-                    <p className="text-[11px] text-gray-500">
-                      Arahkan kursor pada batang untuk melihat tarif resmi, jumlah bal, tonase, dan nilai modal tembakau.
-                    </p>
                   </div>
                   <span className="text-xs font-mono font-semibold text-gray-600">
                     Total: {formatMetricValue(

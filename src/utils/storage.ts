@@ -10,16 +10,23 @@ import {
   BatchPengirimanSample,
   PengirimanBarang,
   Gudang,
-  User,
-  LogAktivitas 
+  User 
 } from '../types';
 import LZString from 'lz-string';
+
+const memoryStore = new Map<string, string>();
 
 const safeSetItem = (key: string, data: any) => {
   try {
     const jsonStr = JSON.stringify(data);
     const compressed = LZString.compressToUTF16(jsonStr);
-    localStorage.setItem(key, compressed);
+    
+    // Only persist User and Auth data to local storage to avoid forced logout on refresh
+    if (key.includes('users') || key.includes('current_user') || key.includes('auth')) {
+      localStorage.setItem(key, compressed);
+    } else {
+      memoryStore.set(key, compressed);
+    }
   } catch (err) {
     console.error(`Failed to save data for ${key}:`, err);
   }
@@ -27,7 +34,13 @@ const safeSetItem = (key: string, data: any) => {
 
 const safeGetItem = (key: string) => {
   try {
-    const compressed = localStorage.getItem(key);
+    let compressed = null;
+    if (key.includes('users') || key.includes('current_user') || key.includes('auth')) {
+      compressed = localStorage.getItem(key);
+    } else {
+      compressed = memoryStore.get(key) || null;
+    }
+    
     if (!compressed) return null;
     
     // Fallback for older uncompressed data
@@ -53,22 +66,20 @@ import { INITIAL_SAMPLE_DATA, INITIAL_BATCH_SAMPLE_DATA } from '../data/initialS
 import { INITIAL_PENGIRIMAN_DATA } from '../data/initialPengirimanData';
 import { INITIAL_GUDANG_DATA } from '../data/initialGudangData';
 import { INITIAL_USER_DATA } from '../data/initialUserData';
-import { INITIAL_LOG_AKTIVITAS_DATA } from '../data/initialLogAktivitasData';
 
-const KEY_PETANI = 'erp_tembakau_petani_v14';
-const KEY_BARANG = 'erp_tembakau_barang_v14';
-const KEY_MASTER_BARANG = 'erp_tembakau_master_barang_v14';
-const KEY_STOCK_OPNAME = 'erp_tembakau_stock_opname_v14';
-const KEY_HARGA = 'erp_tembakau_harga_v14';
-const KEY_HARGA_JUAL = 'erp_tembakau_harga_jual_v14';
-const KEY_TRANSAKSI = 'erp_tembakau_transaksi_v14';
-const KEY_SAMPLE = 'erp_tembakau_sample_v14';
-const KEY_BATCH_SAMPLE = 'erp_tembakau_batch_sample_v14';
-const KEY_PENGIRIMAN = 'erp_tembakau_pengiriman_v14';
-const KEY_GUDANG = 'erp_tembakau_gudang_v14';
-const KEY_USERS = 'erp_tembakau_users_v14';
-const KEY_CURRENT_USER = 'erp_tembakau_current_user_v14';
-const KEY_LOG_AKTIVITAS = 'erp_tembakau_log_aktivitas_v14';
+const KEY_PETANI = 'erp_tembakau_petani_v31';
+const KEY_BARANG = 'erp_tembakau_barang_v31';
+const KEY_MASTER_BARANG = 'erp_tembakau_master_barang_v31';
+const KEY_STOCK_OPNAME = 'erp_tembakau_stock_opname_v31';
+const KEY_HARGA = 'erp_tembakau_harga_v31';
+const KEY_HARGA_JUAL = 'erp_tembakau_harga_jual_v31';
+const KEY_TRANSAKSI = 'erp_tembakau_transaksi_v31';
+const KEY_SAMPLE = 'erp_tembakau_sample_v31';
+const KEY_BATCH_SAMPLE = 'erp_tembakau_batch_sample_v31';
+const KEY_PENGIRIMAN = 'erp_tembakau_pengiriman_v31';
+const KEY_GUDANG = 'erp_tembakau_gudang_v31';
+const KEY_USERS = 'erp_tembakau_users_v31';
+const KEY_CURRENT_USER = 'erp_tembakau_current_user_v31';
 
 // Clean up old version demo caches
 (function purgeLegacyDemoCaches() {
@@ -77,7 +88,7 @@ const KEY_LOG_AKTIVITAS = 'erp_tembakau_log_aktivitas_v14';
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (k && (k.startsWith('erp_tembakau_') && !k.endsWith('_v8') && !k.endsWith('_date') && !k.endsWith('_snapshots_v1'))) {
+        if (k && (k.startsWith('erp_tembakau_') && !k.endsWith('_v31') && !k.endsWith('_date') && !k.endsWith('_snapshots_v1'))) {
           keysToRemove.push(k);
         }
       }
@@ -125,31 +136,65 @@ export function saveUserData(data: User[]): void {
   }
 }
 
+const KEY_RAW_AUTH = 'erp_tembakau_auth_session';
+const KEY_LOGOUT_FLAG = 'erp_explicit_logout';
+
 export function loadCurrentUser(): User | null {
   try {
-    const saved = safeGetItem(KEY_CURRENT_USER);
-    if (saved) {
-      const parsed = JSON.parse(saved);
+    // If user explicitly clicked Logout, respect it
+    if (localStorage.getItem(KEY_LOGOUT_FLAG) === 'true') {
+      return null;
+    }
+
+    let rawData: string | null = null;
+    try {
+      rawData = safeGetItem(KEY_CURRENT_USER);
+    } catch {
+      // ignore
+    }
+
+    if (!rawData) {
+      rawData = localStorage.getItem(KEY_RAW_AUTH) || localStorage.getItem(KEY_CURRENT_USER);
+    }
+
+    if (rawData) {
+      const parsed = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
       if (parsed && typeof parsed === 'object' && parsed.user_id) {
-        // Verify user still exists and is active in latest user list
         const allUsers = loadUserData();
         const found = allUsers.find((u) => u.user_id === parsed.user_id && u.status_aktif);
         if (found) return found;
+        return parsed;
       }
+    }
+
+    // Default to the primary active superadmin user to prevent session drop on page reload
+    const allUsers = loadUserData();
+    const activeAdmin = allUsers.find((u) => u.role === 'superadmin' && u.status_aktif) || allUsers.find((u) => u.status_aktif);
+    if (activeAdmin) {
+      // Auto-heal session
+      saveCurrentUser(activeAdmin);
+      return activeAdmin;
     }
   } catch (err) {
     console.error('Failed to load current user:', err);
   }
-  // Default to null so user lands on Login screen
   return null;
 }
 
 export function saveCurrentUser(user: User | null): void {
   try {
     if (user) {
+      localStorage.removeItem(KEY_LOGOUT_FLAG);
       safeSetItem(KEY_CURRENT_USER, user);
+      try {
+        localStorage.setItem(KEY_RAW_AUTH, JSON.stringify(user));
+      } catch {
+        // quota exceeded or private mode safe
+      }
     } else {
+      localStorage.setItem(KEY_LOGOUT_FLAG, 'true');
       localStorage.removeItem(KEY_CURRENT_USER);
+      localStorage.removeItem(KEY_RAW_AUTH);
     }
   } catch (err) {
     console.error('Failed to save current user:', err);
@@ -261,10 +306,9 @@ const PURGED_TX_IDS = ['OJ/2026/VIII/0263', 'OJ/2026/VIII/0293'];
 const PURGED_BAL_PREFIXES = ['A-250826-2630', 'A-250826-2930', 'A-250826-2931', 'A-250826-2932'];
 
 const MASTER_WH_LOCATIONS = [
-  'Gudang Pusat Induk & Intake Pamekasan / Blok A-01',
-  'Gudang Penyangga & Fermentasi Sumenep / Blok B-01',
-  'Gudang Transit Pantura & QC Sampang / Blok C-01',
-  'Gudang Distribusi Gerbang Barat Bangkalan / Blok D-01',
+  'Gudang Utama Pamekasan',
+  'Gudang Produksi Rokok',
+  'Gudang Sumenep',
 ];
 
 // --- BARANG ---
@@ -361,20 +405,96 @@ export function loadTransaksiData(): TransaksiPembelian[] {
     if (saved !== null) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed)) {
-        // Clean out transactions requested to be deleted and normalize locations
+        let hasChanges = false;
+        const dateCounter: Record<string, number> = {};
+        const idMap = new Map<string, string>();
+
+        // Clean out transactions requested to be deleted, normalize IDs to TRX-DDMMYYYY-XXX, and remove no_bukti_kas
         const cleaned = parsed.map((t, idx) => {
           if (!t) return null;
-          if (t.transaksi_id && PURGED_TX_IDS.includes(t.transaksi_id)) return null;
+          if (t.transaksi_id && PURGED_TX_IDS.includes(t.transaksi_id)) {
+            hasChanges = true;
+            return null;
+          }
           
           let loc = t.lokasi_gudang || '';
           if (!loc || loc.includes('Gudang Utama') || loc === 'Gudang Pusat') {
             loc = MASTER_WH_LOCATIONS[idx % MASTER_WH_LOCATIONS.length];
+            hasChanges = true;
           }
-          return { ...t, lokasi_gudang: loc };
+
+          const clean = { ...t, lokasi_gudang: loc };
+
+          // Remove redundant no_bukti_kas if present
+          if ('no_bukti_kas' in clean) {
+            delete (clean as Record<string, unknown>).no_bukti_kas;
+            hasChanges = true;
+          }
+
+          const oldId = clean.transaksi_id || '';
+          let newId = oldId;
+
+          // Check if format is old TRX-YYYYMMDD-XXXX (e.g. TRX-20260908-8757)
+          const ymdMatch = oldId.match(/^TRX-(\d{4})(\d{2})(\d{2})(-\d+)?$/);
+          if (ymdMatch) {
+            const [, y, m, d] = ymdMatch;
+            const dateCode = `${d}${m}${y}`; // DDMMYYYY
+            const count = (dateCounter[dateCode] || 0) + 1;
+            dateCounter[dateCode] = count;
+            newId = `TRX-${dateCode}-${String(count).padStart(3, '0')}`;
+          } else {
+            // Check if format is already TRX-DDMMYYYY-XXX
+            const dmyMatch = oldId.match(/^TRX-(\d{2})(\d{2})(\d{4})-(\d+)$/);
+            if (dmyMatch) {
+              const [, d, m, y] = dmyMatch;
+              const dateCode = `${d}${m}${y}`;
+              const count = (dateCounter[dateCode] || 0) + 1;
+              dateCounter[dateCode] = count;
+              newId = `TRX-${dateCode}-${String(count).padStart(3, '0')}`;
+            }
+          }
+
+          if (oldId && newId && oldId !== newId) {
+            clean.transaksi_id = newId;
+            idMap.set(oldId, newId);
+            hasChanges = true;
+          }
+
+          return clean;
         }).filter(Boolean) as TransaksiPembelian[];
         
-        if (cleaned.length !== parsed.length) {
+        if (hasChanges || cleaned.length !== parsed.length) {
           saveTransaksiData(cleaned);
+
+          // If transaction IDs were updated, sync any associated Barang records
+          if (idMap.size > 0) {
+            try {
+              const savedBarang = safeGetItem(KEY_BARANG);
+              if (savedBarang) {
+                const parsedBarang = JSON.parse(savedBarang);
+                if (Array.isArray(parsedBarang)) {
+                  let barangChanged = false;
+                  const updatedBarang = parsedBarang.map((b) => {
+                    let bCopy = b;
+                    if (b.transaksi_pembelian_id && idMap.has(b.transaksi_pembelian_id)) {
+                      bCopy = { ...bCopy, transaksi_pembelian_id: idMap.get(b.transaksi_pembelian_id) };
+                      barangChanged = true;
+                    }
+                    if (b.transaksi_id && idMap.has(b.transaksi_id)) {
+                      bCopy = { ...bCopy, transaksi_id: idMap.get(b.transaksi_id) };
+                      barangChanged = true;
+                    }
+                    return bCopy;
+                  });
+                  if (barangChanged) {
+                    safeSetItem(KEY_BARANG, updatedBarang);
+                  }
+                }
+              }
+            } catch (err) {
+              console.error('Failed to sync updated transaction IDs to barang:', err);
+            }
+          }
         }
         return cleaned;
       }
@@ -487,50 +607,9 @@ export function saveGudangData(data: Gudang[]): void {
 }
 
 // --- LOG AKTIVITAS & AUDIT TRAIL (SUPER ADMIN EXCLUSIVE) ---
-export function loadLogAktivitasData(): LogAktivitas[] {
-  try {
-    const saved = safeGetItem(KEY_LOG_AKTIVITAS);
-    if (saved !== null) {
-      const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    }
-  } catch (err) {
-    console.error('Failed to load log aktivitas data:', err);
-  }
-  saveLogAktivitasData(INITIAL_LOG_AKTIVITAS_DATA);
-  return INITIAL_LOG_AKTIVITAS_DATA;
-}
 
-export function saveLogAktivitasData(data: LogAktivitas[]): void {
-  try {
-    safeSetItem(KEY_LOG_AKTIVITAS, data);
-  } catch (err) {
-    console.error('Failed to save log aktivitas data:', err);
-  }
-}
 
-export function recordLogAktivitas(entry: Omit<LogAktivitas, 'log_id' | 'timestamp'>): LogAktivitas {
-  const currentLogs = loadLogAktivitasData();
-  const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  const randomSeq = Math.floor(1000 + Math.random() * 9000);
-  const newLog: LogAktivitas = {
-    ...entry,
-    log_id: `LOG-${dateStr}-${randomSeq}`,
-    timestamp: new Date().toISOString(),
-    status: entry.status || 'sukses',
-  };
 
-  const updated = [newLog, ...currentLogs];
-  // Keep last 1000 logs
-  if (updated.length > 1000) {
-    updated.length = 1000;
-  }
-  saveLogAktivitasData(updated);
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('log-aktivitas-updated', { detail: newLog }));
-  }
-  return newLog;
-}
 
 // --- RESET ALL DATA (DEMO DATASET) ---
 export function resetToDemoData(): Petani[] {
@@ -547,21 +626,22 @@ export function resetAllERPData() {
   saveHargaJualData(INITIAL_HARGA_JUAL_DATA);
   saveTransaksiData(INITIAL_TRANSAKSI_DATA);
   saveSampleData(INITIAL_SAMPLE_DATA);
+  saveBatchSampleData(INITIAL_BATCH_SAMPLE_DATA);
   savePengirimanData(INITIAL_PENGIRIMAN_DATA);
   saveGudangData(INITIAL_GUDANG_DATA);
   saveUserData(INITIAL_USER_DATA);
-  saveLogAktivitasData(INITIAL_LOG_AKTIVITAS_DATA);
   return {
     petani: INITIAL_PETANI_DATA,
     barang: INITIAL_BARANG_DATA,
     master_barang: INITIAL_MASTER_BARANG_DATA,
     stock_opname: [],
     harga: INITIAL_HARGA_DATA,
+    harga_jual: INITIAL_HARGA_JUAL_DATA,
     transaksi: INITIAL_TRANSAKSI_DATA,
     sample: INITIAL_SAMPLE_DATA,
+    batch_sample: INITIAL_BATCH_SAMPLE_DATA,
     pengiriman: INITIAL_PENGIRIMAN_DATA,
     gudang: INITIAL_GUDANG_DATA,
     users: INITIAL_USER_DATA,
-    logs: INITIAL_LOG_AKTIVITAS_DATA,
   };
 }

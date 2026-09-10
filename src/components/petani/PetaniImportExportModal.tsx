@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { 
+import {  
   X, 
   Download, 
   Upload, 
@@ -9,7 +9,7 @@ import {
   HelpCircle,
   Copy,
   ArrowLeft
-} from 'lucide-react';
+, AlertTriangle } from 'lucide-react';
 import { Petani } from '../../types';
 import { generatePetaniId } from '../../utils/formatters';
 import { downloadCsvFile } from '../../utils/printDownload';

@@ -28,6 +28,7 @@ import {
   ChevronLeft
 } from 'lucide-react';
 import { Barang, Gudang, Petani, TransaksiPembelian, TabelHarga, UserRole } from '../../types';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell } from 'recharts';
 import { formatRupiah, formatNumber, formatDateHariBulanTahun } from '../../utils/formatters';
 import { downloadCsvFile, downloadElementAsPdf } from '../../utils/printDownload';
 import { Pagination } from '../common/Pagination';
@@ -96,9 +97,9 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
     maxHarga: '',
   });
 
-  // Sorting State
-  const [sortField, setSortField] = useState<SortField>('default');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('none');
+  // Multi-column Sorting State
+  type SortConfig = { field: SortField; direction: 'asc' | 'desc' };
+  const [sortConfigs, setSortConfigs] = useState<SortConfig[]>([]);
 
   // UI States
   const [showSummaryCards, setShowSummaryCards] = useState(true);
@@ -208,8 +209,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
       minHarga: '',
       maxHarga: '',
     });
-    setSortField('default');
-    setSortDirection('none');
+    setSortConfigs([]);
     setCurrentPage(1);
   };
 
@@ -218,27 +218,39 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
     return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
   };
 
-  // Toggle Header Sort with cycle: none -> asc -> desc -> none
+  // Toggle Header Sort with cycle: desc -> asc -> none
   const handleHeaderSort = (field: SortField) => {
-    if (sortField !== field) {
-      setSortField(field);
-      setSortDirection('asc');
-    } else {
-      if (sortDirection === 'asc') {
-        setSortDirection('desc');
-      } else if (sortDirection === 'desc') {
-        setSortField('default');
-        setSortDirection('none');
-      } else {
-        setSortDirection('asc');
-      }
+    if (field === 'default') {
+      setSortConfigs([]);
+      return;
     }
+
+    setSortConfigs(prev => {
+      const existingIndex = prev.findIndex(c => c.field === field);
+      
+      if (existingIndex >= 0) {
+        const existing = prev[existingIndex];
+        if (existing.direction === 'desc') {
+          const newConfigs = [...prev];
+          newConfigs[existingIndex] = { ...existing, direction: 'asc' };
+          return newConfigs;
+        } else {
+          return prev.filter((_, idx) => idx !== existingIndex);
+        }
+      } else {
+        const newConfigs = [...prev, { field, direction: 'desc' as const }];
+        if (newConfigs.length > 3) {
+          newConfigs.shift();
+        }
+        return newConfigs;
+      }
+    });
   };
 
   // Filtered & Enriched Bal Data
   const enrichedBalList = useMemo(() => {
     // Map transaksi items to ensure accurate harga_per_kg and total_harga if missing
-    const txItemMap = new Map<string, { harga_per_kg: number; total_kotor: number; nama_petani: string; no_kupon: string }>();
+    const txItemMap = new Map<string, { harga_per_kg: number; total_kotor: number; nama_petani: string; no_kupon: string; potongan: number; status_pembayaran: string }>();
     transaksiList.forEach((tx) => {
       if (tx.items) {
         tx.items.forEach((it) => {
@@ -249,6 +261,8 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
               total_kotor: it.total_kotor || ((it.berat_kg || 0) * (it.harga_per_kg || 0)),
               nama_petani: tx.nama_petani || '',
               no_kupon: tx.no_kupon || '',
+              potongan: it.potongan || 0,
+              status_pembayaran: tx.status_pembayaran || 'belum_lunas',
             });
           }
         });
@@ -260,7 +274,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
       const hrgBeli = bal.harga_per_kg || txInfo?.harga_per_kg || 0;
       const netto = bal.berat_kg || 0;
       const subtotal = bal.total_harga || txInfo?.total_kotor || (netto * hrgBeli);
-      const bruto = bal.berat_bruto_kg && bal.berat_bruto_kg > 0 ? bal.berat_bruto_kg : (netto > 0 ? netto + (bal.potongan_tara_kg || 2) : 0);
+      const bruto = bal.berat_bruto_kg && bal.berat_bruto_kg > 0 ? bal.berat_bruto_kg : (netto > 0 ? netto + (bal.potongan_tara_kg || 0) : 0);
       const tara = bal.potongan_tara_kg !== undefined ? bal.potongan_tara_kg : Math.max(0, bruto - netto);
 
       return {
@@ -272,6 +286,8 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
         total_harga: subtotal,
         nama_petani: bal.nama_petani || txInfo?.nama_petani || 'Petani Kemitraan',
         no_kupon: txInfo?.no_kupon || '-',
+        potongan: txInfo?.potongan || 0,
+        status_pembayaran: txInfo?.status_pembayaran || 'belum_lunas',
       };
     });
   }, [barangList, transaksiList]);
@@ -345,75 +361,77 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
     });
   }, [enrichedBalList, appliedFilters]);
 
-  // Sorted Data based on sortField & sortDirection
+  // Sorted Data based on sortConfigs
   const sortedData = useMemo(() => {
-    if (sortDirection === 'none' || sortField === 'default') {
+    if (sortConfigs.length === 0) {
       return [...filteredData].sort((a, b) => a.originalIndex - b.originalIndex);
     }
 
     return [...filteredData].sort((a, b) => {
-      let comparison = 0;
-
-      switch (sortField) {
-        case 'no_bal': {
-          const balA = a.no_bal || a.barang_id || '';
-          const balB = b.no_bal || b.barang_id || '';
-          comparison = compareAlphanumeric(balA, balB);
-          break;
+      for (const config of sortConfigs) {
+        let comparison = 0;
+        switch (config.field) {
+          case 'no_bal': {
+            const balA = a.no_bal || a.barang_id || '';
+            const balB = b.no_bal || b.barang_id || '';
+            comparison = compareAlphanumeric(balA, balB);
+            break;
+          }
+          case 'tanggal_masuk': {
+            const dateA = a.tanggal_masuk || '';
+            const dateB = b.tanggal_masuk || '';
+            comparison = dateA.localeCompare(dateB);
+            break;
+          }
+          case 'kode_grade': {
+            const gradeA = a.kode_grade || '';
+            const gradeB = b.kode_grade || '';
+            comparison = gradeA.localeCompare(gradeB);
+            break;
+          }
+          case 'berat_kg': {
+            comparison = (a.berat_kg || 0) - (b.berat_kg || 0);
+            break;
+          }
+          case 'berat_bruto_kg': {
+            comparison = (a.berat_bruto_kg || 0) - (b.berat_bruto_kg || 0);
+            break;
+          }
+          case 'harga_per_kg': {
+            comparison = (a.harga_per_kg || 0) - (b.harga_per_kg || 0);
+            break;
+          }
+          case 'total_harga': {
+            comparison = (a.total_harga || 0) - (b.total_harga || 0);
+            break;
+          }
+          case 'nama_petani': {
+            const pA = a.nama_petani || '';
+            const pB = b.nama_petani || '';
+            comparison = pA.localeCompare(pB);
+            break;
+          }
+          case 'lokasi_gudang': {
+            const locA = a.lokasi_gudang || '';
+            const locB = b.lokasi_gudang || '';
+            comparison = locA.localeCompare(locB);
+            break;
+          }
+          case 'status_stok': {
+            const stA = a.status_stok || '';
+            const stB = b.status_stok || '';
+            comparison = stA.localeCompare(stB);
+            break;
+          }
         }
-        case 'tanggal_masuk': {
-          const dateA = a.tanggal_masuk || '';
-          const dateB = b.tanggal_masuk || '';
-          comparison = dateA.localeCompare(dateB);
-          break;
+        
+        if (comparison !== 0) {
+          return config.direction === 'asc' ? comparison : -comparison;
         }
-        case 'kode_grade': {
-          const gradeA = a.kode_grade || '';
-          const gradeB = b.kode_grade || '';
-          comparison = gradeA.localeCompare(gradeB);
-          break;
-        }
-        case 'berat_kg': {
-          comparison = (a.berat_kg || 0) - (b.berat_kg || 0);
-          break;
-        }
-        case 'berat_bruto_kg': {
-          comparison = (a.berat_bruto_kg || 0) - (b.berat_bruto_kg || 0);
-          break;
-        }
-        case 'harga_per_kg': {
-          comparison = (a.harga_per_kg || 0) - (b.harga_per_kg || 0);
-          break;
-        }
-        case 'total_harga': {
-          comparison = (a.total_harga || 0) - (b.total_harga || 0);
-          break;
-        }
-        case 'nama_petani': {
-          const pA = a.nama_petani || '';
-          const pB = b.nama_petani || '';
-          comparison = pA.localeCompare(pB);
-          break;
-        }
-        case 'lokasi_gudang': {
-          const locA = a.lokasi_gudang || '';
-          const locB = b.lokasi_gudang || '';
-          comparison = locA.localeCompare(locB);
-          break;
-        }
-        case 'status_stok': {
-          const stA = a.status_stok || '';
-          const stB = b.status_stok || '';
-          comparison = stA.localeCompare(stB);
-          break;
-        }
-        default:
-          comparison = a.originalIndex - b.originalIndex;
       }
-
-      return sortDirection === 'asc' ? comparison : -comparison;
+      return a.originalIndex - b.originalIndex;
     });
-  }, [filteredData, sortField, sortDirection]);
+  }, [filteredData, sortConfigs]);
 
   // Aggregation & KPI Totals
   const totals = useMemo(() => {
@@ -541,19 +559,33 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
 
   // Render Sort Header Icon - Single clean arrow when active
   const renderSortIndicator = (field: SortField) => {
-    if (sortField !== field || sortDirection === 'none') {
+    if (field === 'default') {
+      if (sortConfigs.length === 0) return null;
+      return (
+        <button type="button" onClick={(e) => { e.stopPropagation(); setSortConfigs([]); }} className="text-[10px] bg-red-100 hover:bg-red-200 text-red-700 px-2 py-0.5 rounded-sm transition ml-2 cursor-pointer font-semibold border border-red-200">
+          Reset Urutan
+        </button>
+      );
+    }
+
+    const configIndex = sortConfigs.findIndex(c => c.field === field);
+    if (configIndex === -1) {
       return null;
     }
-    if (sortDirection === 'asc') {
+    const config = sortConfigs[configIndex];
+    
+    if (config.direction === 'asc') {
       return (
-        <span className="inline-flex items-center text-[#b81d24] bg-red-50 p-0.5 rounded-xs border border-red-200 ml-1" title="Urutan Terendah / Naik / A-Z">
+        <span className="inline-flex items-center text-[#b81d24] bg-red-50 p-0.5 px-1 rounded-xs border border-red-200 ml-1" title="Urutan Terendah / Naik / A-Z">
           <ArrowUp className="w-3.5 h-3.5 text-[#b81d24]" />
+          {sortConfigs.length > 1 && <span className="text-[10px] font-bold ml-0.5 leading-none">{configIndex + 1}</span>}
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center text-[#b81d24] bg-red-50 p-0.5 rounded-xs border border-red-200 ml-1" title="Urutan Tertinggi / Turun / Z-A">
+      <span className="inline-flex items-center text-[#b81d24] bg-red-50 p-0.5 px-1 rounded-xs border border-red-200 ml-1" title="Urutan Tertinggi / Turun / Z-A">
         <ArrowDown className="w-3.5 h-3.5 text-[#b81d24]" />
+        {sortConfigs.length > 1 && <span className="text-[10px] font-bold ml-0.5 leading-none">{configIndex + 1}</span>}
       </span>
     );
   };
@@ -563,39 +595,27 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
     if (sortedData.length === 0) return;
 
     const headers = [
-      'No',
-      'No Bal',
-      'Kode Pembeli',
-      'Tanggal Masuk',
-      'Grade',
-      'Nama Petani',
-      'No Kupon',
-      'Lokasi Gudang',
-      'Berat Bruto (kg)',
-      'Potongan Tara (kg)',
-      'Berat Netto (kg)',
-      'Harga Beli per kg (Rp)',
-      'Total Harga Beli (Rp)',
-      'Status Stok',
-      'Catatan',
+      'NO',
+      'TANGGAL',
+      'NO BAL',
+      'PETANI',
+      'BERAT',
+      'HARGA',
+      'STATUS',
+      'POTONGAN',
+      'STATUS (DIGUDANG/TERKIRIM)'
     ];
 
     const rows = sortedData.map((b, idx) => [
       idx + 1,
-      b.no_bal || '-',
-      b.kode_bal_pembeli || '-',
       b.tanggal_masuk ? b.tanggal_masuk.split('T')[0] : '-',
-      b.kode_grade || '-',
+      b.no_bal || '-',
       b.nama_petani || '-',
-      b.no_kupon || '-',
-      b.lokasi_gudang || '-',
-      (b.berat_bruto_kg || 0).toFixed(1),
-      (b.potongan_tara_kg || 0).toFixed(1),
       (b.berat_kg || 0).toFixed(1),
-      b.harga_per_kg || 0,
       b.total_harga || 0,
-      b.status_stok || '-',
-      b.catatan || '',
+      b.status_pembayaran === 'lunas' ? 'LUNAS' : 'KASBON / BELUM LUNAS',
+      b.potongan || 0,
+      b.status_stok === 'di_gudang' ? 'DIGUDANG' : b.status_stok === 'keluar' ? 'TERKIRIM' : (b.status_stok || '').toUpperCase()
     ]);
 
     // Sub-summary section in CSV
@@ -896,6 +916,49 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                     );
                   })}
                 </div>
+
+                {/* Visualisasi Distribusi Grade */}
+                <div className="mt-6 border border-gray-200 rounded-sm p-4 bg-[#f8f9fa] shadow-2xs">
+                  <div className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-4 text-center">
+                    Distribusi Jumlah Bal Berdasarkan Grade
+                  </div>
+                  <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={gradeBreakdown} margin={{ top: 10, right: 30, left: 0, bottom: 20 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                        <XAxis 
+                          dataKey="grade" 
+                          tick={{ fontSize: 11, fontWeight: 'bold' }} 
+                          tickLine={false}
+                          axisLine={{ stroke: '#d1d5db' }}
+                        />
+                        <YAxis 
+                          allowDecimals={false}
+                          tick={{ fontSize: 11 }}
+                          tickLine={false}
+                          axisLine={false}
+                        />
+                        <RechartsTooltip 
+                          cursor={{ fill: '#f3f4f6' }}
+                          contentStyle={{ borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', border: '1px solid #e5e7eb', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}
+                          formatter={(value) => [`${value} Bal`, 'Jumlah Bal']}
+                          labelFormatter={(label) => `Grade ${label}`}
+                        />
+                        <Bar 
+                          dataKey="balCount" 
+                          name="Jumlah Bal" 
+                          radius={[4, 4, 0, 0]}
+                          barSize={40}
+                        >
+                          {gradeBreakdown.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill="#b81d24" />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
               </div>
             )}
           </div>
@@ -1103,16 +1166,19 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
             <span>dari</span>
             <strong className="text-gray-900 font-mono font-bold">{sortedData.length}</strong>
             <span>bal terfilter</span>
-            {sortField !== 'default' && sortDirection !== 'none' && (
-              <div className="inline-flex items-center space-x-1.5 ml-2">
-                <span className="px-2 py-0.5 bg-amber-50 text-amber-900 border border-amber-200 text-[10px] font-bold rounded-xs">
-                  Urutan: {sortField.replace(/_/g, ' ').toUpperCase()} ({sortDirection === 'asc' ? 'TERENDAH / A-Z' : 'TERTINGGI / Z-A'})
-                </span>
+            {sortConfigs.length > 0 && (
+              <div className="inline-flex items-center space-x-1.5 ml-2 flex-wrap gap-y-1">
+                <span className="text-[10px] text-gray-500 font-bold uppercase mr-1">Urutan:</span>
+                {sortConfigs.map((config, idx) => (
+                  <span key={config.field} className="px-1.5 py-0.5 bg-amber-50 text-amber-900 border border-amber-200 text-[10px] font-bold rounded-xs flex items-center space-x-1">
+                    <span>{idx + 1}. {config.field.replace(/_/g, ' ').toUpperCase()}</span>
+                    <span>({config.direction === 'asc' ? 'TERENDAH / A-Z' : 'TERTINGGI / Z-A'})</span>
+                  </span>
+                ))}
                 <button
                   type="button"
                   onClick={() => {
-                    setSortField('default');
-                    setSortDirection('none');
+                    setSortConfigs([]);
                   }}
                   className="px-1.5 py-0.5 text-[10px] font-bold text-red-700 hover:text-red-900 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xs flex items-center space-x-1 cursor-pointer"
                   title="Reset urutan ke default"
@@ -1165,14 +1231,14 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                 >
                   <div className="flex items-center justify-center space-x-1">
                     <span>No</span>
-                    {sortField === 'default' && sortDirection !== 'none' && renderSortIndicator('default')}
+                    {sortConfigs.length > 0 && renderSortIndicator('default')}
                   </div>
                 </th>
 
                 {/* 2. No Bal (Alphanumeric Natural Sort) */}
                 <th
                   onClick={() => handleHeaderSort('no_bal')}
-                  className="py-2.5 px-3 border-r border-gray-200 cursor-pointer hover:bg-gray-200/80 transition group select-none bg-slate-100/50"
+                  className="py-2.5 px-3 border-r border-gray-200 cursor-pointer hover:bg-gray-200/80 transition group select-none bg-slate-100/50 w-28 whitespace-nowrap"
                   title="Klik untuk urutkan No Bal dari alfabet lalu angka"
                 >
                   <div className="flex items-center justify-between space-x-1.5">
@@ -1330,7 +1396,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                       </td>
 
                       {/* 2. No Bal */}
-                      <td className="py-2 px-3 font-mono font-black text-gray-950 border-r border-gray-100 whitespace-nowrap bg-slate-50/40">
+                      <td className="py-2 px-3 font-mono font-black text-gray-950 border-r border-gray-100 whitespace-nowrap bg-slate-50/40 w-28">
                         <span className="hover:underline cursor-pointer" title={`ID: ${bal.barang_id}`}>
                           {bal.no_bal || bal.barang_id}
                         </span>
@@ -1531,33 +1597,29 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
           <table className="w-full text-left border-collapse border border-gray-300 text-[10px] mb-4">
             <thead>
               <tr className="bg-gray-100 text-gray-900 font-bold border-b border-gray-300 uppercase">
-                <th className="p-1 border border-gray-300 text-center">No</th>
-                <th className="p-1 border border-gray-300">No Bal</th>
-                <th className="p-1 border border-gray-300">Tanggal</th>
-                <th className="p-1 border border-gray-300 text-center">Grade</th>
-                <th className="p-1 border border-gray-300">Petani / Supplier</th>
-                <th className="p-1 border border-gray-300">Lokasi Gudang</th>
-                <th className="p-1 border border-gray-300 text-right">Bruto (kg)</th>
-                <th className="p-1 border border-gray-300 text-right">Netto (kg)</th>
-                <th className="p-1 border border-gray-300 text-right">Harga/kg</th>
-                <th className="p-1 border border-gray-300 text-right font-bold">Total Harga</th>
-                <th className="p-1 border border-gray-300 text-center">Status</th>
+                <th className="p-1 border border-gray-300 text-center">NO</th>
+                <th className="p-1 border border-gray-300">TANGGAL</th>
+                <th className="p-1 border border-gray-300">NO BAL</th>
+                <th className="p-1 border border-gray-300">PETANI</th>
+                <th className="p-1 border border-gray-300 text-right">BERAT</th>
+                <th className="p-1 border border-gray-300 text-right">HARGA</th>
+                <th className="p-1 border border-gray-300 text-center">STATUS</th>
+                <th className="p-1 border border-gray-300 text-right">POTONGAN</th>
+                <th className="p-1 border border-gray-300 text-center">STATUS (DIGUDANG/TERKIRIM)</th>
               </tr>
             </thead>
             <tbody>
               {sortedData.slice(0, 300).map((b, idx) => (
                 <tr key={idx} className="border-b border-gray-200">
                   <td className="p-1 border border-gray-300 text-center">{idx + 1}</td>
-                  <td className="p-1 border border-gray-300 font-mono font-bold">{b.no_bal}</td>
                   <td className="p-1 border border-gray-300 font-mono">{b.tanggal_masuk?.split('T')[0] || '-'}</td>
-                  <td className="p-1 border border-gray-300 text-center font-bold">Grade {b.kode_grade}</td>
+                  <td className="p-1 border border-gray-300 font-mono font-bold">{b.no_bal}</td>
                   <td className="p-1 border border-gray-300">{b.nama_petani}</td>
-                  <td className="p-1 border border-gray-300">{b.lokasi_gudang}</td>
-                  <td className="p-1 border border-gray-300 text-right font-mono">{(b.berat_bruto_kg || 0).toFixed(1)}</td>
                   <td className="p-1 border border-gray-300 text-right font-mono font-bold">{(b.berat_kg || 0).toFixed(1)}</td>
-                  <td className="p-1 border border-gray-300 text-right font-mono">Rp {Math.round(b.harga_per_kg || 0).toLocaleString('id-ID')}</td>
                   <td className="p-1 border border-gray-300 text-right font-mono font-bold">Rp {Math.round(b.total_harga || 0).toLocaleString('id-ID')}</td>
-                  <td className="p-1 border border-gray-300 text-center uppercase text-[9px]">{b.status_stok}</td>
+                  <td className="p-1 border border-gray-300 text-center uppercase text-[9px]">{b.status_pembayaran === 'lunas' ? 'LUNAS' : 'KASBON'}</td>
+                  <td className="p-1 border border-gray-300 text-right font-mono">Rp {Math.round(b.potongan || 0).toLocaleString('id-ID')}</td>
+                  <td className="p-1 border border-gray-300 text-center uppercase text-[9px]">{b.status_stok === 'di_gudang' ? 'DIGUDANG' : b.status_stok === 'keluar' ? 'TERKIRIM' : b.status_stok}</td>
                 </tr>
               ))}
             </tbody>
@@ -1617,17 +1679,17 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
             <div>
               <p className="text-gray-600">Petugas Administrasi Bal</p>
               <div className="h-14"></div>
-              <p className="font-bold underline text-gray-900">( Siti Rahayu )</p>
+              <p className="font-bold underline text-gray-900">Siti Rahayu</p>
             </div>
             <div>
               <p className="text-gray-600">Supervisor QC & Mutu</p>
               <div className="h-14"></div>
-              <p className="font-bold underline text-gray-900">( drg. Hendra Kusuma )</p>
+              <p className="font-bold underline text-gray-900">drg. Hendra Kusuma</p>
             </div>
             <div>
               <p className="text-gray-600">Kepala Gudang / Mengetahui</p>
               <div className="h-14"></div>
-              <p className="font-bold underline text-gray-900">( Bambang Sutrisno, S.T. )</p>
+              <p className="font-bold underline text-gray-900">Bambang Sutrisno, S.T.</p>
             </div>
           </div>
         </div>

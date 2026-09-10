@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, UserPlus, UserCheck, Shield, Building2, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { SearchableSelect } from '../common/SearchableSelect';
 import { User, UserRole, Gudang } from '../../types';
 import { ALL_ROLES, ROLE_DEFINITIONS } from '../../utils/rbac';
 
@@ -216,17 +217,12 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
               <label className="block font-semibold text-gray-700 mb-1">
                 Role & Hak Akses (RBAC) <span className="text-red-500">*</span>
               </label>
-              <select
+              <SearchableSelect
                 value={role}
-                onChange={(e) => setRole(e.target.value as UserRole)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-sm focus:ring-1 focus:ring-red-500 focus:border-red-500 text-xs bg-white font-semibold text-gray-900"
-              >
-                {ALL_ROLES.map((r) => (
-                  <option key={r} value={r}>
-                    {ROLE_DEFINITIONS[r].label}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => setRole(val as UserRole)}
+                options={ALL_ROLES.map(r => ({ value: r, label: ROLE_DEFINITIONS[r].label }))}
+                placeholder="Pilih Role..."
+              />
 
               {/* Role description preview box */}
               {selectedRoleInfo && (

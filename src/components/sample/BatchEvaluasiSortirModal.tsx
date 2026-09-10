@@ -42,12 +42,15 @@ export const BatchEvaluasiSortirModal: React.FC<BatchEvaluasiSortirModalProps> =
   const [catatanBatch, setCatatanBatch] = useState('');
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [itemToReject, setItemToReject] = useState<SampleItemDetail | null>(null);
+  const [rejectedBarangIds, setRejectedBarangIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (batch) {
       setItems(JSON.parse(JSON.stringify(batch.items || [])));
       setPetugasQCPabrik(batch.petugas_qc_pabrik || '');
       setCatatanBatch(batch.catatan || '');
+      setRejectedBarangIds([]);
     }
   }, [batch, isOpen]);
 
@@ -66,6 +69,11 @@ export const BatchEvaluasiSortirModal: React.FC<BatchEvaluasiSortirModalProps> =
 
   // Update item status
   const handleItemStatusChange = (index: number, newStatus: StatusSample) => {
+    if (newStatus === 'ditolak') {
+      setItemToReject(items[index]);
+      return;
+    }
+
     setItems((prev) => {
       const copy = [...prev];
       const target = { ...copy[index] };
@@ -78,10 +86,6 @@ export const BatchEvaluasiSortirModal: React.FC<BatchEvaluasiSortirModalProps> =
         if (!target.harga_deal_kg) {
           target.harga_deal_kg = target.harga_tawaran_kg;
         }
-      } else if (newStatus === 'ditolak') {
-        if (!target.alasan_tolak) {
-          target.alasan_tolak = 'Kadar air melebihi batas toleransi lab pabrik (> 14%)';
-        }
       } else if (newStatus === 'nego') {
         if (!target.catatan_nego) {
           target.catatan_nego = 'Pabrik mengajukan penyesuaian harga';
@@ -91,6 +95,14 @@ export const BatchEvaluasiSortirModal: React.FC<BatchEvaluasiSortirModalProps> =
       copy[index] = target;
       return copy;
     });
+  };
+
+  const confirmRejectItem = () => {
+    if (itemToReject) {
+      setItems((prev) => prev.filter((it) => it.sample_item_id !== itemToReject.sample_item_id));
+      setRejectedBarangIds((prev) => [...prev, itemToReject.barang_id]);
+      setItemToReject(null);
+    }
   };
 
   // Update specific field in item
@@ -193,6 +205,13 @@ export const BatchEvaluasiSortirModal: React.FC<BatchEvaluasiSortirModalProps> =
 
     // Update corresponding barang status in inventory
     const updatedBarangs = barangList.map((b) => {
+      if (rejectedBarangIds.includes(b.barang_id)) {
+        return {
+          ...b,
+          status_stok: 'di_gudang' as const,
+          catatan_qc: `Sample Ditolak di Pabrik. Bal dikembalikan ke stok gudang.`,
+        };
+      }
       const matchItem = items.find((it) => it.barang_id === b.barang_id);
       if (matchItem) {
         if (matchItem.status_item === 'ditolak') {
@@ -433,9 +452,13 @@ export const BatchEvaluasiSortirModal: React.FC<BatchEvaluasiSortirModalProps> =
                             )}
                           </div>
                           <div className="text-[11px] text-gray-600 mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
-                            <span>Berat Bal: <strong className="text-gray-900">{formatNumber(item.berat_bal_kg, 1)} Kg</strong></span>
+                            <span>Netto: <strong className="text-gray-900">{formatNumber(item.berat_bal_kg, 1)} Kg</strong></span>
+                            <span>Bruto: <strong className="text-gray-900">{formatNumber(item.berat_bruto_kg || (item.berat_bal_kg > 0 ? item.berat_bal_kg + (item.potongan_tara_kg !== undefined ? item.potongan_tara_kg : 2) : 0), 1)} Kg</strong></span>
+                            {item.harga_beli_kg && item.harga_beli_kg > 0 && (
+                              <span>Harga Beli: <strong className="text-emerald-800 font-mono">{formatRupiah(item.harga_beli_kg)}/Kg</strong></span>
+                            )}
                             {item.kode_harga_jual && (
-                              <span>Kode Harga: <strong className="text-gray-900 font-mono bg-slate-100 px-1 py-0.2 rounded-xs">{item.kode_harga_jual}</strong></span>
+                              <span>Kode Jual: <strong className="text-gray-900 font-mono bg-slate-100 px-1 py-0.2 rounded-xs">{item.kode_harga_jual}</strong></span>
                             )}
                           </div>
                         </div>
@@ -743,6 +766,16 @@ export const BatchEvaluasiSortirModal: React.FC<BatchEvaluasiSortirModalProps> =
         onConfirm={handleConfirmSave}
         onClose={() => setIsConfirmOpen(false)}
         onCancel={() => setIsConfirmOpen(false)}
+      />
+
+      <ConfirmModal
+        isOpen={!!itemToReject}
+        title="Konfirmasi Tolak & Kembalikan Bal"
+        message={`Apakah Anda yakin ingin menolak bal #${itemToReject?.no_bal || ''} (${itemToReject?.kode_grade || ''})? Bal ini akan otomatis dihapus dari daftar batch dan statusnya direset kembali ke stok gudang sehingga kodenya dapat digunakan untuk pengiriman sample baru.`}
+        confirmText="Ya, Tolak & Kembalikan ke Gudang"
+        cancelText="Batal"
+        onConfirm={confirmRejectItem}
+        onClose={() => setItemToReject(null)}
       />
     </>
   );

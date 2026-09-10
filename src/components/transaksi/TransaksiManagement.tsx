@@ -28,7 +28,8 @@ import {
   Sparkles,
   CalendarDays,
   ListFilter,
-  Edit3
+  Edit3,
+  Lock
 } from 'lucide-react';
 import { TransaksiPembelian, Petani, TabelHarga, Barang, UserRole, Gudang, User as UserType } from '../../types';
 import { formatRupiah, formatDateHariBulanTahun } from '../../utils/formatters';
@@ -40,6 +41,7 @@ import { Proses2TimbangModal } from './Proses2TimbangModal';
 import { Pagination } from '../common/Pagination';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
+import { openPrintDocument } from '../../utils/openDedicatedPrint';
 
 interface TransaksiManagementProps {
   transaksiList: TransaksiPembelian[];
@@ -750,6 +752,8 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
                         const isWeighingDone = (tx.items || []).length > 0
                           ? (tx.items || []).every((it) => (it.berat_kg || 0) > 0)
                           : (tx.berat_kg || 0) > 0;
+                        const isTxLunas = tx.status_pembayaran === 'lunas' || tx.metode_pembayaran === 'cash';
+                        const canPrintNota = isWeighingDone && isTxLunas;
 
                         const isPrinted = localPrintedTxIds.has(tx.transaksi_id) || tx.status_nota === 'sudah_cetak';
                         const dateOnly = formatDateHariBulanTahun(tx.tanggal_transaksi);
@@ -871,7 +875,32 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
                                   <Scale className="w-3.5 h-3.5" />
                                 </button>
 
-                                {/* 3. Cetak Nota Timbang / Kasir (Teal) */}
+                                {/* 3. Buka Halaman Cetak Nota (Terkunci jika belum lunas) */}
+                                {canPrintNota ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => openPrintDocument('nota', tx.transaksi_id)}
+                                    className="w-7 h-7 rounded-sm flex items-center justify-center text-white bg-[#b81d24] hover:bg-[#9e161c] transition cursor-pointer shadow-xs"
+                                    title="Buka Dialog Cetak / Simpan PDF Nota (Lunas)"
+                                  >
+                                    <Printer className="w-3.5 h-3.5" />
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    disabled
+                                    className="w-7 h-7 rounded-sm flex items-center justify-center bg-slate-100 border border-slate-300 text-slate-400 cursor-not-allowed shadow-none opacity-70"
+                                    title={
+                                      !isWeighingDone
+                                        ? "Terkunci: Selesaikan timbangan terlebih dahulu"
+                                        : "Terkunci: Nota baru dapat dicetak setelah status pembayaran Lunas (Cash)"
+                                    }
+                                  >
+                                    <Lock className="w-3.5 h-3.5 text-slate-400" />
+                                  </button>
+                                )}
+
+                                {/* 3.1. Lihat Detail Transaksi & Nota Timbang (Teal) */}
                                 <button
                                   type="button"
                                   onClick={() => setSelectedTxForDetail(tx)}
@@ -880,7 +909,7 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
                                       ? 'bg-[#17a2b8] hover:bg-[#138496]' 
                                       : 'bg-gray-300 text-gray-500 cursor-pointer'
                                   }`}
-                                  title={isWeighingDone ? 'Cetak Nota Timbang Kasir ' : 'Selesaikan timbangan untuk mencetak nota'}
+                                  title="Lihat Detail Transaksi & Nota Timbang"
                                 >
                                   <Receipt className="w-3.5 h-3.5" />
                                 </button>
@@ -925,6 +954,8 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
                   const isWeighingDone = (tx.items || []).length > 0
                     ? (tx.items || []).every((it) => (it.berat_kg || 0) > 0)
                     : (tx.berat_kg || 0) > 0;
+                  const isTxLunas = tx.status_pembayaran === 'lunas' || tx.metode_pembayaran === 'cash';
+                  const canPrintNota = isWeighingDone && isTxLunas;
 
                   const isPrinted = localPrintedTxIds.has(tx.transaksi_id) || tx.status_nota === 'sudah_cetak';
                   const dateOnly = formatDateHariBulanTahun(tx.tanggal_transaksi);
@@ -1046,7 +1077,32 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
                             <Scale className="w-3.5 h-3.5" />
                           </button>
 
-                          {/* 3. Cetak Nota Timbang / Kasir (Teal) */}
+                          {/* 3. Buka Halaman Cetak Nota (Terkunci jika belum lunas) */}
+                          {canPrintNota ? (
+                            <button
+                              type="button"
+                              onClick={() => openPrintDocument('nota', tx.transaksi_id)}
+                              className="w-7 h-7 rounded-sm flex items-center justify-center text-white bg-[#b81d24] hover:bg-[#9e161c] transition cursor-pointer shadow-xs"
+                              title="Buka Dialog Cetak / Simpan PDF Nota (Lunas)"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled
+                              className="w-7 h-7 rounded-sm flex items-center justify-center bg-slate-100 border border-slate-300 text-slate-400 cursor-not-allowed shadow-none opacity-70"
+                              title={
+                                !isWeighingDone
+                                  ? "Terkunci: Selesaikan timbangan terlebih dahulu"
+                                  : "Terkunci: Nota baru dapat dicetak setelah status pembayaran Lunas (Cash)"
+                              }
+                            >
+                              <Lock className="w-3.5 h-3.5 text-slate-400" />
+                            </button>
+                          )}
+
+                          {/* 3.1. Lihat Detail Transaksi & Nota Timbang (Teal) */}
                           <button
                             type="button"
                             onClick={() => setSelectedTxForDetail(tx)}
@@ -1055,7 +1111,7 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
                                 ? 'bg-[#17a2b8] hover:bg-[#138496]' 
                                 : 'bg-gray-300 text-gray-500 cursor-pointer'
                             }`}
-                            title={isWeighingDone ? 'Cetak Nota Timbang Kasir ' : 'Selesaikan timbangan untuk mencetak nota'}
+                            title="Lihat Detail Transaksi & Nota Timbang"
                           >
                             <Receipt className="w-3.5 h-3.5" />
                           </button>

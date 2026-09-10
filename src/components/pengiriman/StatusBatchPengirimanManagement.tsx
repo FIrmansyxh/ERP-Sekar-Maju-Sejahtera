@@ -22,7 +22,8 @@ import {
   Building2,
   User,
   Zap,
-  Info
+  Info,
+  Lock
 } from 'lucide-react';
 import { 
   BatchPengirimanSample, 
@@ -37,6 +38,7 @@ import { formatNumber, formatRupiah } from '../../utils/formatters';
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
 import { SuratJalanPrintModal } from './SuratJalanPrintModal';
 import { ConfirmModal } from '../common/ConfirmModal';
+import { openPrintDocument } from '../../utils/openDedicatedPrint';
 
 interface StatusBatchPengirimanManagementProps {
   batchSampleList: BatchPengirimanSample[];
@@ -46,6 +48,7 @@ interface StatusBatchPengirimanManagementProps {
   onUpdateBatchSample: (updatedBatch: BatchPengirimanSample, updatedBarangs?: Barang[]) => void;
   onUpdatePengirimanStatus: (pengirimanId: string, newStatus: StatusPengiriman) => void;
   onNavigateToPengirimanWithBatch: (batchId: string) => void;
+  onDeleteBatchSample?: (batchId: string, revertedBarangs?: Barang[]) => void;
 }
 
 export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanManagementProps> = ({
@@ -56,6 +59,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
   onUpdateBatchSample,
   onUpdatePengirimanStatus,
   onNavigateToPengirimanWithBatch,
+  onDeleteBatchSample,
 }) => {
   // Main Module Tab
   const [activeMainTab, setActiveMainTab] = useState<'sample_batch' | 'pengiriman_batch'>('sample_batch');
@@ -93,12 +97,11 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
 
 
   // --- TAB 1 STATE: DETAIL BATCH SAMPLE & SORTIR BUYER ---
-  const [selectedBatchId, setSelectedBatchId] = useState<string>(
-    batchSampleList.length > 0 ? batchSampleList[0].batch_id : ''
-  );
+  const [selectedBatchId, setSelectedBatchId] = useState<string>('');
   const [batchItems, setBatchItems] = useState<SampleItemDetail[]>([]);
   const [filterSortirStatus, setFilterSortirStatus] = useState<string>('all');
   const [scanSortirInput, setScanSortirInput] = useState('');
+  const [isAccAllConfirmOpen, setIsAccAllConfirmOpen] = useState(false);
   const [scanSortirFeedback, setScanSortirFeedback] = useState<{
     type: 'success' | 'warning' | 'error';
     message: string;
@@ -152,10 +155,10 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
       );
 
       if (matchedBarang) {
-        if (matchedBarang.status_stok !== 'tersedia') {
+        if (matchedBarang.status_stok === 'keluar') {
            setScanSortirFeedback({
              type: 'error',
-             message: `Bal "${code.trim()}" statusnya tidak tersedia (${matchedBarang.status_stok}).`
+             message: `Bal "${code.trim()}" sudah keluar gudang via Surat Jalan / DO.`
            });
         } else {
            // Add to batchItems
@@ -199,6 +202,11 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
 
   // Change individual bal sortir status
   const handleChangeItemStatus = (sampleItemId: string, newStatus: StatusSample) => {
+    if (newStatus === 'ditolak') {
+      setItemToRemove(sampleItemId);
+      return;
+    }
+
     setBatchItems((prev) => {
       return prev.map((item) => {
         if (item.sample_item_id === sampleItemId) {
@@ -209,10 +217,6 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
           if (newStatus === 'disetujui') {
             if (!updated.harga_deal_kg) {
               updated.harga_deal_kg = updated.harga_tawaran_kg;
-            }
-          } else if (newStatus === 'ditolak') {
-            if (!updated.alasan_tolak) {
-              updated.alasan_tolak = 'Kadar air tidak sesuai standar pabrik atau aroma kurang tajam';
             }
           } else if (newStatus === 'nego') {
             if (!updated.catatan_nego) {
@@ -269,13 +273,78 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
   
   const confirmRemoveItem = () => {
     if (itemToRemove) {
-      setBatchItems((prev) => prev.filter((item) => item.sample_item_id !== itemToRemove));
+      const updatedBatchItems = batchItems.filter((item) => item.sample_item_id !== itemToRemove);
+      setBatchItems(updatedBatchItems);
+
+      if (activeBatch) {
+        // If the item was removed as a "Tolak" action from the scan/sortir table
+        const itemToTolak = batchItems.find(i => i.sample_item_id === itemToRemove);
+        
+        if (itemToTolak) {
+          const removedItems = activeBatch.items.filter(i => i.sample_item_id === itemToRemove);
+          const countAcc = updatedBatchItems.filter((i) => i.status_item === 'disetujui').length;
+          const countTolak = updatedBatchItems.filter((i) => i.status_item === 'ditolak').length;
+          const countNego = updatedBatchItems.filter((i) => i.status_item === 'nego').length;
+          const totalDeal = updatedBatchItems
+            .filter((i) => i.status_item === 'disetujui')
+            .reduce((sum, i) => sum + i.berat_bal_kg * (i.harga_deal_kg || i.harga_tawaran_kg), 0);
+            
+          let batchStatus: any = 'sample';
+          if (countAcc > 0) batchStatus = 'diproses';
+          else if (updatedBatchItems.length === 0) batchStatus = 'dibatalkan';
+
+          const updatedBatch: BatchPengirimanSample = {
+            ...activeBatch,
+            status: batchStatus,
+            items: updatedBatchItems,
+            total_sample_bal: updatedBatchItems.length,
+            total_bal_disetujui: countAcc,
+            total_bal_ditolak: countTolak,
+            total_bal_nego: countNego,
+            total_nilai_deal: totalDeal,
+            tanggal_respon: new Date().toISOString().split('T')[0],
+          };
+
+          const itemBeingRemoved = batchItems.find(i => i.sample_item_id === itemToRemove);
+          const targetBarangId = itemBeingRemoved?.barang_id;
+          const updatedBarangs = targetBarangId
+            ? barangList
+                .filter(br => br.barang_id === targetBarangId)
+                .map(b => ({ ...b, status_stok: 'di_gudang' as const }))
+            : removedItems
+                .map(item => {
+                  const b = barangList.find(br => br.barang_id === item.barang_id);
+                  if (b) return { ...b, status_stok: 'di_gudang' as const };
+                  return undefined;
+                })
+                .filter((b): b is Barang => !!b);
+
+          onUpdateBatchSample(updatedBatch, updatedBarangs);
+        }
+      }
+
       setHasUnsavedSortir(true);
       setItemToRemove(null);
     }
   };
 
   // Save Batch Evaluation Changes
+  
+  const handleAccAllItems = () => {
+    setBatchItems(prev => prev.map(item => ({
+      ...item,
+      status_item: 'disetujui',
+      alasan_tolak: '',
+      catatan_nego: ''
+    })));
+    setScanSortirFeedback({
+      type: 'success',
+      message: 'Semua bal dalam batch ini telah di-ACC. Silakan simpan hasil sortir.'
+    });
+    setHasUnsavedSortir(true);
+    setIsAccAllConfirmOpen(false);
+  };
+
   const handleSaveSortirChanges = () => {
     if (!activeBatch) return;
 
@@ -302,10 +371,69 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
       tanggal_respon: new Date().toISOString().split('T')[0],
     };
 
-    onUpdateBatchSample(updatedBatch);
+    // Find items that were removed
+    const currentItemIds = new Set(batchItems.map(i => i.sample_item_id));
+    const removedItems = activeBatch.items.filter(i => !currentItemIds.has(i.sample_item_id));
+    
+    let updatedBarangs: Barang[] | undefined = undefined;
+    if (removedItems.length > 0) {
+      updatedBarangs = removedItems
+        .map(item => {
+          const b = barangList.find(br => br.barang_id === item.barang_id);
+          if (b) {
+            return { ...b, status_stok: 'di_gudang' as const };
+          }
+          return undefined;
+        })
+        .filter((b): b is Barang => !!b);
+    }
+
+    onUpdateBatchSample(updatedBatch, updatedBarangs);
     setHasUnsavedSortir(false);
     setSuccessToast(`Hasil sortir buyer untuk batch ${activeBatch.kode_batch} berhasil disimpan!`);
     setTimeout(() => setSuccessToast(''), 3500);
+  };
+
+  const handleBuatDOReguler = () => {
+    if (!activeBatch) return;
+
+    // Filter items to keep only those not rejected
+    const remainingItems = batchItems.filter((i) => i.status_item !== 'ditolak');
+    const rejectedItems = batchItems.filter((i) => i.status_item === 'ditolak');
+    
+    // Update status_stok to 'di_gudang' for rejected items
+    const updatedBarangs = rejectedItems
+      .map(item => {
+        const barang = barangList.find(b => b.barang_id === item.barang_id);
+        if (barang) {
+          return { ...barang, status_stok: 'di_gudang' as const };
+        }
+        return undefined;
+      })
+      .filter((b): b is Barang => !!b);
+
+    const countAcc = remainingItems.filter((i) => i.status_item === 'disetujui').length;
+    const countNego = remainingItems.filter((i) => i.status_item === 'nego').length;
+    const totalDeal = remainingItems
+      .filter((i) => i.status_item === 'disetujui')
+      .reduce((sum, i) => sum + i.berat_bal_kg * (i.harga_deal_kg || i.harga_tawaran_kg), 0);
+
+    const updatedBatch: BatchPengirimanSample = {
+      ...activeBatch,
+      status: 'diproses',
+      is_locked: true,
+      items: remainingItems,
+      total_sample_bal: remainingItems.length,
+      total_bal_disetujui: countAcc,
+      total_bal_ditolak: 0,
+      total_bal_nego: countNego,
+      total_nilai_deal: totalDeal,
+      tanggal_respon: new Date().toISOString().split('T')[0],
+    };
+
+    onUpdateBatchSample(updatedBatch, updatedBarangs);
+    setHasUnsavedSortir(false);
+    onNavigateToPengirimanWithBatch(activeBatch.batch_id);
   };
 
   // Filtered Items for Display in Tab 1
@@ -357,7 +485,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
   // Tab 2 Metrics
   const countAkanDikirim = pengirimanList.filter((k) => k.status === 'dimuat' || k.status === 'dikirim').length;
   const countSedangDikirim = pengirimanList.filter((k) => k.status === 'dalam_perjalanan').length;
-  const countSudahSelesai = pengirimanList.filter((k) => k.status === 'diterima').length;
+  const countSudahSelesai = pengirimanList.filter((k) => k.status === 'diterima' || k.status === 'selesai').length;
 
   return (
     <div className="space-y-4 animate-in fade-in duration-150">
@@ -392,7 +520,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
           <button
             type="button"
             onClick={() => setActiveMainTab('sample_batch')}
-            className={`px-3.5 py-1.5 text-xs font-bold rounded-xs flex items-center space-x-1.5 transition cursor-pointer ${
+            className={`px-3.5 py-1.5 text-xs font-bold rounded-xs flex items-center space-x-1.5 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
               activeMainTab === 'sample_batch'
                 ? 'bg-white text-gray-900 shadow-xs border border-gray-200'
                 : 'text-gray-600 hover:text-gray-900'
@@ -405,13 +533,13 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
           <button
             type="button"
             onClick={() => setActiveMainTab('pengiriman_batch')}
-            className={`px-3.5 py-1.5 text-xs font-bold rounded-xs flex items-center space-x-1.5 transition cursor-pointer ${
+            className={`px-3.5 py-1.5 text-xs font-bold rounded-xs flex items-center space-x-1.5 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
               activeMainTab === 'pengiriman_batch'
                 ? 'bg-white text-gray-900 shadow-xs border border-gray-200'
                 : 'text-gray-600 hover:text-gray-900'
             }`}
           >
-            <Truck className="w-3.5 h-3.5 text-blue-600" />
+            <Truck className="w-3.5 h-3.5 text-[#b81d24]" />
             <span>Status Pengiriman Barang (Akan / Sedang / Sudah)</span>
           </button>
         </div>
@@ -487,12 +615,12 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                                 setScanBatchId(b.kode_batch);
                               }}
                               onMouseEnter={() => setHighlightedBatchIndex(idx)}
-                              className={`w-full px-3 py-2 text-left flex flex-col gap-0.5 transition cursor-pointer ${
-                                isHighlighted ? 'bg-blue-50 text-blue-950 border-l-4 border-blue-500' : 'hover:bg-gray-50 text-gray-800 border-l-4 border-transparent'
+                              className={`w-full px-3 py-2 text-left flex flex-col gap-0.5 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                                isHighlighted ? 'bg-red-50 text-red-950 border-l-4 border-red-500' : 'hover:bg-gray-50 text-gray-800 border-l-4 border-transparent'
                               }`}
                             >
                               <div className="flex items-center space-x-2">
-                                <span className="font-mono font-bold text-xs text-blue-900 bg-blue-100 px-1.5 py-0.5 rounded-xs">
+                                <span className="font-mono font-bold text-xs text-red-900 bg-red-100 px-1.5 py-0.5 rounded-xs">
                                   {b.kode_batch}
                                 </span>
                                 <span className="font-bold text-xs">{b.tujuan_buyer}</span>
@@ -668,7 +796,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                 <button
                   type="button"
                   onClick={() => setFilterSortirStatus('all')}
-                  className={`px-3 py-1 text-xs font-semibold rounded-xs transition cursor-pointer ${
+                  className={`px-3 py-1 text-xs font-semibold rounded-xs transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                     filterSortirStatus === 'all'
                       ? 'bg-gray-900 text-white shadow-xs'
                       : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
@@ -679,7 +807,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                 <button
                   type="button"
                   onClick={() => setFilterSortirStatus('disetujui')}
-                  className={`px-3 py-1 text-xs font-semibold rounded-xs transition cursor-pointer ${
+                  className={`px-3 py-1 text-xs font-semibold rounded-xs transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                     filterSortirStatus === 'disetujui'
                       ? 'bg-emerald-700 text-white shadow-xs'
                       : 'bg-white text-emerald-800 border border-emerald-300 hover:bg-emerald-50'
@@ -690,7 +818,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                 <button
                   type="button"
                   onClick={() => setFilterSortirStatus('nego')}
-                  className={`px-3 py-1 text-xs font-semibold rounded-xs transition cursor-pointer ${
+                  className={`px-3 py-1 text-xs font-semibold rounded-xs transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                     filterSortirStatus === 'nego'
                       ? 'bg-amber-600 text-white shadow-xs'
                       : 'bg-white text-amber-800 border border-amber-300 hover:bg-amber-50'
@@ -701,7 +829,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                 <button
                   type="button"
                   onClick={() => setFilterSortirStatus('ditolak')}
-                  className={`px-3 py-1 text-xs font-semibold rounded-xs transition cursor-pointer ${
+                  className={`px-3 py-1 text-xs font-semibold rounded-xs transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                     filterSortirStatus === 'ditolak'
                       ? 'bg-red-700 text-white shadow-xs'
                       : 'bg-white text-red-800 border border-red-300 hover:bg-red-50'
@@ -713,29 +841,39 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
 
               {/* Save or Create DO Action */}
               <div className="flex items-center space-x-2">
+                
+                {batchItems.length > 0 && batchItems.some(i => i.status_item !== 'disetujui') && (
+                  <button
+                    type="button"
+                    onClick={() => setIsAccAllConfirmOpen(true)}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xs flex items-center space-x-1.5 shadow-xs transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>ACC Semua</span>
+                  </button>
+                )}
                 {hasUnsavedSortir && (
                   <button
                     type="button"
                     onClick={handleSaveSortirChanges}
-                    className="px-4 py-1.5 bg-[#b81d24] hover:bg-[#991b1b] text-white text-xs font-bold rounded-xs flex items-center space-x-1.5 shadow-xs transition cursor-pointer animate-pulse"
+                    className="px-4 py-1.5 bg-[#b81d24] hover:bg-[#991b1b] text-white text-xs font-bold rounded-xs flex items-center space-x-1.5 shadow-xs transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed animate-pulse"
                   >
                     <Save className="w-3.5 h-3.5" />
                     <span>Simpan Hasil Sortir Buyer</span>
                   </button>
                 )}
 
-                {countAcc > 0 && (
+                {activeBatch?.is_locked && (
+                  <div className="px-3 py-1.5 bg-gray-100 border border-gray-300 text-gray-700 font-bold text-[10px] rounded-xs flex items-center space-x-1">
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>Batch Terkunci (Diproses DO)</span>
+                  </div>
+                )}
+                {countAcc > 0 && !activeBatch?.is_locked && (
                   <button
                     type="button"
-                    onClick={() => {
-                      if (hasUnsavedSortir) {
-                        handleSaveSortirChanges();
-                      }
-                      if (activeBatch) {
-                        onNavigateToPengirimanWithBatch(activeBatch.batch_id);
-                      }
-                    }}
-                    className="px-4 py-1.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold rounded-xs flex items-center space-x-1.5 shadow-xs transition cursor-pointer"
+                    onClick={handleBuatDOReguler}
+                    className="px-4 py-1.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold rounded-xs flex items-center space-x-1.5 shadow-xs transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Truck className="w-3.5 h-3.5 text-yellow-400" />
                     <span>Buat DO Reguler ({countAcc} Bal ACC)</span>
@@ -756,6 +894,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                     <th className="p-3 text-right w-24">Berat Bal (Kg)</th>
                     <th className="p-3 text-center w-48">Status Sortir Pembeli</th>
                     <th className="p-3 w-56">Kode Master Harga Jual</th>
+                    <th className="p-3 text-right w-36">Harga Beli (Rp/Kg)</th>
                     <th className="p-3 text-right w-36">Harga Deal (Rp/Kg)</th>
                     <th className="p-3 text-right w-36">Subtotal Deal</th>
                     <th className="p-3">Catatan / Keterangan Sortir</th>
@@ -804,8 +943,9 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                               <button
                                 type="button"
                                 onClick={() => handleChangeItemStatus(item.sample_item_id, 'disetujui')}
+                                disabled={activeBatch?.is_locked}
                                 title="Terima untuk dibeli"
-                                className={`px-2 py-1 text-[10px] font-bold rounded-xs transition cursor-pointer ${
+                                className={`px-2 py-1 text-[10px] font-bold rounded-xs transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                                   isAcc
                                     ? 'bg-emerald-600 text-white shadow-xs'
                                     : 'text-gray-700 hover:bg-white'
@@ -816,8 +956,9 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                               <button
                                 type="button"
                                 onClick={() => handleChangeItemStatus(item.sample_item_id, 'nego')}
+                                disabled={activeBatch?.is_locked}
                                 title="Perlu negosiasi harga"
-                                className={`px-2 py-1 text-[10px] font-bold rounded-xs transition cursor-pointer ${
+                                className={`px-2 py-1 text-[10px] font-bold rounded-xs transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                                   isNego
                                     ? 'bg-amber-600 text-white shadow-xs'
                                     : 'text-gray-700 hover:bg-white'
@@ -828,8 +969,9 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                               <button
                                 type="button"
                                 onClick={() => handleChangeItemStatus(item.sample_item_id, 'ditolak')}
+                                disabled={activeBatch?.is_locked}
                                 title="Tolak penuh"
-                                className={`px-2 py-1 text-[10px] font-bold rounded-xs transition cursor-pointer ${
+                                className={`px-2 py-1 text-[10px] font-bold rounded-xs transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                                   isTolak
                                     ? 'bg-red-600 text-white shadow-xs'
                                     : 'text-gray-700 hover:bg-white'
@@ -845,7 +987,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                             <select
                               value={item.kode_harga_jual || ''}
                               onChange={(e) => handleChangeItemKodeHarga(item.sample_item_id, e.target.value)}
-                              disabled={isTolak}
+                              disabled={isTolak || activeBatch?.is_locked}
                               className="w-full px-2 py-1 text-xs font-mono font-bold bg-white border border-gray-300 rounded-xs disabled:bg-gray-100 disabled:text-gray-400 focus:ring-1 focus:ring-gray-700"
                             >
                               <option value="">-- Pilih Kode Harga --</option>
@@ -856,6 +998,10 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                               ))}
                             </select>
                           </td>
+                          {/* Harga Beli */}
+                          <td className="p-3 text-right font-mono text-gray-500">
+                            {formatRupiah(barangList.find(b => b.barang_id === item.barang_id)?.harga_per_kg || 0)}
+                          </td>
 
                           {/* Harga Deal / Kirim */}
                           <td className="p-3 text-right">
@@ -865,7 +1011,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                                 type="number"
                                 value={item.harga_deal_kg || item.harga_tawaran_kg}
                                 onChange={(e) => handleChangeItemDealPrice(item.sample_item_id, Number(e.target.value))}
-                                disabled={isTolak}
+                                disabled={isTolak || activeBatch?.is_locked}
                                 className="w-24 px-1.5 py-1 text-xs font-mono font-bold text-right bg-white border border-gray-300 rounded-xs disabled:bg-gray-100 disabled:text-gray-400 focus:ring-1 focus:ring-gray-700"
                               />
                             </div>
@@ -898,8 +1044,9 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                           <td className="p-3 text-center">
                             <button
                               type="button"
-                              onClick={() => handleRemoveItemFromBatch(item.sample_item_id)}
-                              className="text-gray-400 hover:text-red-600 transition-colors cursor-pointer"
+                              disabled={activeBatch?.is_locked}
+                                onClick={() => handleRemoveItemFromBatch(item.sample_item_id)}
+                              className="text-gray-400 hover:text-red-600 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                               title="Hapus dari batch"
                             >
                               <XCircle className="w-4 h-4 mx-auto" />
@@ -919,7 +1066,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                       <td className="p-3 text-right font-mono">
                         {formatNumber(displayedBatchItems.reduce((s, it) => s + it.berat_bal_kg, 0), 1)} kg
                       </td>
-                      <td colSpan={3} className="p-3 text-right uppercase text-[11px]">
+                      <td colSpan={4} className="p-3 text-right uppercase text-[11px]">
                         Total Nilai Deal Bal Lolos:
                       </td>
                       <td className="p-3 text-right font-mono text-sm text-emerald-800">
@@ -953,9 +1100,9 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
       {/* Modal Konfirmasi Hapus Bal */}
       <ConfirmModal
         isOpen={!!itemToRemove}
-        title="Konfirmasi Hapus Bal"
-        message="Apakah Anda yakin ingin menghapus bal ini dari daftar batch sample?"
-        confirmText="Ya, Hapus"
+        title="Konfirmasi Tolak & Kembalikan Bal"
+        message="Apakah Anda yakin ingin menolak bal ini? Bal akan dihapus dari daftar batch dan statusnya otomatis direset kembali ke stok gudang sehingga dapat digunakan kembali."
+        confirmText="Ya, Tolak & Kembalikan ke Gudang"
         cancelText="Batal"
         onConfirm={confirmRemoveItem}
         onClose={() => setItemToRemove(null)}
@@ -987,16 +1134,16 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
               onClick={() => setFilterPengirimanStatus('akan')}
               className={`p-3.5 border rounded-sm shadow-xs cursor-pointer transition ${
                 filterPengirimanStatus === 'akan'
-                  ? 'bg-blue-600 text-white border-blue-600 ring-2 ring-blue-600'
-                  : 'bg-blue-50 border-blue-200 text-blue-950 hover:bg-blue-100'
+                  ? 'bg-[#b81d24] text-white border-[#b81d24] ring-2 ring-[#b81d24]'
+                  : 'bg-red-50 border-red-200 text-red-950 hover:bg-red-100'
               }`}
             >
-              <div className={`text-[11px] font-bold flex items-center space-x-1 ${filterPengirimanStatus === 'akan' ? 'text-blue-100' : 'text-blue-800'}`}>
+              <div className={`text-[11px] font-bold flex items-center space-x-1 ${filterPengirimanStatus === 'akan' ? 'text-red-100' : 'text-red-800'}`}>
                 <Clock className="w-3.5 h-3.5" />
                 <span>Akan Dikirim</span>
               </div>
               <div className="text-xl font-bold mt-0.5">{countAkanDikirim} Surat Jalan</div>
-              <div className={`text-[10px] font-semibold ${filterPengirimanStatus === 'akan' ? 'text-blue-200' : 'text-blue-700'}`}>
+              <div className={`text-[10px] font-semibold ${filterPengirimanStatus === 'akan' ? 'text-red-200' : 'text-red-700'}`}>
                 Muatan & Truk Siap
               </div>
             </div>
@@ -1089,7 +1236,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                     filteredPengirimanList.map((item, idx) => {
                       const isAkan = item.status === 'dimuat' || item.status === 'dikirim';
                       const isSedang = item.status === 'dalam_perjalanan';
-                      const isSudah = item.status === 'diterima';
+                      const isSudah = item.status === 'diterima' || item.status === 'selesai';
 
                       return (
                         <tr key={item.pengiriman_id} className="hover:bg-gray-50 transition">
@@ -1118,7 +1265,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                           {/* Status Badge */}
                           <td className="p-3 text-center">
                             {isAkan && (
-                              <span className="px-2.5 py-1 text-[10px] font-bold text-blue-800 bg-blue-100 border border-blue-200 rounded-xs inline-flex items-center space-x-1">
+                              <span className="px-2.5 py-1 text-[10px] font-bold text-red-800 bg-red-100 border border-red-200 rounded-xs inline-flex items-center space-x-1">
                                 <Clock className="w-3 h-3" />
                                 <span>Akan Dikirim</span>
                               </span>
@@ -1166,9 +1313,9 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
 
                               <button
                                 type="button"
-                                onClick={() => setPrintingSuratJalan(item)}
-                                className="p-1 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xs border border-gray-300 cursor-pointer"
-                                title="Cetak Surat Jalan"
+                                onClick={() => openPrintDocument('surat_jalan', item.pengiriman_id)}
+                                className="p-1 text-[#b81d24] hover:text-white hover:bg-[#b81d24] rounded-xs border border-red-300 cursor-pointer transition"
+                                title="Buka Halaman Cetak Surat Jalan Resmi (Pilih PDF atau Printer)"
                               >
                                 <Printer className="w-3.5 h-3.5" />
                               </button>

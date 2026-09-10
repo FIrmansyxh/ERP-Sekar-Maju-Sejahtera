@@ -1,3 +1,4 @@
+import { SearchableSelect } from '../common/SearchableSelect';
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Scale, 
@@ -25,7 +26,6 @@ import {
 } from 'lucide-react';
 import { TransaksiPembelian, TransaksiItemBal, Barang, Gudang, User as UserType } from '../../types';
 import { formatRupiah, formatDateHariBulanTahun, hitungPotonganTaraKg } from '../../utils/formatters';
-import { recordLogAktivitas } from '../../utils/storage';
 import { ConfirmModal } from '../common/ConfirmModal';
 
 interface Proses2TimbangModalProps {
@@ -109,7 +109,7 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
           potongan_kuli: it.potongan_kuli ?? 7000,
           potongan_tali: it.potongan_tali ?? 3000,
           potongan_tikar: it.potongan_tikar ?? (it.ganti_tikar ? 75000 : 0),
-          potongan_tara_kg: it.potongan_tara_kg ?? (it.ganti_tikar ? 2 : 3),
+          potongan_tara_kg: it.potongan_tara_kg ?? hitungPotonganTaraKg(it.berat_bruto_kg || 0, it.ganti_tikar || false, it.no_bal),
         }));
         setWorkingItems(clonedItems);
 
@@ -147,7 +147,7 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
         potongan_kuli: it.potongan_kuli ?? 7000,
         potongan_tali: it.potongan_tali ?? 3000,
         potongan_tikar: it.potongan_tikar ?? (it.ganti_tikar ? 75000 : 0),
-        potongan_tara_kg: it.potongan_tara_kg ?? (it.ganti_tikar ? 2 : 3),
+        potongan_tara_kg: it.potongan_tara_kg ?? hitungPotonganTaraKg(it.berat_bruto_kg || 0, it.ganti_tikar || false, it.no_bal),
       }));
       setWorkingItems(clonedItems);
       const firstPending = clonedItems.find((it) => (it.berat_kg || 0) <= 0) || clonedItems[0];
@@ -240,7 +240,7 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
         potongan_kuli: it.potongan_kuli ?? 7000,
         potongan_tali: it.potongan_tali ?? 3000,
         potongan_tikar: it.potongan_tikar ?? (it.ganti_tikar ? 75000 : 0),
-        potongan_tara_kg: it.potongan_tara_kg ?? (it.ganti_tikar ? 2 : 3),
+        potongan_tara_kg: it.potongan_tara_kg ?? hitungPotonganTaraKg(it.berat_bruto_kg || 0, it.ganti_tikar || false, it.no_bal),
       }));
       setWorkingItems(clonedItems);
       setSelectedItemBalId(foundItem.item_id);
@@ -283,13 +283,13 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
       prev.map((it) => {
         if (it.item_id === itemId) {
           const nextGanti = !it.ganti_tikar;
-          const tara = nextGanti ? 2 : 3;
-          const potTikar = nextGanti ? 75000 : 0;
           const bBruto = it.berat_bruto_kg || (typeof beratBrutoInput === 'number' ? beratBrutoInput : parseFloat(String(beratBrutoInput)) || 0);
+          const tara = hitungPotonganTaraKg(bBruto, nextGanti, activeBalItem.no_bal);
+          const potTikar = nextGanti ? 75000 : 0;
           const netto = bBruto > 0 ? Math.max(0, Number((bBruto - tara).toFixed(1))) : 0;
           const kotor = Math.round(netto * it.harga_per_kg);
           const potTotal = (it.potongan_kuli || 7000) + (it.potongan_tali || 3000) + potTikar;
-          const bersih = Math.max(0, kotor - potTotal);
+          const bersih = Math.round(Math.max(0, kotor - potTotal));
           return {
             ...it,
             ganti_tikar: nextGanti,
@@ -323,12 +323,12 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
     }
 
     const isGanti = Boolean(activeBalItem.ganti_tikar);
-    const taraKg = hitungPotonganTaraKg(bruto, isGanti);
+    const taraKg = hitungPotonganTaraKg(bruto, isGanti, activeBalItem.no_bal);
     const nettoKg = Math.max(0, Number((bruto - taraKg).toFixed(1)));
     const totalKotor = Math.round(nettoKg * activeBalItem.harga_per_kg);
     const potonganTikar = isGanti ? 75000 : 0;
     const totalPotonganBal = (activeBalItem.potongan_kuli || 7000) + (activeBalItem.potongan_tali || 3000) + potonganTikar;
-    const subtotalBersih = Math.max(0, totalKotor - totalPotonganBal);
+    const subtotalBersih = Math.round(Math.max(0, totalKotor - totalPotonganBal));
 
     const updatedItems = workingItems.map((it) => {
       if (it.item_id === activeBalItem.item_id) {
@@ -437,15 +437,14 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
     const item = workingItems.find((it) => it.item_id === itemId);
     if (!item) return;
 
-    const confirmed = window.confirm(`Buka kunci penimbangan untuk Bal "${item.no_bal}"?\n\nData berat bal ini akan direset sehingga Anda dapat menimbang ulang.`);
-    if (!confirmed) return;
+    const existingBruto = item.berat_bruto_kg || (item.berat_kg ? Number((item.berat_kg + (item.potongan_tara_kg || 0)).toFixed(1)) : 0);
 
     const updatedItems = workingItems.map((it) => {
       if (it.item_id === itemId) {
         return {
           ...it,
           berat_kg: 0,
-          berat_bruto_kg: 0,
+          berat_bruto_kg: existingBruto,
           total_kotor: 0,
           potongan: 0,
           subtotal_bersih: 0,
@@ -456,38 +455,19 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
     });
 
     setWorkingItems(updatedItems);
-    setBeratBrutoInput('');
+    setBeratBrutoInput(existingBruto > 0 ? existingBruto : '');
     setScannerFeedback({
-      text: `🔓 Kunci berat Bal "${item.no_bal}" telah dibuka. Silakan timbang ulang dan masukkan berat bruto.`,
+      text: `🔓 Kunci Bal "${item.no_bal}" dibuka. Berat bruto ${existingBruto > 0 ? `(${existingBruto} Kg) ` : ''}siap diedit atau ditimpa, lalu tekan Enter / Simpan.`,
       isError: false,
     });
 
     // Record audit log for bal weight unlock / reset
-    recordLogAktivitas({
-      user_id: currentUser?.user_id || 'USR-TIMBANG',
-      username: currentUser?.username || 'admintimbang',
-      nama_lengkap: currentUser?.nama_lengkap || 'Operator Timbang',
-      role: currentUser?.role || 'operator_timbang',
-      modul: 'timbangan',
-      aksi: 'Buka Kunci Timbangan Bal',
-      tipe_aksi: 'edit',
-      no_kupon: currentTx?.no_kupon,
-      no_bal: item.no_bal,
-      kode_grade: item.kode_grade,
-      berat_kg: item.berat_kg,
-      transaksi_id: currentTx?.transaksi_id,
-      nama_petani: currentTx?.nama_petani,
-      status: 'peringatan',
-      rincian: `KOREKSI TIMBANGAN: Buka kunci dan reset penimbangan Bal "${item.no_bal}" (Sebelumnya: ${item.berat_kg} Kg Netto, Bruto: ${item.berat_bruto_kg || 0} Kg) oleh ${currentUser?.nama_lengkap || 'Operator'} (@${currentUser?.username || 'admintimbang'}). Petani: ${currentTx?.nama_petani} (Kupon ${currentTx?.no_kupon}). Bal disiapkan untuk penimbangan ulang.`,
-      data_sebelum: JSON.stringify({ no_bal: item.no_bal, berat_kg: item.berat_kg, berat_bruto_kg: item.berat_bruto_kg, subtotal_bersih: item.subtotal_bersih }),
-      data_sesudah: JSON.stringify({ no_bal: item.no_bal, berat_kg: 0, status_timbang: 'menunggu_timbang' }),
-      alasan: 'Buka kunci untuk penimbangan ulang bal',
-    });
+    
 
     setTimeout(() => {
-      if (scannerInputRef.current) {
-        scannerInputRef.current.focus();
-        scannerInputRef.current.select();
+      if (beratInputRef.current) {
+        beratInputRef.current.focus();
+        beratInputRef.current.select();
       }
     }, 100);
   };
@@ -498,11 +478,11 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
   const isAllWeighed = totalBalCount > 0 && weighedBalCount === totalBalCount;
 
   const totalBeratBruto = workingItems.reduce((acc, curr) => acc + (curr.berat_bruto_kg || 0), 0);
-  const totalTaraKg = workingItems.reduce((acc, curr) => acc + (curr.potongan_tara_kg || (curr.ganti_tikar ? 2 : 3)), 0);
+  const totalTaraKg = workingItems.reduce((acc, curr) => acc + (curr.potongan_tara_kg || hitungPotonganTaraKg(curr.berat_bruto_kg || 0, curr.ganti_tikar || false, curr.no_bal)), 0);
   const totalBeratNetto = Number(workingItems.reduce((acc, curr) => acc + (curr.berat_kg || 0), 0).toFixed(1));
-  const totalKotorAll = workingItems.reduce((acc, curr) => acc + (curr.total_kotor || 0), 0);
-  const totalPotonganAll = workingItems.reduce((acc, curr) => acc + (curr.potongan || 0), 0);
-  const totalHargaFinalAll = Math.max(0, totalKotorAll - totalPotonganAll);
+  const totalKotorAll = Math.round(workingItems.reduce((acc, curr) => acc + (curr.total_kotor || 0), 0));
+  const totalPotonganAll = Math.round(workingItems.reduce((acc, curr) => acc + (curr.potongan || 0), 0));
+  const totalHargaFinalAll = Math.round(Math.max(0, totalKotorAll - totalPotonganAll));
 
   // Submit complete transaction
   const handleFinalSaveSubmit = (e: React.FormEvent) => {
@@ -510,10 +490,10 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
     if (!currentTx) return;
 
     if (!isAllWeighed) {
-      const confirmIncomplete = window.confirm(
-        `Perhatian: Baru ${weighedBalCount} dari ${totalBalCount} bal yang selesai ditimbang.\nApakah Anda yakin ingin menyimpan progres timbangan saat ini? Status transaksi akan tetap "Menunggu Timbang" sampai seluruh bal selesai.`
-      );
-      if (!confirmIncomplete) return;
+      // Instead of window.confirm, trigger a generic alert or use the existing modal for partial saves if needed.
+      // We will reuse the ConfirmModal for this as well, but with a different message.
+      setIsConfirmModalOpen(true);
+      return;
     }
 
     setIsConfirmModalOpen(true);
@@ -536,6 +516,8 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
           kode_grade: it.kode_grade,
           no_bal: it.no_bal,
           berat_kg: it.berat_kg,
+          harga_per_kg: it.harga_per_kg,
+          total_harga: (it.berat_kg || 0) * (it.harga_per_kg || 0),
           status_stok: 'di_gudang' as const,
           gudang_id: 'GDG-001',
           lokasi_gudang: `${currentTx.lokasi_gudang || 'Gudang Pusat'} - ${it.lokasi_simpan || BLOK_GUDANG_OPTIONS[0]}`,
@@ -573,18 +555,7 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
     onSaveTimbang(updatedTx, newBarangList);
 
     // Record activity log for Super Admin accountability audit trail
-    recordLogAktivitas({
-      user_id: currentUser?.user_id || 'USR-AUTO',
-      username: currentUser?.username || 'admintimbang',
-      nama_lengkap: currentUser?.nama_lengkap || 'Operator Timbang Digital',
-      role: currentUser?.role || 'operator_timbang',
-      modul: 'timbangan',
-      aksi: 'Penyelesaian Timbang Batch',
-      no_kupon: currentTx.no_kupon,
-      berat_kg: totalBeratNetto,
-      rincian: `Selesai penimbangan Kupon ${currentTx.no_kupon} (${currentTx.nama_petani}): ${weighedBalCount}/${totalBalCount} bal, Total Netto ${totalBeratNetto} Kg, Total Bayar Bersih ${formatRupiah(totalHargaFinalAll)}. Akun operator bertugas: ${currentUser?.nama_lengkap || 'Operator Timbang'}.`,
-      status: 'sukses',
-    });
+    
 
     setIsConfirmModalOpen(false);
     onClose();
@@ -715,20 +686,15 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
                   <label className="block text-gray-700 font-bold mb-1">
                     Kupon / Transaksi Intake Aktif:
                   </label>
-                  <select
+                  <SearchableSelect
                     value={selectedTxId}
-                    onChange={(e) => handleSelectTransaction(e.target.value)}
-                    className="w-full bg-white border border-gray-300 rounded-sm px-2.5 py-1.5 text-xs text-gray-900 font-bold focus:outline-none focus:border-emerald-600"
-                  >
-                    {transaksiList.map((tx) => {
+                    onChange={(val) => handleSelectTransaction(val)}
+                    options={transaksiList.map(tx => {
                       const isDone = (tx.items || []).every((it) => (it.berat_kg || 0) > 0) && (tx.items?.length || 0) > 0;
-                      return (
-                        <option key={tx.transaksi_id} value={tx.transaksi_id}>
-                          {tx.no_kupon || 'KUP?'} • {tx.nama_petani} ({tx.total_bal || tx.items?.length || 1} Bal) - {isDone ? '✓ Selesai Ditimbang' : '⏳ Menunggu Timbang'}
-                        </option>
-                      );
+                      return { value: tx.transaksi_id, label: `${tx.no_kupon || 'KUP?'} • ${tx.nama_petani} (${tx.total_bal || tx.items?.length || 1} Bal) - ${isDone ? '✓ Selesai Ditimbang' : '⏳ Menunggu Timbang'}` };
                     })}
-                  </select>
+                    placeholder="Pilih Transaksi..."
+                  />
                 </div>
 
                 {currentTx && (
@@ -909,23 +875,13 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
                     <label className="block text-gray-800 font-bold mb-1 text-xs">
                       2. Lokasi Simpan / Blok Gudang <span className="text-red-500">*</span>
                     </label>
-                    <select
+                    <SearchableSelect
                       value={lokasiBlokInput}
-                      onChange={(e) => setLokasiBlokInput(e.target.value)}
-                      disabled={(activeBalItem.berat_kg || 0) > 0}
-                      className={`w-full border rounded-sm px-3 py-2 text-xs font-bold ${
-                        (activeBalItem.berat_kg || 0) > 0
-                          ? 'bg-gray-100 text-gray-500 border-gray-300 cursor-not-allowed'
-                          : 'bg-white text-gray-900 border-gray-300 focus:outline-none focus:border-emerald-600'
-                      }`}
-                      required
-                    >
-                      {BLOK_GUDANG_OPTIONS.map((blok) => (
-                        <option key={blok} value={blok}>
-                          {blok}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(val) => setLokasiBlokInput(val)}
+                      options={BLOK_GUDANG_OPTIONS.map(b => ({ value: b, label: b }))}
+                      placeholder="Pilih Blok Gudang"
+                      className={(activeBalItem.berat_kg || 0) > 0 ? 'opacity-60 pointer-events-none' : ''}
+                    />
                     <div className="text-[10px] text-gray-500 mt-1">
                       Bal akan otomatis tercatat di blok ini pada inventaris gudang
                     </div>
@@ -935,12 +891,12 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
                   <div className="flex flex-col justify-between p-3 bg-gray-50 border border-gray-200">
                     {(() => {
                       const bBruto = typeof beratBrutoInput === 'number' ? beratBrutoInput : parseFloat(String(beratBrutoInput)) || 0;
-                      const tara = hitungPotonganTaraKg(bBruto, Boolean(activeBalItem.ganti_tikar));
+                      const tara = hitungPotonganTaraKg(bBruto, Boolean(activeBalItem.ganti_tikar), activeBalItem.no_bal);
                       const netto = Math.max(0, Number((bBruto - tara).toFixed(1)));
                       const kotor = Math.round(netto * activeBalItem.harga_per_kg);
                       const potTikar = activeBalItem.ganti_tikar ? 75000 : 0;
                       const potTotal = (activeBalItem.potongan_kuli || 7000) + (activeBalItem.potongan_tali || 3000) + potTikar;
-                      const bersih = Math.max(0, kotor - potTotal);
+                      const bersih = Math.round(Math.max(0, kotor - potTotal));
                       const isWeighed = (activeBalItem.berat_kg || 0) > 0;
 
                       return (
@@ -1079,7 +1035,7 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
                           </td>
 
                           <td className="py-2 px-3 border-r border-gray-200 text-center font-mono text-gray-600">
-                            {item.potongan_tara_kg || (item.ganti_tikar ? 2 : 3)} kg
+                            {item.potongan_tara_kg || hitungPotonganTaraKg(item.berat_bruto_kg || 0, item.ganti_tikar || false, item.no_bal)} kg
                           </td>
 
                           <td className="py-2 px-3 border-r border-gray-200 text-center font-mono font-black text-emerald-800">
@@ -1195,12 +1151,15 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
       {/* Confirmation Modal */}
       <ConfirmModal
         isOpen={isConfirmModalOpen}
-        title="Konfirmasi Penimbangan Selesai & Simpan Inventaris"
-        message={`Apakah Anda yakin ingin menyimpan penimbangan ${weighedBalCount} bal tembakau untuk Petani ${currentTx?.nama_petani}?\n\nTotal Berat Netto: ${totalBeratNetto} kg\nTotal Bayar Bersih: ${formatRupiah(totalHargaFinalAll)}\n\nBal akan otomatis didaftarkan ke inventaris stok gudang di blok masing-masing.`}
-        confirmLabel="Ya, Selesaikan & Masukkan ke Gudang"
-        isDestructive={false}
+        title={!isAllWeighed ? "Konfirmasi Penimbangan Belum Selesai" : "Konfirmasi Penimbangan Selesai & Simpan Inventaris"}
+        message={!isAllWeighed 
+          ? `Perhatian: Baru ${weighedBalCount} dari ${totalBalCount} bal yang selesai ditimbang.\nApakah Anda yakin ingin menyimpan progres timbangan saat ini? Status transaksi akan tetap "Menunggu Timbang" sampai seluruh bal selesai.`
+          : `Apakah Anda yakin ingin menyimpan penimbangan ${weighedBalCount} bal tembakau untuk Petani ${currentTx?.nama_petani}?\n\nTotal Berat Netto: ${totalBeratNetto} kg\nTotal Bayar Bersih: ${formatRupiah(totalHargaFinalAll)}\n\nBal akan otomatis didaftarkan ke inventaris stok gudang di blok masing-masing.`
+        }
+        confirmText={!isAllWeighed ? "Ya, Simpan Progres" : "Ya, Selesaikan & Masukkan ke Gudang"}
+        cancelText="Batal"
         onConfirm={handleConfirmFinalSave}
-        onCancel={() => setIsConfirmModalOpen(false)}
+        onClose={() => setIsConfirmModalOpen(false)}
       />
     </>
   );

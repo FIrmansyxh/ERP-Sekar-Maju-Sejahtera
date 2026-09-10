@@ -437,27 +437,6 @@ export const OperatorLoketView: React.FC<OperatorLoketViewProps> = ({
 
         {/* Right 1 Col: Quick Card Info & Guidelines */}
         <div className="space-y-4">
-          
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-            <h4 className="font-bold text-xs uppercase tracking-wider text-slate-500">
-              Panduan Antrean Operator Loket
-            </h4>
-            <div className="space-y-2 text-xs text-slate-600">
-              <p className="flex items-start space-x-2">
-                <span className="w-4 h-4 rounded-full bg-slate-900 text-white text-[10px] flex items-center justify-center shrink-0 font-bold mt-0.5">1</span>
-                <span>Minta petani menunjukkan <strong>Kartu Fisik Ber-barcode</strong> resmi gudang.</span>
-              </p>
-              <p className="flex items-start space-x-2">
-                <span className="w-4 h-4 rounded-full bg-slate-900 text-white text-[10px] flex items-center justify-center shrink-0 font-bold mt-0.5">2</span>
-                <span>Arahkan scanner ke barcode atau ketik ID Petani di kolom pencarian cepat.</span>
-              </p>
-              <p className="flex items-start space-x-2">
-                <span className="w-4 h-4 rounded-full bg-slate-900 text-white text-[10px] flex items-center justify-center shrink-0 font-bold mt-0.5">3</span>
-                <span>Pastikan nama dan desa sesuai dengan identitas fisik petani sebelum menimbang.</span>
-              </p>
-            </div>
-          </div>
-
           {selectedFarmer && (
             <div className="bg-slate-900 text-white p-5 rounded-2xl border border-slate-800 space-y-3">
               <div className="flex items-center justify-between">

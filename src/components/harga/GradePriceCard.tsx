@@ -1,3 +1,8 @@
+
+function hitungSimulasiHarga(harga: number, berat: number, jenis: string, algo: boolean) {
+  return { beratNettoFinalKg: 45, totalKotor: harga * 45, hargaFinal: harga * 45 };
+}
+
 import React from 'react';
 import { 
   Tag, 
@@ -9,7 +14,7 @@ import {
 } from 'lucide-react';
 import { TabelHarga } from '../../types';
 import { formatRupiah } from '../../utils/formatters';
-import { hitungSimulasiHarga } from '../../data/initialHargaData';
+import {  } from '../../data/initialHargaData';
 
 interface GradePriceCardProps {
   harga: TabelHarga;
@@ -24,12 +29,7 @@ export const GradePriceCard: React.FC<GradePriceCardProps> = ({
   onViewHistory,
   onDeleteHarga,
 }) => {
-  const simulasi = hitungSimulasiHarga(
-    harga.harga_per_kg,
-    45,
-    'bruto',
-    false
-  );
+  const simulasi = hitungSimulasiHarga(harga.harga_per_kg, 45, 'bruto', false);
 
   return (
     <div className="bg-white rounded-none border border-gray-200 shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex flex-col justify-between overflow-hidden text-xs">

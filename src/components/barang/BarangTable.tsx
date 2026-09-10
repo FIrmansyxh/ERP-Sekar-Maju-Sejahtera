@@ -67,7 +67,7 @@ export const BarangTable: React.FC<BarangTableProps> = ({
           </thead>
           <tbody className="divide-y divide-gray-100">
             {displayItems.map((barang) => {
-              const gradeColor = GRADE_COLOR_MAP[barang.kode_grade] || {
+              const gradeColor: any = GRADE_COLOR_MAP[barang.kode_grade] || {
                 badge: 'bg-gray-800 text-white',
               };
 

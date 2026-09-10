@@ -209,7 +209,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
     const totalBalKirim = filteredPengirimanList.reduce((sum, p) => sum + (p.total_bal || 0), 0);
     const totalKgKirim = filteredPengirimanList.reduce((sum, p) => sum + (p.total_berat_kg || 0), 0);
     
-    const countDiterima = filteredPengirimanList.filter((p) => p.status === 'diterima' || p.status === 'dikirim').length;
+    const countDiterima = filteredPengirimanList.filter((p) => p.status === 'diterima' || p.status === 'selesai').length;
     const countDalamPerjalanan = filteredPengirimanList.filter((p) => p.status === 'dalam_perjalanan').length;
     const countDimuat = filteredPengirimanList.filter((p) => p.status === 'dimuat').length;
 
@@ -238,7 +238,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
       existing.countDO += 1;
       existing.totalBal += (p.total_bal || 0);
       existing.totalKg += (p.total_berat_kg || 0);
-      if (p.status === 'diterima' || p.status === 'dikirim') {
+      if (p.status === 'diterima' || p.status === 'selesai') {
         existing.diterimaCount += 1;
       } else {
         existing.pendingCount += 1;
@@ -1448,19 +1448,19 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
               <div className="text-gray-500">Petugas Logistik / Pengirim,</div>
               <div className="font-bold text-gray-900 mt-0.5">Staff Ekspedisi</div>
               <div className="h-16"></div>
-              <div className="font-semibold text-gray-800 border-t border-gray-400 pt-1">( Bagian Logistik )</div>
+              <div className="font-semibold text-gray-800 border-t border-gray-400 pt-1 min-h-[22px]">&nbsp;</div>
             </div>
             <div>
               <div className="text-gray-500">Diperiksa Oleh,</div>
               <div className="font-bold text-gray-900 mt-0.5">Kepala Gudang Tembakau</div>
               <div className="h-16"></div>
-              <div className="font-semibold text-gray-800 border-t border-gray-400 pt-1">( Bambang Sutrisno, S.T. )</div>
+              <div className="font-semibold text-gray-800 border-t border-gray-400 pt-1">Bambang Sutrisno, S.T.</div>
             </div>
             <div>
               <div className="text-gray-500">Diterima Oleh,</div>
               <div className="font-bold text-gray-900 mt-0.5">Pihak Pabrik Rekanan</div>
               <div className="h-16"></div>
-              <div className="font-semibold text-gray-800 border-t border-gray-400 pt-1">( Petugas Penerima Pabrik )</div>
+              <div className="font-semibold text-gray-800 border-t border-gray-400 pt-1 min-h-[22px]">&nbsp;</div>
             </div>
           </div>
 

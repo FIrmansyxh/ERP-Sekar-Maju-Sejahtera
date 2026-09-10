@@ -9,12 +9,15 @@ import {
   AlertTriangle,
   Info,
   Clock,
-  Edit3
+  Edit3,
+  Lock
 } from 'lucide-react';
 import { TransaksiPembelian } from '../../types';
 import { formatRupiah, formatNumber, angkaTerbilang, formatDateHariBulanTahun } from '../../utils/formatters';
 import { downloadElementAsPdf, printHtmlElementDirectly } from '../../utils/printDownload';
+import { openPrintDocument } from '../../utils/openDedicatedPrint';
 import { ConfirmModal } from '../common/ConfirmModal';
+import { NotaTimbangContent } from './NotaTimbangContent';
 
 interface TransaksiDetailModalProps {
   isOpen: boolean;
@@ -61,7 +64,7 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
         }
       ];
 
-  // Validation: Nota can ONLY be printed / downloaded when ALL items have price and weight > 0
+  // Validation: Nota can ONLY be printed / downloaded when ALL items have price and weight > 0 AND payment is cash/lunas
   const isAllWeighed = items.length > 0 && items.every((it) => (it.berat_kg || 0) > 0 && (it.harga_per_kg || 0) > 0);
   const hasZeroWeightItem = items.some((it) => (it.berat_kg || 0) <= 0);
 
@@ -86,21 +89,6 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
     }
   };
 
-  const handleDirectPrint = () => {
-    if (!isAllWeighed) {
-      alert('Perhatian: Nota pembelian belum dapat diunduh/dicetak karena masih ada bal tembakau yang belum ditimbang (Proses 2 Timbang belum selesai).');
-      return;
-    }
-    if (!receiptRef.current) return;
-    printHtmlElementDirectly(
-      receiptRef.current,
-      `Nota Timbang - ${transaksi.transaksi_id}`
-    );
-    if (onUpdateNotaStatus) {
-      onUpdateNotaStatus(transaksi.transaksi_id);
-    }
-  };
-
   const cleanDate = formatDateHariBulanTahun(transaksi.tanggal_transaksi);
 
   return (
@@ -118,8 +106,8 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
         {/* Modal Header */}
         <div className="px-5 py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white">
           <div className="flex items-center space-x-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-sm bg-gray-100 border border-gray-300 flex items-center justify-center shrink-0">
-              <Receipt className="w-4 h-4 text-gray-700" />
+            <div className="w-8 h-8 rounded-sm bg-red-50 border border-red-100 flex items-center justify-center shrink-0">
+              <Receipt className="w-4 h-4 text-[#b81d24]" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center space-x-2 flex-wrap gap-y-1">
@@ -127,14 +115,14 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
                   Nota Timbang & Kasir Pembayaran
                 </h2>
                 {isLunas ? (
-                  <span className="px-2 py-0.5 bg-emerald-50 text-emerald-800 text-[10px] font-bold rounded-none flex items-center space-x-1 border border-emerald-300">
+                  <span className="px-2 py-0.5 bg-emerald-50 text-emerald-800 text-[10px] font-bold rounded-sm flex items-center space-x-1 border border-emerald-300">
                     <CheckCircle2 className="w-3 h-3 text-emerald-700" />
-                    <span>LUNAS (CASH / MASUK KAS)</span>
+                    <span>LUNAS (CASH)</span>
                   </span>
                 ) : (
-                  <span className="px-2 py-0.5 bg-amber-50 text-amber-900 text-[10px] font-bold rounded-none flex items-center space-x-1 border border-amber-300">
+                  <span className="px-2 py-0.5 bg-amber-50 text-amber-900 text-[10px] font-bold rounded-sm flex items-center space-x-1 border border-amber-300">
                     <Clock className="w-3 h-3 text-amber-700" />
-                    <span>KREDIT (BELUM DISERAHKAN KE KASIR)</span>
+                    <span>BELUM LUNAS (KREDIT)</span>
                   </span>
                 )}
                 {transaksi.status_nota === 'sudah_cetak' && (
@@ -166,10 +154,10 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
                   onClose();
                   onOpenEditModal(transaksi);
                 }}
-                className="px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-sm transition flex items-center space-x-1 cursor-pointer"
+                className="px-3.5 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-sm transition flex items-center space-x-1 cursor-pointer shadow-xs"
                 title="Edit / Koreksi data transaksi ini"
               >
-                <Edit3 className="w-3.5 h-3.5" />
+                <Edit3 className="w-3.5 h-3.5 text-gray-500" />
                 <span>Edit</span>
               </button>
             )}
@@ -181,7 +169,7 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
                   setAlasanHapus('');
                   setIsConfirmDeleteOpen(true);
                 }}
-                className="px-3 py-1.5 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-sm transition flex items-center space-x-1 cursor-pointer"
+                className="px-3 py-1.5 text-xs font-semibold text-red-600 bg-white hover:bg-red-50 border border-red-200 rounded-sm transition flex items-center space-x-1 cursor-pointer shadow-xs"
                 title="Hapus transaksi ini"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -193,17 +181,17 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
 
         {/* Riwayat Pengubahan Data (Audit Trail History Banner) */}
         {transaksi.terakhir_diubah_oleh && (
-          <div className="bg-slate-50 border-b border-slate-200 px-5 py-2.5 flex items-start space-x-2 text-slate-700 text-xs">
-            <Info className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
+          <div className="bg-gray-50 border-b border-gray-200 px-5 py-2 flex items-start space-x-2 text-gray-700 text-xs">
+            <Info className="w-4 h-4 text-gray-500 shrink-0 mt-0.5" />
             <div className="space-y-0.5">
               <div>
-                <span className="font-semibold text-slate-900">Riwayat Pengubahan:</span> Terakhir diubah oleh <strong className="text-slate-900">{transaksi.terakhir_diubah_oleh}</strong>
+                <span className="font-semibold text-gray-900">Riwayat Pengubahan:</span> Terakhir diubah oleh <strong className="text-gray-900">{transaksi.terakhir_diubah_oleh}</strong>
                 {transaksi.terakhir_diubah_pada && (
-                  <span className="text-slate-500"> pada {new Date(transaksi.terakhir_diubah_pada).toLocaleString('id-ID')} WIB</span>
+                  <span className="text-gray-500"> pada {new Date(transaksi.terakhir_diubah_pada).toLocaleString('id-ID')} WIB</span>
                 )}
               </div>
               {transaksi.alasan_perubahan_terakhir && (
-                <div className="text-[11px] text-slate-600 font-mono italic">
+                <div className="text-[11px] text-gray-600 font-mono italic">
                   Alasan Koreksi: "{transaksi.alasan_perubahan_terakhir}"
                 </div>
               )}
@@ -213,7 +201,7 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
 
         {/* Warning if items are not weighed yet */}
         {hasZeroWeightItem && (
-          <div className="bg-amber-50 border-b border-amber-200 px-5 py-2.5 flex items-center space-x-2 text-amber-900 text-xs">
+          <div className="bg-amber-50/80 border-b border-amber-200 px-5 py-2 flex items-center space-x-2 text-amber-900 text-xs">
             <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
             <span>
               <strong>Perhatian:</strong> Terdapat bal tembakau yang belum ditimbang (0 kg). Selesaikan Proses 2 Timbang agar nota dapat dicetak dan dicairkan kasir.
@@ -222,328 +210,135 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
         )}
 
         {/* Action Toolbar */}
-        <div className="px-5 py-2.5 bg-[#f8f9fa] border-b border-gray-200 flex flex-wrap items-center justify-between gap-2">
+        <div className="px-5 py-2.5 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center space-x-2">
-            <button
-              type="button"
-              onClick={handleDirectPrint}
-              disabled={!isAllWeighed}
-              className={`px-3.5 py-1.5 text-xs font-bold rounded-sm flex items-center space-x-1.5 transition cursor-pointer shadow-xs ${
-                isAllWeighed 
-                  ? 'bg-[#212529] hover:bg-[#1a1e21] text-white' 
-                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-              }`}
-            >
-              <Printer className="w-3.5 h-3.5" />
-              <span>Cetak Nota Timbang</span>
-            </button>
+            {/* Tombol Cetak Nota (Terkunci jika belum lunas) */}
+            {isLunas && isAllWeighed ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (onUpdateNotaStatus) onUpdateNotaStatus(transaksi.transaksi_id);
+                  openPrintDocument('nota', transaksi.transaksi_id);
+                }}
+                className="px-3.5 py-1.5 text-xs font-bold rounded-sm bg-[#b81d24] hover:bg-[#a0181e] text-white flex items-center space-x-1.5 transition cursor-pointer shadow-xs"
+                title="Buka Dialog Cetak / Simpan PDF Nota Resmi (Lunas)"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Cetak Nota</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled
+                className="px-3.5 py-1.5 text-xs font-medium rounded-sm bg-gray-100 border border-gray-200 text-gray-400 flex items-center space-x-1.5 cursor-not-allowed"
+                title={
+                  !isAllWeighed 
+                    ? "Terkunci: Bal belum ditimbang lengkap" 
+                    : "Terkunci: Nota baru dapat dicetak setelah status pembayaran Lunas (Cash)"
+                }
+              >
+                <Lock className="w-3.5 h-3.5 text-gray-400" />
+                <span>Cetak Nota (Terkunci)</span>
+              </button>
+            )}
 
-            <button
-              type="button"
-              onClick={handleDownloadPdf}
-              disabled={!isAllWeighed || isDownloadingPdf}
-              className={`px-3.5 py-1.5 text-xs font-semibold rounded-sm border flex items-center space-x-1.5 transition cursor-pointer ${
-                isAllWeighed
-                  ? 'bg-white hover:bg-gray-100 text-gray-700 border-gray-300'
-                  : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-              }`}
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>{isDownloadingPdf ? 'Mengunduh...' : 'Unduh PDF'}</span>
-            </button>
+            {/* Tombol Unduh PDF (Terkunci jika belum lunas) */}
+            {isLunas && isAllWeighed ? (
+              <button
+                type="button"
+                onClick={handleDownloadPdf}
+                disabled={isDownloadingPdf}
+                className="px-3.5 py-1.5 text-xs font-semibold rounded-sm bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 flex items-center space-x-1.5 transition cursor-pointer shadow-xs"
+                title="Unduh Berkas PDF Nota Resmi (Lunas)"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>{isDownloadingPdf ? 'Mengunduh...' : 'Unduh PDF'}</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled
+                className="px-3.5 py-1.5 text-xs font-medium rounded-sm bg-gray-100 border border-gray-200 text-gray-400 flex items-center space-x-1.5 cursor-not-allowed"
+                title={
+                  !isAllWeighed 
+                    ? "Terkunci: Bal belum ditimbang lengkap" 
+                    : "Terkunci: PDF baru dapat diunduh setelah status pembayaran Lunas (Cash)"
+                }
+              >
+                <Lock className="w-3.5 h-3.5 text-gray-400" />
+                <span>Unduh PDF (Terkunci)</span>
+              </button>
+            )}
           </div>
 
           {!isLunas && onOpenBayarModal && (
             <button
               type="button"
-              onClick={() => onOpenBayarModal(transaksi)}
-              className="px-3.5 py-1.5 text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
+              onClick={() => {
+                if (!isAllWeighed) {
+                  alert(
+                    `⚠️ Tidak Bisa Bayar!\n\nKupon ${transaksi.no_kupon} tidak dapat dibayar karena masih ada bal yang belum ditimbang di modul Timbangan.\n\nSesuai SOP, seluruh bal dalam 1 kupon harus ditimbang lengkap terlebih dahulu baru bisa lanjut ke pembayaran kasir.`
+                  );
+                  return;
+                }
+                onOpenBayarModal(transaksi);
+              }}
+              disabled={!isAllWeighed}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-sm transition flex items-center space-x-1.5 shadow-xs ${
+                isAllWeighed
+                  ? 'bg-emerald-700 hover:bg-emerald-800 text-white cursor-pointer'
+                  : 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed'
+              }`}
+              title={isAllWeighed ? "Bayar Kasir (Cairkan Cash)" : "Tidak bisa bayar: seluruh bal dalam 1 kupon harus ditimbang terlebih dahulu"}
             >
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>Bayar Kasir (Cairkan Cash)</span>
+              {isAllWeighed ? (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Bayar Kasir (Cairkan Cash)</span>
+                </>
+              ) : (
+                <>
+                  <Lock className="w-3.5 h-3.5 text-gray-400" />
+                  <span>Belum Ditimbang Lengkap (Terkunci)</span>
+                </>
+              )}
             </button>
           )}
         </div>
 
         {/* Modal Body / Thermal & A4 Receipt Printable Preview */}
-        <div className="p-5 overflow-y-auto bg-gray-100/70 flex-1">
+        <div className="p-5 overflow-y-auto bg-gray-100 flex-1">
           <div 
             ref={receiptRef}
-            className="bg-white border border-gray-300 p-6 max-w-2xl mx-auto shadow-xs space-y-4 font-sans text-gray-900"
+            className="bg-white border border-gray-300 p-6 max-w-2xl mx-auto shadow-xs font-sans text-gray-900 rounded-xs"
           >
-            {/* Nota Header */}
-            <div className="text-center border-b-2 border-gray-800 pb-3 space-y-1">
-              <span className="text-[10px] font-bold tracking-widest text-gray-700 uppercase block">
-                PR. SEKAR MAJU SEJAHTERA • PUSAT PAMEKASAN MADURA
-              </span>
-              <h3 className="text-base font-bold tracking-tight text-gray-900 uppercase">
-                SURAT BUKTI TIMBANG & NOTA PEMBELIAN TEMBAKAU
-              </h3>
-              <p className="text-[10px] text-gray-600 font-medium">
-                Jl. Raya Tlanakan No. 45, Pamekasan, Madura - Jawa Timur | Telp: (0324) 321888
-              </p>
-            </div>
-
-            {/* Transaction Metadata Grid */}
-            <div className="grid grid-cols-2 gap-4 text-xs border-b border-gray-200 pb-3">
-              <div className="space-y-1">
-                <div className="flex justify-between">
-                  <span className="text-gray-500 font-medium">No. Transaksi:</span>
-                  <span className="font-mono font-bold text-gray-900">{transaksi.transaksi_id}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500 font-medium">No. Kupon Antrian:</span>
-                  <span className="font-mono font-bold text-gray-900 whitespace-nowrap">{transaksi.no_kupon}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500 font-medium">Tanggal Transaksi:</span>
-                  <span className="font-mono text-gray-800">{cleanDate}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500 font-medium">Petugas Loket/Sortir:</span>
-                  <span className="font-semibold text-gray-800">{transaksi.operator_nama}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-500 font-medium">Status & Catatan Kas:</span>
-                  <span className={`font-bold px-1.5 py-0.5 rounded-none text-[10px] ${
-                    isLunas ? 'text-emerald-800 bg-emerald-50 border border-emerald-300' : 'text-amber-800 bg-amber-50 border border-amber-300'
-                  }`}>
-                    {isLunas ? 'CASH (MASUK BUKU KAS)' : 'KREDIT (TIKET BELUM DISERAHKAN)'}
-                  </span>
-                </div>
-                {isLunas && transaksi.no_bukti_kas && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-500 font-medium">No. Bukti Kas (BKK):</span>
-                    <span className="font-mono font-bold text-emerald-800">{transaksi.no_bukti_kas}</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-1">
-                <div className="flex justify-between">
-                  <span className="text-gray-500 font-medium">Nama Petani:</span>
-                  <span className="font-bold text-gray-900">{transaksi.nama_petani}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500 font-medium">ID Petani:</span>
-                  <span className="font-mono font-bold text-gray-900">{transaksi.petani_id}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500 font-medium">Alamat / Asal:</span>
-                  <span className="text-gray-800 truncate max-w-[150px]">{transaksi.desa_kecamatan || '-'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500 font-medium">Lokasi Gudang:</span>
-                  <span className="font-medium text-gray-800">{transaksi.lokasi_gudang}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Detail Timbangan Table */}
-            <div className="border border-gray-300 overflow-x-auto">
-              <table className="w-full text-xs text-left border-collapse">
-                <thead>
-                  <tr className="bg-[#f8f9fa] border-b border-gray-300 font-bold text-gray-700 text-[11px]">
-                    <th className="py-2 px-2 text-center border-r border-gray-300 w-8">No</th>
-                    <th className="py-2 px-2.5 border-r border-gray-300">No Bal</th>
-                    <th className="py-2 px-2 border-r border-gray-300 text-center">Grade</th>
-                    <th className="py-2 px-2 border-r border-gray-300 text-center">Tikar</th>
-                    <th className="py-2 px-2.5 border-r border-gray-300 text-center">Netto (Kg)</th>
-                    <th className="py-2 px-2.5 border-r border-gray-300 text-right">Tarif / Kg</th>
-                    <th className="py-2 px-2.5 border-r border-gray-300 text-right">Total Kotor</th>
-                    <th className="py-2 px-2.5 border-r border-gray-300 text-right">Potongan</th>
-                    <th className="py-2 px-2.5 text-right">Subtotal</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {items.map((item, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50">
-                      <td className="py-2 px-2 text-center border-r border-gray-200 font-mono text-gray-600">
-                        {idx + 1}
-                      </td>
-                      <td className="py-2 px-2.5 border-r border-gray-200 font-mono font-bold text-gray-900">
-                        {item.no_bal}
-                      </td>
-                      <td className="py-2 px-2 border-r border-gray-200 text-center font-bold text-gray-800">
-                        Grade {item.kode_grade}
-                      </td>
-                      <td className="py-2 px-2 border-r border-gray-200 text-center text-[10px]">
-                        {item.ganti_tikar ? (
-                          <span className="text-amber-800 font-bold">Ganti (2kg)</span>
-                        ) : (
-                          <span className="text-gray-600">Standar (3kg)</span>
-                        )}
-                      </td>
-                      <td className="py-2 px-2.5 border-r border-gray-200 text-center font-mono font-bold text-gray-900">
-                        {(item.berat_kg || 0) > 0 ? `${item.berat_kg} kg` : <span className="text-amber-600">Menunggu</span>}
-                      </td>
-                      <td className="py-2 px-2.5 border-r border-gray-200 text-right font-mono text-gray-700">
-                        {formatRupiah(item.harga_per_kg)}
-                      </td>
-                      <td className="py-2 px-2.5 border-r border-gray-200 text-right font-mono text-gray-800">
-                        {formatRupiah(item.total_kotor)}
-                      </td>
-                      <td className="py-2 px-2.5 border-r border-gray-200 text-right font-mono text-red-600 font-medium">
-                        -{formatRupiah(item.potongan)}
-                      </td>
-                      <td className="py-2 px-2.5 text-right font-mono font-bold text-gray-900">
-                        {formatRupiah(item.subtotal_bersih)}
-                      </td>
-                    </tr>
-                  ))}
-
-                  {/* Summary Rows */}
-                  <tr className="bg-[#f8f9fa] font-bold border-t border-gray-300">
-                    <td colSpan={4} className="py-2 px-2.5 border-r border-gray-300 text-right uppercase text-[10px]">
-                      TOTAL KESELURUHAN ({items.length} BAL):
-                    </td>
-                    <td className="py-2 px-2.5 border-r border-gray-300 text-center font-mono font-bold text-gray-900">
-                      {transaksi.berat_kg} kg
-                    </td>
-                    <td className="py-2 px-2.5 border-r border-gray-300 text-right font-mono text-gray-500">-</td>
-                    <td className="py-2 px-2.5 border-r border-gray-300 text-right font-mono text-gray-900">
-                      {formatRupiah(transaksi.total_kotor || transaksi.total_harga_beli)}
-                    </td>
-                    <td className="py-2 px-2.5 border-r border-gray-300 text-right font-mono text-red-600">
-                      -{formatRupiah(transaksi.total_potongan)}
-                    </td>
-                    <td className="py-2 px-2.5 text-right font-mono font-bold text-gray-900">
-                      {formatRupiah(transaksi.harga_final)}
-                    </td>
-                  </tr>
-
-                  {/* Rincian Potongan Breakdown */}
-                  <tr className="bg-gray-50 text-[10.5px] text-gray-700 border-t border-gray-200">
-                    <td colSpan={9} className="py-1.5 px-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="font-bold text-gray-600 uppercase text-[10px]">Rincian Potongan Biaya:</span>
-                        <span>Potongan Kuli: <strong className="font-mono text-red-600">-{formatRupiah(transaksi.potongan_kuli || (items.length * 7000))}</strong></span>
-                        <span>Potongan Tali: <strong className="font-mono text-red-600">-{formatRupiah(transaksi.potongan_tali || (items.length * 3000))}</strong></span>
-                        <span>Potongan Tikar: <strong className="font-mono text-red-600">-{formatRupiah(transaksi.potongan_tikar || 0)}</strong></span>
-                        <span>Total Potongan: <strong className="font-mono text-red-700 font-bold">-{formatRupiah(transaksi.total_potongan)}</strong></span>
-                      </div>
-                    </td>
-                  </tr>
-
-                  <tr className="bg-gray-100 font-bold text-gray-900">
-                    <td colSpan={8} className="py-2.5 px-3 border-r border-gray-300 text-right uppercase text-[11px] text-gray-800">
-                      TOTAL BERSIH DIBAYARKAN KE PETANI (NETTO):
-                    </td>
-                    <td className="py-2.5 px-3 text-right font-mono text-sm text-gray-950 font-black">
-                      {formatRupiah(transaksi.harga_final)}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            {/* Terbilang Nilai Pembayaran */}
-            <div className="p-2.5 bg-gray-50 border border-gray-300 text-xs">
-              <div className="flex items-baseline space-x-2">
-                <span className="font-bold uppercase text-[10px] text-gray-600 shrink-0">Terbilang:</span>
-                <span className="font-semibold italic text-gray-900">
-                  "{angkaTerbilang(transaksi.harga_final)}"
-                </span>
-              </div>
-            </div>
-
-            {/* Keterangan Kas & Status Pembayaran */}
-            <div className={`p-2.5 border text-[11px] ${
-              isLunas 
-                ? 'bg-emerald-50/70 border-emerald-300 text-emerald-950' 
-                : 'bg-amber-50/70 border-amber-300 text-amber-950'
-            }`}>
-              <div className="flex items-start space-x-2">
-                {isLunas ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
-                ) : (
-                  <Clock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-                )}
-                <div>
-                  <strong className="block font-bold">
-                    {isLunas 
-                      ? `STATUS: CASH (UANG TUNAI KAS KELUAR SUDAH DICAIRKAN)` 
-                      : `STATUS: KREDIT (HUTANG PEMBELIAN / TIKET BELUM DISERAHKAN)`}
-                  </strong>
-                  <p className="mt-0.5 text-[10.5px]">
-                    {isLunas 
-                      ? `Transaksi ini telah dibayarkan tunai (Cash) oleh ${transaksi.dibayar_oleh || 'Kasir'} pada ${transaksi.dibayar_pada?.split('T')[0] || cleanDate} dengan No. Bukti Kas: ${transaksi.no_bukti_kas || '-'}. Dana resmi keluar dari kas pembelian.`
-                      : `Petani belum menyerahkan tiket timbang ini ke loket kasir. Sebelum tiket diserahkan, transaksi tercatat sebagai Kredit (Hutang). Segera serahkan tiket ini ke kasir untuk pencairan tunai (Cash).`}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Catatan jika ada */}
-            {transaksi.catatan && (
-              <div className="p-2 bg-gray-50 border border-gray-200 text-xs text-gray-700">
-                <span className="font-bold block text-gray-800">Catatan Penerimaan:</span>
-                <p className="mt-0.5">{transaksi.catatan}</p>
-              </div>
-            )}
-
-            {/* Verification and Signature Section */}
-            <div className="pt-2 flex items-end justify-between gap-4">
-              
-              {/* Document ID badge */}
-              <div className="p-2 bg-gray-50 border border-gray-200">
-                <div className="text-[10px] text-gray-500 font-medium">Validasi Sistem:</div>
-                <div className="text-xs font-mono font-bold text-gray-800">
-                  {transaksi.transaksi_id}
-                </div>
-              </div>
-
-              {/* Tanda Tangan */}
-              <div className="grid grid-cols-2 gap-8 text-center text-[10.5px]">
-                <div className="space-y-10">
-                  <span className="text-gray-600 block">Penyetor (Petani)</span>
-                  <div className="border-t border-gray-400 font-semibold pt-1 text-gray-900 min-w-[90px]">
-                    ( {transaksi.nama_petani} )
-                  </div>
-                </div>
-
-                <div className="space-y-10">
-                  <span className="text-gray-600 block">Petugas Timbang & Kasir</span>
-                  <div className="border-t border-gray-400 font-semibold pt-1 text-gray-900 min-w-[90px]">
-                    ( {transaksi.operator_nama} )
-                  </div>
-                </div>
-              </div>
-
-            </div>
-
-            {/* Footer Note */}
-            <div className="border-t border-dashed border-gray-300 pt-1.5 text-[9.5px] text-gray-500 text-center">
-              Simpan bukti timbang ini sebagai rujukan pencairan kas dan bukti setoran tembakau resmi PR. Sekar Maju Sejahtera.
-            </div>
-
+            <NotaTimbangContent transaksi={transaksi} />
           </div>
-
         </div>
 
       </div>
 
       {/* Konfirmasi Hapus Transaksi dengan Alasan Audit Trail */}
       {isConfirmDeleteOpen && onDeleteTransaksi && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white border border-rose-200 rounded-sm shadow-2xl max-w-md w-full p-5 space-y-4 animate-in fade-in">
-            <div className="flex items-center space-x-3 text-rose-600">
-              <div className="w-9 h-9 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
-                <Trash2 className="w-5 h-5 text-rose-600" />
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+          <div className="bg-white border border-gray-300 rounded-sm shadow-xl max-w-md w-full p-5 space-y-4 animate-in fade-in">
+            <div className="flex items-center space-x-3 text-red-600">
+              <div className="w-8 h-8 rounded-sm bg-red-50 border border-red-100 flex items-center justify-center shrink-0">
+                <Trash2 className="w-4 h-4 text-[#b81d24]" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-slate-900">Konfirmasi Hapus Transaksi</h3>
-                <p className="text-xs text-slate-500 font-mono">
+                <h3 className="text-sm font-bold text-gray-900">Konfirmasi Hapus Transaksi</h3>
+                <p className="text-xs text-gray-500 font-mono">
                   {transaksi.no_kupon} ({transaksi.transaksi_id})
                 </p>
               </div>
             </div>
 
-            <div className="p-3 bg-rose-50/70 border border-rose-200 rounded-xs text-xs text-rose-950 space-y-1">
+            <div className="p-3 bg-gray-50 border border-gray-200 rounded-sm text-xs text-gray-800 space-y-1">
               <p>
                 Apakah Anda yakin ingin menghapus transaksi milik Petani <strong>{transaksi.nama_petani}</strong>?
               </p>
-              <p className="text-[11px] text-rose-700">
+              <p className="text-[11px] text-gray-600">
                 • Berat Netto: {transaksi.berat_kg} Kg ({transaksi.total_bal || (transaksi.items ? transaksi.items.length : 1)} Bal)
                 <br />
                 • Total Nilai: {formatRupiah(transaksi.harga_final || transaksi.total_harga_beli)}
@@ -553,7 +348,7 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 flex items-center space-x-1">
+              <label className="text-xs font-bold text-gray-700 flex items-center space-x-1">
                 <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
                 <span>Alasan Penghapusan (Wajib untuk Audit Trail Admin):</span>
               </label>
@@ -562,7 +357,7 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
                 placeholder="Contoh: Salah input nomor kupon / Duplikasi / Dibatalkan petani"
                 value={alasanHapus}
                 onChange={(e) => setAlasanHapus(e.target.value)}
-                className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded-xs focus:ring-1 focus:ring-slate-900 focus:outline-none"
+                className="w-full text-xs px-2.5 py-1.5 border border-gray-300 rounded-sm focus:ring-1 focus:ring-gray-800 focus:outline-none"
               />
               <div className="flex flex-wrap gap-1 pt-1">
                 {['Salah input nomor kupon', 'Duplikasi transaksi timbangan', 'Dibatalkan oleh petani penyetor', 'Koreksi administratif'].map((preset) => (
@@ -570,7 +365,7 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
                     key={preset}
                     type="button"
                     onClick={() => setAlasanHapus(preset)}
-                    className="text-[10px] px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xs border border-slate-200 transition cursor-pointer"
+                    className="text-[10px] px-2 py-0.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-sm border border-gray-200 transition cursor-pointer"
                   >
                     {preset}
                   </button>
@@ -578,14 +373,14 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-200">
+            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-gray-200">
               <button
                 type="button"
                 onClick={() => {
                   setIsConfirmDeleteOpen(false);
                   setAlasanHapus('');
                 }}
-                className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-xs transition cursor-pointer"
+                className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-sm transition cursor-pointer"
               >
                 Batal
               </button>
@@ -597,7 +392,7 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
                   setAlasanHapus('');
                   onClose();
                 }}
-                className="px-4 py-1.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xs transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
+                className="px-4 py-1.5 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#a0181e] rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Hapus & Rekam Audit Log</span>

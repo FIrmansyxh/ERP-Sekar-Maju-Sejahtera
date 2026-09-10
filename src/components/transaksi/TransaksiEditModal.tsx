@@ -1,3 +1,4 @@
+import { SearchableSelect } from '../common/SearchableSelect';
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   X, 
@@ -28,7 +29,6 @@ import {
   User as UserType 
 } from '../../types';
 import { formatRupiah, generateBalId, generateNextUniqueNoBal } from '../../utils/formatters';
-import { recordLogAktivitas } from '../../utils/storage';
 import { getGudangLocationOptions } from '../../data/initialGudangData';
 
 interface TransaksiEditModalProps {
@@ -95,7 +95,7 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
       setTanggalTransaksi(
         transaksi.tanggal_transaksi ? transaksi.tanggal_transaksi.split(' ')[0] : new Date().toISOString().split('T')[0]
       );
-      setLokasiGudang(transaksi.lokasi_gudang || gudangOptions[0] || 'Gudang Pusat Induk - Pamekasan');
+      setLokasiGudang(transaksi.lokasi_gudang || gudangOptions[0] || 'Gudang Utama Pamekasan');
       setStatusPembayaran(transaksi.status_pembayaran === 'lunas' ? 'lunas' : 'belum_lunas');
       setCatatan(transaksi.catatan || '');
       setCatatanKasir(transaksi.catatan_kasir || '');
@@ -112,7 +112,7 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
             kode_grade: it.kode_grade,
             harga_per_kg: it.harga_per_kg || 0,
             berat_bruto_kg: it.berat_bruto_kg,
-            potongan_tara_kg: it.potongan_tara_kg || 3,
+            potongan_tara_kg: it.potongan_tara_kg || 0,
             berat_kg: it.berat_kg,
             potongan: it.potongan || 0,
             potongan_kuli: it.potongan_kuli || 7000,
@@ -165,7 +165,7 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
       prev.map((row, i) => {
         if (i !== index) return row;
         const totalKotor = Math.round(row.berat_kg * newTarif);
-        const subtotalBersih = Math.max(0, totalKotor - row.potongan);
+        const subtotalBersih = Math.round(Math.max(0, totalKotor - row.potongan));
         return {
           ...row,
           kode_grade: newGrade,
@@ -184,7 +184,7 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
         if (i !== index) return row;
         const beratVal = Math.max(0, newBerat);
         const totalKotor = Math.round(beratVal * row.harga_per_kg);
-        const subtotalBersih = Math.max(0, totalKotor - row.potongan);
+        const subtotalBersih = Math.round(Math.max(0, totalKotor - row.potongan));
         return {
           ...row,
           berat_kg: beratVal,
@@ -201,7 +201,7 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
       prev.map((row, i) => {
         if (i !== index) return row;
         const potVal = Math.max(0, newPotongan);
-        const subtotalBersih = Math.max(0, row.total_kotor - potVal);
+        const subtotalBersih = Math.round(Math.max(0, row.total_kotor - potVal));
         return {
           ...row,
           potongan: potVal,
@@ -213,7 +213,7 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
 
   // Add new bal row
   const handleAddBalRow = () => {
-    const defaultGrade = activeGrades[0]?.kode_grade || 'A';
+    const defaultGrade = activeGrades[0]?.kode_grade || '50';
     const defaultTarif = getGradeTarif(defaultGrade);
     const existingNoBals = balRows.map((b) => ({ noBal: b.no_bal }));
     const uniqueNoBal = generateNextUniqueNoBal(defaultGrade, barangList, existingNoBals);
@@ -283,6 +283,10 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
       setValidationError('Semua nomor bal harus terisi valid.');
       return;
     }
+    if (balRows.some((r) => !activeGrades.some((g) => g.kode_grade === r.kode_grade))) {
+      setValidationError('Ada Grade yang tidak valid / tidak terdaftar di Master Harga Beli.');
+      return;
+    }
     if (!alasanEdit.trim()) {
       setValidationError('Harap isi alasan pengubahan data untuk catatan Audit Trail Admin.');
       return;
@@ -322,8 +326,8 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
         no_bal: row.no_bal.trim(),
         kode_grade: row.kode_grade,
         harga_per_kg: row.harga_per_kg,
-        berat_bruto_kg: row.berat_bruto_kg || row.berat_kg + (row.potongan_tara_kg || 3),
-        potongan_tara_kg: row.potongan_tara_kg || 3,
+        berat_bruto_kg: row.berat_bruto_kg || row.berat_kg + (row.potongan_tara_kg || 0),
+        potongan_tara_kg: row.potongan_tara_kg || 0,
         berat_kg: row.berat_kg,
         potongan_kuli: row.potongan_kuli || 7000,
         potongan_tali: row.potongan_tali || 3000,
@@ -408,26 +412,7 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
     });
 
     // Record Detailed Audit Log
-    recordLogAktivitas({
-      user_id: currentUser?.user_id || 'USR-001',
-      username: currentUser?.username || 'admin',
-      nama_lengkap: currentUser?.nama_lengkap || 'Administrator',
-      role: currentUser?.role || 'admin',
-      modul: 'transaksi',
-      aksi: 'Edit & Koreksi Transaksi Pembelian',
-      tipe_aksi: 'edit',
-      no_kupon: updatedTx.no_kupon,
-      no_bal: noBalCombinedBaru,
-      kode_grade: primaryGradeBaru,
-      berat_kg: totalNettoBaru,
-      transaksi_id: updatedTx.transaksi_id,
-      nama_petani: updatedTx.nama_petani,
-      alasan: alasanEdit.trim(),
-      rincian: `KOREKSI TRANSAKSI: Kupon ${updatedTx.no_kupon} (${updatedTx.transaksi_id}) milik Petani "${updatedTx.nama_petani}" diubah oleh ${currentUser?.nama_lengkap || 'Admin'} (@${currentUser?.username || 'admin'}, ${currentUser?.role || 'admin'}). Pembuat awal: ${transaksi.operator_nama || transaksi.petugas_sortir || 'Operator Awal'}. Perubahan: ${changesList.join('; ')}. Alasan koreksi: "${alasanEdit.trim()}".`,
-      data_sebelum: dataSebelum,
-      data_sesudah: dataSesudah,
-      status: 'sukses',
-    });
+    
 
     // Save transaction state
     onSaveTransaksi(updatedTx, updatedBarangs);
@@ -502,17 +487,12 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
                 <User className="w-3.5 h-3.5 text-slate-500" />
                 <span>Petani Penyetor</span>
               </label>
-              <select
+              <SearchableSelect
                 value={selectedPetaniId}
-                onChange={(e) => setSelectedPetaniId(e.target.value)}
-                className="w-full text-xs px-2.5 py-1.5 bg-white border border-slate-300 rounded-xs focus:ring-1 focus:ring-slate-900 focus:outline-none"
-              >
-                {petaniList.map((p) => (
-                  <option key={p.petani_id} value={p.petani_id}>
-                    {p.nama_petani} - {p.petani_id} ({p.desa_kecamatan || p.alamat || 'Pamekasan'})
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => setSelectedPetaniId(val)}
+                options={petaniList.map(p => ({ value: p.petani_id, label: `${p.nama_petani} - ${p.petani_id} (${p.desa_kecamatan || p.alamat || 'Pamekasan'})` }))}
+                placeholder="Pilih Petani..."
+              />
               {isPetaniChanged && (
                 <p className="text-[11px] text-amber-700 font-medium">
                   Semula: <span className="line-through">{oldPetaniNama}</span> → Baru: <strong>{newPetaniNama}</strong>
@@ -560,17 +540,12 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
                 <Warehouse className="w-3.5 h-3.5 text-slate-500" />
                 <span>Lokasi Gudang Simpan</span>
               </label>
-              <select
+              <SearchableSelect
                 value={lokasiGudang}
-                onChange={(e) => setLokasiGudang(e.target.value)}
-                className="w-full text-xs px-2.5 py-1.5 bg-white border border-slate-300 rounded-xs focus:ring-1 focus:ring-slate-900 focus:outline-none"
-              >
-                {gudangOptions.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => setLokasiGudang(val)}
+                options={gudangOptions.map(opt => ({ value: opt, label: opt }))}
+                placeholder="Lokasi Gudang..."
+              />
             </div>
 
             {/* Catatan / Keterangan Transaksi */}
@@ -650,17 +625,11 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
 
                       {/* Grade */}
                       <td className="py-2 px-2.5">
-                        <select
-                          value={row.kode_grade}
-                          onChange={(e) => handleGradeChange(idx, e.target.value)}
-                          className="w-full text-xs font-semibold px-2 py-1 border border-slate-300 rounded-xs focus:ring-1 focus:ring-slate-900 focus:outline-none"
-                        >
-                          {activeGrades.map((g) => (
-                            <option key={g.harga_id} value={g.kode_grade}>
-                              Grade {g.kode_grade} ({formatRupiah(g.harga_per_kg)})
-                            </option>
-                          ))}
-                        </select>
+                        <SearchableSelect allowCustom={true} value={row.kode_grade}
+                          onChange={(val) => handleGradeChange(idx, val)}
+                          options={activeGrades.map(g => ({ value: g.kode_grade, label: `Grade ${g.kode_grade} (${formatRupiah(g.harga_per_kg)})` }))}
+                          placeholder="Grade..."
+                        />
                       </td>
 
                       {/* Tarif/Kg */}

@@ -1,22 +1,514 @@
-import { generateMaduraTobaccoDataset } from './maduraDatasetGenerator';
-const dataset = generateMaduraTobaccoDataset();
-export const INITIAL_HARGA_DATA = dataset.hargaBeliList;
-export const GRADE_COLOR_MAP: Record<string, { bg: string; text: string; border: string; badge: string; hex: string; label?: string }> = {
-  'A': { bg: 'bg-zinc-900', text: 'text-white', border: 'border-zinc-950', badge: 'bg-zinc-900 text-white border border-zinc-950', hex: '#18181b', label: 'Super' },
-  'B': { bg: 'bg-zinc-800', text: 'text-zinc-100', border: 'border-zinc-700', badge: 'bg-zinc-800 text-zinc-100 border border-zinc-700', hex: '#27272a', label: 'Premium' },
-  'C': { bg: 'bg-zinc-200', text: 'text-zinc-900', border: 'border-zinc-300', badge: 'bg-zinc-200 text-zinc-900 border border-zinc-300', hex: '#e4e4e7', label: 'Standar' },
-  'D': { bg: 'bg-zinc-100', text: 'text-zinc-700', border: 'border-zinc-300', badge: 'bg-zinc-100 text-zinc-700 border border-zinc-300', hex: '#f4f4f5', label: 'Medium' },
-  'E': { bg: 'bg-zinc-50', text: 'text-zinc-600', border: 'border-zinc-200', badge: 'bg-zinc-50 text-zinc-600 border border-zinc-200', hex: '#fafafa', label: 'Ekonomis' },
-  'F': { bg: 'bg-white', text: 'text-zinc-500', border: 'border-zinc-200', badge: 'bg-white text-zinc-500 border border-zinc-200', hex: '#ffffff', label: 'Campuran' },
-};
-export function hitungSimulasiHarga(hargaPerKg: number, beratTerukurKg: number = 45, jenisTimbang: 'bruto' | 'netto' = 'bruto', isGantiTikar: boolean = false) {
-  let potonganTaraKg = 0;
-  if (jenisTimbang === 'bruto') {
-    potonganTaraKg = 2;
+import { TabelHarga } from "../types";
+
+export const INITIAL_HARGA_DATA: TabelHarga[] = [
+  {
+    "harga_id": "HB-30",
+    "kode_grade": "30",
+    "nama_grade": "Grade 30",
+    "warna_badge": "emerald",
+    "harga_per_kg": 30000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 30"
+  },
+  {
+    "harga_id": "HB-31",
+    "kode_grade": "31",
+    "nama_grade": "Grade 31",
+    "warna_badge": "amber",
+    "harga_per_kg": 31000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 31"
+  },
+  {
+    "harga_id": "HB-32",
+    "kode_grade": "32",
+    "nama_grade": "Grade 32",
+    "warna_badge": "purple",
+    "harga_per_kg": 32000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 32"
+  },
+  {
+    "harga_id": "HB-33",
+    "kode_grade": "33",
+    "nama_grade": "Grade 33",
+    "warna_badge": "indigo",
+    "harga_per_kg": 33000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 33"
+  },
+  {
+    "harga_id": "HB-34",
+    "kode_grade": "34",
+    "nama_grade": "Grade 34",
+    "warna_badge": "rose",
+    "harga_per_kg": 34000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 34"
+  },
+  {
+    "harga_id": "HB-35",
+    "kode_grade": "35",
+    "nama_grade": "Grade 35",
+    "warna_badge": "teal",
+    "harga_per_kg": 35000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 35"
+  },
+  {
+    "harga_id": "HB-36",
+    "kode_grade": "36",
+    "nama_grade": "Grade 36",
+    "warna_badge": "red",
+    "harga_per_kg": 36000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 36"
+  },
+  {
+    "harga_id": "HB-37",
+    "kode_grade": "37",
+    "nama_grade": "Grade 37",
+    "warna_badge": "blue",
+    "harga_per_kg": 37000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 37"
+  },
+  {
+    "harga_id": "HB-38",
+    "kode_grade": "38",
+    "nama_grade": "Grade 38",
+    "warna_badge": "emerald",
+    "harga_per_kg": 38000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 38"
+  },
+  {
+    "harga_id": "HB-39",
+    "kode_grade": "39",
+    "nama_grade": "Grade 39",
+    "warna_badge": "amber",
+    "harga_per_kg": 39000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 39"
+  },
+  {
+    "harga_id": "HB-40",
+    "kode_grade": "40",
+    "nama_grade": "Grade 40",
+    "warna_badge": "purple",
+    "harga_per_kg": 40000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 40"
+  },
+  {
+    "harga_id": "HB-41",
+    "kode_grade": "41",
+    "nama_grade": "Grade 41",
+    "warna_badge": "indigo",
+    "harga_per_kg": 41000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 41"
+  },
+  {
+    "harga_id": "HB-42",
+    "kode_grade": "42",
+    "nama_grade": "Grade 42",
+    "warna_badge": "rose",
+    "harga_per_kg": 42000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 42"
+  },
+  {
+    "harga_id": "HB-43",
+    "kode_grade": "43",
+    "nama_grade": "Grade 43",
+    "warna_badge": "teal",
+    "harga_per_kg": 43000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 43"
+  },
+  {
+    "harga_id": "HB-44",
+    "kode_grade": "44",
+    "nama_grade": "Grade 44",
+    "warna_badge": "red",
+    "harga_per_kg": 44000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 44"
+  },
+  {
+    "harga_id": "HB-45",
+    "kode_grade": "45",
+    "nama_grade": "Grade 45",
+    "warna_badge": "blue",
+    "harga_per_kg": 45000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 45"
+  },
+  {
+    "harga_id": "HB-46",
+    "kode_grade": "46",
+    "nama_grade": "Grade 46",
+    "warna_badge": "emerald",
+    "harga_per_kg": 46000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 46"
+  },
+  {
+    "harga_id": "HB-47",
+    "kode_grade": "47",
+    "nama_grade": "Grade 47",
+    "warna_badge": "amber",
+    "harga_per_kg": 47000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 47"
+  },
+  {
+    "harga_id": "HB-48",
+    "kode_grade": "48",
+    "nama_grade": "Grade 48",
+    "warna_badge": "purple",
+    "harga_per_kg": 48000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 48"
+  },
+  {
+    "harga_id": "HB-49",
+    "kode_grade": "49",
+    "nama_grade": "Grade 49",
+    "warna_badge": "indigo",
+    "harga_per_kg": 49000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 49"
+  },
+  {
+    "harga_id": "HB-50",
+    "kode_grade": "50",
+    "nama_grade": "Grade 50",
+    "warna_badge": "rose",
+    "harga_per_kg": 50000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 50"
+  },
+  {
+    "harga_id": "HB-51",
+    "kode_grade": "51",
+    "nama_grade": "Grade 51",
+    "warna_badge": "teal",
+    "harga_per_kg": 51000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 51"
+  },
+  {
+    "harga_id": "HB-52",
+    "kode_grade": "52",
+    "nama_grade": "Grade 52",
+    "warna_badge": "red",
+    "harga_per_kg": 52000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 52"
+  },
+  {
+    "harga_id": "HB-53",
+    "kode_grade": "53",
+    "nama_grade": "Grade 53",
+    "warna_badge": "blue",
+    "harga_per_kg": 53000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 53"
+  },
+  {
+    "harga_id": "HB-54",
+    "kode_grade": "54",
+    "nama_grade": "Grade 54",
+    "warna_badge": "emerald",
+    "harga_per_kg": 54000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 54"
+  },
+  {
+    "harga_id": "HB-55",
+    "kode_grade": "55",
+    "nama_grade": "Grade 55",
+    "warna_badge": "amber",
+    "harga_per_kg": 55000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 55"
+  },
+  {
+    "harga_id": "HB-56",
+    "kode_grade": "56",
+    "nama_grade": "Grade 56",
+    "warna_badge": "purple",
+    "harga_per_kg": 56000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 56"
+  },
+  {
+    "harga_id": "HB-57",
+    "kode_grade": "57",
+    "nama_grade": "Grade 57",
+    "warna_badge": "indigo",
+    "harga_per_kg": 57000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 57"
+  },
+  {
+    "harga_id": "HB-58",
+    "kode_grade": "58",
+    "nama_grade": "Grade 58",
+    "warna_badge": "rose",
+    "harga_per_kg": 58000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 58"
+  },
+  {
+    "harga_id": "HB-59",
+    "kode_grade": "59",
+    "nama_grade": "Grade 59",
+    "warna_badge": "teal",
+    "harga_per_kg": 59000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 59"
+  },
+  {
+    "harga_id": "HB-60",
+    "kode_grade": "60",
+    "nama_grade": "Grade 60",
+    "warna_badge": "red",
+    "harga_per_kg": 60000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 60"
+  },
+  {
+    "harga_id": "HB-61",
+    "kode_grade": "61",
+    "nama_grade": "Grade 61",
+    "warna_badge": "blue",
+    "harga_per_kg": 61000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 61"
+  },
+  {
+    "harga_id": "HB-62",
+    "kode_grade": "62",
+    "nama_grade": "Grade 62",
+    "warna_badge": "emerald",
+    "harga_per_kg": 62000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 62"
+  },
+  {
+    "harga_id": "HB-63",
+    "kode_grade": "63",
+    "nama_grade": "Grade 63",
+    "warna_badge": "amber",
+    "harga_per_kg": 63000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 63"
+  },
+  {
+    "harga_id": "HB-64",
+    "kode_grade": "64",
+    "nama_grade": "Grade 64",
+    "warna_badge": "purple",
+    "harga_per_kg": 64000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 64"
+  },
+  {
+    "harga_id": "HB-65",
+    "kode_grade": "65",
+    "nama_grade": "Grade 65",
+    "warna_badge": "indigo",
+    "harga_per_kg": 65000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 65"
+  },
+  {
+    "harga_id": "HB-66",
+    "kode_grade": "66",
+    "nama_grade": "Grade 66",
+    "warna_badge": "rose",
+    "harga_per_kg": 66000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 66"
+  },
+  {
+    "harga_id": "HB-67",
+    "kode_grade": "67",
+    "nama_grade": "Grade 67",
+    "warna_badge": "teal",
+    "harga_per_kg": 67000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 67"
+  },
+  {
+    "harga_id": "HB-68",
+    "kode_grade": "68",
+    "nama_grade": "Grade 68",
+    "warna_badge": "red",
+    "harga_per_kg": 68000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 68"
+  },
+  {
+    "harga_id": "HB-69",
+    "kode_grade": "69",
+    "nama_grade": "Grade 69",
+    "warna_badge": "blue",
+    "harga_per_kg": 69000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 69"
+  },
+  {
+    "harga_id": "HB-70",
+    "kode_grade": "70",
+    "nama_grade": "Grade 70",
+    "warna_badge": "emerald",
+    "harga_per_kg": 70000,
+    "tanggal_berlaku": "2022-06-01",
+    "status": "aktif",
+    "dibuat_oleh": "System",
+    "ketentuan": "Standar Tembakau Rajangan Madura Grade 70"
   }
-  const beratNettoFinalKg = Math.max(0, beratTerukurKg - potonganTaraKg);
-  const totalPotongan = 10000;
-  const totalHargaBeli = Math.round(beratNettoFinalKg * hargaPerKg);
-  const hargaFinal = Math.max(0, totalHargaBeli - totalPotongan);
-  return { jenisTimbang, beratTerukurKg, potonganTaraKg, beratNettoFinalKg, hargaPerKg, totalHargaBeli, totalKotor: totalHargaBeli, potonganBal: 10000, totalPotongan, hargaFinal };
-}
+];
+
+export const GRADE_COLOR_MAP: Record<string, string> = {
+  "30": "emerald",
+  "31": "amber",
+  "32": "purple",
+  "33": "indigo",
+  "34": "rose",
+  "35": "teal",
+  "36": "red",
+  "37": "blue",
+  "38": "emerald",
+  "39": "amber",
+  "40": "purple",
+  "41": "indigo",
+  "42": "rose",
+  "43": "teal",
+  "44": "red",
+  "45": "blue",
+  "46": "emerald",
+  "47": "amber",
+  "48": "purple",
+  "49": "indigo",
+  "50": "rose",
+  "51": "teal",
+  "52": "red",
+  "53": "blue",
+  "54": "emerald",
+  "55": "amber",
+  "56": "purple",
+  "57": "indigo",
+  "58": "rose",
+  "59": "teal",
+  "60": "red",
+  "61": "blue",
+  "62": "emerald",
+  "63": "amber",
+  "64": "purple",
+  "65": "indigo",
+  "66": "rose",
+  "67": "teal",
+  "68": "red",
+  "69": "blue",
+  "70": "emerald",
+  "71": "amber",
+  "72": "purple",
+  "73": "indigo",
+  "74": "rose",
+  "75": "teal",
+  "76": "red",
+  "77": "blue",
+  "78": "emerald",
+  "79": "amber",
+  "80": "purple",
+  "81": "indigo",
+  "82": "rose",
+  "83": "teal",
+  "84": "red",
+  "85": "blue"
+};

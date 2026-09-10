@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { PengirimanBarang, Barang, TabelHarga, TransaksiPembelian } from '../../types';
 import { downloadElementAsPdf, printHtmlElementDirectly } from '../../utils/printDownload';
+import { openPrintDocument } from '../../utils/openDedicatedPrint';
 import { formatNumber, formatRupiah, angkaTerbilang } from '../../utils/formatters';
 
 interface SuratJalanPrintModalProps {
@@ -64,11 +65,7 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
   };
 
   const handlePrint = () => {
-    if (!printAreaRef.current) return;
-    printHtmlElementDirectly(
-      printAreaRef.current,
-      `Surat Jalan DO - ${pengiriman.no_surat_jalan}`
-    );
+    openPrintDocument('surat_jalan', pengiriman.pengiriman_id);
   };
 
   // Helper to lookup default unit price by grade
@@ -111,34 +108,22 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
     // Priority 1: Agreed deal price from Sample Batch negotiation
     let pricePerKg = pengiriman.harga_deal_map?.[id];
     
-    // Priority 2: Transaction / Purchase price from inventory
+    // If no deal price is provided for DO, default to 0 to prevent leaking buy price
     if (!pricePerKg || pricePerKg <= 0) {
-      pricePerKg = found?.harga_per_kg;
-    }
-    if (!pricePerKg || pricePerKg <= 0) {
-      if (found?.transaksi_pembelian_id) {
-        const tx = transaksiList.find((t) => t.transaksi_id === found.transaksi_pembelian_id);
-        if (tx && tx.harga_per_kg > 0) {
-          pricePerKg = tx.harga_per_kg;
-        }
-      }
-    }
-    if (!pricePerKg || pricePerKg <= 0) {
-      pricePerKg = getDefaultPriceByGrade(grade);
+      pricePerKg = 0;
     }
 
     const subtotal = Math.round(berat * pricePerKg);
 
     const kodeHarga = pengiriman.kode_harga_jual_map?.[id];
-    const keteranganStr = kodeHarga
-      ? `Kode: ${kodeHarga} • Grade ${grade}`
-      : `Tembakau Madura Grade ${grade}`;
+    const displayGrade = kodeHarga || grade;
+    const keteranganStr = `Tembakau Madura Grade ${displayGrade}`;
 
     return {
       barang_id: id,
       no_bal: found?.no_bal || `BAL-${String(index + 1).padStart(3, '0')}`,
       barcode: barcodeVal,
-      kode_grade: grade,
+      kode_grade: typeof displayGrade !== 'undefined' ? displayGrade : grade,
       berat_kg: berat,
       harga_per_kg: pricePerKg,
       total_harga: subtotal,
@@ -209,9 +194,10 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
               type="button"
               onClick={handlePrint}
               className="px-4 py-1.5 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#a0181e] rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs whitespace-nowrap"
+              title="Buka Halaman Cetak Surat Jalan (Pilih PDF atau Printer)"
             >
               <Printer className="w-3.5 h-3.5" />
-              <span>Cetak Sekarang</span>
+              <span>Buka Dialog Cetak / PDF</span>
             </button>
 
             <button
@@ -278,10 +264,7 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
                   <span className="font-bold text-sm text-gray-900 block leading-tight">{pengiriman.tujuan}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-[11px] pt-0.5">
-                  <div>
-                    <span className="text-gray-500 text-[10px] block">No. Kontrak / PO:</span>
-                    <span className="font-mono font-bold text-gray-800">{pengiriman.nomor_kontrak || '-'}</span>
-                  </div>
+                  
                   <div>
                     <span className="text-gray-500 text-[10px] block">Gudang Pengirim:</span>
                     <span className="font-semibold text-gray-800">Gudang Pusat Pamekasan</span>
@@ -319,39 +302,35 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
                 </span>
               </div>
 
-              <table className="w-full text-xs text-left border-collapse border border-gray-400">
+              <table className="w-full text-xs text-left border-collapse border border-gray-400 table-fixed">
                 <thead>
                   <tr className="bg-gray-100 border-b border-gray-400 font-bold text-gray-900 text-[11px]">
-                    <th className="p-2 border border-gray-300 text-center w-8">No</th>
-                    <th className="p-2 border border-gray-300">No Bal / Barcode</th>
-                    <th className="p-2 border border-gray-300 text-center w-16">Grade</th>
-                    <th className="p-2 border border-gray-300 text-right w-24">Berat Netto</th>
-                    <th className="p-2 border border-gray-300 text-right w-28">Harga / Kg</th>
-                    <th className="p-2 border border-gray-300 text-right w-32">Total Harga</th>
-                    <th className="p-2 border border-gray-300">Keterangan</th>
+                    <th className="p-2 border border-gray-300 text-center w-[6%]">No</th>
+                    <th className="p-2 border border-gray-300 w-[22%]">No Bal / Barcode</th>
+                    <th className="p-2 border border-gray-300 text-center w-[12%]">Grade</th>
+                    <th className="p-2 border border-gray-300 text-right w-[18%]">Berat Netto</th>
+                    <th className="p-2 border border-gray-300 text-right w-[21%]">Harga / Kg</th>
+                    <th className="p-2 border border-gray-300 text-right w-[21%]">Total Harga</th>
                   </tr>
                 </thead>
                 <tbody>
                   {balDetails.map((b, idx) => (
                     <tr key={idx} className={idx % 2 === 1 ? 'bg-gray-50/70' : 'bg-white'}>
                       <td className="p-1.5 border border-gray-300 text-center font-mono text-gray-600">{idx + 1}</td>
-                      <td className="p-1.5 border border-gray-300 font-mono font-bold text-gray-900">{b.no_bal}</td>
+                      <td className="p-1.5 border border-gray-300 font-mono font-bold text-gray-900 truncate" title={b.no_bal}>{b.no_bal}</td>
                       <td className="p-1.5 border border-gray-300 text-center font-bold">
                         <span className="px-1.5 py-0.5 bg-gray-100 border border-gray-300 text-gray-900 rounded-none text-[10px]">
                           {b.kode_grade}
                         </span>
                       </td>
-                      <td className="p-1.5 border border-gray-300 text-right font-mono font-semibold text-gray-900">
+                      <td className="p-1.5 border border-gray-300 text-right font-mono font-semibold text-gray-900 whitespace-nowrap">
                         {b.berat_kg.toLocaleString('id-ID', { maximumFractionDigits: 2 })} kg
                       </td>
-                      <td className="p-1.5 border border-gray-300 text-right font-mono text-gray-700">
+                      <td className="p-1.5 border border-gray-300 text-right font-mono text-gray-700 whitespace-nowrap">
                         {formatRupiah(b.harga_per_kg)}
                       </td>
-                      <td className="p-1.5 border border-gray-300 text-right font-mono font-bold text-gray-950">
+                      <td className="p-1.5 border border-gray-300 text-right font-mono font-bold text-gray-950 whitespace-nowrap">
                         {formatRupiah(b.total_harga)}
-                      </td>
-                      <td className="p-1.5 border border-gray-300 text-gray-600 text-[11px] truncate max-w-[130px]">
-                        {b.keterangan}
                       </td>
                     </tr>
                   ))}
@@ -359,19 +338,16 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
                   {/* Summary Subtotal Row */}
                   <tr className="bg-gray-100 font-bold border-t-2 border-gray-400 text-gray-900">
                     <td colSpan={3} className="p-2 border border-gray-300 text-right uppercase text-[11px]">
-                      TOTAL MUATAN:
+                      TOTAL {totalItemsCount} BAL:
                     </td>
-                    <td className="p-2 border border-gray-300 text-right font-mono font-black text-blue-900 text-xs">
+                    <td className="p-2 border border-gray-300 text-right font-mono font-black text-blue-900 text-xs whitespace-nowrap">
                       {formatNumber(grandTotalBerat)} kg
                     </td>
-                    <td className="p-2 border border-gray-300 text-right font-mono text-gray-600 text-[10.5px]">
+                    <td className="p-2 border border-gray-300 text-right font-mono text-gray-600 text-[10.5px] whitespace-nowrap">
                       Rata-rata: {formatRupiah(averageHargaPerKg)}
                     </td>
-                    <td className="p-2 border border-gray-300 text-right font-mono font-black text-[#b81d24] text-xs">
+                    <td className="p-2 border border-gray-300 text-right font-mono font-black text-[#b81d24] text-xs whitespace-nowrap">
                       {formatRupiah(grandTotalNilai)}
-                    </td>
-                    <td className="p-2 border border-gray-300 font-mono text-[10.5px] text-gray-700">
-                      {totalItemsCount} Bal ({(grandTotalBerat / 1000).toFixed(2)} Ton)
                     </td>
                   </tr>
                 </tbody>
@@ -415,7 +391,7 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
                   <span className="text-[10px] text-gray-500">PR. Sekar Maju Sejahtera</span>
                 </div>
                 <div className="border-t border-gray-400 font-bold text-gray-900 pt-1 inline-block px-4 min-w-[120px]">
-                  ( {pengiriman.petugas || 'Admin Logistik'} )
+                  {pengiriman.petugas || <>&nbsp;</>}
                 </div>
               </div>
 
@@ -425,7 +401,7 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
                   <span className="text-[10px] text-gray-500">Pembawa Muatan</span>
                 </div>
                 <div className="border-t border-gray-400 font-bold text-gray-900 pt-1 inline-block px-4 min-w-[120px]">
-                  ( {pengiriman.driver_nama || 'Supir Kendaraan'} )
+                  {pengiriman.driver_nama || <>&nbsp;</>}
                 </div>
               </div>
 
@@ -435,7 +411,7 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
                   <span className="text-[10px] text-gray-500">{pengiriman.tujuan}</span>
                 </div>
                 <div className="border-t border-gray-400 font-bold text-gray-900 pt-1 inline-block px-4 min-w-[120px]">
-                  ( ........................................ )
+                  {pengiriman.penerima || <>&nbsp;</>}
                 </div>
               </div>
             </div>

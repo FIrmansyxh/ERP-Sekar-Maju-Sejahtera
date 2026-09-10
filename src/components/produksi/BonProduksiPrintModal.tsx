@@ -254,21 +254,21 @@ export const BonProduksiPrintModal: React.FC<BonProduksiPrintModalProps> = ({
             <div className="space-y-12">
               <span className="font-semibold text-gray-600 block">Dikeluarkan Oleh (Gudang)</span>
               <div className="border-t border-gray-400 pt-1 font-bold text-gray-900">
-                ( {pengeluaran.dibuat_oleh || 'Kepala Gudang Bahan Baku'} )
+                {pengeluaran.dibuat_oleh || <>&nbsp;</>}
               </div>
             </div>
 
             <div className="space-y-12">
               <span className="font-semibold text-gray-600 block">Petugas Pemindahan / Logistik</span>
               <div className="border-t border-gray-400 pt-1 font-bold text-gray-900">
-                ( Petugas Logistik Internal )
+                <>&nbsp;</>
               </div>
             </div>
 
             <div className="space-y-12">
               <span className="font-semibold text-gray-600 block">Diterima Mandor Produksi Rokok</span>
               <div className="border-t border-gray-400 pt-1 font-bold text-gray-900">
-                ( {pengeluaran.mandor_produksi || 'Mandor Produksi SKT/SKM'} )
+                {pengeluaran.mandor_produksi || <>&nbsp;</>}
               </div>
             </div>
           </div>

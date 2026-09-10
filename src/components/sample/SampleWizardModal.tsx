@@ -55,7 +55,7 @@ export const SampleWizardModal: React.FC<SampleWizardModalProps> = ({
   const [beratGramPerBal, setBeratGramPerBal] = useState<number>(250);
   const [tujuanBuyer, setTujuanBuyer] = useState<string>('');
   const [sumberGudang, setSumberGudang] = useState<string>('Gudang Utama Tembakau A1');
-  const [dikirimOleh, setDikirimOleh] = useState<string>('Petugas QC & Sortir');
+  const [dikirimOleh, setDikirimOleh] = useState<string>('');
   const [catatan, setCatatan] = useState<string>('Pengujian organoleptik dan kadar air laboratorium');
 
   const scannerInputRef = useRef<HTMLInputElement>(null);
@@ -89,9 +89,14 @@ export const SampleWizardModal: React.FC<SampleWizardModalProps> = ({
       (b) =>
         b.status !== 'dibatalkan' &&
         b.items?.some(
-          (it) =>
-            it.barang_id === bal.barang_id ||
-            (it.no_bal && bal.no_bal && it.no_bal.trim().toLowerCase() === bal.no_bal.trim().toLowerCase())
+          (it) => {
+            const isMatch = it.barang_id === bal.barang_id || (it.no_bal && bal.no_bal && it.no_bal.trim().toLowerCase() === bal.no_bal.trim().toLowerCase());
+            // If the item was rejected in the batch, it can be used again
+            if (isMatch && (it.status_item === 'ditolak' || (it as any).status === 'ditolak')) {
+              return false;
+            }
+            return isMatch;
+          }
         )
     );
     if (matchedBatch) {
@@ -347,7 +352,7 @@ export const SampleWizardModal: React.FC<SampleWizardModalProps> = ({
                     type="text"
                     value={balInput}
                     onChange={(e) => setBalInput(e.target.value)}
-                    placeholder="Arahkan scanner / ketik No Bal misal: A0001..."
+                    placeholder="Scan barcode / ketik No Bal..."
                     className="flex-1 bg-white border border-[#ced4da] rounded-none px-3 py-1.5 text-xs font-mono font-bold text-gray-900 focus:outline-none focus:border-gray-900"
                     autoFocus
                   />
@@ -394,7 +399,6 @@ export const SampleWizardModal: React.FC<SampleWizardModalProps> = ({
                   </div>
 
                   <div className="flex items-center space-x-1.5 text-[11px]">
-                    <span className="text-[10px] text-gray-500 italic hidden sm:inline">*SOP: Manual / scan barcode per bal</span>
                     {selectedBarangIds.length > 0 && (
                       <button
                         type="button"

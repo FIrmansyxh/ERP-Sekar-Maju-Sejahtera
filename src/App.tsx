@@ -10,8 +10,7 @@ import {
   User,
   UserRole,
   MasterHargaJual,
-  BatchPengirimanSample,
-  LogAktivitas
+  BatchPengirimanSample
 } from './types';
 import { 
   loadPetaniData, 
@@ -34,8 +33,6 @@ import {
   saveGudangData,
   loadUserData, 
   saveUserData,
-  loadLogAktivitasData,
-  recordLogAktivitas,
   loadCurrentUser, 
   saveCurrentUser,
   resetToDemoData
@@ -106,12 +103,55 @@ import { PengirimanManagement } from './components/pengiriman/PengirimanManageme
 import { SampleManagement } from './components/sample/SampleManagement';
 
 import { StatusBatchPengirimanManagement } from './components/pengiriman/StatusBatchPengirimanManagement';
-import { LogAktivitasManagement } from './components/log/LogAktivitasManagement';
 import { HargaJualManagement } from './components/harga_jual/HargaJualManagement';
+import { DedicatedPrintView } from './components/print/DedicatedPrintView';
 
 import { CheckCircle2, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 
 export default function App() {
+  // Check URL params for standalone print route (e.g. ?cetak=nota&id=... or ?cetak=surat_jalan&id=...)
+  const [printParam, setPrintParam] = useState<{
+    type: 'nota' | 'surat_jalan' | 'sample' | 'bon_produksi';
+    id: string;
+  } | null>(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const cetakType = urlParams.get('cetak');
+      const id = urlParams.get('id') || urlParams.get('no_transaksi');
+      if (
+        (cetakType === 'nota' ||
+          cetakType === 'surat_jalan' ||
+          cetakType === 'sample' ||
+          cetakType === 'bon_produksi') &&
+        id
+      ) {
+        return { type: cetakType, id };
+      }
+    } catch {}
+    return null;
+  });
+
+  // State for in-app fallback print view (when window.open is blocked by browser iframe)
+  const [embeddedPrintDoc, setEmbeddedPrintDoc] = useState<{
+    type: 'nota' | 'surat_jalan' | 'sample' | 'bon_produksi';
+    id: string;
+  } | null>(null);
+
+  // Global event listener for print requests across modules
+  useEffect(() => {
+    const handlePrintEvent = (e: Event) => {
+      const customEvt = e as CustomEvent<{
+        type: 'nota' | 'surat_jalan' | 'sample' | 'bon_produksi';
+        id: string;
+      }>;
+      if (customEvt.detail) {
+        setEmbeddedPrintDoc(customEvt.detail);
+      }
+    };
+    window.addEventListener('erp-open-print-doc', handlePrintEvent);
+    return () => window.removeEventListener('erp-open-print-doc', handlePrintEvent);
+  }, []);
+
   // User Authentication & RBAC States
   const [currentUser, setCurrentUser] = useState<User | null>(() => loadCurrentUser());
   const [userList, setUserList] = useState<User[]>(() => loadUserData());
@@ -207,9 +247,26 @@ export default function App() {
   const [hargaJualList, setHargaJualList] = useState<MasterHargaJual[]>(() => loadHargaJualData());
   const [batchSampleList, setBatchSampleList] = useState<BatchPengirimanSample[]>(() => loadBatchSampleData());
   const [selectedBatchIdForShipment, setSelectedBatchIdForShipment] = useState<string>('');
-  const [logAktivitasList, setLogAktivitasList] = useState<LogAktivitas[]>(() => loadLogAktivitasData());
+  
 
-  const [activeModuleId, setActiveModuleId] = useState<string>('modul-home');
+  const [activeModuleId, setActiveModuleId] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('erp_tembakau_active_module');
+      return saved || 'modul-home';
+    } catch {
+      return 'modul-home';
+    }
+  });
+
+  useEffect(() => {
+    try {
+      if (activeModuleId) {
+        localStorage.setItem('erp_tembakau_active_module', activeModuleId);
+      }
+    } catch {
+      // ignore
+    }
+  }, [activeModuleId]);
   const [targetKuponNo, setTargetKuponNo] = useState<string | undefined>(undefined);
   const [targetTxId, setTargetTxId] = useState<string | undefined>(undefined);
   const [targetBalNo, setTargetBalNo] = useState<string | undefined>(undefined);
@@ -244,7 +301,7 @@ export default function App() {
     setGudangList(loadGudangData());
     setHargaJualList(loadHargaJualData());
     setBatchSampleList(loadBatchSampleData());
-    setLogAktivitasList(loadLogAktivitasData());
+    
   }, []);
 
   // Check RBAC module access whenever activeModuleId or currentUser changes
@@ -280,11 +337,56 @@ export default function App() {
     showToast(`Selamat Datang, ${user.nama_lengkap}! Login berhasil.`);
   };
 
-  const handleLogout = () => {
+  const handleLogout = (autoLogout: boolean = false) => {
     setCurrentUser(null);
     saveCurrentUser(null);
-    showToast('Anda telah berhasil keluar dari sistem.', 'info');
+    if (autoLogout === true) {
+      showToast('Sesi berakhir otomatis karena tidak ada aktivitas selama 30 menit demi keamanan.', 'info');
+    } else {
+      showToast('Anda telah berhasil keluar dari sistem.', 'info');
+    }
   };
+
+  // --- Auto Logout (Idle Timer) ---
+  useEffect(() => {
+    if (!currentUser) return; // Only track idle if logged in
+
+    let idleTimer: ReturnType<typeof setTimeout>;
+    let isThrottled = false;
+
+    const resetIdleTimer = () => {
+      clearTimeout(idleTimer);
+      // Set to 30 minutes (30 * 60 * 1000 ms)
+      idleTimer = setTimeout(() => {
+        handleLogout(true);
+      }, 30 * 60 * 1000);
+    };
+
+    const handleUserActivity = () => {
+      // Throttle timer reset to at most once per second for performance (e.g. mousemove)
+      if (!isThrottled) {
+        resetIdleTimer();
+        isThrottled = true;
+        setTimeout(() => { isThrottled = false; }, 1000);
+      }
+    };
+
+    // Initial setup
+    resetIdleTimer();
+
+    // Listen to standard activity events
+    const activityEvents = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'];
+    activityEvents.forEach((eventName) => {
+      window.addEventListener(eventName, handleUserActivity);
+    });
+
+    return () => {
+      clearTimeout(idleTimer);
+      activityEvents.forEach((eventName) => {
+        window.removeEventListener(eventName, handleUserActivity);
+      });
+    };
+  }, [currentUser]);
 
   const handleSwitchUser = (targetUser: User) => {
     setCurrentUser(targetUser);
@@ -539,13 +641,36 @@ export default function App() {
     saveTransaksiData(updatedTxList);
 
     const barangsToAdd = Array.isArray(generatedBarang) ? generatedBarang : (generatedBarang ? [generatedBarang] : []);
-    if (barangsToAdd.length > 0) {
-      const addedIds = new Set(barangsToAdd.map((b) => b.barang_id));
-      const filteredOldBarangs = barangList.filter((b) => !addedIds.has(b.barang_id));
-      const updatedBarangList = [...barangsToAdd, ...filteredOldBarangs];
-      setBarangList(updatedBarangList);
-      saveBarangData(updatedBarangList);
+    
+    // Always clean up orphaned barangs for this transaction
+    const validRefsForTx = new Set<string>();
+    barangsToAdd.forEach(b => validRefsForTx.add(b.barang_id));
+    newTx.items?.forEach(i => {
+      if (i.barang_id) validRefsForTx.add(i.barang_id);
+      if (i.no_bal) validRefsForTx.add(i.no_bal);
+      if (i.barcode) validRefsForTx.add(i.barcode);
+    });
+    newTx.barang_ids?.forEach(id => validRefsForTx.add(id));
+    
+    let updatedBarangList = barangList;
+    if (exists) {
+      updatedBarangList = barangList.filter((b) => {
+        if (b.transaksi_pembelian_id === newTx.transaksi_id) {
+          // Keep only if it's in the new updated list or still referenced in the transaction items
+          return validRefsForTx.has(b.barang_id) || validRefsForTx.has(b.no_bal);
+        }
+        return true;
+      });
     }
+
+    if (barangsToAdd.length > 0) {
+      const addedIds = new Set(barangsToAdd.map(b => b.barang_id));
+      const filteredOldBarangs = updatedBarangList.filter((b) => !addedIds.has(b.barang_id));
+      updatedBarangList = [...barangsToAdd, ...filteredOldBarangs];
+    }
+    
+    setBarangList(updatedBarangList);
+    saveBarangData(updatedBarangList);
 
     const balCount = newTx.total_bal || (newTx.items ? newTx.items.length : 1);
     const itemBalList = (newTx.items && newTx.items.length > 0)
@@ -608,47 +733,13 @@ export default function App() {
           diffSummary.push(`Status bayar: ${oldTx.status_pembayaran} -> ${newTx.status_pembayaran}`);
         }
 
-        recordLogAktivitas({
-          user_id: currentUser?.user_id || 'USR-001',
-          username: currentUser?.username || 'admin',
-          nama_lengkap: currentUser?.nama_lengkap || 'Administrator',
-          role: currentUser?.role || currentRole,
-          modul: 'transaksi',
-          aksi: 'Edit & Pembaruan Transaksi',
-          tipe_aksi: 'edit',
-          transaksi_id: newTx.transaksi_id,
-          no_kupon: newTx.no_kupon,
-          no_bal: itemBalList,
-          nama_petani: newTx.nama_petani,
-          berat_kg: newTx.berat_kg,
-          alasan: newTx.alasan_perubahan_terakhir || 'Pembaruan data transaksi via sistem',
-          status: 'sukses',
-          rincian: `EDIT TRANSAKSI: Data Kupon ${newTx.no_kupon} (${newTx.transaksi_id}) milik Petani "${newTx.nama_petani}" diperbarui oleh ${currentUser?.nama_lengkap || 'Admin'} (@${currentUser?.username || 'admin'}). Pembuat Asli: ${oldTx.operator_nama || oldTx.petugas_sortir || 'Operator Awal'}. Perubahan: ${diffSummary.length > 0 ? diffSummary.join('; ') : 'Pembaruan data bal / alur proses'}.${newTx.alasan_perubahan_terakhir ? ` Alasan: "${newTx.alasan_perubahan_terakhir}".` : ''}`,
-          data_sebelum: JSON.stringify(oldTx, null, 2),
-          data_sesudah: JSON.stringify(newTx, null, 2),
-        });
+        
       }
     } else {
-      recordLogAktivitas({
-        user_id: currentUser?.user_id || 'USR-001',
-        username: currentUser?.username || 'admin',
-        nama_lengkap: currentUser?.nama_lengkap || 'Administrator',
-        role: currentUser?.role || currentRole,
-        modul: 'transaksi',
-        aksi: 'Input Transaksi Baru',
-        tipe_aksi: 'tambah',
-        transaksi_id: newTx.transaksi_id,
-        no_kupon: newTx.no_kupon,
-        no_bal: itemBalList,
-        nama_petani: newTx.nama_petani,
-        berat_kg: newTx.berat_kg,
-        status: 'sukses',
-        rincian: `TRANSAKSI BARU: Pembuatan transaksi Kupon ${newTx.no_kupon} (${newTx.transaksi_id}) untuk Petani ${newTx.nama_petani}. Total ${balCount} Bal (${itemBalList}), Berat ${newTx.berat_kg} Kg, Nilai Rp ${(newTx.harga_final || newTx.total_harga_beli).toLocaleString('id-ID')}. Dicatat oleh ${currentUser?.nama_lengkap || 'Admin'}.`,
-        data_sesudah: JSON.stringify(newTx, null, 2),
-      });
+      
     }
 
-    setLogAktivitasList(loadLogAktivitasData());
+    
     showToast(`Transaksi ${newTx.transaksi_id} (${balCount} Bal, ${newTx.berat_kg} Kg) berhasil disimpan!`);
   };
 
@@ -666,7 +757,7 @@ export default function App() {
       (txToDelete.items || []).map((i) => i.barang_id || i.no_bal)
     );
     const updatedBarangList = barangList.filter((b) => {
-      if (b.transaksi_id === transaksiId) return false;
+      if (b.transaksi_pembelian_id === transaksiId || (b as any).transaksi_id === transaksiId) return false;
       if (b.barang_id && txItemBalIds.has(b.barang_id)) return false;
       if (b.no_bal && (b.no_bal === txToDelete.no_bal || txItemBalIds.has(b.no_bal))) return false;
       return true;
@@ -700,27 +791,9 @@ export default function App() {
       : txToDelete.no_bal || '-';
     const totalNilai = txToDelete.harga_final || txToDelete.total_harga_beli || 0;
 
-    recordLogAktivitas({
-      user_id: currentUser?.user_id || 'USR-001',
-      username: currentUser?.username || 'admin',
-      nama_lengkap: currentUser?.nama_lengkap || 'Administrator',
-      role: currentUser?.role || currentRole,
-      modul: 'transaksi',
-      aksi: 'Hapus Transaksi Pembelian',
-      tipe_aksi: 'hapus',
-      transaksi_id: txToDelete.transaksi_id,
-      no_kupon: txToDelete.no_kupon,
-      no_bal: itemBalList,
-      nama_petani: txToDelete.nama_petani,
-      berat_kg: txToDelete.berat_kg,
-      alasan: alasanHapus || 'Dihapus oleh user via menu transaksi',
-      status: 'peringatan',
-      rincian: `HAPUS TRANSAKSI: Transaksi Kupon ${txToDelete.no_kupon} (${txToDelete.transaksi_id}) milik Petani "${txToDelete.nama_petani}" DIHAPUS PERMANEN oleh ${currentUser?.nama_lengkap || 'Admin'} (@${currentUser?.username || 'admin'}, role: ${currentUser?.role || currentRole}). Pembuat Asli: ${txToDelete.operator_nama || txToDelete.petugas_sortir || 'Operator Awal'}. Data terhapus: ${balCount} Bal (${itemBalList}), Netto ${txToDelete.berat_kg} Kg, Nilai Rp ${totalNilai.toLocaleString('id-ID')}. Alasan: "${alasanHapus || 'Penghapusan administratif oleh user'}". Bal gudang terkait transaksi ini telah ditarik.`,
-      data_sebelum: JSON.stringify(txToDelete, null, 2),
-      data_sesudah: 'DATA TRANSAKSI DAN INVENTARIS BAL TERKAIT DIHAPUS PERMANEN DARI SISTEM',
-    });
+    
 
-    setLogAktivitasList(loadLogAktivitasData());
+    
     showToast(`Transaksi ${transaksiId} dan data bal terkait berhasil dihapus.`);
   };
 
@@ -783,7 +856,7 @@ export default function App() {
             }
             return it;
           });
-          const allSent = updatedItems.length > 0 && updatedItems.every((it) => it.sudah_dikirim_do);
+          const allSent = updatedItems.length > 0 && updatedItems.every((it) => it.sudah_dikirim_do || it.status_item === 'ditolak') && updatedItems.some(it => it.sudah_dikirim_do);
           return {
             ...batch,
             items: updatedItems,
@@ -831,6 +904,22 @@ export default function App() {
     showToast(`Batch Sample ${newBatch.kode_batch} berhasil dikirim ke ${newBatch.tujuan_buyer}!`);
   };
 
+
+  const handleDeleteBatchSample = (batchId: string, revertedBarangs?: Barang[]) => {
+    const list = batchSampleList.filter(b => b.batch_id !== batchId);
+    setBatchSampleList(list);
+    saveBatchSampleData(list);
+    
+    if (revertedBarangs && revertedBarangs.length > 0) {
+      const updatedBarangMap = new Map(revertedBarangs.map((b) => [b.barang_id, b]));
+      const newBarangList = barangList.map((b) => updatedBarangMap.get(b.barang_id) || b);
+      setBarangList(newBarangList);
+      saveBarangData(newBarangList);
+    }
+    
+    showToast(`Batch ${batchId} berhasil dihapus.`);
+  };
+
   const handleUpdateBatchSample = (updatedBatch: BatchPengirimanSample, updatedBarangs?: Barang[]) => {
     const list = batchSampleList.map(b => b.batch_id === updatedBatch.batch_id ? updatedBatch : b);
     setBatchSampleList(list);
@@ -865,7 +954,7 @@ export default function App() {
     setUserList(loadUserData());
     setHargaJualList(loadHargaJualData());
     setBatchSampleList(loadBatchSampleData());
-    setLogAktivitasList(loadLogAktivitasData());
+    
     showToast('Data sistem ERP berhasil direset ke dataset demo default.');
   };
 
@@ -919,6 +1008,26 @@ export default function App() {
   };
 
   const pageInfo = getPageTitleAndBreadcrumb();
+
+  // Dedicated Standalone Print View (matches user's reference sekaranomgroup.com/cetak_... tab)
+  if (printParam) {
+    return (
+      <DedicatedPrintView
+        type={printParam.type}
+        id={printParam.id}
+        onClose={() => {
+          window.history.replaceState({}, '', window.location.pathname);
+          setPrintParam(null);
+        }}
+        isEmbedded={false}
+        transaksiList={transaksiList}
+        pengirimanList={pengirimanList}
+        barangList={barangList}
+        petaniList={petaniList}
+        tabelHarga={hargaList}
+      />
+    );
+  }
 
   // If user is not authenticated, show Login View
   if (!currentUser) {
@@ -1282,11 +1391,15 @@ export default function App() {
                 gudangList={gudangList}
                 petaniList={petaniList}
                 hargaJualList={hargaJualList}
+                hargaList={hargaList}
+                transaksiList={transaksiList}
                 userRole={currentRole}
                 onSaveNewSample={handleSaveNewSample}
                 onSaveBatchSamples={handleSaveBatchSamples}
+
                 onSaveBatchSample={handleSaveBatchSample}
                 onUpdateBatchSample={handleUpdateBatchSample}
+                onDeleteBatchSample={handleDeleteBatchSample}
                 onUpdateSample={handleUpdateSample}
                 onNavigateToPengiriman={(batchId) => {
                   if (batchId) {
@@ -1347,6 +1460,7 @@ export default function App() {
                 barangList={barangList}
                 hargaJualList={hargaJualList}
                 onUpdateBatchSample={handleUpdateBatchSample}
+                onDeleteBatchSample={handleDeleteBatchSample}
                 onUpdatePengirimanStatus={handleUpdatePengirimanStatus}
                 onNavigateToPengirimanWithBatch={(batchId) => {
                   setSelectedBatchIdForShipment(batchId);
@@ -1356,14 +1470,7 @@ export default function App() {
             )}
 
             {/* Log Aktivitas */}
-            {activeModuleId === 'modul-log-aktivitas' && (
-              <LogAktivitasManagement
-                logs={logAktivitasList}
-                currentUser={currentUser}
-                allUsers={userList}
-                onRefreshLogs={() => setLogAktivitasList(loadLogAktivitasData())}
-              />
-            )}
+            
 
           </div>
         </main>
@@ -1426,6 +1533,21 @@ export default function App() {
         petaniList={petaniList}
         onImportSuccess={handleImportSuccess}
       />
+
+      {/* Universal In-App Print & PDF Preview Modal */}
+      {embeddedPrintDoc && (
+        <DedicatedPrintView
+          type={embeddedPrintDoc.type}
+          id={embeddedPrintDoc.id}
+          onClose={() => setEmbeddedPrintDoc(null)}
+          isEmbedded={true}
+          transaksiList={transaksiList}
+          pengirimanList={pengirimanList}
+          barangList={barangList}
+          petaniList={petaniList}
+          tabelHarga={hargaList}
+        />
+      )}
 
       {/* Toast Notification Popup */}
       {toast && (

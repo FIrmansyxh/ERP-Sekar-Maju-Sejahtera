@@ -212,8 +212,19 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
 
   // 2. PER-GRADE METRICS CALCULATION
   const gradeMetrics = useMemo(() => {
-    // Total active bal in warehouse
-    const activeBal = barangList.filter((b) => b.status_stok === 'di_gudang' || b.status_stok === 'siap_kirim');
+    // Find which pengirimans are NOT completed (still loading/in transit)
+    const activePengirimanIds = new Set(
+      pengirimanList
+        .filter(p => p.status !== 'diterima' && p.status !== 'selesai')
+        .map(p => p.pengiriman_id)
+    );
+
+    // Total active bal in warehouse + in transit
+    const activeBal = barangList.filter((b) => {
+      if (b.status_stok === 'di_gudang' || b.status_stok === 'siap_kirim' || b.status_stok === 'terkirim_sample') return true;
+      if (b.status_stok === 'keluar' && b.pengiriman_id && activePengirimanIds.has(b.pengiriman_id)) return true;
+      return false;
+    });
     const totalActiveBalCount = activeBal.length || 1;
     const totalActiveBalKg = activeBal.reduce((sum, b) => sum + (b.berat_kg || 0), 0) || 1;
 
@@ -226,7 +237,9 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
       const stokKg = inGudangBal.reduce((sum, b) => sum + (b.berat_kg || 0), 0);
       const persenStokBal = (stokBal / totalActiveBalCount) * 100;
       const persenStokKg = (stokKg / totalActiveBalKg) * 100;
-      const valuasiRupiah = stokKg * g.price;
+      
+      // Calculate valuasi using actual buy price if available, fallback to grade price
+      const valuasiRupiah = inGudangBal.reduce((sum, b) => sum + (b.total_harga || ((b.berat_kg || 0) * (b.harga_per_kg || g.price))), 0);
 
       // Inbound / Intake (From Transaksi)
       // Note: If transaction has items, count items with this grade. If single bal transaction without items, check t.kode_grade.
@@ -505,7 +518,7 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
   const handleDownloadBalDetailCsv = () => {
     const headers = [
       'No',
-      'No Bal',
+      'ID Bal',
       'No Bal',
       'Grade',
       'Berat Netto (kg)',
@@ -617,7 +630,7 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
         <div className="bg-white p-4 border border-gray-200 shadow-xs relative overflow-hidden">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-              Valuasi Aset Tembakau
+              Valuasi Aset (Stok di Gudang)
             </span>
             <span className="p-1.5 bg-blue-50 text-blue-800 rounded-sm">
               <span className="inline-flex items-center justify-center font-bold leading-none w-4 h-4">Rp</span>
@@ -970,8 +983,8 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
             <thead>
               <tr className="bg-gray-50 text-gray-700 font-bold border-b border-gray-200 text-[10px] uppercase">
                 <th className="py-2 px-3 text-center w-10">No</th>
-                <th className="py-2 px-3">No Bal</th>
-                <th className="py-2 px-3">No Bal</th>
+                <th className="py-2 px-3 w-32 whitespace-nowrap">ID Bal</th>
+                <th className="py-2 px-3 w-28 whitespace-nowrap">No Bal</th>
                 <th className="py-2 px-3 text-center">Grade</th>
                 <th className="py-2 px-3 text-right">Berat (kg)</th>
                 <th className="py-2 px-3 text-right">Estimasi Valuasi</th>
@@ -999,10 +1012,10 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
                       <td className="py-2 px-3 text-center font-mono text-gray-500 text-[11px]">
                         {(currentPage - 1) * itemsPerPage + idx + 1}
                       </td>
-                      <td className="py-2 px-3 font-mono font-bold text-gray-900">
+                      <td className="py-2 px-3 font-mono font-bold text-gray-900 w-32 whitespace-nowrap">
                         {bal.barang_id}
                       </td>
-                      <td className="py-2 px-3 font-mono text-gray-800">
+                      <td className="py-2 px-3 font-mono text-gray-800 w-28 whitespace-nowrap">
                         {bal.no_bal}
                       </td>
                       <td className="py-2 px-3 text-center">
@@ -1060,7 +1073,7 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
 
       {/* Hidden DOM for High-Fidelity PDF Generation */}
       <div className="hidden">
-        <div ref={printDocumentRef} className="p-8 bg-white text-gray-900 font-sans text-xs space-y-6">
+        <div ref={printJualRef} className="p-8 bg-white text-gray-900 font-sans text-xs space-y-6">
           {/* Header */}
           <div className="border-b-2 border-gray-900 pb-4 flex items-center justify-between">
             <div>
@@ -1069,7 +1082,7 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
               <p className="text-[10px] text-gray-500">Pusat Intake & Pengolahan Tembakau Madura - Pamekasan, Jawa Timur</p>
             </div>
             <div className="text-right">
-              <h2 className="text-sm font-bold uppercase text-[#b81d24]">LAPORAN MASTER HARGA BELI & VALUASI STOK</h2>
+              <h2 className="text-sm font-bold uppercase text-[#b81d24]">LAPORAN MASTER HARGA JUAL & VALUASI STOK</h2>
               <p className="text-[10px] text-gray-600">Tanggal Ekspor: {new Date().toLocaleDateString('id-ID', { dateStyle: 'full' })}</p>
               <p className="text-[10px] text-gray-500">Total Mutu Terdaftar: {uniqueGrades.length} Grade</p>
             </div>
@@ -1086,7 +1099,7 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
               <strong className="text-sm text-emerald-900">{overallSummary.totalStokBal} Bal ({overallSummary.totalStokKg.toLocaleString('id-ID')} kg)</strong>
             </div>
             <div>
-              <span className="text-[10px] text-gray-500 uppercase block">Total Valuasi Aset:</span>
+              <span className="text-[10px] text-gray-500 uppercase block">Total Valuasi (Stok Gudang):</span>
               <strong className="text-sm text-[#b81d24]">Rp {overallSummary.totalValuasi.toLocaleString('id-ID')}</strong>
             </div>
             <div>
@@ -1595,8 +1608,8 @@ const contentBeli = (
             <thead>
               <tr className="bg-gray-50 text-gray-700 font-bold border-b border-gray-200 text-[10px] uppercase">
                 <th className="py-2 px-3 text-center w-10">No</th>
-                <th className="py-2 px-3">No Bal</th>
-                <th className="py-2 px-3">No Bal</th>
+                <th className="py-2 px-3 w-32 whitespace-nowrap">ID Bal</th>
+                <th className="py-2 px-3 w-28 whitespace-nowrap">No Bal</th>
                 <th className="py-2 px-3 text-center">Grade</th>
                 <th className="py-2 px-3 text-right">Berat (kg)</th>
                 <th className="py-2 px-3 text-right">Estimasi Valuasi</th>
@@ -1624,10 +1637,10 @@ const contentBeli = (
                       <td className="py-2 px-3 text-center font-mono text-gray-500 text-[11px]">
                         {(currentPage - 1) * itemsPerPage + idx + 1}
                       </td>
-                      <td className="py-2 px-3 font-mono font-bold text-gray-900">
+                      <td className="py-2 px-3 font-mono font-bold text-gray-900 w-32 whitespace-nowrap">
                         {bal.barang_id}
                       </td>
-                      <td className="py-2 px-3 font-mono text-gray-800">
+                      <td className="py-2 px-3 font-mono text-gray-800 w-28 whitespace-nowrap">
                         {bal.no_bal}
                       </td>
                       <td className="py-2 px-3 text-center">

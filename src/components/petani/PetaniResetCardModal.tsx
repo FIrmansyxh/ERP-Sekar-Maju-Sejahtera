@@ -32,9 +32,21 @@ export const PetaniResetCardModal: React.FC<PetaniResetCardModalProps> = ({
   const [reason, setReason] = useState<string>('Kartu lama hilang di ladang');
   const [error, setError] = useState<string>('');
 
+  const getNextCardNumber = () => {
+    let maxSeq = 0;
+    existingPetaniList.forEach((p) => {
+      const match = p.petani_id.match(/KRT-(?:[A-Z]+)-(\d+)/i) || p.petani_id.match(/(\d+)/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num > maxSeq) maxSeq = num;
+      }
+    });
+    return generateSuggestedCardNumber('WRA', maxSeq + 1);
+  };
+
   useEffect(() => {
     if (isOpen && petani) {
-      const suggested = generateSuggestedCardNumber('WRA');
+      const suggested = getNextCardNumber();
       setNewCardNumber(suggested);
       setReason('Kartu lama hilang/rusak fisik');
       setError('');
@@ -44,10 +56,7 @@ export const PetaniResetCardModal: React.FC<PetaniResetCardModalProps> = ({
   if (!isOpen || !petani) return null;
 
   const handleGenerateNew = () => {
-    let card = generateSuggestedCardNumber('WRA');
-    while (existingPetaniList.some((p) => p.petani_id.toUpperCase() === card.toUpperCase())) {
-      card = generateSuggestedCardNumber('WRA');
-    }
+    const card = getNextCardNumber();
     setNewCardNumber(card);
     setError('');
   };
@@ -90,7 +99,7 @@ export const PetaniResetCardModal: React.FC<PetaniResetCardModalProps> = ({
               <h2 className="text-sm font-bold text-gray-900 tracking-tight">
                 Penerbitan Ulang ID Petani
               </h2>
-              <p className="text-[11px] text-gray-500">Ganti kartu hilang/rusak dengan audit log</p>
+              <p className="text-[11px] text-gray-500">Ganti kartu hilang/rusak dengan aman</p>
             </div>
           </div>
 

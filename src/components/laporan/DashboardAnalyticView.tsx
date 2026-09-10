@@ -51,18 +51,24 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
 }) => {
   const isQCOnly = userRole === 'qc_mutu';
 
-  // 1. Total Pembelian Petani (Sum Jumlah Bayar)
+  // 1. Total Pembelian (Modal Kotor: Petani + Biaya Kuli/Tali)
   const totalPembelianRupiah = useMemo(() => {
     return transaksiList.reduce((sum, t) => {
+      // HANYA hitung pembelian jika transaksi sudah LUNAS (dibayar)
+      if (t.status_pembayaran !== 'lunas') return sum;
+      
       const subtotal = t.total_harga_beli || (t.berat_kg * t.harga_per_kg);
-      const jmlBayar = t.harga_final || (subtotal - (t.total_potongan || 7000));
-      return sum + jmlBayar;
+      return sum + subtotal;
     }, 0);
   }, [transaksiList]);
 
   // 2. Tonase Masuk (Intake) (Sum Netto kg)
   const totalTonaseMasukKg = useMemo(() => {
-    return transaksiList.reduce((sum, t) => sum + (t.berat_kg || 0), 0);
+    return transaksiList.reduce((sum, t) => {
+      // HANYA hitung tonase masuk jika transaksi sudah LUNAS (dibayar)
+      if (t.status_pembayaran !== 'lunas') return sum;
+      return sum + (t.berat_kg || 0);
+    }, 0);
   }, [transaksiList]);
 
   // Total Terkirim ke Pabrik Luar (Reguler)
@@ -70,15 +76,113 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
     return pengirimanList.reduce((sum, p) => sum + (p.total_berat_kg || 0), 0);
   }, [pengirimanList]);
 
-  // 3. Stok Aktif di Gudang (Di Gudang / Siap Kirim)
+  // 3. Stok Aktif di Gudang & Transit (Di Gudang / Siap Kirim / Transit)
   const stokAktifGudang = useMemo(() => {
-    const balAktif = barangList.filter(b => b.status_stok === 'di_gudang' || b.status_stok === 'siap_kirim');
+    const activePengirimanIds = new Set(
+      pengirimanList.filter(p => p.status !== 'diterima' && p.status !== 'selesai')
+        .map(p => p.pengiriman_id)
+    );
+
+    // Get all valid references from transactions to filter out orphaned/deleted items
+    const validRefsFromTx = new Set<string>();
+    transaksiList.forEach(tx => { if (tx.status_pembayaran === "lunas") {
+      tx.items?.forEach(item => {
+        if (item.barang_id) validRefsFromTx.add(item.barang_id);
+        if (item.no_bal) validRefsFromTx.add(item.no_bal);
+        if (item.barcode) validRefsFromTx.add(item.barcode);
+      });
+      tx.barang_ids?.forEach(id => validRefsFromTx.add(id)); }
+    });
+
+    const balAktif = barangList.filter(b => {
+      // Clean up orphaned items
+      if (b.transaksi_pembelian_id && !validRefsFromTx.has(b.barang_id) && !validRefsFromTx.has(b.no_bal)) return false;
+
+      if (b.status_stok === 'di_gudang' || b.status_stok === 'siap_kirim' || b.status_stok === 'terkirim_sample') return true;
+      if (b.status_stok === 'keluar' && b.pengiriman_id && activePengirimanIds.has(b.pengiriman_id)) return true;
+      return false;
+    });
+
     const totalKg = balAktif.reduce((sum, b) => sum + (b.berat_kg || 0), 0);
     return {
       count: balAktif.length,
       totalKg,
     };
-  }, [barangList]);
+  }, [barangList, pengirimanList, transaksiList]);
+
+  // Helper to get price
+  const getPriceByGrade = (kodeGrade: string) => {
+    const h = (hargaList || []).find(x => (x.kode_grade || '').toUpperCase() === (kodeGrade || '').toUpperCase());
+    return h ? (h.harga_per_kg || 50000) : 50000;
+  };
+
+  // NEW: Total Penjualan (Omset)
+  const totalPenjualanRupiah = useMemo(() => {
+    const completedPengiriman = pengirimanList.filter(p => p.status === 'diterima' || p.status === 'selesai');
+    return completedPengiriman.reduce((sum, p) => {
+      // Prioritize explicit deal value on the DO
+      if (p.total_nilai_deal && p.total_nilai_deal > 0) return sum + p.total_nilai_deal;
+      
+      // Otherwise, iterate through goods and use harga_deal_map or fallback to actual buy price
+      let DOValue = 0;
+      let hasValidItemVal = false;
+      
+      (p.barang_ids || []).forEach(bid => {
+        const b = barangList.find(x => x.barang_id === bid);
+        if (b) {
+          const hargaJual = p.harga_deal_map?.[bid] || 0;
+          if (hargaJual > 0) {
+            DOValue += (b.berat_kg || 0) * hargaJual;
+            hasValidItemVal = true;
+          } else {
+            // DO NOT fallback to buy price, this causes phantom sales.
+            // A sale without a deal price is 0
+            DOValue += 0;
+          }
+        }
+      });
+      
+      // Do not use extreme fallback. If deal price is 0, DO value is 0.
+      return sum + DOValue;
+    }, 0);
+  }, [pengirimanList, barangList, hargaList]);
+
+  // NEW: Valuasi Aset (Nilai Saat Ini)
+  const totalValuasiRupiah = useMemo(() => {
+    const activePengirimanIds = new Set(
+      pengirimanList.filter(p => p.status !== 'diterima' && p.status !== 'selesai')
+        .map(p => p.pengiriman_id)
+    );
+
+    // Get all valid references from transactions to filter out orphaned/deleted items
+    const validRefsFromTx = new Set<string>();
+    transaksiList.forEach(tx => { if (tx.status_pembayaran === "lunas") {
+      tx.items?.forEach(item => {
+        if (item.barang_id) validRefsFromTx.add(item.barang_id);
+        if (item.no_bal) validRefsFromTx.add(item.no_bal);
+        if (item.barcode) validRefsFromTx.add(item.barcode);
+      });
+      tx.barang_ids?.forEach(id => validRefsFromTx.add(id)); }
+    });
+
+    const balValuasi = barangList.filter(b => {
+      // Clean up orphaned items (if it came from a transaction, it must exist in that transaction)
+      if (b.transaksi_pembelian_id && !validRefsFromTx.has(b.barang_id) && !validRefsFromTx.has(b.no_bal)) return false;
+
+      if (b.status_stok === 'di_gudang' || b.status_stok === 'siap_kirim' || b.status_stok === 'terkirim_sample') return true;
+      if (b.status_stok === 'keluar' && b.pengiriman_id && activePengirimanIds.has(b.pengiriman_id)) return true;
+      return false;
+    });
+
+    return balValuasi.reduce((sum, b) => {
+      // Use actual buy price if available, fallback to market grade price
+      const cost = b.total_harga || ((b.berat_kg || 0) * (b.harga_per_kg || getPriceByGrade(b.kode_grade))); return sum + cost;
+    }, 0);
+  }, [barangList, pengirimanList, hargaList]);
+  
+  // NEW: Keuntungan Bersih = Penjualan + Valuasi Aset - Pembelian
+  const totalKeuntunganBersih = totalPenjualanRupiah + totalValuasiRupiah - totalPembelianRupiah;
+  
 
   // 4. Approval Rate Lab QC
   const qcStats = useMemo(() => {
@@ -96,7 +200,7 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
   const topHargaBeli = useMemo(() => {
     const priceMap = new Map<number, { harga: number; count: number; totalKg: number; totalNilai: number }>();
 
-    transaksiList.forEach(tx => {
+    transaksiList.forEach(tx => { if (tx.status_pembayaran === "lunas") {
       const p = tx.harga_per_kg || 0;
       if (p > 0) {
         const existing = priceMap.get(p) || { harga: p, count: 0, totalKg: 0, totalNilai: 0 };
@@ -117,6 +221,7 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
           }
         });
       }
+    }
     });
 
     if (priceMap.size === 0 && hargaList) {
@@ -150,7 +255,7 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
       const existing = map.get(key) || { nama: t.nama_petani, balCount: 0, totalKg: 0, totalNilai: 0 };
       
       const subtotal = t.total_harga_beli || (t.berat_kg * t.harga_per_kg);
-      const jmlBayar = t.harga_final || (subtotal - (t.total_potongan || 7000));
+      const jmlBayar = t.harga_final !== undefined && t.harga_final !== 0 ? t.harga_final : (subtotal - (t.total_potongan || (7000 * (t.total_bal || 1))));
 
       const balInTx = t.total_bal || (t.items && t.items.length) || (t.barang_ids && t.barang_ids.length) || 1;
 
@@ -183,25 +288,46 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
     let totalPercentageSum = 0;
 
     pengirimanList.forEach((pengiriman) => {
-      if (pengiriman.status === 'batal') return;
+      if (pengiriman.status !== 'diterima' && pengiriman.status !== 'selesai') return;
       
+      let doHargaBeli = 0;
+      let doHargaJual = 0;
+      let doBalCount = 0;
+      
+      // Calculate buy price for items in this DO
       pengiriman.barang_ids.forEach((balId) => {
         const bal = barangList.find(b => b.barang_id === balId);
         if (bal) {
-          const hargaBeli = bal.harga_per_kg || 0;
-          const hargaJual = pengiriman.harga_deal_map?.[balId] || 0;
-          const berat = bal.berat_kg || 0;
-
-          if (hargaJual > 0 && hargaBeli > 0 && berat > 0) {
-            totalHargaBeliSold += hargaBeli * berat;
-            totalHargaJualSold += hargaJual * berat;
-            soldBalCount += 1;
-            
-            const balProfitPct = ((hargaJual - hargaBeli) / hargaBeli) * 100;
-            totalPercentageSum += balProfitPct;
-          }
+          doHargaBeli += bal.total_harga || ((bal.harga_per_kg || getPriceByGrade(bal.kode_grade)) * (bal.berat_kg || 0));
+          doBalCount += 1;
         }
       });
+
+      // Avoid division by zero
+      if (doBalCount === 0 || doHargaBeli === 0) return;
+      
+      // Calculate sell price
+      if (pengiriman.total_nilai_deal && pengiriman.total_nilai_deal > 0) {
+          doHargaJual = pengiriman.total_nilai_deal;
+      } else {
+          // Iterate items if no DO total
+          pengiriman.barang_ids.forEach((balId) => {
+            const bal = barangList.find(b => b.barang_id === balId);
+            if (bal) {
+               const hargaJual = pengiriman.harga_deal_map?.[balId] || 0;
+               doHargaJual += hargaJual * (bal.berat_kg || 0);
+            }
+          });
+      }
+      
+      if (doHargaJual > 0 && doHargaBeli > 0) {
+          totalHargaBeliSold += doHargaBeli;
+          totalHargaJualSold += doHargaJual;
+          soldBalCount += doBalCount;
+          // Weighted average for the DO
+          const doProfitPct = ((doHargaJual - doHargaBeli) / doHargaBeli) * 100;
+          totalPercentageSum += doProfitPct * doBalCount; 
+      }
     });
 
     const netProfit = totalHargaJualSold - totalHargaBeliSold;
@@ -216,7 +342,7 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
       totalHargaBeliSold,
       totalHargaJualSold,
     };
-  }, [pengirimanList, barangList]);
+  }, [pengirimanList, barangList, hargaList]);
 
   const trendPembelianBulanan = useMemo(() => {
     const monthlyData: Record<string, number> = {};
@@ -259,8 +385,8 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
       t.kode_grade,
       t.berat_kg,
       t.harga_per_kg,
-      t.total_potongan || 7000,
-      t.harga_final || (t.berat_kg * t.harga_per_kg - (t.total_potongan || 7000)),
+      t.total_potongan || (7000 * (t.total_bal || 1)),
+      t.harga_final !== undefined && t.harga_final !== 0 ? t.harga_final : (t.berat_kg * t.harga_per_kg - (t.total_potongan || (7000 * (t.total_bal || 1)))),
     ]);
     downloadCsvFile('Buku_Kas_Pembelian_Petani', headers, rows);
   };
@@ -348,30 +474,90 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
         )}
       </div>
 
-      {/* 9.1 Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        
-        {/* 1. Total Pembelian Petani */}
-        {!isQCOnly ? (
+      {/* 9.1 Summary Cards (FINANCIAL OVERVIEW) */}
+      {!isQCOnly && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+          
+          {/* 1. Total Pembelian Petani */}
           <div className="bg-white p-4 border border-gray-200 shadow-xs relative overflow-hidden">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                Total Pembelian Petani
+            <div className="flex items-center justify-between" title="Total modal pembelian aset barang (Dibayar ke Petani + Dibayar cash untuk Potongan/Operasional)">
+              <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">
+                Total Pembelian (Modal)
               </span>
               <span className="p-1.5 bg-red-50 text-[#b81d24] rounded-sm">
                 <span className="inline-flex items-center justify-center font-bold leading-none w-4 h-4">Rp</span>
               </span>
             </div>
-            <div className="text-xl font-bold text-gray-900 mt-2">
+            <div className="text-[17px] font-bold text-[#b81d24] mt-2 font-mono">
               Rp {totalPembelianRupiah.toLocaleString('id-ID')}
             </div>
-            <div className="flex items-center justify-between text-[11px] text-gray-500 mt-1 pt-2 border-t border-gray-100">
-              <span>Total Setoran Timbang</span>
-              <span className="font-semibold text-gray-700">{transaksiList.length} Bal</span>
+            <div className="flex items-center justify-between text-[10px] text-gray-500 mt-2 pt-2 border-t border-gray-100">
+              <span>Total Modal Kotor</span>
+              <span className="font-semibold text-gray-700">{transaksiList.length} Nota</span>
             </div>
           </div>
-        ) : null}
 
+          {/* 2. Total Penjualan */}
+          <div className="bg-white p-4 border border-gray-200 shadow-xs relative overflow-hidden">
+            <div className="flex items-center justify-between" title="Total nilai uang dari barang yang telah laku dan dikirim">
+              <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">
+                Total Penjualan
+              </span>
+              <span className="p-1.5 bg-blue-50 text-blue-800 rounded-sm">
+                <span className="inline-flex items-center justify-center font-bold leading-none w-4 h-4">Rp</span>
+              </span>
+            </div>
+            <div className="text-[17px] font-bold text-blue-800 mt-2 font-mono">
+              Rp {totalPenjualanRupiah.toLocaleString('id-ID')}
+            </div>
+            <div className="flex items-center justify-between text-[10px] text-gray-500 mt-2 pt-2 border-t border-gray-100">
+              <span>Barang yang Laku/Keluar</span>
+              <span className="font-semibold text-gray-700">{pengirimanList.length} DO</span>
+            </div>
+          </div>
+
+          {/* 3. Valuasi Aset di Gudang */}
+          <div className="bg-white p-4 border border-gray-200 shadow-xs relative overflow-hidden">
+            <div className="flex items-center justify-between" title="Estimasi nilai harta berupa tembakau yang FISIKNYA SAAT INI MASIH ADA DI GUDANG">
+              <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">
+                Valuasi (Stok Gudang)
+              </span>
+              <span className="p-1.5 bg-amber-50 text-amber-800 rounded-sm">
+                <span className="inline-flex items-center justify-center font-bold leading-none w-4 h-4">Rp</span>
+              </span>
+            </div>
+            <div className="text-[17px] font-bold text-amber-800 mt-2 font-mono">
+              Rp {totalValuasiRupiah.toLocaleString('id-ID')}
+            </div>
+            <div className="flex items-center justify-between text-[10px] text-gray-500 mt-2 pt-2 border-t border-gray-100">
+              <span>Nilai Harta Saat Ini</span>
+              <span className="font-semibold text-gray-700">{stokAktifGudang.count} Bal</span>
+            </div>
+          </div>
+
+          {/* 4. Total Keuntungan Bersih */}
+          <div className="bg-white p-4 border border-emerald-200 shadow-xs relative overflow-hidden bg-emerald-50/10">
+            <div className="flex items-center justify-between" title="Penjualan + Valuasi Aset - Total Pembelian">
+              <span className="text-xs font-bold text-emerald-800 uppercase tracking-wide">
+                Keuntungan Bersih
+              </span>
+              <span className="p-1.5 bg-emerald-100 text-emerald-800 rounded-sm">
+                <span className="inline-flex items-center justify-center font-bold leading-none w-4 h-4">Rp</span>
+              </span>
+            </div>
+            <div className={`text-[17px] font-bold mt-2 font-mono ${totalKeuntunganBersih >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+              {totalKeuntunganBersih < 0 ? '-' : ''}Rp {Math.abs(totalKeuntunganBersih).toLocaleString('id-ID')}
+            </div>
+            <div className="flex items-center justify-between text-[10px] text-gray-500 mt-2 pt-2 border-t border-gray-100">
+              <span className="italic text-emerald-800/70 truncate mr-2">(Penjualan + Valuasi) - Modal</span>
+            </div>
+          </div>
+
+        </div>
+      )}
+
+      {/* 9.1b Operational Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {/* 2. Tonase Masuk (Intake) */}
         {!isQCOnly ? (
           <div className="bg-white p-4 border border-gray-200 shadow-xs relative overflow-hidden">
@@ -379,7 +565,7 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
               <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
                 Tonase Masuk (Intake)
               </span>
-              <span className="p-1.5 bg-blue-50 text-blue-800 rounded-sm">
+              <span className="p-1.5 bg-slate-100 text-slate-800 rounded-sm">
                 <Scale className="w-4 h-4" />
               </span>
             </div>
@@ -387,8 +573,8 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
               {totalTonaseMasukKg.toLocaleString('id-ID')} <span className="text-xs font-normal text-gray-500">kg ({(totalTonaseMasukKg / 1000).toFixed(2)} Ton)</span>
             </div>
             <div className="flex items-center justify-between text-[11px] text-gray-500 mt-1 pt-2 border-t border-gray-100">
-              <span>Terkirim ke Pabrik:</span>
-              <span className="font-semibold text-blue-900">{totalTerkirimKg.toLocaleString('id-ID')} kg</span>
+              <span>Total Dikeluarkan/Terkirim:</span>
+              <span className="font-semibold text-slate-800">{totalTerkirimKg.toLocaleString('id-ID')} kg</span>
             </div>
           </div>
         ) : null}
@@ -438,44 +624,6 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
       </div>
 
       
-      {/* 9.1b Analisis Profitabilitas (Keuntungan) */}
-      {!isQCOnly && (
-        <div className="bg-white border border-gray-200 shadow-xs overflow-hidden">
-           <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex flex-col">
-             <h3 className="text-sm font-bold text-gray-900 tracking-tight">Analisis Keuntungan Penjualan</h3>
-             <p className="text-[11px] text-gray-500 mt-0.5">Hanya menghitung Bal yang telah berhasil dijual (dikirim).</p>
-           </div>
-           <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-gray-100">
-              <div className="p-4">
-                 <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Total Keuntungan Bersih</div>
-                 <div className={`text-xl font-bold mt-2 ${profitStats.netProfit >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
-                    {profitStats.netProfit >= 0 ? '+' : ''} Rp {profitStats.netProfit.toLocaleString('id-ID')}
-                 </div>
-                 <div className="text-[11px] text-gray-500 mt-1">
-                    Dari {profitStats.soldBalCount} Bal terjual
-                 </div>
-              </div>
-              <div className="p-4">
-                 <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Persentase Keuntungan Total</div>
-                 <div className={`text-xl font-bold mt-2 ${profitStats.totalProfitPct >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
-                    {profitStats.totalProfitPct >= 0 ? '+' : ''} {profitStats.totalProfitPct.toFixed(2)}%
-                 </div>
-                 <div className="text-[11px] text-gray-500 mt-1">
-                    Margin atas total modal Rp {profitStats.totalHargaBeliSold.toLocaleString('id-ID')}
-                 </div>
-              </div>
-              <div className="p-4">
-                 <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Rata-rata Margin per Bal</div>
-                 <div className={`text-xl font-bold mt-2 ${profitStats.avgProfitPctPerBal >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
-                    {profitStats.avgProfitPctPerBal >= 0 ? '+' : ''} {profitStats.avgProfitPctPerBal.toFixed(2)}%
-                 </div>
-                 <div className="text-[11px] text-gray-500 mt-1">
-                    Rata-rata persentase untung di setiap bal
-                 </div>
-              </div>
-           </div>
-        </div>
-      )}
 
       {/* Visualisasi Recharts: Tren Pembelian Bulanan */}
       {!isQCOnly && (

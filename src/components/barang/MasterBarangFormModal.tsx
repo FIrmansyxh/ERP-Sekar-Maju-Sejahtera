@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Save, ArrowLeft, Package, AlertCircle } from 'lucide-react';
+import { SearchableSelect } from '../common/SearchableSelect';
 import { MasterBarang } from '../../types';
 import { STANDARD_GUDANG_LOCATIONS } from '../../data/initialGudangData';
 import { ConfirmModal } from '../common/ConfirmModal';
@@ -21,13 +22,13 @@ export const MasterBarangFormModal: React.FC<MasterBarangFormModalProps> = ({
 }) => {
   const [kodeBarang, setKodeBarang] = useState('');
   const [namaBarang, setNamaBarang] = useState('');
-  const [kodeGrade, setKodeGrade] = useState('A');
+  const [kodeGrade, setKodeGrade] = useState('50');
   const [kategori, setKategori] = useState('Tembakau Rajangan Halus');
   const [varietas, setVarietas] = useState('Prancak Super');
   const [beratStandarKg, setBeratStandarKg] = useState<number>(45.0);
   const [satuan, setSatuan] = useState('Bal (Keranjang)');
-  const [hargaReferensiKg, setHargaReferensiKg] = useState<number>(90000);
-  const [lokasiDefaultGudang, setLokasiDefaultGudang] = useState('Gudang Pusat Induk & Intake - Pamekasan / Blok A-01');
+  const [hargaReferensiKg, setHargaReferensiKg] = useState<number>(50000);
+  const [lokasiDefaultGudang, setLokasiDefaultGudang] = useState('Gudang Utama Pamekasan');
   const [keterangan, setKeterangan] = useState('');
   const [statusAktif, setStatusAktif] = useState(true);
 
@@ -53,13 +54,13 @@ export const MasterBarangFormModal: React.FC<MasterBarangFormModalProps> = ({
       const nextNum = existingItems.length + 1;
       setKodeBarang(`MB-TBK-00${nextNum}`);
       setNamaBarang('');
-      setKodeGrade('A');
+      setKodeGrade('50');
       setKategori('Tembakau Rajangan Halus');
       setVarietas('Prancak Super');
       setBeratStandarKg(45.0);
       setSatuan('Bal (Keranjang)');
-      setHargaReferensiKg(90000);
-      setLokasiDefaultGudang('Gudang Pusat Induk & Intake - Pamekasan / Blok A-01');
+      setHargaReferensiKg(50000);
+      setLokasiDefaultGudang('Gudang Utama Pamekasan');
       setKeterangan('');
       setStatusAktif(true);
       setErrorMessage('');
@@ -204,7 +205,6 @@ export const MasterBarangFormModal: React.FC<MasterBarangFormModalProps> = ({
                     <label className="block text-gray-700 font-bold">
                       Kode Grade Tembakau <span className="text-red-500">*</span>
                     </label>
-                    <span className="text-[10px] text-gray-500 italic">Bisa ketik nama Grade custom</span>
                   </div>
                   <input
                     type="text"

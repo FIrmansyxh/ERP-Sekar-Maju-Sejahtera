@@ -1,3 +1,4 @@
+import { SearchableSelect } from '../common/SearchableSelect';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   Truck, 
@@ -45,6 +46,7 @@ import { loadHargaJualData, loadBatchSampleData } from '../../utils/storage';
 import { SuratJalanPrintModal } from './SuratJalanPrintModal';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { Pagination } from '../common/Pagination';
+import { openPrintDocument } from '../../utils/openDedicatedPrint';
 import { formatNumber, formatRupiah, generateNoSuratJalanSimple } from '../../utils/formatters';
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
 
@@ -112,8 +114,8 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   const [noSuratJalan, setNoSuratJalan] = useState('');
   const [tanggalKirim, setTanggalKirim] = useState(new Date().toISOString().split('T')[0]);
   const [tujuanBuyer, setTujuanBuyer] = useState('');
-  const [driverNama, setDriverNama] = useState('Bpk. Slamet Riyadi (Trans Logistik Madura)');
-  const [platNomor, setPlatNomor] = useState('M 8921 UA');
+  const [driverNama, setDriverNama] = useState('');
+  const [platNomor, setPlatNomor] = useState('');
   const [noKontrak, setNoKontrak] = useState(`PO-DJA-${new Date().getFullYear()}-089`);
 
   // Create View Filters (Grade, Lokasi Gudang, Petani) for regular mode
@@ -170,7 +172,9 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       linkedShipments.length > 0 || 
       batch.status === 'selesai' || 
       batch.status === 'dibatalkan' ||
-      ((batch.items || []).length > 0 && (batch.items || []).every((it) => it.sudah_dikirim_do));
+      ((batch.items || []).length > 0 && 
+       (batch.items || []).every((it) => it.sudah_dikirim_do || it.status_item === 'ditolak') &&
+       (batch.items || []).some(it => it.sudah_dikirim_do));
 
     const isCurrentlyShipping = 
       batch.status === 'dikirim' || 
@@ -337,7 +341,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
         initialIncluded.push(it.barang_id);
       }
       const balObj = barangList.find((b) => b.barang_id === it.barang_id);
-      const agreedPrice = it.harga_deal_kg || it.harga_tawaran_kg || balObj?.harga_per_kg || 45000;
+      const agreedPrice = it.harga_deal_kg || it.harga_tawaran_kg || 0;
       initialHarga[it.barang_id] = agreedPrice;
       if (it.kode_harga_jual) {
         initialKode[it.barang_id] = it.kode_harga_jual;
@@ -349,10 +353,10 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       }
     });
 
-    // Fallback: if initialIncluded is empty but there are unsent items, include them
-    if (initialIncluded.length === 0 && items.some((it) => !it.sudah_dikirim_do)) {
+    // Fallback: if initialIncluded is empty but there are unsent non-rejected items, include them
+    if (initialIncluded.length === 0 && items.some((it) => it.status_item !== 'ditolak' && !it.sudah_dikirim_do)) {
       items.forEach((it) => {
-        if (!it.sudah_dikirim_do) initialIncluded.push(it.barang_id);
+        if (it.status_item !== 'ditolak' && !it.sudah_dikirim_do) initialIncluded.push(it.barang_id);
       });
     }
 
@@ -370,7 +374,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
          p.batch_sample_id_ref?.toLowerCase() === targetBatch.batch_id.toLowerCase() ||
          p.batch_sample_id_ref?.toLowerCase() === targetBatch.kode_batch.toLowerCase())
     );
-    const alreadyShipped = batchShipments.length > 0 || targetBatch.status === 'selesai' || (items.length > 0 && items.every((it) => it.sudah_dikirim_do));
+    const alreadyShipped = batchShipments.length > 0 || targetBatch.status === 'selesai' || (items.length > 0 && items.every((it) => it.sudah_dikirim_do || it.status_item === 'ditolak') && items.some(it => it.sudah_dikirim_do));
 
     if (alreadyShipped) {
       const sjListStr = batchShipments.map((s) => s.no_surat_jalan).join(', ') || 'DO Selesai';
@@ -391,7 +395,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     } else {
       setScanAlert({
         type: 'success',
-        message: `Batch ${targetBatch.kode_batch} (${targetBatch.tujuan_buyer}) aktif: ${initialIncluded.length} bal siap dimuat. Silakan scan barcode atau masukkan ID bal untuk mencentang bal yang dikeluarkan.`,
+        message: `Batch ${targetBatch.kode_batch} (${targetBatch.tujuan_buyer}) aktif: ${initialIncluded.length} bal siap dimuat.`,
       });
     }
   };
@@ -484,7 +488,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       handleSelectSuggestedBatch(matchedBatch.batch_id);
       setScanAlert({
         type: 'success',
-        message: `Batch ${matchedBatch.kode_batch} dipilih. Silakan scan barcode atau ketik ID setiap bal untuk mencentang muatan siap kirim.`,
+        message: `Batch ${matchedBatch.kode_batch} dipilih.`,
       });
       setScanInputText('');
       return;
@@ -638,7 +642,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
 
     setScanAlert({
       type: 'success',
-      message: `${stokModalSelectedIds.length} bal berhasil dimasukkan ke daftar muatan. Sesuai SOP, silakan scan barcode atau centang bal satu per satu saat bal dimuat.`,
+      message: `${stokModalSelectedIds.length} bal berhasil dimasukkan ke daftar muatan.`,
     });
 
     setIsStokModalOpen(false);
@@ -846,7 +850,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   // Calculate total transaction value of the shipment using customKodeHargaMap
   const totalNilaiSuratJalan = useMemo(() => {
     return selectedBalObjects.reduce((sum, b) => {
-      let dealPrice = b.harga_per_kg ?? 45000;
+      let dealPrice = 0;
       const kode = customKodeHargaMap[b.barang_id];
       if (kode) {
         const master = activeHargaJualList.find(h => h.kode === kode);
@@ -879,7 +883,9 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     if (existingShipmentsForBatch.length > 0) return true;
     if (activeBatchObj.status === 'selesai') return true;
     const items = activeBatchObj.items || [];
-    if (items.length > 0 && items.every((it) => it.sudah_dikirim_do)) return true;
+    if (items.length > 0 && 
+        items.every((it) => it.sudah_dikirim_do || it.status_item === 'ditolak') &&
+        items.some((it) => it.sudah_dikirim_do)) return true;
     return false;
   }, [activeBatchObj, existingShipmentsForBatch]);
 
@@ -1475,16 +1481,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                 )}
               </div>
 
-              {/* No Kontrak */}
-              <div className="space-y-1">
-                <label className="block font-semibold text-gray-700">No. Nota / No. Kontrak:</label>
-                <input
-                  type="text"
-                  value={noKontrak}
-                  onChange={(e) => setNoKontrak(e.target.value)}
-                  className="w-full px-2.5 py-1.5 bg-white border border-gray-300 rounded-xs font-mono"
-                />
-              </div>
+              
 
               {/* Nama Supir */}
               <div className="space-y-1">
@@ -1521,9 +1518,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                   <Barcode className="w-4 h-4 text-[#b81d24]" />
                   <span>Scan Barcode / Input ID Bal Tembakau yang Dikeluarkan</span>
                 </h3>
-                <p className="text-[11px] text-gray-500">
-                  Arahkan barcode scanner atau ketik nomor bal/ID bal untuk mencentang bal yang sudah dikeluarkan dan siap dimuat oleh petugas pengiriman.
-                </p>
               </div>
 
               {/* Progress Tracker */}
@@ -1550,7 +1544,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                     <input
                       ref={scannerInputRef}
                       type="text"
-                      placeholder="Arahkan Barcode Scanner atau ketik No Bal / ID Batch..."
+                      placeholder="Scan Barcode / ketik No Bal / ID Batch..."
                       value={scanInputText}
                       onChange={(e) => {
                         setScanInputText(e.target.value);
@@ -1718,11 +1712,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                       ? `Tabel Bal Evaluasi Sample Batch (${selectedBalIds.length} dari ${activeBatchObj?.items?.length || 0} Bal Dipilih Jadi Kirim):`
                       : `Daftar Bal Tembakau yang Harus Dimuat (${selectedBalObjects.length} Bal):`}
                   </span>
-                  <p className="text-[11px] text-gray-500">
-                    {sourceMode === 'sample_batch'
-                      ? 'Centang bal mana saja yang jadi dikirim dan ubah Kode Harga Jual / Harga Penawaran jika terjadi kesepakatan baru dengan pembeli.'
-                      : 'Atur kode harga jual master atau ketik langsung harga per kg sebelum surat jalan diterbitkan.'}
-                  </p>
                 </div>
                 <div className="text-right">
                   <span className="text-gray-600 font-mono text-xs">
@@ -1736,9 +1725,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                 <div className="flex items-center space-x-2 flex-wrap">
                   {sourceMode === 'sample_batch' ? (
                     <>
-                      <span className="text-[11px] text-gray-500 italic">
-                        *SOP: Wajib scan barcode atau centang bal satu per satu saat fisik dimuat
-                      </span>
                       {selectedBalIds.length > 0 && (
                         <button
                           type="button"
@@ -1955,18 +1941,12 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
 
                               {/* Dropdown Kode Master Harga Jual */}
                               <td className="p-2">
-                                <select
+                                <SearchableSelect
                                   value={currentKode}
-                                  onChange={(e) => handleUpdateBalKodeHarga(it.barang_id, e.target.value)}
-                                  className="w-full px-2 py-1 text-xs bg-white border border-gray-300 rounded-xs focus:ring-1 focus:ring-[#b81d24] font-medium text-gray-900"
-                                >
-                                  <option value="">-- Pilih Kode --</option>
-                                  {activeHargaJualList.map((h) => (
-                                    <option key={h.harga_jual_id} value={h.kode}>
-                                      {h.kode} ({formatRupiah(h.harga_jual)}/kg)
-                                    </option>
-                                  ))}
-                                </select>
+                                  onChange={(v) => handleUpdateBalKodeHarga(it.barang_id, v)}
+                                  options={activeHargaJualList.map(h => ({ value: h.kode, label: `${h.kode} (${formatRupiah(h.harga_jual)}/kg)` }))}
+                                  placeholder="-- Pilih Kode --"
+                                />
                               </td>
 
                               {/* Display Harga (Rp/Kg) */}
@@ -2016,7 +1996,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                           const isChecked = selectedBalIds.includes(bal.barang_id);
                           
                           const currentKode = customKodeHargaMap[bal.barang_id] ?? '';
-                          let currentPrice = bal.harga_per_kg ?? 45000;
+                          let currentPrice = 0;
                           if (currentKode) {
                             const master = activeHargaJualList.find(h => h.kode === currentKode);
                             if (master) currentPrice = master.harga_jual;
@@ -2065,18 +2045,12 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
 
                               {/* Dropdown Kode Master Harga Jual */}
                               <td className="p-2">
-                                <select
+                                <SearchableSelect
                                   value={currentKode}
-                                  onChange={(e) => handleUpdateBalKodeHarga(bal.barang_id, e.target.value)}
-                                  className="w-full px-2 py-1 text-xs bg-white border border-gray-300 rounded-xs focus:ring-1 focus:ring-[#b81d24] font-medium text-gray-900"
-                                >
-                                  <option value="">-- Pilih Kode --</option>
-                                  {activeHargaJualList.map((h) => (
-                                    <option key={h.harga_jual_id} value={h.kode}>
-                                      {h.kode} ({formatRupiah(h.harga_jual)}/kg)
-                                    </option>
-                                  ))}
-                                </select>
+                                  onChange={(v) => handleUpdateBalKodeHarga(bal.barang_id, v)}
+                                  options={activeHargaJualList.map(h => ({ value: h.kode, label: `${h.kode} (${formatRupiah(h.harga_jual)}/kg)` }))}
+                                  placeholder="-- Pilih Kode --"
+                                />
                               </td>
 
                               {/* Display Harga (Rp/Kg) */}
@@ -2140,10 +2114,10 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                     {!tujuanBuyer.trim()
                       ? 'Tujuan gudang / pabrik buyer wajib diisi sebelum menerbitkan surat jalan.'
                       : sourceMode === 'sample_batch'
-                      ? `Belum semua bal dicentang (${checkedEligibleCount}/${eligibleBatchItems.length} Bal). Scan barcode atau centang setiap bal fisik satu per satu sesuai SOP sebelum menerbitkan surat jalan.`
+                      ? `Belum semua bal dicentang (${checkedEligibleCount}/${eligibleBatchItems.length} Bal). Centang atau scan seluruh bal muatan sebelum menerbitkan surat jalan.`
                       : regulerManifestBalIds.length === 0
                       ? 'Tabel muatan masih kosong. Silakan scan barcode atau masukkan bal tembakau terlebih dahulu.'
-                      : `Belum semua bal dicentang (${selectedBalObjects.length}/${regulerManifestBalIds.length} Bal). Petugas wajib mencentang/scan setiap bal satu per satu sesuai SOP sebelum surat jalan dapat diterbitkan.`}
+                      : `Belum semua bal dicentang (${selectedBalObjects.length}/${regulerManifestBalIds.length} Bal). Centang atau scan seluruh bal muatan sebelum menerbitkan surat jalan.`}
                   </span>
                 </div>
               )}
@@ -2343,11 +2317,11 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                           <td className="p-2.5 text-center">
                             <button
                               type="button"
-                              onClick={() => setPrintingSuratJalan(krm)}
-                              className="px-2.5 py-1 text-[11px] font-bold text-gray-800 bg-white hover:bg-gray-100 border border-gray-300 rounded-xs flex items-center space-x-1 cursor-pointer mx-auto shadow-2xs"
-                              title="Cetak Surat Jalan Resmi & Invoice"
+                              onClick={() => openPrintDocument('surat_jalan', krm.pengiriman_id)}
+                              className="px-2.5 py-1 text-[11px] font-bold text-white bg-[#b81d24] hover:bg-[#9e161c] rounded-xs flex items-center space-x-1 cursor-pointer mx-auto shadow-2xs"
+                              title="Buka Halaman Cetak Surat Jalan Resmi (Download PDF / Cetak ke Printer)"
                             >
-                              <Printer className="w-3.5 h-3.5 text-gray-600" />
+                              <Printer className="w-3.5 h-3.5" />
                               <span>Cetak DO</span>
                             </button>
                           </td>
@@ -2448,9 +2422,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
               </div>
 
               <div className="flex items-center space-x-2">
-                <span className="text-[11px] text-gray-500 italic hidden sm:inline">
-                  *SOP: Pilih bal satu per satu atau gunakan scan barcode
-                </span>
                 {stokModalSelectedIds.length > 0 && (
                   <button
                     type="button"
@@ -2579,7 +2550,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                   disabled={stokModalSelectedIds.length === 0}
                   onClick={handleConfirmStokModal}
                   className="px-4 py-1.5 text-xs font-bold text-white bg-gray-900 hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed rounded-xs transition cursor-pointer shadow-xs"
-                  title="Masukkan bal ke daftar muatan dalam keadaan belum dicentang (wajib di-scan barcode atau dicentang manual saat dimuat sesuai SOP)"
                 >
                   Masukkan ke Daftar Muatan ({stokModalSelectedIds.length} Bal)
                 </button>

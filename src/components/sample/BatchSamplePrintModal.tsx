@@ -60,8 +60,13 @@ export const BatchSamplePrintModal: React.FC<BatchSamplePrintModalProps> = ({
 
   const items = batch.items || [];
   const totalBal = items.length;
-  const totalBeratBal = items.reduce((sum, item) => sum + item.berat_bal_kg, 0);
-  const totalSampleGram = items.reduce((sum, item) => sum + item.berat_sample_gram, 0);
+  const totalNetto = items.reduce((sum, item) => sum + (item.berat_bal_kg || 0), 0);
+  const totalBruto = items.reduce((sum, item) => {
+    if (item.berat_bruto_kg && item.berat_bruto_kg > 0) return sum + item.berat_bruto_kg;
+    const netto = item.berat_bal_kg || 0;
+    const tara = item.potongan_tara_kg !== undefined ? item.potongan_tara_kg : 2;
+    return sum + (netto > 0 ? (netto + tara) : 0);
+  }, 0);
   const totalNilaiTawaran = items.reduce((sum, item) => sum + (item.berat_bal_kg * item.harga_tawaran_kg), 0);
   const totalNilaiDeal = items
     .filter(i => i.status_item === 'disetujui')
@@ -69,7 +74,7 @@ export const BatchSamplePrintModal: React.FC<BatchSamplePrintModalProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto font-sans animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto font-sans animate-in fade-in duration-150 print:bg-white print:backdrop-blur-none print:p-0 print:block print:overflow-visible print:relative print:inset-auto"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           onClose();
@@ -77,12 +82,12 @@ export const BatchSamplePrintModal: React.FC<BatchSamplePrintModalProps> = ({
       }}
     >
       <div 
-        className="bg-white border border-gray-300 w-full max-w-4xl rounded-none shadow-2xl flex flex-col max-h-[92vh] text-xs text-gray-800"
+        className="bg-white border border-gray-300 w-full max-w-4xl rounded-none shadow-2xl flex flex-col max-h-[92vh] text-xs text-gray-800 print:max-h-none print:border-none print:shadow-none print:w-full print:max-w-full print:block print:overflow-visible"
         onClick={(e) => e.stopPropagation()}
       >
         
         {/* Header Bar */}
-        <div className="px-5 py-3.5 border-b border-gray-200 bg-gray-900 text-white flex items-center justify-between shrink-0">
+        <div className="px-5 py-3.5 border-b border-gray-200 bg-gray-900 text-white flex items-center justify-between shrink-0 print:hidden">
           <div className="flex items-center space-x-2.5">
             <FlaskConical className="w-5 h-5 text-yellow-400" />
             <div>
@@ -180,15 +185,13 @@ export const BatchSamplePrintModal: React.FC<BatchSamplePrintModalProps> = ({
             <div className="font-sans">
               <table className="w-full border-collapse border border-gray-900 text-xs">
                 <thead>
-                  <tr className="bg-gray-900 text-white text-[11px] font-bold">
+                  <tr className="bg-gray-900 text-white text-[10px] font-bold">
                     <th className="border border-gray-900 p-2 text-center w-8">No</th>
-                    <th className="border border-gray-900 p-2 text-left">Kode Bal & ID Sample</th>
-                    <th className="border border-gray-900 p-2 text-center w-16">Grade</th>
-                    <th className="border border-gray-900 p-2 text-right w-20">Berat Bal (Kg)</th>
-                    <th className="border border-gray-900 p-2 text-right w-20">Sample (g)</th>
-                    <th className="border border-gray-900 p-2 text-right w-28">Harga Tawaran</th>
-                    <th className="border border-gray-900 p-2 text-right w-28">Status Sortir</th>
-                    <th className="border border-gray-900 p-2 text-left">Catatan / Alasan</th>
+                    <th className="border border-gray-900 p-2 text-left">Kode Bal (Gudang / Buyer)</th>
+                    <th className="border border-gray-900 p-2 text-right w-16">Bruto (Kg)</th>
+                    <th className="border border-gray-900 p-2 text-right w-16">Netto (Kg)</th>
+                    <th className="border border-gray-900 p-2 text-right w-24">Harga Tawar</th>
+                    <th className="border border-gray-900 p-2 text-right w-28">Est. Subtotal</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -197,69 +200,70 @@ export const BatchSamplePrintModal: React.FC<BatchSamplePrintModalProps> = ({
                     const isReject = it.status_item === 'ditolak';
                     const isNego = it.status_item === 'nego';
 
+                    const netto = it.berat_bal_kg || 0;
+                    const bruto = it.berat_bruto_kg && it.berat_bruto_kg > 0
+                      ? it.berat_bruto_kg
+                      : (netto > 0 ? netto + (it.potongan_tara_kg !== undefined ? it.potongan_tara_kg : 2) : 0);
+                    const hrgBeli = it.harga_beli_kg || 0;
+                    const subtotal = netto * it.harga_tawaran_kg;
+
                     return (
                       <tr key={it.sample_item_id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/70'}>
-                        <td className="border border-gray-300 p-2 text-center font-bold">{idx + 1}</td>
-                        <td className="border border-gray-300 p-2">
-                          <div className="font-mono font-bold text-gray-900">{it.no_bal || it.barang_id}</div>
-                          <div className="text-[10px] text-gray-500 font-mono">{it.sample_item_id} • Petani: {it.nama_petani || '-'}</div>
+                        <td className="border border-gray-300 p-1.5 text-center font-bold">{idx + 1}</td>
+                        <td className="border border-gray-300 p-1.5">
+                          <div className="font-mono font-bold text-gray-900">
+                            {it.no_bal || it.barang_id}
+                            {it.kode_bal_pembeli && it.kode_bal_pembeli !== it.no_bal && (
+                              <span className="text-gray-600 font-normal"> / {it.kode_bal_pembeli}</span>
+                            )}
+                          </div>
+                          <div className="text-[9px] text-gray-500 font-mono">{it.sample_item_id} • Petani: {it.nama_petani || '-'}</div>
                         </td>
-                        <td className="border border-gray-300 p-2 text-center font-bold text-sm bg-yellow-50/50">
-                          {it.kode_grade}
+                        <td className="border border-gray-300 p-1.5 text-right font-mono text-gray-700">
+                          {formatNumber(bruto, 1)}
                         </td>
-                        <td className="border border-gray-300 p-2 text-right font-mono font-semibold">
-                          {formatNumber(it.berat_bal_kg, 1)}
+                        <td className="border border-gray-300 p-1.5 text-right font-mono font-bold text-gray-900">
+                          {formatNumber(netto, 1)}
                         </td>
-                        <td className="border border-gray-300 p-2 text-right font-mono text-gray-600">
-                          {it.berat_sample_gram}
-                        </td>
-                        <td className="border border-gray-300 p-2 text-right font-mono font-bold text-gray-900">
-                          {formatRupiah(it.harga_tawaran_kg)}/kg
+                        <td className="border border-gray-300 p-1.5 text-right font-mono font-bold text-gray-900">
+                          {formatRupiah(it.harga_tawaran_kg)}
                           {isAcc && it.harga_deal_kg && it.harga_deal_kg !== it.harga_tawaran_kg && (
-                            <div className="text-[10px] text-emerald-700 font-semibold">
-                              Deal: {formatRupiah(it.harga_deal_kg)}/kg
+                            <div className="text-[9px] text-emerald-700 font-semibold">
+                              Deal: {formatRupiah(it.harga_deal_kg)}
                             </div>
                           )}
                         </td>
-                        <td className="border border-gray-300 p-2 text-right font-semibold">
-                          {isAcc ? (
-                            <span className="text-emerald-700 font-bold">ACC (Deal)</span>
-                          ) : isReject ? (
-                            <span className="text-red-700 font-bold">Ditolak</span>
-                          ) : isNego ? (
-                            <span className="text-amber-700 font-bold">Nego Harga</span>
-                          ) : (
-                            <span className="text-blue-700">Dikirim</span>
-                          )}
-                        </td>
-                        <td className="border border-gray-300 p-2 text-[10px] text-gray-600">
-                          {isReject ? it.alasan_tolak : isNego ? it.catatan_nego : it.catatan_nego || '-'}
+                        <td className="border border-gray-300 p-1.5 text-right font-mono font-bold text-gray-950">
+                          {formatRupiah(subtotal)}
                         </td>
                       </tr>
                     );
                   })}
                 </tbody>
                 <tfoot>
-                  <tr className="bg-gray-100 font-bold border-t-2 border-gray-900">
-                    <td colSpan={3} className="border border-gray-900 p-2 text-right uppercase text-[11px]">
+                  <tr className="bg-gray-100 font-bold border-t-2 border-gray-900 text-[11px]">
+                    <td colSpan={2} className="border border-gray-900 p-2 text-right uppercase">
                       Total ({totalBal} Bal Sample)
                     </td>
                     <td className="border border-gray-900 p-2 text-right font-mono">
-                      {formatNumber(totalBeratBal, 1)} Kg
+                      {formatNumber(totalBruto, 1)}
                     </td>
-                    <td className="border border-gray-900 p-2 text-right font-mono text-gray-600">
-                      {totalSampleGram} g
+                    <td className="border border-gray-900 p-2 text-right font-mono font-bold text-gray-950">
+                      {formatNumber(totalNetto, 1)}
                     </td>
-                    <td colSpan={3} className="border border-gray-900 p-2 text-right font-mono text-sm text-gray-900">
-                      Est. Total Penawaran: {formatRupiah(totalNilaiTawaran)}
+                    <td className="border border-gray-900 p-2 text-right text-[10px] text-gray-600">
+                      Total Nilai:
+                    </td>
+                    <td className="border border-gray-900 p-2 text-right font-mono font-bold text-gray-950">
+                      {formatRupiah(totalNilaiTawaran)}
                     </td>
                   </tr>
                   {totalNilaiDeal > 0 && (
                     <tr className="bg-emerald-50 font-bold border-b border-gray-900 text-emerald-900">
-                      <td colSpan={5} className="border border-gray-900 p-2 text-right uppercase text-[11px]">
+                      <td colSpan={4} className="border border-gray-900 p-2 text-right uppercase text-[11px]">
                         Total Nilai Disetujui (Deal Final):
                       </td>
-                      <td colSpan={3} className="border border-gray-900 p-2 text-right font-mono text-sm text-emerald-800">
+                      <td colSpan={2} className="border border-gray-900 p-2 text-right font-mono text-sm text-emerald-800">
                         {formatRupiah(totalNilaiDeal)}
                       </td>
                     </tr>
@@ -284,8 +288,8 @@ export const BatchSamplePrintModal: React.FC<BatchSamplePrintModalProps> = ({
 
               <div>
                 <p className="text-gray-500 mb-14">Diterima & Diuji Oleh (Pabrik Buyer),</p>
-                <p className="font-bold border-t border-gray-900 pt-1 text-gray-900">
-                  {batch.petugas_qc_pabrik || '(..................................................)'}
+                <p className="font-bold border-t border-gray-900 pt-1 text-gray-900 min-h-[22px]">
+                  {batch.petugas_qc_pabrik || <>&nbsp;</>}
                 </p>
                 <p className="text-[10px] text-gray-500">Tim QC / Lab Pembelian Pabrik</p>
               </div>

@@ -1249,19 +1249,19 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
               <div className="text-gray-500">Dibuat Oleh,</div>
               <div className="font-bold text-gray-900 mt-0.5">Operator Loket / Kasir</div>
               <div className="h-16"></div>
-              <div className="font-semibold text-gray-800 border-t border-gray-400 pt-1">( Petugas Timbang )</div>
+              <div className="font-semibold text-gray-800 border-t border-gray-400 pt-1 min-h-[22px]">&nbsp;</div>
             </div>
             <div>
               <div className="text-gray-500">Diperiksa Oleh,</div>
               <div className="font-bold text-gray-900 mt-0.5">Kepala Gudang Tembakau</div>
               <div className="h-16"></div>
-              <div className="font-semibold text-gray-800 border-t border-gray-400 pt-1">( Bambang Sutrisno, S.T. )</div>
+              <div className="font-semibold text-gray-800 border-t border-gray-400 pt-1">Bambang Sutrisno, S.T.</div>
             </div>
             <div>
               <div className="text-gray-500">Mengetahui & Menyetujui,</div>
               <div className="font-bold text-gray-900 mt-0.5">Direksi PR. Sekar Anom</div>
               <div className="h-16"></div>
-              <div className="font-semibold text-gray-800 border-t border-gray-400 pt-1">( Pimpinan Perusahaan )</div>
+              <div className="font-semibold text-gray-800 border-t border-gray-400 pt-1 min-h-[22px]">&nbsp;</div>
             </div>
           </div>
 

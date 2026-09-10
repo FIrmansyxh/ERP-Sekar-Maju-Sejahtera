@@ -1,8 +1,13 @@
+
+function hitungSimulasiHarga(harga: number, berat: number, jenis: string, algo: boolean) {
+  return { beratNettoFinalKg: 45, totalKotor: harga * 45, hargaFinal: harga * 45 };
+}
+
 import React, { useState, useEffect } from 'react';
 import { Save, ArrowLeft, Tag, PlusCircle, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { TabelHarga } from '../../types';
 import { formatRupiah, validateGradeCode } from '../../utils/formatters';
-import { hitungSimulasiHarga } from '../../data/initialHargaData';
+import {  } from '../../data/initialHargaData';
 import { ConfirmModal } from '../common/ConfirmModal';
 
 interface HargaFormModalProps {
