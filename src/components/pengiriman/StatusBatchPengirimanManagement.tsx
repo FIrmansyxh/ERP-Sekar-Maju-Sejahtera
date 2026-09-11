@@ -698,7 +698,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                 <div className="text-[10px] font-semibold text-red-700">Tidak Lolos Mutu</div>
               </div>
 
-              <div className="bg-gray-900 text-white p-3 border border-gray-900 rounded-xs shadow-xs">
+              <div className="bg-[#b81d24] text-white p-3 border border-[#b81d24] rounded-xs shadow-xs">
                 <div className="text-[11px] font-medium text-gray-300">Total Nilai Deal (ACC)</div>
                 <div className="text-base font-bold font-mono text-yellow-400 mt-0.5 truncate">
                   {formatRupiah(totalDealRp)}
@@ -736,7 +736,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                 <button
                   type="button"
                   onClick={() => handleProcessScanSortir(scanSortirInput)}
-                  className="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold rounded-xs cursor-pointer"
+                  className="px-3 py-1.5 bg-[#b81d24] hover:bg-[#b81d24] text-white text-xs font-semibold rounded-xs cursor-pointer"
                 >
                   Cari Bal
                 </button>
@@ -798,7 +798,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                   onClick={() => setFilterSortirStatus('all')}
                   className={`px-3 py-1 text-xs font-semibold rounded-xs transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                     filterSortirStatus === 'all'
-                      ? 'bg-gray-900 text-white shadow-xs'
+                      ? 'bg-[#b81d24] text-white shadow-xs'
                       : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
                   }`}
                 >
@@ -873,7 +873,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                   <button
                     type="button"
                     onClick={handleBuatDOReguler}
-                    className="px-4 py-1.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold rounded-xs flex items-center space-x-1.5 shadow-xs transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-4 py-1.5 bg-[#b81d24] hover:bg-[#b81d24] text-white text-xs font-bold rounded-xs flex items-center space-x-1.5 shadow-xs transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Truck className="w-3.5 h-3.5 text-yellow-400" />
                     <span>Buat DO Reguler ({countAcc} Bal ACC)</span>
@@ -897,7 +897,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                     <th className="p-3 text-right w-36">Harga Beli (Rp/Kg)</th>
                     <th className="p-3 text-right w-36">Harga Deal (Rp/Kg)</th>
                     <th className="p-3 text-right w-36">Subtotal Deal</th>
-                    <th className="p-3">Catatan / Keterangan Sortir</th>
+                    <th className="p-3">Catatan Sortir</th>
                     <th className="p-3 text-center w-16">Aksi</th>
                   </tr>
                 </thead>
@@ -1115,18 +1115,14 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <div 
               onClick={() => setFilterPengirimanStatus('all')}
-              className={`p-3.5 border rounded-sm shadow-xs cursor-pointer transition ${
-                filterPengirimanStatus === 'all'
-                  ? 'bg-gray-900 text-white border-gray-900 ring-2 ring-gray-900'
-                  : 'bg-white border-gray-300 hover:bg-gray-50'
-              }`}
+              className="bg-white p-3.5 border border-gray-200 rounded-sm shadow-xs cursor-pointer hover:bg-gray-50 transition"
             >
-              <div className={`text-[11px] font-medium ${filterPengirimanStatus === 'all' ? 'text-gray-300' : 'text-gray-500'}`}>
-                Semua Surat Jalan
+              <div className="flex items-center justify-between">
+                <span className={`text-[11px] font-semibold ${filterPengirimanStatus === 'all' ? 'text-gray-900 font-bold' : 'text-gray-500'}`}>Semua Surat Jalan</span>
               </div>
-              <div className="text-xl font-bold mt-0.5">{pengirimanList.length} Pengiriman</div>
-              <div className={`text-[10px] ${filterPengirimanStatus === 'all' ? 'text-gray-400' : 'text-gray-400'}`}>
-                Total riwayat DO pabrik
+              <div className="mt-2 flex items-baseline justify-between">
+                <span className="text-xl font-bold text-gray-900">{pengirimanList.length}</span>
+                <span className="text-xs text-gray-500 font-medium">Pengiriman</span>
               </div>
             </div>
 
@@ -1134,17 +1130,17 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
               onClick={() => setFilterPengirimanStatus('akan')}
               className={`p-3.5 border rounded-sm shadow-xs cursor-pointer transition ${
                 filterPengirimanStatus === 'akan'
-                  ? 'bg-amber-600 text-white border-amber-600 ring-2 ring-amber-600'
-                  : 'bg-amber-50 border-amber-200 text-amber-950 hover:bg-amber-100'
+                  ? 'bg-amber-50 border-amber-400'
+                  : 'bg-white border-amber-200 hover:bg-amber-50/50'
               }`}
             >
-              <div className={`text-[11px] font-bold flex items-center space-x-1 ${filterPengirimanStatus === 'akan' ? 'text-amber-100' : 'text-amber-800'}`}>
-                <Clock className="w-3.5 h-3.5" />
-                <span>Akan Dikirim</span>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-amber-800">Akan Dikirim</span>
+                <Clock className="w-4 h-4 text-amber-600" />
               </div>
-              <div className="text-xl font-bold mt-0.5">{countAkanDikirim} Surat Jalan</div>
-              <div className={`text-[10px] font-semibold ${filterPengirimanStatus === 'akan' ? 'text-amber-200' : 'text-amber-700'}`}>
-                Muatan & Truk Siap
+              <div className="mt-2 flex items-baseline justify-between">
+                <span className="text-xl font-bold text-amber-700">{countAkanDikirim}</span>
+                <span className="text-[11px] font-medium text-amber-600">Surat Jalan</span>
               </div>
             </div>
 
@@ -1152,17 +1148,17 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
               onClick={() => setFilterPengirimanStatus('sedang')}
               className={`p-3.5 border rounded-sm shadow-xs cursor-pointer transition ${
                 filterPengirimanStatus === 'sedang'
-                  ? 'bg-blue-600 text-white border-blue-600 ring-2 ring-blue-600'
-                  : 'bg-blue-50 border-blue-200 text-blue-950 hover:bg-blue-100'
+                  ? 'bg-rose-50 border-rose-400'
+                  : 'bg-white border-rose-200 hover:bg-rose-50/50'
               }`}
             >
-              <div className={`text-[11px] font-bold flex items-center space-x-1 ${filterPengirimanStatus === 'sedang' ? 'text-blue-100' : 'text-blue-800'}`}>
-                <Truck className="w-3.5 h-3.5" />
-                <span>Sedang Dikirim</span>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-rose-800">Sedang Dikirim</span>
+                <Truck className="w-4 h-4 text-rose-600" />
               </div>
-              <div className="text-xl font-bold mt-0.5">{countSedangDikirim} Truk Jalan</div>
-              <div className={`text-[10px] font-semibold ${filterPengirimanStatus === 'sedang' ? 'text-blue-200' : 'text-blue-700'}`}>
-                Dalam Perjalanan Ekspedisi
+              <div className="mt-2 flex items-baseline justify-between">
+                <span className="text-xl font-bold text-rose-700">{countSedangDikirim}</span>
+                <span className="text-[11px] font-medium text-rose-600">Truk Jalan</span>
               </div>
             </div>
 
@@ -1170,17 +1166,17 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
               onClick={() => setFilterPengirimanStatus('sudah')}
               className={`p-3.5 border rounded-sm shadow-xs cursor-pointer transition ${
                 filterPengirimanStatus === 'sudah'
-                  ? 'bg-emerald-600 text-white border-emerald-600 ring-2 ring-emerald-600'
-                  : 'bg-emerald-50 border-emerald-200 text-emerald-950 hover:bg-emerald-100'
+                  ? 'bg-emerald-50 border-emerald-400'
+                  : 'bg-white border-emerald-200 hover:bg-emerald-50/50'
               }`}
             >
-              <div className={`text-[11px] font-bold flex items-center space-x-1 ${filterPengirimanStatus === 'sudah' ? 'text-emerald-100' : 'text-emerald-800'}`}>
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Sudah Selesai</span>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-emerald-800">Sudah Selesai</span>
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
               </div>
-              <div className="text-xl font-bold mt-0.5">{countSudahSelesai} Tiba</div>
-              <div className={`text-[10px] font-semibold ${filterPengirimanStatus === 'sudah' ? 'text-emerald-200' : 'text-emerald-700'}`}>
-                Diterima & Bongkar Pabrik
+              <div className="mt-2 flex items-baseline justify-between">
+                <span className="text-xl font-bold text-emerald-700">{countSudahSelesai}</span>
+                <span className="text-[11px] font-medium text-emerald-600">Tiba di Pabrik</span>
               </div>
             </div>
           </div>
@@ -1271,8 +1267,8 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                               </span>
                             )}
                             {isSedang && (
-                              <span className="px-2.5 py-1 text-[10px] font-bold text-blue-800 bg-blue-100 border border-blue-300 rounded-xs inline-flex items-center space-x-1 animate-pulse">
-                                <Truck className="w-3 h-3 text-blue-700" />
+                              <span className="px-2.5 py-1 text-[10px] font-bold text-rose-800 bg-rose-100 border border-rose-300 rounded-xs inline-flex items-center space-x-1 animate-pulse">
+                                <Truck className="w-3 h-3 text-rose-700" />
                                 <span>Sedang Dikirim</span>
                               </span>
                             )}

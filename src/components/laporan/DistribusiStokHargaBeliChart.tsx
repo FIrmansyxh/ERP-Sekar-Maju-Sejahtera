@@ -96,14 +96,14 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
 
   // Map harga standar dari master harga
   const masterHargaMap = useMemo(() => {
-    const map = new Map<string, { harga: number; nama: string; ketentuan: string }>();
+    const map = new Map<string, { harga: number; nama: string;  }>();
     hargaList.forEach((h) => {
       const code = (h.kode_grade || '').trim().toUpperCase();
       if (code) {
         map.set(code, {
           harga: h.harga_per_kg || 0,
           nama: h.nama_grade || `Grade ${code}`,
-          ketentuan: h.ketentuan || h.deskripsi || 'Standar mutu pembelian',
+          
         });
       }
     });

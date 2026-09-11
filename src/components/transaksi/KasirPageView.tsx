@@ -24,6 +24,7 @@ import { TransaksiDetailModal } from './TransaksiDetailModal';
 import { PembayaranKasirModal } from './PembayaranKasirModal';
 import { TransaksiEditModal } from './TransaksiEditModal';
 import { ConfirmModal } from '../common/ConfirmModal';
+import { Pagination } from '../common/Pagination';
 import { openPrintDocument } from '../../utils/openDedicatedPrint';
 
 interface KasirPageViewProps {
@@ -444,7 +445,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
       <div className="bg-white border border-slate-200 p-4 shadow-2xs rounded-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
           <div className="flex items-center space-x-2">
-            <span className="w-2 h-2 rounded-full bg-slate-800"></span>
+            <span className="w-2 h-2 rounded-full bg-[#b81d24]"></span>
             <h2 className="text-sm font-semibold text-slate-900 tracking-tight">
               Data Pembelian Barang (Kasir & Pencairan Nota)
             </h2>
@@ -468,7 +469,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
           <button
             type="button"
             onClick={() => onNavigateToTimbangan()}
-            className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs rounded-sm transition cursor-pointer shadow-2xs"
+            className="px-3 py-1.5 bg-[#b81d24] hover:bg-[#b81d24] text-white font-medium text-xs rounded-sm transition cursor-pointer shadow-2xs"
           >
             Meja Timbangan
           </button>
@@ -612,7 +613,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
             <button
               type="button"
               onClick={() => setCurrentPage(1)}
-              className="flex-1 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs rounded-sm transition flex items-center justify-center space-x-1.5 cursor-pointer shadow-2xs"
+              className="flex-1 py-1.5 bg-[#b81d24] hover:bg-[#b81d24] text-white font-medium text-xs rounded-sm transition flex items-center justify-center space-x-1.5 cursor-pointer shadow-2xs"
             >
               <Search className="w-3.5 h-3.5" />
               <span>Cari</span>
@@ -749,10 +750,10 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="bg-[#343a40] text-white font-semibold text-[11px] border-b border-slate-700 select-none">
+              <tr className="bg-[#f8f9fa] text-gray-700 font-bold text-[11px] border-b border-gray-200 select-none">
                 <th 
                   onClick={() => handleHeaderSort('kupon')}
-                  className="py-2.5 px-3 w-10 text-center cursor-pointer hover:bg-slate-700 transition"
+                  className="py-2.5 px-3 border-r border-gray-200 w-10 text-center cursor-pointer hover:bg-gray-100 transition border-r border-gray-200"
                 >
                   <div className="flex items-center justify-center space-x-1">
                     <span>#</span>
@@ -760,7 +761,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 </th>
                 <th 
                   onClick={() => handleHeaderSort('kupon')}
-                  className="py-2.5 px-3 cursor-pointer hover:bg-slate-700 transition"
+                  className="py-2.5 px-3 border-r border-gray-200 cursor-pointer hover:bg-gray-100 transition border-r border-gray-200"
                 >
                   <div className="flex items-center justify-between">
                     <span>Kupon</span>
@@ -769,7 +770,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 </th>
                 <th 
                   onClick={() => handleHeaderSort('tanggal')}
-                  className="py-2.5 px-3 cursor-pointer hover:bg-slate-700 transition"
+                  className="py-2.5 px-3 border-r border-gray-200 cursor-pointer hover:bg-gray-100 transition border-r border-gray-200"
                 >
                   <div className="flex items-center justify-between">
                     <span>Tanggal</span>
@@ -778,7 +779,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 </th>
                 <th 
                   onClick={() => handleHeaderSort('petani')}
-                  className="py-2.5 px-3 cursor-pointer hover:bg-slate-700 transition"
+                  className="py-2.5 px-3 border-r border-gray-200 cursor-pointer hover:bg-gray-100 transition border-r border-gray-200"
                 >
                   <div className="flex items-center justify-between">
                     <span>Petani</span>
@@ -787,7 +788,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 </th>
                 <th 
                   onClick={() => handleHeaderSort('jumlah')}
-                  className="py-2.5 px-3 text-center cursor-pointer hover:bg-slate-700 transition"
+                  className="py-2.5 px-3 border-r border-gray-200 text-center cursor-pointer hover:bg-gray-100 transition border-r border-gray-200"
                 >
                   <div className="flex items-center justify-center space-x-1">
                     <span>Jumlah / Beli</span>
@@ -796,7 +797,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 </th>
                 <th 
                   onClick={() => handleHeaderSort('netto')}
-                  className="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-700 transition"
+                  className="py-2.5 px-3 border-r border-gray-200 text-right cursor-pointer hover:bg-gray-100 transition border-r border-gray-200"
                 >
                   <div className="flex items-center justify-end space-x-1">
                     <span>Netto</span>
@@ -805,7 +806,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 </th>
                 <th 
                   onClick={() => handleHeaderSort('total_kotor')}
-                  className="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-700 transition"
+                  className="py-2.5 px-3 border-r border-gray-200 text-right cursor-pointer hover:bg-gray-100 transition border-r border-gray-200"
                 >
                   <div className="flex items-center justify-end space-x-1">
                     <span>Total Harga Beli</span>
@@ -814,7 +815,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 </th>
                 <th 
                   onClick={() => handleHeaderSort('pajak')}
-                  className="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-700 transition"
+                  className="py-2.5 px-3 border-r border-gray-200 text-right cursor-pointer hover:bg-gray-100 transition border-r border-gray-200"
                 >
                   <div className="flex items-center justify-end space-x-1">
                     <span>Pajak</span>
@@ -823,7 +824,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 </th>
                 <th 
                   onClick={() => handleHeaderSort('potongan')}
-                  className="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-700 transition"
+                  className="py-2.5 px-3 border-r border-gray-200 text-right cursor-pointer hover:bg-gray-100 transition border-r border-gray-200"
                 >
                   <div className="flex items-center justify-end space-x-1">
                     <span>Potongan</span>
@@ -832,7 +833,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 </th>
                 <th 
                   onClick={() => handleHeaderSort('jumlah_bayar')}
-                  className="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-700 transition"
+                  className="py-2.5 px-3 border-r border-gray-200 text-right cursor-pointer hover:bg-gray-100 transition border-r border-gray-200"
                 >
                   <div className="flex items-center justify-end space-x-1">
                     <span>Jumlah Bayar</span>
@@ -841,7 +842,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 </th>
                 <th 
                   onClick={() => handleHeaderSort('cash')}
-                  className="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-700 transition"
+                  className="py-2.5 px-3 border-r border-gray-200 text-right cursor-pointer hover:bg-gray-100 transition border-r border-gray-200"
                 >
                   <div className="flex items-center justify-end space-x-1">
                     <span>Cash</span>
@@ -850,7 +851,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 </th>
                 <th 
                   onClick={() => handleHeaderSort('kredit')}
-                  className="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-700 transition"
+                  className="py-2.5 px-3 border-r border-gray-200 text-right cursor-pointer hover:bg-gray-100 transition border-r border-gray-200"
                 >
                   <div className="flex items-center justify-end space-x-1">
                     <span>Kredit</span>
@@ -859,14 +860,14 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 </th>
                 <th 
                   onClick={() => handleHeaderSort('avg')}
-                  className="py-2.5 px-3 text-right cursor-pointer hover:bg-slate-700 transition"
+                  className="py-2.5 px-3 border-r border-gray-200 text-right cursor-pointer hover:bg-gray-100 transition border-r border-gray-200"
                 >
                   <div className="flex items-center justify-end space-x-1">
                     <span>AVG</span>
                     <ArrowUpDown className="w-3 h-3 text-slate-400" />
                   </div>
                 </th>
-                <th className="py-2.5 px-3 text-center w-36">
+                <th className="py-2.5 px-3 border-r border-gray-200 text-center w-36">
                   <span>Opsi</span>
                 </th>
               </tr>
@@ -908,12 +909,12 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                       className="hover:bg-slate-50 transition border-b border-slate-100 text-slate-800"
                     >
                       {/* # */}
-                      <td className="py-2.5 px-3 text-center font-mono text-slate-500">
+                      <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono text-slate-500">
                         {seq}
                       </td>
 
                       {/* Kupon */}
-                      <td className="py-2.5 px-3">
+                      <td className="py-2.5 px-3 border-r border-gray-200 border-r border-gray-200">
                         <div className="flex flex-col">
                           <span className="font-mono font-bold text-slate-900 text-xs">
                             {tx.no_kupon || '-'}
@@ -928,7 +929,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                             </span>
                           )}
                           {!isLunas && isAllWeighed && (
-                            <span className="inline-flex items-center text-[9px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-1 py-0.2 rounded-xs mt-0.5 w-fit">
+                            <span className="inline-flex items-center text-[9px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-1 py-0.2 rounded-xs mt-0.5 w-fit">
                               ✓ Siap Bayar
                             </span>
                           )}
@@ -936,22 +937,22 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                       </td>
 
                       {/* Tanggal: e.g. 08 September 2026 */}
-                      <td className="py-2.5 px-3 text-slate-700 text-xs whitespace-nowrap">
+                      <td className="py-2.5 px-3 border-r border-gray-200 text-slate-700 text-xs whitespace-nowrap">
                         {formatDateIndo(tx.tanggal_transaksi)}
                       </td>
 
                       {/* Petani */}
-                      <td className="py-2.5 px-3">
+                      <td className="py-2.5 px-3 border-r border-gray-200 border-r border-gray-200">
                         <div className="font-medium text-slate-900 text-xs">{tx.nama_petani}</div>
                       </td>
 
                       {/* Jumlah / Beli */}
-                      <td className="py-2.5 px-3 text-center font-mono text-slate-800">
+                      <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono text-slate-800">
                         {balCount}
                       </td>
 
                       {/* Netto */}
-                      <td className="py-2.5 px-3 text-right font-mono text-slate-900">
+                      <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono text-slate-900">
                         <div>
                           <span>{tx.berat_kg ? tx.berat_kg.toLocaleString('id-ID') : 0}</span>
                           {!isAllWeighed && (
@@ -966,42 +967,42 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                       </td>
 
                       {/* Total Harga Beli */}
-                      <td className="py-2.5 px-3 text-right font-mono text-slate-900">
+                      <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono text-slate-900">
                         {formatAccounting(totalKotorVal)}
                       </td>
 
                       {/* Pajak */}
-                      <td className="py-2.5 px-3 text-right font-mono text-slate-700">
+                      <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono text-slate-700">
                         {formatAccounting(pajakVal)}
                       </td>
 
                       {/* Potongan */}
-                      <td className="py-2.5 px-3 text-right font-mono text-slate-700">
+                      <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono text-slate-700">
                         {formatAccounting(potonganVal)}
                       </td>
 
                       {/* Jumlah Bayar */}
-                      <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
+                      <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono font-bold text-slate-900">
                         {formatAccounting(jumlahBayarVal)}
                       </td>
 
                       {/* Cash */}
-                      <td className={`py-2.5 px-3 text-right font-mono ${isLunas ? 'font-bold text-emerald-700' : 'text-slate-600'}`}>
+                      <td className={`py-2.5 px-3 border-r border-gray-200 text-right font-mono ${isLunas ? 'font-bold text-emerald-700' : 'text-slate-600'}`}>
                         {formatAccounting(cashVal)}
                       </td>
 
                       {/* Kredit */}
-                      <td className={`py-2.5 px-3 text-right font-mono ${!isLunas ? 'font-bold text-amber-700' : 'text-slate-600'}`}>
+                      <td className={`py-2.5 px-3 border-r border-gray-200 text-right font-mono ${!isLunas ? 'font-bold text-amber-700' : 'text-slate-600'}`}>
                         {formatAccounting(kreditVal)}
                       </td>
 
                       {/* AVG */}
-                      <td className="py-2.5 px-3 text-right font-mono text-slate-800 font-medium">
+                      <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono text-slate-800 font-medium">
                         {formatAccounting(avgPrice)}
                       </td>
 
                       {/* Opsi Buttons */}
-                      <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                      <td className="py-2.5 px-3 border-r border-gray-200 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center space-x-1.5">
                           
                           {/* Tombol Detail (Hijau) */}
@@ -1114,37 +1115,37 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
             {/* Total Summary Row matching Image 2 */}
             <tfoot>
               <tr className="bg-[#e9ecef] font-bold text-slate-900 border-t-2 border-slate-300 text-xs">
-                <td colSpan={4} className="py-2.5 px-3 text-right uppercase tracking-wider font-extrabold text-slate-800">
+                <td colSpan={4} className="py-2.5 px-3 border-r border-gray-200 text-right uppercase tracking-wider font-extrabold text-slate-800">
                   Total:
                 </td>
-                <td className="py-2.5 px-3 text-center font-mono font-bold text-slate-900">
+                <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono font-bold text-slate-900">
                   {stats.totalBal}
                 </td>
-                <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
+                <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono font-bold text-slate-900">
                   {stats.totalNetto.toLocaleString('id-ID')}
                 </td>
-                <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
+                <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono font-bold text-slate-900">
                   {formatAccounting(stats.totalKotor)}
                 </td>
-                <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
+                <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono font-bold text-slate-900">
                   {formatAccounting(stats.totalPajak)}
                 </td>
-                <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
+                <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono font-bold text-slate-900">
                   {formatAccounting(stats.totalPotongan)}
                 </td>
-                <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
+                <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono font-bold text-slate-900">
                   {formatAccounting(stats.totalBayar)}
                 </td>
-                <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-800">
+                <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono font-bold text-emerald-800">
                   {formatAccounting(stats.lunasNominal)}
                 </td>
-                <td className="py-2.5 px-3 text-right font-mono font-bold text-amber-800">
+                <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono font-bold text-amber-800">
                   {formatAccounting(stats.belumLunasNominal)}
                 </td>
-                <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
+                <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono font-bold text-slate-900">
                   {formatAccounting(stats.avgHarga)}
                 </td>
-                <td className="py-2.5 px-3 text-center text-slate-400">
+                <td className="py-2.5 px-3 border-r border-gray-200 text-center text-slate-400">
                   -
                 </td>
               </tr>
@@ -1153,48 +1154,16 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
         </div>
 
         {/* DataTables Bottom Controls (Showing X of Y & Pagination) */}
-        <div className="p-3 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-600">
-          <div>
-            Showing {searchedAndSortedList.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1} to{' '}
-            {Math.min(currentPage * itemsPerPage, searchedAndSortedList.length)} of {searchedAndSortedList.length} entries
-            {filteredList.length !== transaksiList.length && (
-              <span className="text-slate-400 ml-1">
-                (filtered from {transaksiList.length} total entries)
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center space-x-1">
-            <button
-              disabled={currentPage <= 1}
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              className="px-2.5 py-1 border border-slate-300 rounded-xs bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-medium cursor-pointer"
-            >
-              Previous
-            </button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1)
-              .slice(Math.max(0, currentPage - 3), Math.min(totalPages, currentPage + 2))
-              .map((page) => (
-                <button
-                  key={page}
-                  onClick={() => setCurrentPage(page)}
-                  className={`px-2.5 py-1 border rounded-xs text-xs font-semibold cursor-pointer ${
-                    page === currentPage
-                      ? 'bg-slate-900 text-white border-slate-900'
-                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
-                  }`}
-                >
-                  {page}
-                </button>
-              ))}
-            <button
-              disabled={currentPage >= totalPages}
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              className="px-2.5 py-1 border border-slate-300 rounded-xs bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-medium cursor-pointer"
-            >
-              Next
-            </button>
-          </div>
+        <div className="p-3 bg-white border-t border-slate-200">
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={searchedAndSortedList.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+            showQuickJumper={true}
+            showFirstLast={true}
+          />
         </div>
       </div>
 
@@ -1244,7 +1213,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
 
       {/* Delete Confirmation Modal */}
       {txToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#b81d24]/60 backdrop-blur-xs">
           <div className="bg-white border border-rose-200 rounded-sm shadow-2xl max-w-md w-full p-5 space-y-4 animate-in fade-in">
             <div className="flex items-center space-x-3 text-rose-600">
               <div className="w-9 h-9 rounded-full bg-rose-100 flex items-center justify-center shrink-0">

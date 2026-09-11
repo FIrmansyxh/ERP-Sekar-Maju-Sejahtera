@@ -650,7 +650,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                   type="button"
                   id="btn-tambah-bal"
                   onClick={handleAddBalItem}
-                  className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs rounded-sm transition flex items-center justify-center space-x-1.5 cursor-pointer shadow-2xs"
+                  className="w-full py-2 bg-[#b81d24] hover:bg-[#b81d24] text-white font-medium text-xs rounded-sm transition flex items-center justify-center space-x-1.5 cursor-pointer shadow-2xs"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Tambah Bal</span>
@@ -685,15 +685,15 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
             </div>
 
             <div className="border border-slate-200 rounded-sm overflow-hidden bg-white">
-              <table className="w-full text-left text-xs border-collapse">
+              <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr className="bg-slate-900 text-white font-semibold uppercase tracking-wider text-[10px]">
-                    <th className="py-2.5 px-3 w-12 text-center">#</th>
-                    <th className="py-2.5 px-3">No Bal</th>
-                    <th className="py-2.5 px-3">Mutu Grade</th>
-                    <th className="py-2.5 px-3 text-right">Harga Satuan</th>
+                  <tr className="bg-[#f8f9fa] border-b border-gray-200 text-gray-700 font-bold uppercase tracking-wider text-[10px]">
+                    <th className="py-2.5 px-3 w-12 text-center border-r border-gray-200">#</th>
+                    <th className="py-2.5 px-3 border-r border-gray-200">No Bal</th>
+                    <th className="py-2.5 px-3 border-r border-gray-200">Mutu Grade</th>
+                    <th className="py-2.5 px-3 text-right border-r border-gray-200">Harga Satuan</th>
                     
-                    <th className="py-2.5 px-3 text-center">Status Berat</th>
+                    <th className="py-2.5 px-3 text-center border-r border-gray-200">Status Berat</th>
                     <th className="py-2.5 px-3 w-20 text-center">Aksi</th>
                   </tr>
                 </thead>
@@ -710,16 +710,16 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                     </tr>
                   ) : (
                     balItems.map((item, index) => (
-                      <tr key={item.item_id || index} className="hover:bg-amber-50/40 transition">
-                        <td className="py-2 px-3 text-center font-mono font-bold text-gray-500">
+                      <tr key={item.item_id || index} className="hover:bg-[#f8f9fa] transition-colors border-b border-gray-100 last:border-0">
+                        <td className="py-2 px-3 text-center font-mono font-bold text-gray-500 border-r border-gray-200">
                           {index + 1}
                         </td>
-                        <td className="py-2 px-3">
+                        <td className="py-2 px-3 border-r border-gray-200">
                           <span className="font-mono font-black text-gray-900 bg-gray-100 px-2 py-0.5 border border-gray-300 rounded text-xs">
                             {item.no_bal}
                           </span>
                         </td>
-                        <td className="py-2 px-3">
+                        <td className="py-2 px-3 border-r border-gray-200">
                           <span className="px-2 py-0.5 bg-red-50 text-[#b81d24] border border-red-200 font-bold rounded-xs text-[11px]">
                             Grade {item.kode_grade}
                           </span>
@@ -728,12 +728,12 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                           {formatRupiah(item.harga_per_kg)}/kg
                         </td>
                         
-                        <td className="py-2 px-3 text-center">
+                        <td className="py-2 px-3 text-center border-r border-gray-200">
                           <span className="px-2 py-0.5 bg-slate-100 text-slate-700 border border-slate-200 rounded-xs text-[10px] font-medium">
                             Menunggu Timbang
                           </span>
                         </td>
-                        <td className="py-2 px-3 text-center">
+                        <td className="py-2 px-3 text-center border-r border-gray-200">
                           <button
                             type="button"
                             onClick={() => handleRemoveItem(index)}
@@ -776,7 +776,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                 type="button"
                 onClick={() => handleSaveSortirData(false)}
                 disabled={balItems.length === 0}
-                className="flex-1 sm:flex-none px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-medium text-xs rounded-sm transition flex items-center justify-center space-x-1.5 cursor-pointer disabled:opacity-50 shadow-2xs"
+                className="flex-1 sm:flex-none px-4 py-2 bg-[#b81d24] hover:bg-[#b81d24] text-white font-medium text-xs rounded-sm transition flex items-center justify-center space-x-1.5 cursor-pointer disabled:opacity-50 shadow-2xs"
               >
                 <Check className="w-4 h-4 text-emerald-400" />
                 <span>Simpan Data Sortir</span>

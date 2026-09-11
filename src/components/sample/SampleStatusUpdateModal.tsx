@@ -65,7 +65,7 @@ export const SampleStatusUpdateModal: React.FC<SampleStatusUpdateModalProps> = (
   return (
     <>
       <div 
-        className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 overflow-y-auto font-sans animate-in fade-in duration-150"
+        className="fixed inset-0 z-50 bg-[#b81d24]/40 flex items-center justify-center p-4 overflow-y-auto font-sans animate-in fade-in duration-150"
         onClick={(e) => {
           if (e.target === e.currentTarget && !isConfirmOpen) {
             onClose();
@@ -154,7 +154,7 @@ export const SampleStatusUpdateModal: React.FC<SampleStatusUpdateModalProps> = (
                   onClick={() => setStatus('diterima')}
                   className={`p-2 border text-center font-bold text-xs rounded-sm transition cursor-pointer ${
                     status === 'diterima'
-                      ? 'bg-blue-100 border-blue-500 text-blue-900 font-bold'
+                      ? 'bg-rose-100 border-[#b81d24] text-rose-900 font-bold'
                       : 'bg-[#f8f9fa] border-gray-300 text-gray-700 hover:bg-gray-100'
                   }`}
                 >

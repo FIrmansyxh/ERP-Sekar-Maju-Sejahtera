@@ -1,3 +1,4 @@
+import { formatDateHariBulanTahun } from '../../utils/formatters';
 import React, { useState, useMemo, useRef } from 'react';
 import { 
   Search, 
@@ -40,8 +41,7 @@ export const LaporanHargaJualView: React.FC<LaporanHargaJualViewProps> = ({
       if (searchTerm) {
         const q = searchTerm.toLowerCase();
         if (
-          !item.kode.toLowerCase().includes(q) &&
-          !(item.keterangan || '').toLowerCase().includes(q)
+          !item.kode.toLowerCase().includes(q)
         ) {
           return false;
         }
@@ -58,13 +58,12 @@ export const LaporanHargaJualView: React.FC<LaporanHargaJualViewProps> = ({
 
   const handleExportCSV = () => {
     const filename = `Laporan_Master_Harga_Jual_${new Date().toISOString().split('T')[0]}.csv`;
-    const headers = ['Kode', 'Harga Jual (Rp)', 'Tanggal Berlaku', 'Status', 'Keterangan'];
+    const headers = ['Kode', 'Harga Jual (Rp)', 'Tanggal Berlaku', 'Status'];
     const rows = filteredList.map(h => [
       h.kode,
       h.harga_jual,
       h.tanggal_berlaku,
       h.status_aktif ? 'Aktif' : 'Non-Aktif',
-      h.keterangan || '-',
     ]);
     downloadCsvFile(filename, headers, rows);
   };
@@ -155,7 +154,7 @@ export const LaporanHargaJualView: React.FC<LaporanHargaJualViewProps> = ({
               <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-gray-400" />
               <input
                 type="text"
-                placeholder="Cari kode atau keterangan..."
+                placeholder="Cari kode ..."
                 value={searchTerm}
                 onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
                 className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-300 rounded-sm focus:outline-none focus:border-[#b81d24] focus:ring-1 focus:ring-[#b81d24]"
@@ -194,7 +193,7 @@ export const LaporanHargaJualView: React.FC<LaporanHargaJualViewProps> = ({
                 <th className="py-2.5 px-3 font-semibold">Kode Penawaran</th>
                 <th className="py-2.5 px-3 font-semibold text-right">Harga Jual (Rp)</th>
                 <th className="py-2.5 px-3 font-semibold text-center">Tanggal Berlaku</th>
-                <th className="py-2.5 px-3 font-semibold">Keterangan</th>
+                
                 <th className="py-2.5 px-3 font-semibold text-center">Status</th>
               </tr>
             </thead>
@@ -227,9 +226,6 @@ export const LaporanHargaJualView: React.FC<LaporanHargaJualViewProps> = ({
                         <Calendar className="w-3 h-3" />
                         <span>{item.tanggal_berlaku}</span>
                       </span>
-                    </td>
-                    <td className="py-2.5 px-3 text-gray-600">
-                      {item.keterangan || '-'}
                     </td>
                     <td className="py-2.5 px-3 text-center">
                       {item.status_aktif ? (
@@ -271,7 +267,7 @@ export const LaporanHargaJualView: React.FC<LaporanHargaJualViewProps> = ({
             </div>
             <div className="text-right">
               <h2 className="text-sm font-bold uppercase text-[#b81d24]">LAPORAN MASTER HARGA JUAL</h2>
-              <p className="text-[10px] text-gray-600">Tanggal Ekspor: {new Date().toLocaleDateString('id-ID', { dateStyle: 'full' })}</p>
+              <p className="text-[10px] text-gray-600">Tanggal Ekspor: {formatDateHariBulanTahun(new Date().toISOString())}</p>
             </div>
           </div>
           
@@ -283,7 +279,7 @@ export const LaporanHargaJualView: React.FC<LaporanHargaJualViewProps> = ({
                 <th className="py-2 px-2 border-r border-gray-300 text-right">Harga Jual (Rp)</th>
                 <th className="py-2 px-2 border-r border-gray-300 text-center">Tanggal Berlaku</th>
                 <th className="py-2 px-2 border-r border-gray-300 text-center">Status</th>
-                <th className="py-2 px-2">Keterangan</th>
+                
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -294,7 +290,7 @@ export const LaporanHargaJualView: React.FC<LaporanHargaJualViewProps> = ({
                   <td className="py-2 px-2 border-r border-gray-300 text-right font-mono">Rp {m.harga_jual.toLocaleString('id-ID')}</td>
                   <td className="py-2 px-2 border-r border-gray-300 text-center font-mono">{m.tanggal_berlaku}</td>
                   <td className="py-2 px-2 border-r border-gray-300 text-center">{m.status_aktif ? 'Aktif' : 'Non-Aktif'}</td>
-                  <td className="py-2 px-2">{m.keterangan || '-'}</td>
+                  
                 </tr>
               ))}
             </tbody>

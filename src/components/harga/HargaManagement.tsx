@@ -44,7 +44,6 @@ export const HargaManagement: React.FC<HargaManagementProps> = ({
   const [formKode, setFormKode] = useState('');
   const [formHarga, setFormHarga] = useState<number | ''>('');
   const [formTanggalBerlaku, setFormTanggalBerlaku] = useState('');
-  const [formKeterangan, setFormKeterangan] = useState('');
   const [formStatusAktif, setFormStatusAktif] = useState(true);
   
   const [errorMessage, setErrorMessage] = useState('');
@@ -61,8 +60,7 @@ export const HargaManagement: React.FC<HargaManagementProps> = ({
 
       const q = searchTerm.toLowerCase();
       return (
-        item.kode_grade.toLowerCase().includes(q) ||
-        (item.ketentuan || '').toLowerCase().includes(q)
+        item.kode_grade.toLowerCase().includes(q)
       );
     });
   }, [hargaList, searchTerm, statusFilter]);
@@ -79,7 +77,6 @@ export const HargaManagement: React.FC<HargaManagementProps> = ({
     setFormKode('');
     setFormHarga('');
     setFormTanggalBerlaku(new Date().toISOString().split('T')[0]);
-    setFormKeterangan('');
     setFormStatusAktif(true);
     setErrorMessage('');
     setIsModalOpen(true);
@@ -90,7 +87,6 @@ export const HargaManagement: React.FC<HargaManagementProps> = ({
     setFormKode(item.kode_grade);
     setFormHarga(item.harga_per_kg);
     setFormTanggalBerlaku(item.tanggal_berlaku || new Date().toISOString().split('T')[0]);
-    setFormKeterangan(item.ketentuan || '');
     setFormStatusAktif(item.status === 'aktif');
     setErrorMessage('');
     setIsModalOpen(true);
@@ -122,8 +118,7 @@ export const HargaManagement: React.FC<HargaManagementProps> = ({
       nama_grade: formKode.trim().toUpperCase(),
       warna_badge: editingItem?.warna_badge || 'bg-slate-100 text-slate-800',
       harga_per_kg: Number(formHarga),
-      ketentuan: formKeterangan,
-      tanggal_berlaku: formTanggalBerlaku,
+            tanggal_berlaku: formTanggalBerlaku,
       rate_potongan_per_bal: editingItem?.rate_potongan_per_bal || 2000,
       berat_standar_kg: editingItem?.berat_standar_kg || 50,
       status: formStatusAktif ? 'aktif' : 'nonaktif',
@@ -267,7 +262,7 @@ return (
             <div className="relative flex-1 sm:w-64">
               <input
                 type="text"
-                placeholder="Cari kode atau kriteria..."
+                placeholder="Cari kode..."
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
@@ -299,7 +294,6 @@ return (
                 <th className="py-2.5 px-3 border-r border-gray-200 w-32">Kode</th>
                 <th className="py-2.5 px-3 border-r border-gray-200 w-40">Harga Beli</th>
                 <th className="py-2.5 px-3 border-r border-gray-200 w-32">Tgl Berlaku</th>
-                <th className="py-2.5 px-3 border-r border-gray-200 min-w-[200px]">Keterangan (Kriteria Tembakau)</th>
                 <th className="py-2.5 px-3 border-r border-gray-200 w-24 text-center">Status</th>
                 {canManage && <th className="py-2.5 px-3 text-center w-24">Aksi</th>}
               </tr>
@@ -307,7 +301,7 @@ return (
             <tbody className="text-xs text-gray-800">
               {paginatedList.length === 0 ? (
                 <tr>
-                  <td colSpan={canManage ? 7 : 6} className="py-8 text-center text-gray-500 bg-white">
+                  <td colSpan={canManage ? 6 : 5} className="py-8 text-center text-gray-500 bg-white">
                     <div className="text-sm font-bold text-gray-700">Tidak ada data Master Harga Beli</div>
                     <div className="mt-1">
                       {statusFilter !== 'all' || searchTerm
@@ -346,11 +340,6 @@ return (
                         <span>{item.tanggal_berlaku || '-'}</span>
                       </div>
                     </td>
-                    <td className="py-2.5 px-3 border-r border-gray-200">
-                      <div className="text-gray-700 leading-relaxed line-clamp-2">
-                        {item.ketentuan || '-'}
-                      </div>
-                    </td>
                     <td className="py-2.5 px-3 border-r border-gray-200 text-center">
                       {item.status === 'aktif' ? (
                         <span className="px-2 py-0.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-sm text-[10px] font-bold flex items-center justify-center space-x-1 w-max mx-auto">
@@ -370,7 +359,7 @@ return (
                           <button
                             type="button"
                             onClick={() => handleOpenEditModal(item)}
-                            className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-xs transition cursor-pointer"
+                            className="p-1.5 text-[#b81d24] hover:text-[#9e161c] hover:bg-rose-50 rounded-xs transition cursor-pointer"
                             title="Edit Master Harga Beli"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
@@ -489,17 +478,6 @@ return (
                 />
               </div>
 
-              {/* Keterangan */}
-              <div className="space-y-1">
-                <label className="block font-semibold text-gray-800">Keterangan (Kriteria Tembakau):</label>
-                <textarea
-                  rows={3}
-                  placeholder="Deskripsikan kriteria untuk harga ini. Misal: Daun atas, warna kuning cerah, tidak ada bercak, aroma tajam..."
-                  value={formKeterangan}
-                  onChange={(e) => setFormKeterangan(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-white border border-gray-300 rounded-xs focus:ring-1 focus:ring-gray-700"
-                />
-              </div>
 
               
               {/* Status Aktif */}

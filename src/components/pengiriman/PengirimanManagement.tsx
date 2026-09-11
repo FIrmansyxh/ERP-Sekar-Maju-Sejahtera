@@ -27,7 +27,8 @@ import {
   AlertTriangle,
   DollarSign,
   Trash2,
-  Package
+  Package,
+  Edit3
 } from 'lucide-react';
 import { 
   PengirimanBarang, 
@@ -63,6 +64,8 @@ interface PengirimanManagementProps {
   transaksiList?: TransaksiPembelian[];
   userRole: UserRole;
   onSaveNewPengiriman: (pengiriman: PengirimanBarang, updatedBarangIds: string[]) => void;
+  onUpdatePengiriman?: (pengiriman: PengirimanBarang) => void;
+  onDeletePengiriman?: (pengirimanId: string, revertedBarangs?: Barang[]) => void;
 }
 
 export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
@@ -78,11 +81,16 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   transaksiList = [],
   userRole,
   onSaveNewPengiriman,
+  onUpdatePengiriman,
+  onDeletePengiriman,
 }) => {
   const activeHargaJualList = (hargaJualList && hargaJualList.length > 0) ? hargaJualList : loadHargaJualData();
 
   // Page mode: default to 'create' (In-page Delivery Order Creation) as requested by user
   const [viewMode, setViewMode] = useState<'list' | 'create'>('create');
+  const [editingPengirimanId, setEditingPengirimanId] = useState<string | null>(null);
+  const [pengirimanToDelete, setPengirimanToDelete] = useState<string | null>(null);
+  
   const [isBatchDropdownOpen, setIsBatchDropdownOpen] = useState(false);
   const [highlightedBatchIndex, setHighlightedBatchIndex] = useState(0);
   const [scanBatchId, setScanBatchId] = useState('');
@@ -1041,12 +1049,14 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
         })) + 1
       : 1;
 
+    const existingPengiriman = editingPengirimanId ? pengirimanList.find(p => p.pengiriman_id === editingPengirimanId) : null;
+
     const newPengiriman: PengirimanBarang = {
-      pengiriman_id: String(nextShipmentSeq),
+      pengiriman_id: editingPengirimanId || String(nextShipmentSeq),
       no_surat_jalan: noSuratJalan || generateNoSuratJalanSimple(nextShipmentSeq),
       tanggal_kirim: tanggalKirim,
       tujuan: finalTujuan,
-      status: 'dikirim',
+      status: existingPengiriman ? existingPengiriman.status : 'dikirim',
       total_bal: totalSelectedBal,
       total_berat_kg: totalSelectedBerat,
       driver_nama: driverNama,
@@ -1062,7 +1072,13 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       total_nilai_deal: totalNilaiSuratJalan,
     };
 
-    onSaveNewPengiriman(newPengiriman, selectedBalIds);
+    if (editingPengirimanId && onUpdatePengiriman) {
+      onUpdatePengiriman(newPengiriman);
+    } else {
+      onSaveNewPengiriman(newPengiriman, selectedBalIds);
+    }
+    
+    setEditingPengirimanId(null);
     setIsConfirmOpen(false);
     setTujuanBuyer('');
     setViewMode('list');
@@ -1137,7 +1153,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                   }}
                   className={`px-3.5 py-1.5 text-xs font-bold rounded-xs transition flex items-center space-x-1.5 cursor-pointer ${
                     sourceMode === 'gudang_reguler'
-                      ? 'bg-gray-900 text-white shadow-xs'
+                      ? 'bg-[#b81d24] text-white shadow-xs'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
@@ -1169,7 +1185,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                         setSelectedBalIds([]);
                         setRegulerManifestBalIds([]);
                       }}
-                      className="px-3.5 py-1.5 text-xs font-bold text-white bg-gray-900 hover:bg-black rounded-xs whitespace-nowrap cursor-pointer shadow-xs transition"
+                      className="px-3.5 py-1.5 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#b81d24] rounded-xs whitespace-nowrap cursor-pointer shadow-xs transition"
                     >
                       Pilih Bebas dari Stok Gudang →
                     </button>
@@ -1240,7 +1256,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                           <button
                             type="button"
                             onClick={handleCommitBatchSearch}
-                            className="px-4 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xs flex items-center space-x-1.5 cursor-pointer shadow-xs whitespace-nowrap transition"
+                            className="px-4 py-2 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#b81d24] rounded-xs flex items-center space-x-1.5 cursor-pointer shadow-xs whitespace-nowrap transition"
                           >
                             <Search className="w-3.5 h-3.5" />
                             <span>Pilih Batch</span>
@@ -1290,7 +1306,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                                             ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                                             : b.status === 'deal_sebagian'
                                             ? 'bg-slate-100 text-slate-800 border border-slate-300'
-                                            : 'bg-blue-100 text-blue-800 border border-blue-300'
+                                            : 'bg-rose-100 text-rose-800 border border-rose-300'
                                         }`}>
                                           {b.status === 'selesai_deal'
                                             ? 'ACC Semua'
@@ -1305,7 +1321,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                                       {accCount > 0 ? (
                                         <span className="text-emerald-700 font-bold">Di-ACC: {accCount} Bal</span>
                                       ) : (
-                                        <span className="text-blue-700 font-medium">Siap Muat: {items.length} Bal</span>
+                                        <span className="text-rose-700 font-medium">Siap Muat: {items.length} Bal</span>
                                       )}
                                       <span className="text-gray-300">|</span>
                                       <span>Tgl Kirim: {b.tanggal_kirim}</span>
@@ -1751,7 +1767,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                           setStokModalSelectedIds([]);
                           setIsStokModalOpen(true);
                         }}
-                        className="px-2.5 py-1 text-[11px] font-bold text-white bg-gray-900 hover:bg-black rounded-xs cursor-pointer transition flex items-center space-x-1 shadow-2xs"
+                        className="px-2.5 py-1 text-[11px] font-bold text-white bg-[#b81d24] hover:bg-[#b81d24] rounded-xs cursor-pointer transition flex items-center space-x-1 shadow-2xs"
                       >
                         <Plus className="w-3 h-3" />
                         <span>Pilih dari Stok Gudang ({availableBalList.length} Bal)</span>
@@ -1933,7 +1949,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                                     ✕ Ditolak
                                   </span>
                                 ) : (
-                                  <span className="px-2 py-0.5 bg-blue-100 text-blue-800 border border-blue-300 rounded-xs font-semibold text-[10px]">
+                                  <span className="px-2 py-0.5 bg-rose-100 text-rose-800 border border-rose-300 rounded-xs font-semibold text-[10px]">
                                     Sample Dikirim
                                   </span>
                                 )}
@@ -1983,7 +1999,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                                   setStokModalSelectedIds([]);
                                   setIsStokModalOpen(true);
                                 }}
-                                className="mt-2 inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold text-white bg-gray-900 hover:bg-black rounded-xs cursor-pointer shadow-xs"
+                                className="mt-2 inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#b81d24] rounded-xs cursor-pointer shadow-xs"
                               >
                                 <Plus className="w-3.5 h-3.5" />
                                 <span>Pilih dari Stok Gudang ({availableBalList.length} Bal Tersedia)</span>
@@ -2220,7 +2236,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
               </div>
             </div>
 
-            <div className="bg-gray-900 text-white p-3.5 border border-gray-900 rounded-sm shadow-xs">
+            <div className="bg-[#b81d24] text-white p-3.5 border border-[#b81d24] rounded-sm shadow-xs">
               <div className="text-[11px] font-medium text-gray-300">Estimasi Nilai DO</div>
               <div className="text-base font-bold text-emerald-400 mt-0.5 truncate font-mono">
                 {formatRupiah(pengirimanList.reduce((sum, p) => sum + (p.total_nilai_deal || (p.total_berat_kg * 125000)), 0))}
@@ -2315,15 +2331,60 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                             </span>
                           </td>
                           <td className="p-2.5 text-center">
-                            <button
-                              type="button"
-                              onClick={() => openPrintDocument('surat_jalan', krm.pengiriman_id)}
-                              className="px-2.5 py-1 text-[11px] font-bold text-white bg-[#b81d24] hover:bg-[#9e161c] rounded-xs flex items-center space-x-1 cursor-pointer mx-auto shadow-2xs"
-                              title="Buka Halaman Cetak Surat Jalan Resmi (Download PDF / Cetak ke Printer)"
-                            >
-                              <Printer className="w-3.5 h-3.5" />
-                              <span>Cetak DO</span>
-                            </button>
+                            <div className="flex items-center justify-center space-x-1.5">
+                              <button
+                                type="button"
+                                onClick={() => openPrintDocument('surat_jalan', krm.pengiriman_id)}
+                                className="px-2.5 py-1 text-[11px] font-bold text-white bg-[#b81d24] hover:bg-[#9e161c] rounded-xs flex items-center space-x-1 cursor-pointer shadow-2xs"
+                                title="Buka Halaman Cetak Surat Jalan Resmi (Download PDF / Cetak ke Printer)"
+                              >
+                                <Printer className="w-3.5 h-3.5" />
+                                <span>Cetak DO</span>
+                              </button>
+                              
+                              {(userRole === 'superadmin' || userRole === 'admin_utama') && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingPengirimanId(krm.pengiriman_id);
+                                      setNoSuratJalan(krm.no_surat_jalan);
+                                      setTujuanBuyer(krm.tujuan);
+                                      setTanggalKirim(krm.tanggal_kirim);
+                                      setDriverNama(krm.driver_nama || '');
+                                      setPlatNomor(krm.plat_nomor || '');
+                                      setNoKontrak(krm.nomor_kontrak || '');
+                                      setSourceMode(krm.batch_sample_id_ref ? 'sample_batch' : 'gudang_reguler');
+                                      if (krm.batch_sample_id_ref) {
+                                        setSelectedBatchSampleId(krm.batch_sample_id_ref);
+                                      }
+                                      // Note: To fully edit items, we must load krm.barang_ids into selectedBalIds
+                                      // and their respective objects into selectedBalObjects.
+                                      const relatedBarangs = barangList.filter(b => krm.barang_ids.includes(b.barang_id));
+                                      setSelectedBalIds(relatedBarangs.map(b => b.barang_id));
+                                      setRegulerManifestBalIds(relatedBarangs.map(b => b.barang_id));
+                                      
+                                      if (krm.kode_harga_jual_map) setCustomKodeHargaMap(krm.kode_harga_jual_map);
+                                      
+                                      setViewMode('create');
+                                    }}
+                                    className="p-1 text-gray-500 hover:text-[#b81d24] hover:bg-rose-50 rounded-xs transition cursor-pointer"
+                                    title="Edit Pengiriman DO"
+                                  >
+                                    <Edit3 className="w-4 h-4" />
+                                  </button>
+                                  
+                                  <button
+                                    type="button"
+                                    onClick={() => setPengirimanToDelete(krm.pengiriman_id)}
+                                    className="p-1 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xs transition cursor-pointer"
+                                    title="Hapus Pengiriman DO"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -2360,6 +2421,32 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
         transaksiList={transaksiList}
       />
 
+      {/* Confirm Delete DO Modal */}
+      <ConfirmModal
+        isOpen={!!pengirimanToDelete}
+        title="Konfirmasi Hapus Pengiriman DO"
+        message="Apakah Anda yakin ingin menghapus surat jalan pengiriman ini? Bal tembakau yang terikat akan dikembalikan ke status Gudang."
+        confirmText="Ya, Hapus"
+        cancelText="Batal"
+        variant="danger"
+        onConfirm={() => {
+          if (pengirimanToDelete && onDeletePengiriman) {
+            const pToDel = pengirimanList.find(p => p.pengiriman_id === pengirimanToDelete);
+            if (pToDel) {
+              const revertedBarangs = barangList
+                .filter(b => pToDel.barang_ids.includes(b.barang_id))
+                .map(b => ({ ...b, status_stok: 'di_gudang' as const }));
+              onDeletePengiriman(pengirimanToDelete, revertedBarangs);
+            } else {
+              onDeletePengiriman(pengirimanToDelete);
+            }
+          }
+          setPengirimanToDelete(null);
+        }}
+        onClose={() => setPengirimanToDelete(null)}
+        onCancel={() => setPengirimanToDelete(null)}
+      />
+
       {/* Confirm Save Modal */}
       <ConfirmModal
         isOpen={isConfirmOpen}
@@ -2374,10 +2461,10 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
 
       {/* Modal: Pilih Bal dari Stok Gudang untuk Pengiriman Reguler */}
       {isStokModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/50 backdrop-blur-2xs animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-[#b81d24]/50 backdrop-blur-2xs animate-in fade-in duration-150">
           <div className="bg-white rounded-sm border border-gray-300 shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
             {/* Modal Header */}
-            <div className="px-5 py-3.5 bg-gray-900 text-white flex items-center justify-between">
+            <div className="px-5 py-3.5 bg-[#b81d24] text-white flex items-center justify-between">
               <div className="flex items-center space-x-2.5">
                 <Package className="w-5 h-5 text-slate-300" />
                 <div>
@@ -2549,7 +2636,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                   type="button"
                   disabled={stokModalSelectedIds.length === 0}
                   onClick={handleConfirmStokModal}
-                  className="px-4 py-1.5 text-xs font-bold text-white bg-gray-900 hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed rounded-xs transition cursor-pointer shadow-xs"
+                  className="px-4 py-1.5 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#b81d24] disabled:opacity-50 disabled:cursor-not-allowed rounded-xs transition cursor-pointer shadow-xs"
                 >
                   Masukkan ke Daftar Muatan ({stokModalSelectedIds.length} Bal)
                 </button>

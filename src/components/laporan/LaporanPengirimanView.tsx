@@ -1,3 +1,4 @@
+import { formatDateHariBulanTahun } from '../../utils/formatters';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Truck, 
@@ -1382,7 +1383,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
             <div className="text-right">
               <div className="text-xs font-bold text-[#b81d24] uppercase">LAPORAN PENGIRIMAN & DISTRIBUSI</div>
               <div className="text-[10px] text-gray-500 mt-0.5">
-                Tanggal Ekspor: {new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}
+                Tanggal Ekspor: {formatDateHariBulanTahun(new Date().toISOString())}
               </div>
               <div className="text-[10px] text-gray-500">
                 Tujuan: {appliedFilters.pabrik !== 'ALL' ? appliedFilters.pabrik : 'Semua Pabrik'} • Status: {appliedFilters.status !== 'ALL' ? appliedFilters.status : 'Semua Status'}

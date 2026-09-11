@@ -285,7 +285,7 @@ export const PengirimanFormModal: React.FC<PengirimanFormModalProps> = ({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-3 sm:p-4 overflow-y-auto font-sans animate-in fade-in duration-150">
+      <div className="fixed inset-0 z-50 bg-[#b81d24]/40 flex items-center justify-center p-3 sm:p-4 overflow-y-auto font-sans animate-in fade-in duration-150">
         <div className="bg-white border border-gray-300 w-full max-w-4xl rounded-none shadow-2xl flex flex-col max-h-[92vh] text-xs text-gray-800">
           
           {/* Header */}
@@ -319,7 +319,7 @@ export const PengirimanFormModal: React.FC<PengirimanFormModalProps> = ({
                 onClick={handleSubmit}
                 disabled={selectedBarangIds.length === 0 || !tujuanPabrik.trim()}
                 title={!tujuanPabrik.trim() ? 'Tujuan gudang / pabrik buyer wajib diisi' : selectedBarangIds.length === 0 ? 'Pilih minimal 1 bal' : 'Terbitkan Surat Jalan'}
-                className="px-4 py-1.5 text-xs font-bold text-white bg-gray-900 hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed rounded-none transition flex items-center space-x-1.5 cursor-pointer shadow-xs whitespace-nowrap"
+                className="px-4 py-1.5 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#b81d24] disabled:opacity-50 disabled:cursor-not-allowed rounded-none transition flex items-center space-x-1.5 cursor-pointer shadow-xs whitespace-nowrap"
               >
                 <Save className="w-3.5 h-3.5" />
                 <span>Terbitkan Surat Jalan ({totalBalCount} Bal)</span>
@@ -490,7 +490,7 @@ export const PengirimanFormModal: React.FC<PengirimanFormModalProps> = ({
                             handleSelectByNoBal(noBalInput);
                           }
                         }}
-                        className="px-3.5 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-none font-bold text-xs flex items-center space-x-1 transition cursor-pointer shadow-xs"
+                        className="px-3.5 py-1.5 bg-[#b81d24] hover:bg-[#b81d24] text-white rounded-none font-bold text-xs flex items-center space-x-1 transition cursor-pointer shadow-xs"
                       >
                         <Zap className="w-3.5 h-3.5" />
                         <span>Pilih</span>
@@ -567,7 +567,7 @@ export const PengirimanFormModal: React.FC<PengirimanFormModalProps> = ({
                         scanFeedback.type === 'success'
                           ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
                           : scanFeedback.type === 'info'
-                          ? 'bg-blue-50 border-blue-300 text-blue-800'
+                          ? 'bg-rose-50 border-rose-300 text-rose-800'
                           : 'bg-red-50 border-red-300 text-red-800'
                       }`}
                     >
@@ -654,7 +654,7 @@ export const PengirimanFormModal: React.FC<PengirimanFormModalProps> = ({
                           </div>
 
                           <div className="flex items-center space-x-2">
-                            <span className="px-1.5 py-0.5 bg-gray-800 text-white rounded-none text-[10px] font-bold">
+                            <span className="px-1.5 py-0.5 bg-[#b81d24] text-white rounded-none text-[10px] font-bold">
                               {b.kode_grade}
                             </span>
                             <span className="font-mono font-bold">{b.berat_kg} kg</span>
@@ -690,7 +690,7 @@ export const PengirimanFormModal: React.FC<PengirimanFormModalProps> = ({
 
       {/* Confirmation Modal */}
       {isConfirmOpen && (
-        <div className="fixed inset-0 z-60 bg-black/50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-60 bg-[#b81d24]/50 flex items-center justify-center p-4">
           <div className="bg-white border border-gray-300 max-w-md w-full p-4 space-y-3 shadow-xl">
             <h3 className="font-bold text-sm text-gray-900">Konfirmasi Penerbitan Surat Jalan</h3>
             <p className="text-xs text-gray-600">
@@ -707,7 +707,7 @@ export const PengirimanFormModal: React.FC<PengirimanFormModalProps> = ({
               <button
                 type="button"
                 onClick={handleConfirmSave}
-                className="px-4 py-1.5 text-xs font-bold text-white bg-gray-900 hover:bg-gray-800 rounded-none cursor-pointer"
+                className="px-4 py-1.5 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#b81d24] rounded-none cursor-pointer"
               >
                 Ya, Terbitkan
               </button>

@@ -346,7 +346,7 @@ export const TransaksiFormModal: React.FC<TransaksiFormModalProps> = ({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-2 sm:p-4 overflow-y-auto font-sans animate-in fade-in duration-150">
+      <div className="fixed inset-0 z-50 bg-[#b81d24]/40 flex items-center justify-center p-2 sm:p-4 overflow-y-auto font-sans animate-in fade-in duration-150">
         <div className="bg-white border border-gray-300 w-full max-w-6xl rounded-none shadow-2xl max-h-[94vh] flex flex-col text-xs text-gray-800">
           
           {/* Top Header */}
@@ -394,8 +394,8 @@ export const TransaksiFormModal: React.FC<TransaksiFormModalProps> = ({
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-[#f8f9fa]">
             
             {/* Intake Notice */}
-            <div className="bg-blue-50/80 border border-blue-200 p-2.5 rounded-sm text-xs text-blue-900 flex items-start space-x-2">
-              <Scale className="w-4 h-4 text-blue-700 shrink-0 mt-0.5" />
+            <div className="bg-rose-50/80 border border-rose-200 p-2.5 rounded-sm text-xs text-rose-900 flex items-start space-x-2">
+              <Scale className="w-4 h-4 text-rose-700 shrink-0 mt-0.5" />
               <div className="text-[11px] leading-relaxed">
                 <span className="font-bold">Proses Intake & Timbang 1 Kupon Petani:</span> Satu nomor kupon antri petani dapat memuat <span className="font-bold">lebih dari 1 bal</span> tembakau dengan grade dan berat berbeda. Isi data transaksi petani di atas, lalu tambahkan baris bal tembakau pada tabel detail di bawah untuk input langsung sekaligus dalam 1 kali transaksi.
               </div>
@@ -709,7 +709,7 @@ export const TransaksiFormModal: React.FC<TransaksiFormModalProps> = ({
             {/* Bottom Summary Section */}
             <div className="bg-white p-4 border border-gray-300 shadow-xs grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-gray-700 font-bold mb-1">Keterangan / Catatan Transaksi Intake</label>
+                <label className="block text-gray-700 font-bold mb-1">Catatan Transaksi Intake</label>
                 <textarea
                   rows={4}
                   value={catatan}

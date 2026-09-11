@@ -1,3 +1,4 @@
+import { formatDateHariBulanTahun } from '../../utils/formatters';
 import React, { useState, useMemo, useRef } from 'react';
 import { 
   Warehouse, 
@@ -1102,7 +1103,7 @@ export const LaporanGudangView: React.FC<LaporanGudangViewProps> = ({
           {/* Metadata Laporan */}
           <div className="grid grid-cols-2 gap-4 text-[11px] bg-gray-50 p-3 border border-gray-200">
             <div>
-              <div>Tanggal Cetak: <strong className="font-mono">{new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</strong></div>
+              <div>Tanggal Cetak: <strong className="font-mono">{formatDateHariBulanTahun(new Date().toISOString()) + ' ' + new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</strong></div>
               <div>Fasilitas Gudang: <strong>{selectedWarehouse ? `${selectedWarehouse.kode_gudang} - ${selectedWarehouse.nama_gudang}` : 'Semua Fasilitas Pergudangan'}</strong></div>
             </div>
             <div className="text-right">

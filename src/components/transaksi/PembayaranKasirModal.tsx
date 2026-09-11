@@ -93,7 +93,7 @@ export const PembayaranKasirModal: React.FC<PembayaranKasirModalProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto font-sans animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 bg-[#b81d24]/40 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto font-sans animate-in fade-in duration-150"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}

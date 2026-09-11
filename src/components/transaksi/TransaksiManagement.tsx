@@ -333,14 +333,14 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
               }}
               className={`px-3 py-2 text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer rounded-xs whitespace-nowrap ${
                 activeTab === 'kasir'
-                  ? 'bg-indigo-700 text-white shadow-xs'
+                  ? 'bg-[#b81d24] text-white shadow-xs'
                   : 'text-gray-700 bg-gray-100 hover:bg-gray-200'
               }`}
             >
               <Receipt className="w-3.5 h-3.5" />
               <span>Loket Kasir & Cetak Nota</span>
               <span className={`ml-1 text-[10px] px-1.5 py-0.2 rounded-full ${
-                activeTab === 'kasir' ? 'bg-white/20 text-white' : 'bg-indigo-200 text-indigo-900 font-bold'
+                activeTab === 'kasir' ? 'bg-white/20 text-white' : 'bg-rose-200 text-rose-900 font-bold'
               }`}>
                 {countSiapNota}
               </span>
@@ -377,11 +377,11 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
 
       {/* Standby Scanner Gun Bar (Active on Meja Timbang / Standby Mode) */}
       {activeTab === 'timbang' && (
-        <div className="bg-slate-900 text-white p-4 border border-slate-700 shadow-md">
+        <div className="bg-[#b81d24] text-white p-4 border border-slate-700 shadow-md">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="space-y-1">
               <div className="flex items-center space-x-2">
-                <span className="bg-slate-800 text-slate-200 border border-slate-700 text-[10px] font-bold px-2 py-0.5 rounded-none uppercase tracking-wider">
+                <span className="bg-[#b81d24] text-slate-200 border border-slate-700 text-[10px] font-bold px-2 py-0.5 rounded-none uppercase tracking-wider">
                   STANDBY MEJA TIMBANGAN (SCANNER AKTIF)
                 </span>
                 <span className="text-xs text-slate-300 font-medium">
@@ -425,7 +425,7 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
             <div className={`mt-3 px-3 py-1.5 rounded-none text-xs font-bold flex items-center space-x-2 ${
               standbyFeedback.isError 
                 ? 'bg-red-950 text-red-300 border border-red-800' 
-                : 'bg-slate-800 text-slate-200 border border-slate-600'
+                : 'bg-[#b81d24] text-slate-200 border border-slate-600'
             }`}>
               {standbyFeedback.isError ? (
                 <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
@@ -452,7 +452,7 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
               </span>
             </div>
             <p className="text-gray-600 text-[11px] mt-0.5 leading-relaxed">
-              <strong>Sortir (Admin 1/2/3):</strong> Input / scan nomor bal ➔ Input grade & harga (berat kosong) ➔ Centang Ganti Tikar (+75rb, tara 2kg / standar 3kg) ➔ Simpan sample QC. <br />
+              <strong>Sortir (Admin 1/2/3):</strong> Input / scan nomor bal ➔ Input grade & harga (berat kosong) ➔ Centang Ganti Tikar jika ada (+Potongan Nominal Rp) ➔ Simpan sample QC. <br />
               <strong>Timbang & Gudang:</strong> Standby scan no. bal di timbangan ➔ Otomatis buka bal & input berat ➔ Tentukan Blok Simpan (Blok A/B/C/D) ➔ Masuk inventaris & Nota siap dicetak kasir.
             </p>
           </div>
@@ -617,7 +617,7 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
               onClick={() => setGroupByDate(!groupByDate)}
               className={`px-3 py-1.5 text-xs font-semibold rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs border ${
                 groupByDate
-                  ? 'bg-slate-800 text-white border-slate-900'
+                  ? 'bg-[#b81d24] text-white border-[#b81d24]'
                   : 'bg-white text-gray-700 hover:bg-gray-100 border-gray-300'
               }`}
               title="Kelompokkan data berdasarkan tanggal transaksi"
@@ -839,8 +839,8 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
                             {/* Status Nota */}
                             <td className="py-2.5 px-3 border-r border-gray-200 text-center whitespace-nowrap">
                               {isPrinted ? (
-                                <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-[10px] font-bold rounded-xs inline-flex items-center space-x-1">
-                                  <Check className="w-3 h-3 text-blue-700" />
+                                <span className="px-2 py-0.5 bg-rose-100 text-rose-800 text-[10px] font-bold rounded-xs inline-flex items-center space-x-1">
+                                  <Check className="w-3 h-3 text-rose-700" />
                                   <span>Sudah Dicetak</span>
                                 </span>
                               ) : (
@@ -918,7 +918,7 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => setSelectedTxForEdit(tx)}
-                                  className="w-7 h-7 rounded-sm bg-slate-700 hover:bg-slate-800 text-white flex items-center justify-center transition cursor-pointer shadow-xs"
+                                  className="w-7 h-7 rounded-sm bg-slate-700 hover:bg-[#b81d24] text-white flex items-center justify-center transition cursor-pointer shadow-xs"
                                   title="Edit & Koreksi Data Transaksi (Petani, Bal, Grade, Berat, Harga)"
                                 >
                                   <Edit3 className="w-3.5 h-3.5" />
@@ -1041,8 +1041,8 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
                       {/* Status Nota */}
                       <td className="py-2.5 px-3 border-r border-gray-200 text-center whitespace-nowrap">
                         {isPrinted ? (
-                          <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-[10px] font-bold rounded-xs inline-flex items-center space-x-1">
-                            <Check className="w-3 h-3 text-blue-700" />
+                          <span className="px-2 py-0.5 bg-rose-100 text-rose-800 text-[10px] font-bold rounded-xs inline-flex items-center space-x-1">
+                            <Check className="w-3 h-3 text-rose-700" />
                             <span>Sudah Dicetak</span>
                           </span>
                         ) : (
@@ -1120,7 +1120,7 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
                           <button
                             type="button"
                             onClick={() => setSelectedTxForEdit(tx)}
-                            className="w-7 h-7 rounded-sm bg-slate-700 hover:bg-slate-800 text-white flex items-center justify-center transition cursor-pointer shadow-xs"
+                            className="w-7 h-7 rounded-sm bg-slate-700 hover:bg-[#b81d24] text-white flex items-center justify-center transition cursor-pointer shadow-xs"
                             title="Edit & Koreksi Data Transaksi (Petani, Bal, Grade, Berat, Harga)"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
@@ -1243,7 +1243,7 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
 
       {/* Konfirmasi Hapus Transaksi dengan Alasan Audit Trail */}
       {txToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#b81d24]/60 backdrop-blur-xs">
           <div className="bg-white border border-rose-200 rounded-sm shadow-2xl max-w-md w-full p-5 space-y-4 animate-in fade-in">
             <div className="flex items-center space-x-3 text-rose-600">
               <div className="w-9 h-9 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
@@ -1280,7 +1280,7 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
                 placeholder="Contoh: Salah input nomor kupon / Duplikasi / Dibatalkan petani"
                 value={alasanHapus}
                 onChange={(e) => setAlasanHapus(e.target.value)}
-                className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded-xs focus:ring-1 focus:ring-slate-900 focus:outline-none"
+                className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded-xs focus:ring-1 focus:ring-[#b81d24] focus:outline-none"
               />
               <div className="flex flex-wrap gap-1 pt-1">
                 {['Salah input nomor kupon', 'Duplikasi transaksi timbangan', 'Dibatalkan oleh petani penyetor', 'Koreksi administratif'].map((preset) => (

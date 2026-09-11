@@ -93,7 +93,7 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-3 sm:p-4 overflow-y-auto font-sans animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 bg-[#b81d24]/40 flex items-center justify-center p-3 sm:p-4 overflow-y-auto font-sans animate-in fade-in duration-150"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -320,7 +320,7 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
 
       {/* Konfirmasi Hapus Transaksi dengan Alasan Audit Trail */}
       {isConfirmDeleteOpen && onDeleteTransaksi && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-[#b81d24]/40 backdrop-blur-xs">
           <div className="bg-white border border-gray-300 rounded-sm shadow-xl max-w-md w-full p-5 space-y-4 animate-in fade-in">
             <div className="flex items-center space-x-3 text-red-600">
               <div className="w-8 h-8 rounded-sm bg-red-50 border border-red-100 flex items-center justify-center shrink-0">

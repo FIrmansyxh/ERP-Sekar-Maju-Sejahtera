@@ -107,7 +107,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
         <div className="w-full max-w-[840px] bg-white rounded-xl shadow-[0_4px_25px_rgba(0,0,0,0.08)] border border-gray-200 grid grid-cols-1 md:grid-cols-12 overflow-hidden">
           
           {/* Left Panel (Red Brand Area) */}
-          <div className="md:col-span-5 bg-[#a3151b] p-7 text-white flex flex-col justify-between relative bg-[radial-gradient(#ffffff0a_1px,transparent_1px)] [background-size:12px_12px]">
+          <div className="md:col-span-5 bg-[#b81d24] p-7 text-white flex flex-col justify-between relative bg-[radial-gradient(#ffffff0a_1px,transparent_1px)] [background-size:12px_12px]">
             <div>
               {/* Badge */}
               <div className="inline-flex items-center space-x-1.5 px-3 py-1 bg-black/20 border border-white/20 rounded-xs text-[11px] font-medium text-white/95 mb-6">
@@ -116,34 +116,35 @@ export const LoginView: React.FC<LoginViewProps> = ({
               </div>
 
               {/* Title */}
-              <h1 className="text-2xl font-black tracking-tight text-white mb-2">
-                PR. SEKAR MAJU SEJAHTERA
+              <h1 className="text-3xl font-black tracking-tight text-white mb-3 leading-tight">
+                PR. SEKAR MAJU<br />SEJAHTERA
               </h1>
-              <p className="text-xs text-red-100/90 leading-relaxed mb-6 font-normal">
-                Sistem Enterprise Resource Planning (ERP) Manajemen Data Petani, Stok Bal, Intake Timbangan, & Logistik.
+              <p className="text-sm text-red-100/90 leading-relaxed mb-8 font-normal">
+                Sistem Enterprise Resource Planning (ERP) Manajemen<br />
+                Data Petani, Stok Bal, Intake Timbangan, & Logistik.
               </p>
 
               {/* Feature Points */}
-              <div className="space-y-3 text-xs">
-                <div className="flex items-center space-x-2 text-white/90">
-                  <CheckCircle2 className="w-4 h-4 text-amber-300 shrink-0" />
+              <div className="space-y-4 text-sm font-medium">
+                <div className="flex items-center space-x-3 text-white/95">
+                  <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0" />
                   <span>Otorisasi Berjenjang (RBAC 7 Roles)</span>
                 </div>
-                <div className="flex items-center space-x-2 text-white/90">
-                  <CheckCircle2 className="w-4 h-4 text-amber-300 shrink-0" />
-                  <span>Penyimpanan Aman & Terisolasi Offline</span>
+                <div className="flex items-center space-x-3 text-white/95">
+                  <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0" />
+                  <span>Manajemen Stok Bal & Multi-Gudang Terpusat</span>
                 </div>
-                <div className="flex items-center space-x-2 text-white/90">
-                  <CheckCircle2 className="w-4 h-4 text-amber-300 shrink-0" />
-                  <span>Audit Trail & Kupon Timbang Terintegrasi</span>
+                <div className="flex items-center space-x-3 text-white/95">
+                  <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0" />
+                  <span>Pelacakan Pengiriman & QC Lab Terintegrasi</span>
                 </div>
               </div>
             </div>
 
             {/* Bottom Left Info */}
-            <div className="pt-6 mt-6 border-t border-white/15 text-[10px] text-red-200/80 leading-relaxed font-sans">
+            <div className="pt-6 mt-8 border-t border-white/15 text-[11px] text-red-200/90 leading-relaxed font-sans">
               <div>Pamekasan, Madura - Jawa Timur</div>
-              <div className="font-mono text-red-200/60 mt-0.5">Build: 2026-08-REV3</div>
+              <div className="font-mono text-red-200/70 mt-1">Build: 2026-08-REV3</div>
             </div>
           </div>
 

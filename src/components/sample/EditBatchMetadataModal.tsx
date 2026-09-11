@@ -46,7 +46,7 @@ export const EditBatchMetadataModal: React.FC<EditBatchMetadataModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-[#b81d24]/50 backdrop-blur-xs flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-md rounded-sm shadow-xl flex flex-col max-h-[90vh]">
         <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
           <h2 className="text-sm font-bold text-gray-900 flex items-center">
@@ -117,7 +117,7 @@ export const EditBatchMetadataModal: React.FC<EditBatchMetadataModalProps> = ({
             </button>
             <button 
               type="submit" 
-              className="px-4 py-1.5 text-white bg-gray-900 hover:bg-black rounded-xs font-bold shadow-xs"
+              className="px-4 py-1.5 text-white bg-[#b81d24] hover:bg-[#b81d24] rounded-xs font-bold shadow-xs"
             >
               Simpan Perubahan
             </button>

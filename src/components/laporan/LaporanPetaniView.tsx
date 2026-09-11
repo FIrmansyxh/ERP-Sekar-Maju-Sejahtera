@@ -1177,7 +1177,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
             <div className="text-right">
               <div className="text-xs font-bold text-[#b81d24] uppercase">LAPORAN REKAPITULASI PETANI</div>
               <div className="text-[10px] text-gray-500 mt-0.5">
-                Tanggal Ekspor: {new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}
+                Tanggal Ekspor: {formatDateHariBulanTahun(new Date().toISOString())}
               </div>
               <div className="text-[10px] text-gray-500">
                 Filter: {appliedFilters.wilayah !== 'ALL' ? `Desa ${appliedFilters.wilayah}` : 'Semua Wilayah'} • {appliedFilters.status !== 'ALL' ? `Status ${appliedFilters.status}` : 'Semua Status'}

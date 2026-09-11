@@ -161,15 +161,24 @@ export const LaporanKodeBalView: React.FC<LaporanKodeBalViewProps> = ({
 
   return (
     <div className="space-y-4 animate-in fade-in duration-300">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-2">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 flex items-center">
-            <PackageSearch className="w-5 h-5 mr-2 text-[#b81d24]" />
-            Laporan Kode Bal
-          </h2>
-          <p className="text-sm text-gray-500 mt-1">
-            Analisis data inventaris bal berdasarkan kategori kode awal pada nomor bal.
-          </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 bg-gray-900 rounded-none flex items-center justify-center shrink-0 shadow-xs">
+            <PackageSearch className="w-5 h-5 text-yellow-400" />
+          </div>
+          <div>
+            <div className="flex items-center space-x-2">
+              <span className="px-1.5 py-0.5 bg-slate-100 text-slate-800 font-bold text-[10px] rounded-none uppercase tracking-wider">
+                LAPORAN INVENTARIS FISIK
+              </span>
+              <span className="text-[11px] text-gray-500 font-medium">
+                PR. Sekar Maju Sejahtera
+              </span>
+            </div>
+            <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">
+              Laporan Kode Bal
+            </h1>
+          </div>
         </div>
         
         <div className="flex space-x-2">

@@ -140,7 +140,7 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-3 sm:p-4 print:p-0 print:bg-white overflow-y-auto font-sans animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 bg-[#b81d24]/50 flex items-center justify-center p-3 sm:p-4 print:p-0 print:bg-white overflow-y-auto font-sans animate-in fade-in duration-150"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           onClose();
@@ -220,7 +220,7 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
             style={{ minHeight: '840px' }}
           >
             {/* Header Kop Surat Jalan Resmi */}
-            <div className="border-b-2 border-gray-900 pb-3 mb-4 flex justify-between items-start">
+            <div className="border-b-2 border-[#b81d24] pb-3 mb-4 flex justify-between items-start">
               <div className="space-y-0.5">
                 <div className="flex items-center space-x-2">
                   <div className="w-7 h-7 bg-[#b81d24] text-white font-black flex items-center justify-center text-xs">
@@ -340,7 +340,7 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
                     <td colSpan={3} className="p-2 border border-gray-300 text-right uppercase text-[11px]">
                       TOTAL {totalItemsCount} BAL:
                     </td>
-                    <td className="p-2 border border-gray-300 text-right font-mono font-black text-blue-900 text-xs whitespace-nowrap">
+                    <td className="p-2 border border-gray-300 text-right font-mono font-black text-rose-900 text-xs whitespace-nowrap">
                       {formatNumber(grandTotalBerat)} kg
                     </td>
                     <td className="p-2 border border-gray-300 text-right font-mono text-gray-600 text-[10.5px] whitespace-nowrap">

@@ -102,7 +102,6 @@ export interface MasterHargaJual {
   kode: string; // e.g. "HJ-45", "HJ-43", "HJ-A-SUPER"
   harga_jual: number; // e.g. 45000, 43000
   tanggal_berlaku: string; // YYYY-MM-DD
-  keterangan?: string;
   status_aktif?: boolean;
 }
 
@@ -116,7 +115,6 @@ export interface TabelHarga {
   rate_potongan_per_bal?: number; // Rp 2.000 / bal
   rate_potongan_per_10kg?: number; // legacy alias
   berat_standar_kg?: number;
-  ketentuan?: string; // Criteria description
   tanggal_berlaku: string; // YYYY-MM-DD
   tanggal_berakhir?: string;
   status: 'aktif' | 'nonaktif';
@@ -140,7 +138,7 @@ export interface TransaksiItemBal {
   barcode?: string; // Barcode fisik unik hasil scan
   kode_grade: string;
   harga_per_kg: number;
-  ganti_tikar?: boolean; // true = potongan 75rb & tara 2kg; false = potongan 0 & tara 3kg
+  ganti_tikar?: boolean; // true = potongan nominal rupiah diaktifkan; tidak mengubah potongan tara berat
   berat_bruto_kg?: number; // Berat kotor timbangan saat proses 2
   potongan_tara_kg?: number; // SB = 2kg rata; selain SB: <=49kg=3kg, 50-59kg=5kg, >=60kg=6kg
   is_netto_manual?: boolean; // True jika berat netto diinput/diedit secara manual
@@ -333,7 +331,6 @@ export interface MasterBarang {
   satuan: string;
   harga_referensi_kg: number;
   lokasi_default_gudang: string;
-  keterangan?: string;
   status_aktif: boolean;
   tanggal_dibuat: string;
 }

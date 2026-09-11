@@ -44,7 +44,6 @@ export const HargaJualManagement: React.FC<HargaJualManagementProps> = ({
   const [formKode, setFormKode] = useState('');
   const [formHargaJual, setFormHargaJual] = useState<number | ''>('');
   const [formTanggalBerlaku, setFormTanggalBerlaku] = useState('');
-  const [formKeterangan, setFormKeterangan] = useState('');
   const [formStatusAktif, setFormStatusAktif] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [successToast, setSuccessToast] = useState('');
@@ -60,8 +59,7 @@ export const HargaJualManagement: React.FC<HargaJualManagementProps> = ({
       if (statusFilter === 'inactive' && isActive) return false;
 
       const matchSearch = 
-        item.kode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (item.keterangan && item.keterangan.toLowerCase().includes(searchTerm.toLowerCase()));
+        item.kode.toLowerCase().includes(searchTerm.toLowerCase());
       return matchSearch;
     });
   }, [hargaJualList, searchTerm, statusFilter]);
@@ -93,7 +91,6 @@ export const HargaJualManagement: React.FC<HargaJualManagementProps> = ({
     setFormHargaJual('');
     const today = new Date().toISOString().split('T')[0];
     setFormTanggalBerlaku(today);
-    setFormKeterangan('');
     setFormStatusAktif(true);
     setErrorMessage('');
     setIsModalOpen(true);
@@ -105,7 +102,6 @@ export const HargaJualManagement: React.FC<HargaJualManagementProps> = ({
     setFormKode(item.kode);
     setFormHargaJual(item.harga_jual);
     setFormTanggalBerlaku(item.tanggal_berlaku || new Date().toISOString().split('T')[0]);
-    setFormKeterangan(item.keterangan || '');
     setFormStatusAktif(item.status_aktif !== false);
     setErrorMessage('');
     setIsModalOpen(true);
@@ -142,7 +138,6 @@ export const HargaJualManagement: React.FC<HargaJualManagementProps> = ({
       kode: formKode.trim().toUpperCase(),
       harga_jual: Number(formHargaJual),
       tanggal_berlaku: formTanggalBerlaku,
-      keterangan: formKeterangan.trim(),
       status_aktif: formStatusAktif,
     };
 
@@ -279,7 +274,7 @@ return (
             <div className="relative flex-1 sm:w-64">
               <input
                 type="text"
-                placeholder="Cari kode atau keterangan..."
+                placeholder="Cari kode..."
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
@@ -310,8 +305,7 @@ return (
                 <th className="py-2.5 px-3 border-r border-gray-200 w-12 text-center">No</th>
                 <th className="py-2.5 px-3 border-r border-gray-200 w-32">Kode</th>
                 <th className="py-2.5 px-3 border-r border-gray-200 w-40">Harga Jual</th>
-                <th className="py-2.5 px-3 border-r border-gray-200 w-32">Tanggal Berlaku</th>
-                <th className="py-2.5 px-3 border-r border-gray-200 min-w-[200px]">Keterangan</th>
+                <th className="py-2.5 px-3 border-r border-gray-200 w-32">Tgl Berlaku</th>
                 <th className="py-2.5 px-3 border-r border-gray-200 w-24 text-center">Status</th>
                 <th className="py-2.5 px-3 text-center w-24">Aksi</th>
               </tr>
@@ -319,7 +313,7 @@ return (
             <tbody className="text-xs text-gray-800">
               {paginatedList.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-gray-500 bg-white">
+                  <td colSpan={6} className="py-8 text-center text-gray-500 bg-white">
                     <div className="text-sm font-bold text-gray-700">Tidak ada data Master Harga Jual</div>
                     <div className="mt-1">
                       {statusFilter !== 'all' || searchTerm
@@ -349,18 +343,13 @@ return (
                     <td className="py-2.5 px-3 border-r border-gray-200 font-mono font-bold text-[#b81d24]">
                       {item.kode}
                     </td>
-                    <td className="py-2.5 px-3 border-r border-gray-200 font-mono font-bold text-emerald-700">
+                    <td className="py-2.5 px-3 border-r border-gray-200 font-mono font-bold text-gray-900">
                       {formatRupiah(item.harga_jual)}/kg
                     </td>
                     <td className="py-2.5 px-3 border-r border-gray-200">
                       <div className="flex items-center space-x-1.5 text-gray-600">
                         <Calendar className="w-3.5 h-3.5" />
-                        <span>{item.tanggal_berlaku ? new Date(item.tanggal_berlaku).toLocaleDateString('id-ID') : '-'}</span>
-                      </div>
-                    </td>
-                    <td className="py-2.5 px-3 border-r border-gray-200">
-                      <div className="text-gray-700 leading-relaxed line-clamp-2">
-                        {item.keterangan || '-'}
+                        <span>{item.tanggal_berlaku || '-'}</span>
                       </div>
                     </td>
                     <td className="py-2.5 px-3 border-r border-gray-200 text-center">
@@ -499,18 +488,6 @@ return (
                   onChange={(e) => setFormTanggalBerlaku(e.target.value)}
                   className="w-full px-3 py-2 text-xs bg-white border border-gray-300 rounded-xs focus:ring-1 focus:ring-gray-700"
                   required
-                />
-              </div>
-
-              {/* Keterangan */}
-              <div className="space-y-1">
-                <label className="block font-semibold text-gray-800">Keterangan / Spesifikasi Penawaran:</label>
-                <textarea
-                  rows={2}
-                  placeholder="Misal: Penawaran awal daun bawah, atau kesepakatan nego pabrik..."
-                  value={formKeterangan}
-                  onChange={(e) => setFormKeterangan(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-white border border-gray-300 rounded-xs focus:ring-1 focus:ring-gray-700"
                 />
               </div>
 

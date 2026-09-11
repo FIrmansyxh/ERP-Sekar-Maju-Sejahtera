@@ -16,6 +16,7 @@ import { GRADE_COLOR_MAP } from '../../data/initialHargaData';
 import { formatRupiah } from '../../utils/formatters';
 import { MasterBarangFormModal } from './MasterBarangFormModal';
 import { ConfirmModal } from '../common/ConfirmModal';
+import { Pagination } from '../common/Pagination';
 
 interface MasterBarangManagementProps {
   masterBarangList: MasterBarang[];
@@ -37,6 +38,10 @@ export const MasterBarangManagement: React.FC<MasterBarangManagementProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGrade, setSelectedGrade] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -106,6 +111,13 @@ export const MasterBarangManagement: React.FC<MasterBarangManagementProps> = ({
       return matchSearch && matchGrade && matchStatus;
     });
   }, [masterBarangList, searchTerm, selectedGrade, statusFilter]);
+
+  // Pagination calculation
+  const totalPages = Math.ceil(filteredItems.length / itemsPerPage) || 1;
+  const paginatedItems = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredItems.slice(start, start + itemsPerPage);
+  }, [filteredItems, currentPage, itemsPerPage]);
 
   const handleOpenAdd = () => {
     setEditingItem(null);
@@ -228,7 +240,7 @@ export const MasterBarangManagement: React.FC<MasterBarangManagementProps> = ({
         <div className="bg-white p-3.5 border border-gray-300 shadow-xs">
           <div className="flex items-center justify-between text-gray-500 mb-1">
             <span className="font-semibold uppercase tracking-wider text-[10px]">Total Master SKU</span>
-            <Package className="w-4 h-4 text-blue-600" />
+            <Package className="w-4 h-4 text-[#b81d24]" />
           </div>
           <div className="text-xl font-bold font-mono text-gray-900">{totalMasterCount}</div>
           <div className="text-[11px] text-gray-500 mt-0.5">Katalog Terdaftar</div>
@@ -334,7 +346,7 @@ export const MasterBarangManagement: React.FC<MasterBarangManagementProps> = ({
                   </td>
                 </tr>
               ) : (
-                filteredItems.map((item) => {
+                paginatedItems.map((item) => {
                   const gradeBadge: any = GRADE_COLOR_MAP[item.kode_grade] || {
                     bg: 'bg-gray-100',
                     text: 'text-gray-800',
@@ -387,7 +399,7 @@ export const MasterBarangManagement: React.FC<MasterBarangManagementProps> = ({
 
                       <td className="py-2.5 px-3 text-center">
                         <div className="inline-flex flex-col items-center">
-                          <span className="px-2 py-0.5 bg-blue-50 text-blue-800 border border-blue-200 font-mono font-bold rounded-xs text-[11px]">
+                          <span className="px-2 py-0.5 bg-rose-50 text-rose-800 border border-rose-200 font-mono font-bold rounded-xs text-[11px]">
                             {liveStock.totalBal} Bal
                           </span>
                           <span className="text-[10px] text-gray-400 font-mono mt-0.5">
@@ -444,7 +456,7 @@ export const MasterBarangManagement: React.FC<MasterBarangManagementProps> = ({
                             <button
                               onClick={() => onNavigateToStock(item.kode_grade)}
                               title={`Lihat Stok Fisik Grade ${item.kode_grade}`}
-                              className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-sm transition cursor-pointer"
+                              className="p-1.5 text-[#b81d24] hover:text-[#9e161c] hover:bg-rose-50 rounded-sm transition cursor-pointer"
                             >
                               <ArrowRight className="w-3.5 h-3.5" />
                             </button>
@@ -460,15 +472,16 @@ export const MasterBarangManagement: React.FC<MasterBarangManagementProps> = ({
         </div>
 
         {/* Table Footer */}
-        <div className="p-3 bg-[#f8f9fa] border-t border-gray-200 flex items-center justify-between text-[11px] text-gray-500 font-medium">
-          <div>
-            Menampilkan <span className="font-bold text-gray-800">{filteredItems.length}</span> dari{' '}
-            <span className="font-bold text-gray-800">{masterBarangList.length}</span> master item SKU Tembakau Madura.
-          </div>
-          <div className="flex items-center space-x-1">
-            <Info className="w-3.5 h-3.5 text-gray-400" />
-            <span>Master data digunakan sebagai katalog referensi intake pembelian & produksi.</span>
-          </div>
+        <div className="p-3 bg-white border-t border-gray-200">
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={filteredItems.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+            showQuickJumper={true}
+            showFirstLast={true}
+          />
         </div>
       </div>
 

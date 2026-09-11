@@ -497,7 +497,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
     const q = scanHargaJual.trim().toLowerCase();
     let matches = activeHargaJualList.filter((h) => 
       h.status_aktif !== false && 
-      (!q || h.kode.toLowerCase().includes(q) || h.harga_jual.toString().includes(q) || (h.keterangan && h.keterangan.toLowerCase().includes(q)))
+      (!q || h.kode.toLowerCase().includes(q) || h.harga_jual.toString().includes(q))
     );
 
     matches.sort((a, b) => {
@@ -861,7 +861,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
             onClick={() => setViewMode('list')}
             className={`px-3.5 py-2 text-xs font-semibold rounded-sm transition flex items-center space-x-1.5 cursor-pointer border ${
               viewMode === 'list'
-                ? 'bg-gray-900 text-white border-gray-900 shadow-xs'
+                ? 'bg-[#b81d24] text-white border-[#b81d24] shadow-xs'
                 : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
             }`}
           >
@@ -916,14 +916,14 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
               </div>
             </div>
 
-            <div className="bg-white p-3.5 border border-blue-200 bg-blue-50/20 rounded-sm shadow-xs">
+            <div className="bg-white p-3.5 border border-rose-200 bg-rose-50/20 rounded-sm shadow-xs">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-blue-800">Sedang Berangkat</span>
-                <Truck className="w-4 h-4 text-blue-600" />
+                <span className="text-[11px] font-semibold text-rose-800">Sedang Berangkat</span>
+                <Truck className="w-4 h-4 text-[#b81d24]" />
               </div>
               <div className="mt-2 flex items-baseline justify-between">
-                <span className="text-xl font-bold text-blue-700">{countDikirim}</span>
-                <span className="text-[11px] font-medium text-blue-600">Dalam Perjalanan</span>
+                <span className="text-xl font-bold text-rose-700">{countDikirim}</span>
+                <span className="text-[11px] font-medium text-[#b81d24]">Dalam Perjalanan</span>
               </div>
             </div>
 
@@ -1454,7 +1454,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                                   }`}
                                 >
                                   <div className="font-bold text-xs text-gray-900">{hj.kode} - Rp {hj.harga_jual.toLocaleString('id-ID')}</div>
-                                  <div className="text-[10px] text-gray-500 line-clamp-1">{hj.keterangan || 'Tidak ada keterangan'}</div>
+                                  
                                 </button>
                               ))
                             ) : (
@@ -1517,7 +1517,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                           <td className="p-2.5 font-mono font-bold text-gray-900 border-r border-gray-200">{item.noBal}</td>
                           <td className="p-2.5 font-mono font-bold text-[#b81d24] border-r border-gray-200">{item.kodeBalPembeli}</td>
                           <td className="p-2.5 text-center border-r border-gray-200">
-                            <span className="px-1.5 py-0.5 bg-gray-900 text-white font-mono text-[10px] font-bold rounded-2xs">
+                            <span className="px-1.5 py-0.5 bg-[#b81d24] text-white font-mono text-[10px] font-bold rounded-2xs">
                               {item.grade}
                             </span>
                           </td>
@@ -1659,6 +1659,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
         message="Apakah Anda yakin ingin menghapus batch sample ini? Data yang sudah dihapus tidak dapat dikembalikan."
         confirmText="Ya, Hapus"
         cancelText="Batal"
+        variant="danger"
         onConfirm={() => {
           if (batchToDelete && onDeleteBatchSample) {
             const batchToDel = batchSampleList.find((b) => b.batch_id === batchToDelete);

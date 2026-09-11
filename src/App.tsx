@@ -936,6 +936,28 @@ export default function App() {
     showToast(`Batch ${updatedBatch.batch_id} berhasil diperbarui.`);
   };
 
+  const handleUpdatePengiriman = (updatedPengiriman: PengirimanBarang) => {
+    const list = pengirimanList.map(p => p.pengiriman_id === updatedPengiriman.pengiriman_id ? updatedPengiriman : p);
+    setPengirimanList(list);
+    savePengirimanData(list);
+    showToast(`Data pengiriman DO berhasil diperbarui.`);
+  };
+
+  const handleDeletePengiriman = (pengirimanId: string, revertedBarangs?: Barang[]) => {
+    const list = pengirimanList.filter((p) => p.pengiriman_id !== pengirimanId);
+    setPengirimanList(list);
+    savePengirimanData(list);
+
+    if (revertedBarangs && revertedBarangs.length > 0) {
+      const updatedBarangMap = new Map(revertedBarangs.map((b) => [b.barang_id, b]));
+      const newBarangList = barangList.map((b) => updatedBarangMap.get(b.barang_id) || b);
+      setBarangList(newBarangList);
+      saveBarangData(newBarangList);
+    }
+    
+    showToast(`Pengiriman (DO) berhasil dihapus.`);
+  };
+
   const handleUpdatePengirimanStatus = (pengirimanId: string, newStatus: string) => {
     const updated = pengirimanList.map(p => p.pengiriman_id === pengirimanId ? { ...p, status: newStatus as any } : p);
     setPengirimanList(updated);
@@ -1116,16 +1138,6 @@ export default function App() {
         <main className="flex-1 overflow-y-auto p-3 sm:p-4 bg-gray-50/40">
           <div className="w-full space-y-2.5">
             
-            {/* Breadcrumb & Page Title Bar */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pb-1">
-              <h1 className="text-xl font-bold text-gray-800 tracking-tight">
-                {pageInfo.title}
-              </h1>
-              <div className="text-xs text-gray-500 font-medium">
-                <span className="text-gray-400">Beranda</span> / <span className="text-gray-700 font-semibold">{pageInfo.title}</span>
-              </div>
-            </div>
-
             {/* Dashboard Menu */}
             {activeModuleId === 'modul-home' && (
               <HomeDashboardView
@@ -1435,6 +1447,8 @@ export default function App() {
                 transaksiList={transaksiList}
                 userRole={currentRole}
                 onSaveNewPengiriman={handleSaveNewPengiriman}
+                onUpdatePengiriman={handleUpdatePengiriman}
+                onDeletePengiriman={handleDeletePengiriman}
               />
             )}
 

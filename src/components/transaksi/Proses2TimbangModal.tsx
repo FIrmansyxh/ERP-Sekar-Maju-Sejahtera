@@ -563,7 +563,7 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-2 sm:p-4 overflow-y-auto font-sans animate-in fade-in duration-150">
+      <div className="fixed inset-0 z-50 bg-[#b81d24]/40 flex items-center justify-center p-2 sm:p-4 overflow-y-auto font-sans animate-in fade-in duration-150">
         <div className="bg-white border border-gray-300 w-full max-w-6xl rounded-none shadow-2xl max-h-[94vh] flex flex-col text-xs text-gray-800">
           
           {/* Top Header */}
@@ -608,7 +608,7 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
               <span><strong>Standby Scan:</strong> Tembak stiker barcode fisik bal di timbangan</span>
             </div>
             <div className="flex items-center space-x-2 text-gray-700">
-              <span className="w-5 h-5 rounded-full bg-indigo-700 text-white font-bold text-[10px] flex items-center justify-center shrink-0">
+              <span className="w-5 h-5 rounded-full bg-[#b81d24] text-white font-bold text-[10px] flex items-center justify-center shrink-0">
                 2
               </span>
               <span><strong>Auto-Open Bal:</strong> Sistem otomatis memuat data bal & kupon terkait</span>
@@ -779,7 +779,7 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
                     <span className="font-mono font-black text-base text-gray-900 bg-gray-100 px-2 py-0.5 border border-gray-300">
                       {activeBalItem.no_bal}
                     </span>
-                    <span className="px-2 py-0.5 bg-gray-900 text-white font-bold text-[11px] rounded-xs">
+                    <span className="px-2 py-0.5 bg-[#b81d24] text-white font-bold text-[11px] rounded-xs">
                       GRADE {activeBalItem.kode_grade}
                     </span>
                     {(activeBalItem.berat_kg || 0) > 0 && (
@@ -805,7 +805,7 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
                             ? 'bg-amber-100 hover:bg-amber-200 text-amber-950 border-amber-400 font-black cursor-pointer' 
                             : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border-gray-300 cursor-pointer'
                       }`}
-                      title="Klik untuk ubah status Ganti Tikar (+Rp 75.000, potongan tara bertingkat)"
+                      title="Klik untuk ubah status Ganti Tikar (+Nominal Potongan)"
                     >
                       <input 
                         type="checkbox" 
@@ -866,7 +866,7 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
                       <span className="absolute right-3 top-2.5 font-bold text-gray-500">kg</span>
                     </div>
                     <div className="text-[10px] text-gray-500 mt-1">
-                      Tara: <strong>{activeBalItem.ganti_tikar ? '2-4 kg (Ganti Tikar)' : '3-5 kg (Tikar Bawaan)'}</strong> • Ketik manual angka timbangan
+                      Tara: <strong>Otomatis sesuai kelas berat</strong> • Ketik manual angka timbangan
                     </div>
                   </div>
 
@@ -1110,8 +1110,8 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
                 </div>
               </div>
 
-              <div className="p-2.5 bg-blue-50/70 border border-blue-200 text-[11px] text-blue-950 flex items-center space-x-2">
-                <Info className="w-4 h-4 text-blue-700 shrink-0" />
+              <div className="p-2.5 bg-rose-50/70 border border-rose-200 text-[11px] text-rose-950 flex items-center space-x-2">
+                <Info className="w-4 h-4 text-rose-700 shrink-0" />
                 <span>
                   Setelah penimbangan disimpan, seluruh bal otomatis terdaftar di inventaris <strong>Barang Gudang</strong> dan status kupon dapat dicetak notanya.
                 </span>

@@ -224,13 +224,7 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
     }
     });
 
-    if (priceMap.size === 0 && hargaList) {
-      hargaList.forEach(h => {
-        if (h.harga_per_kg > 0) {
-          priceMap.set(h.harga_per_kg, { harga: h.harga_per_kg, count: 1, totalKg: 50, totalNilai: h.harga_per_kg * 50 });
-        }
-      });
-    }
+
 
     const list = Array.from(priceMap.values());
     const totalCount = list.reduce((sum, i) => sum + i.count, 0) || 1;

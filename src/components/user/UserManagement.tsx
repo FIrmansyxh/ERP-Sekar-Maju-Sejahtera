@@ -511,7 +511,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
         title="Hapus Akun Pengguna"
         message={`Apakah Anda yakin ingin menghapus akun pengguna "${targetDeleteUser?.nama_lengkap}" (@${targetDeleteUser?.username})? Tindakan ini bersifat permanen.`}
         confirmText="Hapus Pengguna"
-        type="danger"
+        variant="danger"
       />
 
     </div>

@@ -1,3 +1,4 @@
+import { formatDateHariBulanTahun } from '../../utils/formatters';
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Scan, 
@@ -261,7 +262,7 @@ export const SampleWizardModal: React.FC<SampleWizardModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto font-sans animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 bg-[#b81d24]/50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto font-sans animate-in fade-in duration-150">
       <div className="bg-white border border-gray-300 w-full max-w-3xl rounded-none shadow-2xl flex flex-col text-xs text-gray-800 max-h-[94vh]">
         
         {/* Header Modal */}
@@ -353,12 +354,12 @@ export const SampleWizardModal: React.FC<SampleWizardModalProps> = ({
                     value={balInput}
                     onChange={(e) => setBalInput(e.target.value)}
                     placeholder="Scan barcode / ketik No Bal..."
-                    className="flex-1 bg-white border border-[#ced4da] rounded-none px-3 py-1.5 text-xs font-mono font-bold text-gray-900 focus:outline-none focus:border-gray-900"
+                    className="flex-1 bg-white border border-[#ced4da] rounded-none px-3 py-1.5 text-xs font-mono font-bold text-gray-900 focus:outline-none focus:border-[#b81d24]"
                     autoFocus
                   />
                   <button
                     type="submit"
-                    className="px-4 py-1.5 bg-gray-900 hover:bg-black text-white rounded-none font-bold text-xs flex items-center space-x-1 transition cursor-pointer shadow-xs"
+                    className="px-4 py-1.5 bg-[#b81d24] hover:bg-[#b81d24] text-white rounded-none font-bold text-xs flex items-center space-x-1 transition cursor-pointer shadow-xs"
                   >
                     <Zap className="w-3.5 h-3.5" />
                     <span>Pilih Bal</span>
@@ -372,7 +373,7 @@ export const SampleWizardModal: React.FC<SampleWizardModalProps> = ({
                       scanFeedback.type === 'success'
                         ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
                         : scanFeedback.type === 'info'
-                        ? 'bg-blue-50 border-blue-300 text-blue-800'
+                        ? 'bg-rose-50 border-rose-300 text-rose-800'
                         : 'bg-red-50 border-red-300 text-red-800'
                     }`}
                   >
@@ -476,7 +477,7 @@ export const SampleWizardModal: React.FC<SampleWizardModalProps> = ({
                           </div>
 
                           <div className="flex items-center space-x-2.5">
-                            <span className="px-2 py-0.5 bg-gray-800 text-white text-[10px] font-bold">
+                            <span className="px-2 py-0.5 bg-[#b81d24] text-white text-[10px] font-bold">
                               Grade {b.kode_grade}
                             </span>
                             <span className="font-mono font-bold text-gray-900 text-xs">
@@ -526,7 +527,7 @@ export const SampleWizardModal: React.FC<SampleWizardModalProps> = ({
                       onClick={() => setBeratGramPerBal(gr)}
                       className={`py-2 text-center rounded-none font-bold text-xs border transition cursor-pointer ${
                         beratGramPerBal === gr
-                          ? 'bg-gray-900 text-white border-gray-900 shadow-xs'
+                          ? 'bg-[#b81d24] text-white border-[#b81d24] shadow-xs'
                           : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                       }`}
                     >
@@ -604,7 +605,7 @@ export const SampleWizardModal: React.FC<SampleWizardModalProps> = ({
                       Ringkasan Pengiriman Batch Sampel Tembakau
                     </h3>
                     <span className="text-[11px] text-gray-500 font-mono">
-                      Tanggal: {new Date().toLocaleDateString('id-ID')}
+                      Tanggal: {formatDateHariBulanTahun(new Date().toISOString())}
                     </span>
                   </div>
                   <span className="px-2.5 py-1 bg-emerald-50 text-emerald-800 font-bold border border-emerald-300 text-xs">
@@ -651,7 +652,7 @@ export const SampleWizardModal: React.FC<SampleWizardModalProps> = ({
                           <div className="flex items-center space-x-2">
                             <span className="text-gray-400">{idx + 1}.</span>
                             <span className="font-bold text-gray-900">Bal #{bal.no_bal}</span>
-                            <span className="px-1.5 py-0.2 bg-gray-800 text-white text-[10px]">Grade {bal.kode_grade}</span>
+                            <span className="px-1.5 py-0.2 bg-[#b81d24] text-white text-[10px]">Grade {bal.kode_grade}</span>
                           </div>
                           <div className="text-right">
                             <span className="text-gray-400">{bal.berat_kg} kg ➔ </span>
@@ -702,7 +703,7 @@ export const SampleWizardModal: React.FC<SampleWizardModalProps> = ({
                 setScanFeedback(null);
                 setStep((s) => (s + 1) as 1 | 2 | 3);
               }}
-              className="px-4 py-1.5 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed rounded-none transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
+              className="px-4 py-1.5 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#b81d24] disabled:opacity-40 disabled:cursor-not-allowed rounded-none transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
             >
               <span>Lanjut ({selectedBarangIds.length} Bal Terpilih)</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -721,7 +722,7 @@ export const SampleWizardModal: React.FC<SampleWizardModalProps> = ({
                 }
                 setIsConfirmOpen(true);
               }}
-              className="px-5 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-black disabled:opacity-40 disabled:cursor-not-allowed rounded-none transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
+              className="px-5 py-2 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#b81d24] disabled:opacity-40 disabled:cursor-not-allowed rounded-none transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
             >
               <CheckCircle2 className="w-4 h-4" />
               <span>Simpan & Terbitkan Sample Batch</span>

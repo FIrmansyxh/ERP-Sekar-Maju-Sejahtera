@@ -29,6 +29,7 @@ export const HargaFormModal: React.FC<HargaFormModalProps> = ({
   const [kodeGrade, setKodeGrade] = useState('A');
   const [hargaPerKg, setHargaPerKg] = useState<number>(140000);
   const [deskripsi, setDeskripsi] = useState('');
+  
   const [tanggalBerlaku, setTanggalBerlaku] = useState(
     new Date().toISOString().split('T')[0]
   );
@@ -42,7 +43,7 @@ export const HargaFormModal: React.FC<HargaFormModalProps> = ({
         if (existing) {
           setKodeGrade(existing.kode_grade);
           setHargaPerKg(existing.harga_per_kg);
-          setDeskripsi(existing.ketentuan || existing.deskripsi || '');
+          
           setTanggalBerlaku(existing.tanggal_berlaku || new Date().toISOString().split('T')[0]);
         }
       } else {
@@ -65,8 +66,8 @@ export const HargaFormModal: React.FC<HargaFormModalProps> = ({
     const newErrors: { [key: string]: string } = {};
 
     const gradeVal = validateGradeCode(kodeGrade);
-    if (!gradeVal.isValid) {
-      newErrors.kodeGrade = gradeVal.message || 'Kode grade tidak valid.';
+    if (!gradeVal) {
+      newErrors.kodeGrade = 'Kode grade tidak valid.';
     }
 
     if (!isEditing && currentActivePrices.some(p => p.kode_grade.toUpperCase() === kodeGrade.trim().toUpperCase())) {
@@ -97,7 +98,7 @@ export const HargaFormModal: React.FC<HargaFormModalProps> = ({
       warna_badge: 'bg-slate-800 text-white',
       harga_per_kg: Number(hargaPerKg),
       berat_standar_kg: 45,
-      ketentuan: deskripsi.trim() || `Standar kualitas tembakau grade ${cleanCode}`,
+      
       tanggal_berlaku: tanggalBerlaku,
       status: 'aktif',
       dibuat_oleh: 'Kepala Gudang PR. Sekar Anom',
@@ -223,22 +224,12 @@ export const HargaFormModal: React.FC<HargaFormModalProps> = ({
               />
             </div>
 
-            {/* Deskripsi / Ciri Fisik Tembakau */}
-            <div>
-              <label className="block text-gray-700 font-bold mb-1">Karakteristik & Ketentuan Mutu</label>
-              <textarea
-                rows={3}
-                placeholder="Contoh: Daun mahkota atas, warna kuning keemasan, minyak tinggi, aroma pekat kretek..."
-                value={deskripsi}
-                onChange={(e) => setDeskripsi(e.target.value)}
-                className="w-full bg-white border border-gray-300 rounded-sm px-3 py-2 text-xs text-gray-800 focus:outline-none focus:border-[#b81d24]"
-              />
-            </div>
+            
 
             {/* Live Calculation Preview Box */}
             <div className="bg-gray-50 border border-gray-300 p-3.5 space-y-2">
               <div className="font-bold text-gray-800 text-[11px] border-b border-gray-200 pb-1 flex items-center justify-between">
-                <span>KETENTUAN POTONGAN OPERASIONAL RESMI</span>
+                <span>POTONGAN OPERASIONAL RESMI</span>
                 <span className="text-[#b81d24] font-mono font-bold">Grade {kodeGrade || '...'}</span>
               </div>
               

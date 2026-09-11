@@ -367,6 +367,11 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     setActiveItemId(item.item_id);
     setBeratBrutoInput(item.berat_bruto_kg && item.berat_bruto_kg > 0 ? item.berat_bruto_kg : '');
     setLokasiBlok(item.lokasi_simpan || 'Blok A (Utara)');
+    if (item.ganti_tikar && item.potongan_tikar) {
+      setPotTikarInput(item.potongan_tikar);
+    } else {
+      setPotTikarInput(75000);
+    }
     const isWeighed = (item.berat_kg || 0) > 0;
     setScanFeedback({ 
       text: `Memilih Bal "${item.no_bal}" (Grade ${item.kode_grade})${isWeighed ? ` • [Netto: ${item.berat_kg} Kg - TERKUNCI]` : ' • [Langkah 2: Masukkan Berat Manual]'}`, 
@@ -884,11 +889,11 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
         <div className="lg:col-span-4 space-y-3">
           
           {/* Scanner Box */}
-          <div className="bg-white border border-slate-200 p-4 shadow-2xs rounded-sm space-y-3">
+          <div className="bg-white border border-gray-200 p-4 shadow-2xs rounded-sm space-y-3">
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2 text-slate-800">
-                <Layers className="w-4 h-4 text-slate-700" />
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+              <div className="flex items-center space-x-2 text-gray-800">
+                <Layers className="w-4 h-4 text-gray-700" />
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-700">
                   Scan / Cari No Bal / No. Kupon
                 </h3>
               </div>
@@ -941,10 +946,10 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                     }
                   }}
                   placeholder="Ketik No Bal / No. Kupon, atau Scan Barcode..."
-                  className={`w-full bg-white border rounded-sm pl-3 pr-8 py-2 text-xs font-mono font-semibold text-slate-900 focus:outline-none focus:ring-1 transition ${
+                  className={`w-full bg-white border rounded-sm pl-3 pr-8 py-2 text-xs font-mono font-semibold text-gray-900 focus:outline-none focus:ring-1 transition ${
                     scanFeedback?.isError
                       ? 'border-rose-300 focus:border-rose-600 focus:ring-rose-600 bg-rose-50/20'
-                      : 'border-slate-300 focus:border-slate-800 focus:ring-slate-800'
+                      : 'border-gray-300 focus:border-slate-800 focus:ring-slate-800'
                   } placeholder:font-sans placeholder:font-normal placeholder:text-slate-400`}
                 />
                 {scannedBarcode && (
@@ -956,7 +961,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                       setScanFeedback(null);
                       barcodeScannerRef.current?.focus();
                     }}
-                    className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 cursor-pointer text-xs"
+                    className="absolute right-2 top-2 text-slate-400 hover:text-gray-600 cursor-pointer text-xs"
                     title="Hapus input"
                   >
                     ✕
@@ -972,9 +977,9 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                 return (
                   <div
                     ref={dropdownRef}
-                    className="absolute left-0 right-0 top-full mt-1 z-30 bg-white border border-slate-200 rounded-sm shadow-lg overflow-hidden divide-y divide-slate-100 max-h-72 overflow-y-auto"
+                    className="absolute left-0 right-0 top-full mt-1 z-30 bg-white border border-gray-200 rounded-sm shadow-lg overflow-hidden divide-y divide-gray-100 max-h-72 overflow-y-auto"
                   >
-                    <div className="px-2.5 py-1.5 bg-slate-50 text-[10px] font-semibold text-slate-600 tracking-wider flex items-center justify-between border-b border-slate-200 sticky top-0 z-10">
+                    <div className="px-2.5 py-1.5 bg-[#f8f9fa] text-[10px] font-semibold text-gray-600 tracking-wider flex items-center justify-between border-b border-gray-200 sticky top-0 z-10">
                       <div className="flex items-center space-x-1.5">
                         <span>Rekomendasi Bal ({balSuggestions.length}):</span>
                         {unweighedCount > 0 && (
@@ -993,7 +998,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                       return (
                         <React.Fragment key={`${tx.transaksi_id}-${item.item_id}`}>
                           {showWeighedSectionDivider && (
-                            <div className="px-2.5 py-1 bg-slate-100 text-[9px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between border-t border-b border-slate-200">
+                            <div className="px-2.5 py-1 bg-gray-100 text-[9px] font-bold text-gray-500 uppercase tracking-wider flex items-center justify-between border-t border-b border-gray-200">
                               <span>Sudah Ditimbang ({weighedCount})</span>
                               <span className="text-[9px] text-slate-400 font-normal lowercase">Urut terdekat</span>
                             </div>
@@ -1003,10 +1008,10 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                             onClick={() => selectBalAndOpen(tx, item, 'manual')}
                             className={`w-full px-3 py-2 text-left flex items-center justify-between transition cursor-pointer ${
                               isHighlighted
-                                ? 'bg-slate-100 text-slate-900'
+                                ? 'bg-gray-100 text-gray-900'
                                 : !isWeighed
-                                ? 'hover:bg-amber-50/60 bg-white text-slate-900'
-                                : 'hover:bg-slate-50 text-slate-700'
+                                ? 'hover:bg-amber-50/60 bg-white text-gray-900'
+                                : 'hover:bg-[#f8f9fa] text-gray-700'
                             }`}
                           >
                             <div>
@@ -1014,16 +1019,16 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                                 <span className={`font-mono font-bold text-xs px-1.5 py-0.2 rounded-xs border ${
                                   !isWeighed
                                     ? 'text-amber-950 bg-amber-50 border-amber-300'
-                                    : 'text-slate-700 bg-slate-100 border-slate-200'
+                                    : 'text-gray-700 bg-gray-100 border-gray-200'
                                 }`}>
                                   {item.no_bal}
                                 </span>
-                                <span className="px-1.5 py-0.2 bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-medium rounded-xs">
+                                <span className="px-1.5 py-0.2 bg-gray-100 text-gray-700 border border-gray-200 text-[10px] font-medium rounded-xs">
                                   Grade {item.kode_grade}
                                 </span>
                               </div>
-                              <p className="text-[10px] text-slate-500 mt-0.5">
-                                Kupon <strong className="text-slate-700 font-mono">{tx.no_kupon}</strong> • {tx.nama_petani}
+                              <p className="text-[10px] text-gray-500 mt-0.5">
+                                Kupon <strong className="text-gray-700 font-mono">{tx.no_kupon}</strong> • {tx.nama_petani}
                               </p>
                             </div>
                             <div className="text-right shrink-0">
@@ -1059,7 +1064,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
 
               <button
                 type="submit"
-                className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs rounded-sm transition cursor-pointer shadow-2xs"
+                className="w-full py-2 bg-[#b81d24] hover:bg-[#b81d24] text-white font-medium text-xs rounded-sm transition cursor-pointer shadow-2xs"
               >
                 Cari / Buka Data
               </button>
@@ -1067,7 +1072,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
 
             {scanFeedback && (
               <div className={`p-2.5 rounded-sm text-xs font-medium ${
-                scanFeedback.isError ? 'bg-rose-50 text-rose-800 border border-rose-200' : 'bg-slate-50 text-slate-800 border border-slate-200'
+                scanFeedback.isError ? 'bg-rose-50 text-rose-800 border border-rose-200' : 'bg-[#f8f9fa] text-gray-800 border border-gray-200'
               }`}>
                 {scanFeedback.text}
               </div>
@@ -1075,15 +1080,15 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
           </div>
 
           {/* Kupon Batch Selector */}
-          <div className="bg-white border border-slate-200 p-4 shadow-2xs rounded-sm space-y-3">
+          <div className="bg-white border border-gray-200 p-4 shadow-2xs rounded-sm space-y-3">
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2 text-slate-800">
-                <Layers className="w-4 h-4 text-slate-600" />
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+              <div className="flex items-center space-x-2 text-gray-800">
+                <Layers className="w-4 h-4 text-gray-600" />
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-700">
                   Pilih Kupon Antrian
                 </h3>
               </div>
-              <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono font-medium border border-slate-200">
+              <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-mono font-medium border border-gray-200">
                 {pendingOrRecentTxList.length} Batch
               </span>
             </div>
@@ -1105,11 +1110,11 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                   // Small delay to allow click on dropdown to register
                   setTimeout(() => setShowKuponDropdown(false), 200);
                 }}
-                className="w-full bg-white border border-slate-300 rounded-sm px-2.5 py-2 text-xs font-medium text-slate-900 focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800"
+                className="w-full bg-white border border-gray-300 rounded-sm px-2.5 py-2 text-xs font-medium text-gray-900 focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800"
               />
               
               {showKuponDropdown && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-sm shadow-lg overflow-y-auto max-h-60 z-50">
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-sm shadow-lg overflow-y-auto max-h-60 z-50">
                   {pendingOrRecentTxList
                     .filter((tx) => tx.no_kupon.includes(kuponInput))
                     .map((tx) => {
@@ -1124,20 +1129,20 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                             setKuponInput(tx.no_kupon);
                             setShowKuponDropdown(false);
                           }}
-                          className="px-3 py-2 cursor-pointer hover:bg-slate-50 border-b border-slate-100 last:border-0"
+                          className="px-3 py-2 cursor-pointer hover:bg-[#f8f9fa] border-b border-gray-100 last:border-0"
                         >
                           <div className="flex justify-between items-center mb-0.5">
-                            <strong className="text-slate-800 font-mono text-xs">{tx.no_kupon}</strong>
-                            <span className="text-[10px] text-slate-500 font-medium">{isComplete ? '✓ LENGKAP' : '⏳ PROSES'}</span>
+                            <strong className="text-gray-800 font-mono text-xs">{tx.no_kupon}</strong>
+                            <span className="text-[10px] text-gray-500 font-medium">{isComplete ? '✓ LENGKAP' : '⏳ PROSES'}</span>
                           </div>
-                          <div className="text-[10px] text-slate-600">
+                          <div className="text-[10px] text-gray-600">
                             {tx.nama_petani} • {weighed}/{items.length} Bal ditimbang
                           </div>
                         </div>
                       );
                     })}
                     {pendingOrRecentTxList.filter((tx) => tx.no_kupon.includes(kuponInput)).length === 0 && (
-                      <div className="px-3 py-2 text-xs text-slate-500 text-center">Tidak ada kupon ditemukan</div>
+                      <div className="px-3 py-2 text-xs text-gray-500 text-center">Tidak ada kupon ditemukan</div>
                     )}
                 </div>
               )}
@@ -1146,13 +1151,13 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
           </div>
 
                     {/* List of Bals in Selected Kupon */}
-          <div className="bg-white border border-slate-200 shadow-2xs rounded-sm overflow-hidden">
-            <div className="bg-slate-50 border-b border-slate-200 px-4 py-2.5 flex items-center justify-between">
-              <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+          <div className="bg-white border border-gray-200 shadow-2xs rounded-sm overflow-hidden">
+            <div className="bg-[#f8f9fa] border-b border-gray-200 px-4 py-2.5 flex items-center justify-between">
+              <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider">
                 Daftar Bal ({workingItems.length})
               </h3>
             </div>
-            <div className="divide-y divide-slate-100 max-h-[500px] overflow-y-auto">
+            <div className="divide-y divide-gray-100 max-h-[500px] overflow-y-auto">
               {workingItems.map((item, index) => {
                 const isActive = activeItemId === item.item_id;
                 const isWeighed = (item.berat_kg || 0) > 0;
@@ -1163,10 +1168,10 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                     onClick={() => setActiveItemId(item.item_id)}
                     className={`w-full text-left px-4 py-3 transition cursor-pointer flex items-center justify-between ${
                       isActive
-                        ? 'bg-slate-100 border-l-4 border-slate-900 font-semibold'
+                        ? 'bg-gray-100 border-l-4 border-[#b81d24] font-semibold'
                         : isWeighed
-                        ? 'bg-white hover:bg-slate-50'
-                        : 'bg-white hover:bg-slate-50'
+                        ? 'bg-white hover:bg-[#f8f9fa]'
+                        : 'bg-white hover:bg-[#f8f9fa]'
                     }`}
                   >
                     <div className="flex items-center space-x-2.5">
@@ -1175,14 +1180,14 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                       </span>
                       <div>
                         <div className="flex items-center space-x-1.5">
-                          <span className="font-mono font-semibold text-slate-900">
+                          <span className="font-mono font-semibold text-gray-900">
                             {item.no_bal}
                           </span>
-                          <span className="px-1.5 py-0.2 bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-medium rounded-xs">
+                          <span className="px-1.5 py-0.2 bg-gray-100 text-gray-700 border border-gray-200 text-[10px] font-medium rounded-xs">
                             Grade {item.kode_grade}
                           </span>
                         </div>
-                        <p className="text-[10px] text-slate-500 mt-0.5">
+                        <p className="text-[10px] text-gray-500 mt-0.5">
                           {formatRupiah(item.harga_per_kg)}/kg {item.ganti_tikar && '• Ganti Tikar'}
                         </p>
                       </div>
@@ -1190,7 +1195,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                     <div className="text-right">
                       {isWeighed ? (
                         <div>
-                          <span className="font-mono font-semibold text-slate-900 text-xs">
+                          <span className="font-mono font-semibold text-gray-900 text-xs">
                             {item.berat_kg} Kg Netto
                           </span>
                           <p className="text-[9px] text-emerald-600 font-medium">
@@ -1198,7 +1203,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                           </p>
                         </div>
                       ) : (
-                        <span className="px-2 py-0.5 bg-slate-100 text-slate-600 border border-slate-200 rounded-xs text-[10px] font-medium">
+                        <span className="px-2 py-0.5 bg-gray-100 text-gray-600 border border-gray-200 rounded-xs text-[10px] font-medium">
                           Belum Timbang
                         </span>
                       )}
@@ -1271,12 +1276,12 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
 
               {/* Main Workspace - Compact, Structured, Matching System Theme */}
               <div className="p-4 sm:p-5 space-y-4">
-                <div className="p-4 bg-slate-50 border border-slate-200 rounded-sm space-y-4">
+                <div className="p-4 bg-[#f8f9fa] border border-gray-200 rounded-sm space-y-4">
                   {/* Grid Inputs: Bruto & Netto side-by-side */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {/* Bruto Input */}
                     <div className="space-y-1.5">
-                      <label className="block text-xs font-semibold text-slate-700">
+                      <label className="block text-xs font-semibold text-gray-700">
                         Berat Kotor (Bruto) <span className="text-rose-500">*</span>
                       </label>
                       <div className="relative">
@@ -1289,14 +1294,14 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                           disabled={isActiveBalWeighed}
                           onChange={(e) => setBeratBrutoInput(e.target.value)}
                           onKeyDown={handleKeyDownWeight}
-                          className="w-full bg-white border border-slate-300 rounded-xs py-2 px-3 text-base font-bold text-slate-900 focus:outline-none focus:border-[#b81d24] focus:ring-1 focus:ring-[#b81d24] disabled:bg-slate-100 disabled:text-slate-400 transition"
+                          className="w-full bg-white border border-gray-300 rounded-xs py-2 px-3 text-base font-bold text-gray-900 focus:outline-none focus:border-[#b81d24] focus:ring-1 focus:ring-[#b81d24] disabled:bg-gray-100 disabled:text-slate-400 transition"
                           placeholder="0.0"
                         />
                         <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                          <span className="text-slate-500 font-semibold text-xs">KG</span>
+                          <span className="text-gray-500 font-semibold text-xs">KG</span>
                         </div>
                       </div>
-                      <p className="text-[11px] text-slate-500">
+                      <p className="text-[11px] text-gray-500">
                         {isActiveBalWeighed 
                           ? 'Bal telah tersimpan & terkunci. Klik "Buka Kunci" untuk menimbang ulang.' 
                           : 'Ketik berat kotor lalu tekan Enter untuk simpan.'}
@@ -1306,7 +1311,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                     {/* Netto Display & Edit */}
                     <div className="space-y-1.5">
                       <div className="flex justify-between items-center">
-                        <label className="block text-xs font-semibold text-slate-700">
+                        <label className="block text-xs font-semibold text-gray-700">
                           Berat Bersih (Netto)
                         </label>
                         {isNettoManual && (
@@ -1316,7 +1321,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                               setIsNettoManual(false);
                               setBeratNettoInput('');
                             }}
-                            className="text-[10px] text-blue-600 hover:text-blue-800 font-medium"
+                            className="text-[10px] text-[#b81d24] hover:text-rose-800 font-medium"
                           >
                             Reset Auto
                           </button>
@@ -1334,38 +1339,38 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                             setBeratNettoInput(e.target.value);
                           }}
                           onKeyDown={handleKeyDownWeight}
-                          className="w-full bg-white border border-slate-300 rounded-xs py-2 px-3 text-base font-bold text-slate-900 focus:outline-none focus:border-[#b81d24] focus:ring-1 focus:ring-[#b81d24] disabled:bg-slate-100 disabled:text-slate-400 transition"
+                          className="w-full bg-white border border-gray-300 rounded-xs py-2 px-3 text-base font-bold text-gray-900 focus:outline-none focus:border-[#b81d24] focus:ring-1 focus:ring-[#b81d24] disabled:bg-gray-100 disabled:text-slate-400 transition"
                           placeholder="0.0"
                         />
                         <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                          <span className="text-slate-500 font-semibold text-xs">KG</span>
+                          <span className="text-gray-500 font-semibold text-xs">KG</span>
                         </div>
                       </div>
                       <div className="flex justify-between items-center text-[11px] pt-0.5">
-                        <span className="text-slate-500">Potongan Tara:</span>
-                        <span className="font-semibold text-slate-700">{liveBruto ? liveTara : 0} KG {isNettoManual ? '(Disesuaikan)' : ''}</span>
+                        <span className="text-gray-500">Potongan Tara:</span>
+                        <span className="font-semibold text-gray-700">{liveBruto ? liveTara : 0} KG {isNettoManual ? '(Disesuaikan)' : ''}</span>
                       </div>
                     </div>
                   </div>
 
                   {/* Ganti Tikar Checkbox */}
-                  <div className="pt-3 border-t border-slate-200">
+                  <div className="pt-3 border-t border-gray-200">
                     <label className="inline-flex items-center space-x-2.5 cursor-pointer group">
                       <input
                         type="checkbox"
                         checked={activeBalItem.ganti_tikar}
                         onChange={() => handleToggleGantiTikar(activeBalItem.item_id)}
                         disabled={isActiveBalWeighed}
-                        className="w-4 h-4 rounded-xs border-slate-300 text-[#b81d24] focus:ring-[#b81d24] disabled:opacity-50 cursor-pointer"
+                        className="w-4 h-4 rounded-xs border-gray-300 text-[#b81d24] focus:ring-[#b81d24] disabled:opacity-50 cursor-pointer"
                       />
-                      <span className="text-xs font-semibold text-slate-700 group-hover:text-slate-900 transition">
+                      <span className="text-xs font-semibold text-gray-700 group-hover:text-gray-900 transition">
                         Ada Ganti Tikar?
                       </span>
                     </label>
 
                     {activeBalItem.ganti_tikar && (
                       <div className="mt-2.5 ml-6 max-w-xs">
-                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        <label className="block text-[11px] font-semibold text-gray-600 mb-1">
                           Nominal Potongan Tikar (Rp)
                         </label>
                         <input
@@ -1373,7 +1378,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                           value={potTikarInput}
                           onChange={(e) => setPotTikarInput(parseFloat(e.target.value) || 0)}
                           disabled={isActiveBalWeighed}
-                          className="w-full bg-white border border-slate-300 rounded-xs py-1.5 px-2.5 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#b81d24] focus:ring-1 focus:ring-[#b81d24] disabled:bg-slate-100 disabled:text-slate-400"
+                          className="w-full bg-white border border-gray-300 rounded-xs py-1.5 px-2.5 text-xs font-semibold text-gray-900 focus:outline-none focus:border-[#b81d24] focus:ring-1 focus:ring-[#b81d24] disabled:bg-gray-100 disabled:text-slate-400"
                         />
                       </div>
                     )}
@@ -1394,7 +1399,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                       Buka Kunci (Edit Ulang)
                     </button>
                   ) : (
-                    <p className="text-xs text-slate-500">Pastikan timbangan fisik stabil sebelum menyimpan.</p>
+                    <p className="text-xs text-gray-500">Pastikan timbangan fisik stabil sebelum menyimpan.</p>
                   )}
                 </div>
                 <div className="flex space-x-2">
@@ -1412,9 +1417,9 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
 
             </div>
           ) : (
-            <div className="bg-white border border-slate-200 p-12 text-center text-slate-400 rounded-sm flex flex-col items-center justify-center h-full">
+            <div className="bg-white border border-gray-200 p-12 text-center text-slate-400 rounded-sm flex flex-col items-center justify-center h-full">
               <Scale className="w-16 h-16 mb-4 text-slate-200" />
-              <h3 className="text-base font-bold text-slate-700">Tidak ada bal dipilih</h3>
+              <h3 className="text-base font-bold text-gray-700">Tidak ada bal dipilih</h3>
             </div>
           )}
         </div>

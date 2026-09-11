@@ -1,3 +1,4 @@
+import { formatDateHariBulanTahun } from '../../utils/formatters';
 import React, { useState, useMemo, useRef } from 'react';
 import { 
   Award, 
@@ -95,8 +96,7 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
       if (searchTermJual) {
         const q = searchTermJual.toLowerCase();
         if (
-          !item.kode.toLowerCase().includes(q) &&
-          !(item.keterangan || '').toLowerCase().includes(q)
+          !item.kode.toLowerCase().includes(q)
         ) {
           return false;
         }
@@ -113,13 +113,12 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
 
   const handleExportJualCSV = () => {
     const filename = `Laporan_Master_Harga_Jual_${new Date().toISOString().split('T')[0]}.csv`;
-    const headers = ['Kode', 'Harga Jual (Rp)', 'Tanggal Berlaku', 'Status', 'Keterangan'];
+    const headers = ['Kode', 'Harga Jual (Rp)', 'Tanggal Berlaku', 'Status'];
     const rows = filteredHargaJualList.map(h => [
       h.kode,
       h.harga_jual,
       h.tanggal_berlaku,
       h.status_aktif ? 'Aktif' : 'Non-Aktif',
-      h.keterangan || '-',
     ]);
     downloadCsvFile(filename, headers, rows);
   };
@@ -146,6 +145,8 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
   }, [hargaJualList]);
   // Filter States
   const [showSummaryCardsBeli, setShowSummaryCardsBeli] = useState<boolean>(true);
+  const [showMatriksBeli, setShowMatriksBeli] = useState<boolean>(false);
+  const [showMatriksJual, setShowMatriksJual] = useState<boolean>(false);
   const [selectedGradeCode, setSelectedGradeCode] = useState<string>('');
   const [filterGudang, setFilterGudang] = useState<string>('ALL');
   const [filterStatusStok, setFilterStatusStok] = useState<string>('ALL');
@@ -160,7 +161,7 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
   // Extract all distinct valid grades from hargaList + barangList
   // Note: Multi Grade is strictly an indicator for multi-item purchases, NEVER a grade itself.
   const uniqueGrades = useMemo(() => {
-    const gradeMap = new Map<string, { code: string; name: string; price: number; status: string; ketentuan: string }>();
+    const gradeMap = new Map<string, { code: string; name: string; price: number; status: string;  }>();
 
     // 1. First add from Master Harga (preserves creation order & active pricing)
     hargaList.forEach((h) => {
@@ -172,7 +173,7 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
             name: h.nama_grade || `Grade ${code}`,
             price: h.harga_per_kg || 0,
             status: h.status || 'aktif',
-            ketentuan: h.ketentuan || h.deskripsi || 'Standar mutu tembakau',
+            
           });
         }
       }
@@ -188,7 +189,7 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
             name: `Grade ${code}`,
             price: 0,
             status: 'aktif',
-            ketentuan: 'Inventaris fisik terdata di gudang',
+            
           });
         }
       }
@@ -202,7 +203,7 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
           name: `Grade ${g}`,
           price: 100000,
           status: 'aktif',
-          ketentuan: 'Standar mutu tembakau',
+          
         });
       });
     }
@@ -554,11 +555,23 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
   const contentJual = (
     <div className="space-y-4">
       <div className="bg-white p-4 border border-gray-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-bold text-gray-900 tracking-tight">
-            Laporan Stok & Analisis Harga Jual
-          </h2>
-          
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 bg-gray-900 rounded-none flex items-center justify-center shrink-0 shadow-xs">
+            <Award className="w-5 h-5 text-emerald-400" />
+          </div>
+          <div>
+            <div className="flex items-center space-x-2">
+              <span className="px-1.5 py-0.5 bg-slate-100 text-slate-800 font-bold text-[10px] rounded-none uppercase tracking-wider">
+                LAPORAN INVENTARIS FISIK
+              </span>
+              <span className="text-[11px] text-gray-500 font-medium">
+                PR. Sekar Maju Sejahtera
+              </span>
+            </div>
+            <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">
+              Laporan Stok & Analisis Mutu Jual
+            </h1>
+          </div>
         </div>
 
         {/* Action Direct Download Buttons */}
@@ -670,9 +683,13 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
       <div className="bg-white border border-gray-200 shadow-xs p-4 space-y-4">
         
         <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-gray-100 gap-2">
-          <div>
+          <div 
+            className="flex-1 cursor-pointer"
+            onClick={() => setShowMatriksJual(!showMatriksJual)}
+          >
             <h2 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center space-x-2">
               <span>Matriks Distribusi & Rekapitulasi per Mutu Grade</span>
+              {showMatriksJual ? <EyeOff className="w-3 h-3 text-gray-400" /> : <Eye className="w-3 h-3 text-gray-400" />}
               <span className="px-2 py-0.5 text-[10px] bg-red-50 text-[#b81d24] font-bold border border-red-200">
                 Pembaruan Real-Time
               </span>
@@ -695,6 +712,8 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
           </div>
         </div>
 
+        {showMatriksJual && (
+          <>
         {/* Quick Filter Kode Pills */}
         <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px]">
           <span className="text-gray-500 font-medium">Filter Tampilan Kode:</span>
@@ -762,7 +781,7 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
                     {/* Nama Mutu & Deskripsi */}
                     <td className="py-2.5 px-3">
                       <div className="font-bold text-gray-900">{item.name}</div>
-                      <div className="text-[10px] text-gray-500 line-clamp-1 max-w-xs">{item.ketentuan}</div>
+                      
                     </td>
 
                     {/* Tarif Acuan */}
@@ -858,10 +877,11 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
                 </td>
                 <td colSpan={2}></td>
               </tr>
-            </tfoot>
+                        </tfoot>
           </table>
         </div>
-
+        </>
+        )}
       </div>
 
       {/* Deep-Dive Bal Inventory Explorer */}
@@ -1083,7 +1103,7 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
             </div>
             <div className="text-right">
               <h2 className="text-sm font-bold uppercase text-[#b81d24]">LAPORAN MASTER HARGA JUAL & VALUASI STOK</h2>
-              <p className="text-[10px] text-gray-600">Tanggal Ekspor: {new Date().toLocaleDateString('id-ID', { dateStyle: 'full' })}</p>
+              <p className="text-[10px] text-gray-600">Tanggal Ekspor: {formatDateHariBulanTahun(new Date().toISOString())}</p>
               <p className="text-[10px] text-gray-500">Total Mutu Terdaftar: {uniqueGrades.length} Grade</p>
             </div>
           </div>
@@ -1179,11 +1199,23 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
 const contentBeli = (
     <div className="space-y-4">
       <div className="bg-white p-4 border border-gray-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-bold text-gray-900 tracking-tight">
-            Laporan Stok & Analisis Mutu Grade (Harga Beli)
-          </h2>
-          
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 bg-gray-900 rounded-none flex items-center justify-center shrink-0 shadow-xs">
+            <Award className="w-5 h-5 text-yellow-400" />
+          </div>
+          <div>
+            <div className="flex items-center space-x-2">
+              <span className="px-1.5 py-0.5 bg-slate-100 text-slate-800 font-bold text-[10px] rounded-none uppercase tracking-wider">
+                LAPORAN INVENTARIS FISIK
+              </span>
+              <span className="text-[11px] text-gray-500 font-medium">
+                PR. Sekar Maju Sejahtera
+              </span>
+            </div>
+            <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">
+              Laporan Stok & Analisis Mutu Grade
+            </h1>
+          </div>
         </div>
 
         {/* Action Direct Download Buttons */}
@@ -1295,9 +1327,13 @@ const contentBeli = (
       <div className="bg-white border border-gray-200 shadow-xs p-4 space-y-4">
         
         <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-gray-100 gap-2">
-          <div>
+          <div 
+            className="flex-1 cursor-pointer"
+            onClick={() => setShowMatriksBeli(!showMatriksBeli)}
+          >
             <h2 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center space-x-2">
               <span>Matriks Distribusi & Rekapitulasi per Mutu Grade</span>
+              {showMatriksBeli ? <EyeOff className="w-3 h-3 text-gray-400" /> : <Eye className="w-3 h-3 text-gray-400" />}
               <span className="px-2 py-0.5 text-[10px] bg-red-50 text-[#b81d24] font-bold border border-red-200">
                 Pembaruan Real-Time
               </span>
@@ -1320,6 +1356,8 @@ const contentBeli = (
           </div>
         </div>
 
+        {showMatriksBeli && (
+          <>
         {/* Quick Filter Grade Pills */}
         <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px]">
           <span className="text-gray-500 font-medium">Filter Tampilan Grade:</span>
@@ -1387,7 +1425,7 @@ const contentBeli = (
                     {/* Nama Mutu & Deskripsi */}
                     <td className="py-2.5 px-3">
                       <div className="font-bold text-gray-900">{item.name}</div>
-                      <div className="text-[10px] text-gray-500 line-clamp-1 max-w-xs">{item.ketentuan}</div>
+                      
                     </td>
 
                     {/* Tarif Acuan */}
@@ -1483,10 +1521,11 @@ const contentBeli = (
                 </td>
                 <td colSpan={2}></td>
               </tr>
-            </tfoot>
+                        </tfoot>
           </table>
         </div>
-
+        </>
+        )}
       </div>
 
       {/* Deep-Dive Bal Inventory Explorer */}
@@ -1708,7 +1747,7 @@ const contentBeli = (
             </div>
             <div className="text-right">
               <h2 className="text-sm font-bold uppercase text-[#b81d24]">LAPORAN MASTER HARGA BELI & VALUASI STOK</h2>
-              <p className="text-[10px] text-gray-600">Tanggal Ekspor: {new Date().toLocaleDateString('id-ID', { dateStyle: 'full' })}</p>
+              <p className="text-[10px] text-gray-600">Tanggal Ekspor: {formatDateHariBulanTahun(new Date().toISOString())}</p>
               <p className="text-[10px] text-gray-500">Total Mutu Terdaftar: {uniqueGrades.length} Grade</p>
             </div>
           </div>

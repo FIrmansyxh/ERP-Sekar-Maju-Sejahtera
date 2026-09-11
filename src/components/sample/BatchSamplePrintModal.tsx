@@ -74,7 +74,7 @@ export const BatchSamplePrintModal: React.FC<BatchSamplePrintModalProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto font-sans animate-in fade-in duration-150 print:bg-white print:backdrop-blur-none print:p-0 print:block print:overflow-visible print:relative print:inset-auto"
+      className="fixed inset-0 z-50 bg-[#b81d24]/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto font-sans animate-in fade-in duration-150 print:bg-white print:backdrop-blur-none print:p-0 print:block print:overflow-visible print:relative print:inset-auto"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           onClose();
@@ -87,7 +87,7 @@ export const BatchSamplePrintModal: React.FC<BatchSamplePrintModalProps> = ({
       >
         
         {/* Header Bar */}
-        <div className="px-5 py-3.5 border-b border-gray-200 bg-gray-900 text-white flex items-center justify-between shrink-0 print:hidden">
+        <div className="px-5 py-3.5 border-b border-gray-200 bg-[#b81d24] text-white flex items-center justify-between shrink-0 print:hidden">
           <div className="flex items-center space-x-2.5">
             <FlaskConical className="w-5 h-5 text-yellow-400" />
             <div>
@@ -119,7 +119,7 @@ export const BatchSamplePrintModal: React.FC<BatchSamplePrintModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 text-gray-400 hover:text-white rounded-sm hover:bg-gray-800 transition"
+              className="p-1.5 text-gray-400 hover:text-white rounded-sm hover:bg-[#b81d24] transition"
             >
               <X className="w-4 h-4" />
             </button>
@@ -134,7 +134,7 @@ export const BatchSamplePrintModal: React.FC<BatchSamplePrintModalProps> = ({
             style={{ fontFamily: 'Georgia, serif' }}
           >
             {/* Letterhead */}
-            <div className="border-b-2 border-gray-900 pb-4 text-center relative">
+            <div className="border-b-2 border-[#b81d24] pb-4 text-center relative">
               <h1 className="text-xl font-bold uppercase tracking-wider text-gray-950">
                 PR. SEKAR MAJU SEJAHTERA
               </h1>
@@ -144,7 +144,7 @@ export const BatchSamplePrintModal: React.FC<BatchSamplePrintModalProps> = ({
               <p className="text-[11px] text-gray-500 font-sans mt-0.5">
                 Kantor & Gudang Utama: Jl. Raya Tlanakan No. 88, Pamekasan, Madura | Telp: (0324) 321890
               </p>
-              <div className="mt-2.5 inline-block bg-gray-900 text-white px-4 py-1 text-xs font-bold font-sans uppercase tracking-widest">
+              <div className="mt-2.5 inline-block bg-[#b81d24] text-white px-4 py-1 text-xs font-bold font-sans uppercase tracking-widest">
                 SURAT PENGANTAR SAMPLE & PENAWARAN BATCH
               </div>
             </div>
@@ -183,15 +183,15 @@ export const BatchSamplePrintModal: React.FC<BatchSamplePrintModalProps> = ({
 
             {/* Table of Sample Bales */}
             <div className="font-sans">
-              <table className="w-full border-collapse border border-gray-900 text-xs">
+              <table className="w-full border-collapse border border-[#b81d24] text-xs">
                 <thead>
-                  <tr className="bg-gray-900 text-white text-[10px] font-bold">
-                    <th className="border border-gray-900 p-2 text-center w-8">No</th>
-                    <th className="border border-gray-900 p-2 text-left">Kode Bal (Gudang / Buyer)</th>
-                    <th className="border border-gray-900 p-2 text-right w-16">Bruto (Kg)</th>
-                    <th className="border border-gray-900 p-2 text-right w-16">Netto (Kg)</th>
-                    <th className="border border-gray-900 p-2 text-right w-24">Harga Tawar</th>
-                    <th className="border border-gray-900 p-2 text-right w-28">Est. Subtotal</th>
+                  <tr className="bg-[#b81d24] text-white text-[10px] font-bold">
+                    <th className="border border-[#b81d24] p-2 text-center w-8">No</th>
+                    <th className="border border-[#b81d24] p-2 text-left">Kode Bal (Gudang / Buyer)</th>
+                    <th className="border border-[#b81d24] p-2 text-right w-16">Bruto (Kg)</th>
+                    <th className="border border-[#b81d24] p-2 text-right w-16">Netto (Kg)</th>
+                    <th className="border border-[#b81d24] p-2 text-right w-24">Harga Tawar</th>
+                    <th className="border border-[#b81d24] p-2 text-right w-28">Est. Subtotal</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -241,29 +241,29 @@ export const BatchSamplePrintModal: React.FC<BatchSamplePrintModalProps> = ({
                   })}
                 </tbody>
                 <tfoot>
-                  <tr className="bg-gray-100 font-bold border-t-2 border-gray-900 text-[11px]">
-                    <td colSpan={2} className="border border-gray-900 p-2 text-right uppercase">
+                  <tr className="bg-gray-100 font-bold border-t-2 border-[#b81d24] text-[11px]">
+                    <td colSpan={2} className="border border-[#b81d24] p-2 text-right uppercase">
                       Total ({totalBal} Bal Sample)
                     </td>
-                    <td className="border border-gray-900 p-2 text-right font-mono">
+                    <td className="border border-[#b81d24] p-2 text-right font-mono">
                       {formatNumber(totalBruto, 1)}
                     </td>
-                    <td className="border border-gray-900 p-2 text-right font-mono font-bold text-gray-950">
+                    <td className="border border-[#b81d24] p-2 text-right font-mono font-bold text-gray-950">
                       {formatNumber(totalNetto, 1)}
                     </td>
-                    <td className="border border-gray-900 p-2 text-right text-[10px] text-gray-600">
+                    <td className="border border-[#b81d24] p-2 text-right text-[10px] text-gray-600">
                       Total Nilai:
                     </td>
-                    <td className="border border-gray-900 p-2 text-right font-mono font-bold text-gray-950">
+                    <td className="border border-[#b81d24] p-2 text-right font-mono font-bold text-gray-950">
                       {formatRupiah(totalNilaiTawaran)}
                     </td>
                   </tr>
                   {totalNilaiDeal > 0 && (
-                    <tr className="bg-emerald-50 font-bold border-b border-gray-900 text-emerald-900">
-                      <td colSpan={4} className="border border-gray-900 p-2 text-right uppercase text-[11px]">
+                    <tr className="bg-emerald-50 font-bold border-b border-[#b81d24] text-emerald-900">
+                      <td colSpan={4} className="border border-[#b81d24] p-2 text-right uppercase text-[11px]">
                         Total Nilai Disetujui (Deal Final):
                       </td>
-                      <td colSpan={2} className="border border-gray-900 p-2 text-right font-mono text-sm text-emerald-800">
+                      <td colSpan={2} className="border border-[#b81d24] p-2 text-right font-mono text-sm text-emerald-800">
                         {formatRupiah(totalNilaiDeal)}
                       </td>
                     </tr>
@@ -276,19 +276,19 @@ export const BatchSamplePrintModal: React.FC<BatchSamplePrintModalProps> = ({
             <div className="font-sans grid grid-cols-3 gap-6 pt-6 text-center text-xs">
               <div>
                 <p className="text-gray-500 mb-14">Dibuat & Dikirim Oleh,</p>
-                <p className="font-bold border-t border-gray-900 pt-1 text-gray-900">{batch.dikirim_oleh}</p>
+                <p className="font-bold border-t border-[#b81d24] pt-1 text-gray-900">{batch.dikirim_oleh}</p>
                 <p className="text-[10px] text-gray-500">QC & Logistik PR. Sekar Maju Sejahtera</p>
               </div>
 
               <div>
                 <p className="text-gray-500 mb-14">Mengetahui (Pimpinan Gudang),</p>
-                <p className="font-bold border-t border-gray-900 pt-1 text-gray-900">H. Achmad Syafi'i</p>
+                <p className="font-bold border-t border-[#b81d24] pt-1 text-gray-900">H. Achmad Syafi'i</p>
                 <p className="text-[10px] text-gray-500">Kepala Gudang & Pembelian</p>
               </div>
 
               <div>
                 <p className="text-gray-500 mb-14">Diterima & Diuji Oleh (Pabrik Buyer),</p>
-                <p className="font-bold border-t border-gray-900 pt-1 text-gray-900 min-h-[22px]">
+                <p className="font-bold border-t border-[#b81d24] pt-1 text-gray-900 min-h-[22px]">
                   {batch.petugas_qc_pabrik || <>&nbsp;</>}
                 </p>
                 <p className="text-[10px] text-gray-500">Tim QC / Lab Pembelian Pabrik</p>

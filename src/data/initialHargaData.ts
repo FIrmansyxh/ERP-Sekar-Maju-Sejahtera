@@ -10,7 +10,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 30"
   },
   {
     "harga_id": "HB-31",
@@ -21,7 +20,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 31"
   },
   {
     "harga_id": "HB-32",
@@ -32,7 +30,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 32"
   },
   {
     "harga_id": "HB-33",
@@ -43,7 +40,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 33"
   },
   {
     "harga_id": "HB-34",
@@ -54,7 +50,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 34"
   },
   {
     "harga_id": "HB-35",
@@ -65,7 +60,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 35"
   },
   {
     "harga_id": "HB-36",
@@ -76,7 +70,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 36"
   },
   {
     "harga_id": "HB-37",
@@ -87,7 +80,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 37"
   },
   {
     "harga_id": "HB-38",
@@ -98,7 +90,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 38"
   },
   {
     "harga_id": "HB-39",
@@ -109,7 +100,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 39"
   },
   {
     "harga_id": "HB-40",
@@ -120,7 +110,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 40"
   },
   {
     "harga_id": "HB-41",
@@ -131,7 +120,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 41"
   },
   {
     "harga_id": "HB-42",
@@ -142,7 +130,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 42"
   },
   {
     "harga_id": "HB-43",
@@ -153,7 +140,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 43"
   },
   {
     "harga_id": "HB-44",
@@ -164,7 +150,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 44"
   },
   {
     "harga_id": "HB-45",
@@ -175,7 +160,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 45"
   },
   {
     "harga_id": "HB-46",
@@ -186,7 +170,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 46"
   },
   {
     "harga_id": "HB-47",
@@ -197,7 +180,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 47"
   },
   {
     "harga_id": "HB-48",
@@ -208,7 +190,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 48"
   },
   {
     "harga_id": "HB-49",
@@ -219,7 +200,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 49"
   },
   {
     "harga_id": "HB-50",
@@ -230,7 +210,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 50"
   },
   {
     "harga_id": "HB-51",
@@ -241,7 +220,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 51"
   },
   {
     "harga_id": "HB-52",
@@ -252,7 +230,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 52"
   },
   {
     "harga_id": "HB-53",
@@ -263,7 +240,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 53"
   },
   {
     "harga_id": "HB-54",
@@ -274,7 +250,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 54"
   },
   {
     "harga_id": "HB-55",
@@ -285,7 +260,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 55"
   },
   {
     "harga_id": "HB-56",
@@ -296,7 +270,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 56"
   },
   {
     "harga_id": "HB-57",
@@ -307,7 +280,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 57"
   },
   {
     "harga_id": "HB-58",
@@ -318,7 +290,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 58"
   },
   {
     "harga_id": "HB-59",
@@ -329,7 +300,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 59"
   },
   {
     "harga_id": "HB-60",
@@ -340,7 +310,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 60"
   },
   {
     "harga_id": "HB-61",
@@ -351,7 +320,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 61"
   },
   {
     "harga_id": "HB-62",
@@ -362,7 +330,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 62"
   },
   {
     "harga_id": "HB-63",
@@ -373,7 +340,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 63"
   },
   {
     "harga_id": "HB-64",
@@ -384,7 +350,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 64"
   },
   {
     "harga_id": "HB-65",
@@ -395,7 +360,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 65"
   },
   {
     "harga_id": "HB-66",
@@ -406,7 +370,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 66"
   },
   {
     "harga_id": "HB-67",
@@ -417,7 +380,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 67"
   },
   {
     "harga_id": "HB-68",
@@ -428,7 +390,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 68"
   },
   {
     "harga_id": "HB-69",
@@ -439,7 +400,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 69"
   },
   {
     "harga_id": "HB-70",
@@ -450,7 +410,6 @@ export const INITIAL_HARGA_DATA: TabelHarga[] = [
     "tanggal_berlaku": "2022-06-01",
     "status": "aktif",
     "dibuat_oleh": "System",
-    "ketentuan": "Standar Tembakau Rajangan Madura Grade 70"
   }
 ];
 

@@ -44,7 +44,7 @@ export const HomeDashboardView: React.FC<HomeDashboardViewProps> = ({
     { no: 8, nama: 'Laporan Petani & Setoran', judul: 'Rekapitulasi Kinerja Penyetoran, Volume Bal & Nilai Pembelian Per Petani', modId: 'modul-6-laporan-petani' },
     { no: 9, nama: 'Laporan Pengiriman & DO Pabrik', judul: 'Distribusi Bal Tembakau, Surat Jalan Pabrik Rekanan & Armada Logistik', modId: 'modul-6-laporan-pengiriman' },
     { no: 10, nama: 'Master Petani', judul: 'Data Petani Tembakau & Kartu Scan Setoran', modId: 'modul-1-petani' },
-    { no: 11, nama: 'Master Kualitas & Harga Beli', judul: 'Tarif Acuan Grade A-F & Ketentuan Kualitas Tembakau Masuk', modId: 'modul-3-harga' },
+    { no: 11, nama: 'Master Harga Beli', judul: 'Tarif Acuan Grade A-F Tembakau Masuk', modId: 'modul-3-harga' },
     { no: 12, nama: 'Master Harga Jual Pabrik', judul: 'Daftar Kode & Master Harga Jual Tembakau ke Pabrik Rekanan', modId: 'modul-3-harga-jual' },
     { no: 13, nama: 'Master Data Gudang', judul: 'Lokasi Simpan, Blok & Kapasitas Pergudangan', modId: 'modul-7-gudang' },
     { no: 14, nama: 'Inventaris Bal Gudang', judul: 'Stok Fisik Bal & Lokasi Simpan', modId: 'modul-2-barang' },

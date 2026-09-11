@@ -423,7 +423,7 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-2 sm:p-4 overflow-y-auto font-sans animate-in fade-in duration-150">
+      <div className="fixed inset-0 z-50 bg-[#b81d24]/40 flex items-center justify-center p-2 sm:p-4 overflow-y-auto font-sans animate-in fade-in duration-150">
         <div className="bg-white border border-gray-300 w-full max-w-6xl rounded-none shadow-2xl max-h-[94vh] flex flex-col text-xs text-gray-800">
           
           {/* Top Header */}
@@ -461,7 +461,7 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
               <span><strong>Pilih Petani:</strong> Verifikasi data penyetor tembakau</span>
             </div>
             <div className="flex items-center space-x-2 text-gray-700">
-              <span className="w-5 h-5 rounded-full bg-indigo-700 text-white font-bold text-[10px] flex items-center justify-center shrink-0">
+              <span className="w-5 h-5 rounded-full bg-[#b81d24] text-white font-bold text-[10px] flex items-center justify-center shrink-0">
                 2
               </span>
               <span><strong>Scan Stiker Fisik:</strong> Tembak barcode (misal A0001 ➔ auto baris baru A0002)</span>
@@ -610,24 +610,24 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
                     className="w-4 h-4 text-[#b81d24] rounded-xs border-gray-300 focus:ring-[#b81d24]"
                   />
                   <span className="font-bold text-gray-700 text-[11px]">
-                    Default Ganti Tikar (+Rp 75rb • Tara 2kg)
+                    Default Ganti Tikar (+Rp 75rb)
                   </span>
                 </label>
               </div>
             </div>
 
             {/* Barcode Gun Fast-Input Continuous Box (Admin 1 & 2) */}
-            <div className="p-4 bg-gradient-to-r from-indigo-50 via-indigo-50/70 to-blue-50 border-2 border-indigo-300 flex flex-col md:flex-row items-center justify-between gap-3 shadow-2xs">
+            <div className="p-4 bg-gradient-to-r from-indigo-50 via-indigo-50/70 to-blue-50 border-2 border-rose-300 flex flex-col md:flex-row items-center justify-between gap-3 shadow-2xs">
               <div className="flex items-center space-x-3 w-full md:w-auto">
-                <div className="w-9 h-9 rounded-sm bg-indigo-700 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <div className="w-9 h-9 rounded-sm bg-[#b81d24] text-white flex items-center justify-center shrink-0 shadow-xs">
                   <Scan className="w-5 h-5 animate-pulse" />
                 </div>
                 <div>
-                  <span className="text-[10px] font-black text-indigo-900 uppercase block tracking-wider">
+                  <span className="text-[10px] font-black text-rose-900 uppercase block tracking-wider">
                     SCANNER GUN STIKER EKSTERNAL (CONTINUOUS AUTO-ROW)
                   </span>
                   <span className="text-xs font-semibold text-gray-900">
-                    Tembak stiker barcode fisik karung (misal: <code className="bg-indigo-100 text-indigo-900 px-1 py-0.5 rounded font-mono font-bold">A0001</code> ➔ <code className="bg-indigo-100 text-indigo-900 px-1 py-0.5 rounded font-mono font-bold">A0002</code>):
+                    Tembak stiker barcode fisik karung (misal: <code className="bg-rose-100 text-rose-900 px-1 py-0.5 rounded font-mono font-bold">A0001</code> ➔ <code className="bg-rose-100 text-rose-900 px-1 py-0.5 rounded font-mono font-bold">A0002</code>):
                   </span>
                 </div>
               </div>
@@ -646,7 +646,7 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
                       }
                     }}
                     placeholder="Scan stiker barcode fisik (misal: A0001)..."
-                    className="w-full bg-white border-2 border-indigo-500 font-mono font-black text-sm rounded-sm px-3 py-2 text-gray-900 shadow-inner focus:outline-none focus:border-indigo-800"
+                    className="w-full bg-white border-2 border-[#b81d24] font-mono font-black text-sm rounded-sm px-3 py-2 text-gray-900 shadow-inner focus:outline-none focus:border-rose-800"
                     autoFocus
                   />
                   <span className="absolute right-2.5 top-2.5 text-[10px] text-gray-400 font-mono">
@@ -657,7 +657,7 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
                 <button
                   type="button"
                   onClick={() => handleScannerSubmit()}
-                  className="px-4 py-2 bg-indigo-700 hover:bg-indigo-800 text-white font-bold rounded-sm transition cursor-pointer text-xs shrink-0 shadow-xs"
+                  className="px-4 py-2 bg-[#b81d24] hover:bg-[#9e161c] text-white font-bold rounded-sm transition cursor-pointer text-xs shrink-0 shadow-xs"
                 >
                   Scan Bal
                 </button>
@@ -712,7 +712,7 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
                       <th className="py-2 px-2.5 text-center border-r border-gray-200 w-10">No</th>
                       <th className="py-2 px-3 border-r border-gray-200 w-44">
                         <div className="flex items-center space-x-1">
-                          <BarcodeIcon className="w-3.5 h-3.5 text-indigo-700" />
+                          <BarcodeIcon className="w-3.5 h-3.5 text-rose-700" />
                           <span>Kode Stiker Barcode / Bal</span>
                         </div>
                       </th>
@@ -738,7 +738,7 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
                       <tr>
                         <td colSpan={8} className="py-12 text-center text-gray-500 bg-gray-50/50">
                           <div className="max-w-md mx-auto space-y-2">
-                            <div className="w-10 h-10 rounded-full bg-indigo-50 border border-indigo-200 flex items-center justify-center mx-auto text-indigo-600">
+                            <div className="w-10 h-10 rounded-full bg-rose-50 border border-rose-200 flex items-center justify-center mx-auto text-[#b81d24]">
                               <Scan className="w-5 h-5" />
                             </div>
                             <p className="font-bold text-gray-800 text-xs">
@@ -760,7 +760,7 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
                           <tr 
                             key={item.id} 
                             className={`transition-colors ${
-                              isLatest ? 'bg-indigo-50/60 font-semibold' : 'hover:bg-gray-50/80'
+                              isLatest ? 'bg-rose-50/60 font-semibold' : 'hover:bg-gray-50/80'
                             }`}
                           >
                             
@@ -860,7 +860,7 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
                             {/* Tara Timbang */}
                             <td className="py-2 px-3 border-r border-gray-200 text-center">
                               <span className={`px-2 py-0.5 rounded-xs font-mono font-bold text-xs ${
-                                item.gantiTikar ? 'bg-amber-100 text-amber-800' : 'bg-blue-50 text-blue-800'
+                                item.gantiTikar ? 'bg-amber-100 text-amber-800' : 'bg-rose-50 text-rose-800'
                               }`}>
                                 {taraKg} kg
                               </span>

@@ -70,13 +70,7 @@ export const GradePriceCard: React.FC<GradePriceCardProps> = ({
           </p>
         </div>
 
-        {/* Karakteristik & Ketentuan Mutu */}
-        {harga.ketentuan && (
-          <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-sm text-[11px] text-slate-700">
-            <span className="font-semibold text-slate-800 block text-[10px] uppercase tracking-wider mb-0.5">Karakteristik & Ketentuan Mutu:</span>
-            <p className="line-clamp-2 text-slate-600">{harga.ketentuan}</p>
-          </div>
-        )}
+        
       </div>
 
       {/* Live 45kg Bal Simulation */}

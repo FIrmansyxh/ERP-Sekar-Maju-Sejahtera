@@ -110,7 +110,7 @@ export const MODULES_CONFIG = [
   {
     id: 'modul-3-harga',
     title: 'Master Harga Beli',
-    subtitle: 'Kode & Kriteria Tembakau',
+    subtitle: 'Kode & Harga Beli',
     icon: 'Tag',
     moduleKey: 'harga',
   },

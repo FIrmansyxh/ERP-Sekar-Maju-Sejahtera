@@ -29,7 +29,7 @@ export const MasterBarangFormModal: React.FC<MasterBarangFormModalProps> = ({
   const [satuan, setSatuan] = useState('Bal (Keranjang)');
   const [hargaReferensiKg, setHargaReferensiKg] = useState<number>(50000);
   const [lokasiDefaultGudang, setLokasiDefaultGudang] = useState('Gudang Utama Pamekasan');
-  const [keterangan, setKeterangan] = useState('');
+  
   const [statusAktif, setStatusAktif] = useState(true);
 
   const [errorMessage, setErrorMessage] = useState('');
@@ -47,7 +47,7 @@ export const MasterBarangFormModal: React.FC<MasterBarangFormModalProps> = ({
       setSatuan(editingItem.satuan || 'Bal (Keranjang)');
       setHargaReferensiKg(editingItem.harga_referensi_kg || 0);
       setLokasiDefaultGudang(editingItem.lokasi_default_gudang || '');
-      setKeterangan(editingItem.keterangan || '');
+      
       setStatusAktif(editingItem.status_aktif !== false);
       setErrorMessage('');
     } else {
@@ -61,7 +61,7 @@ export const MasterBarangFormModal: React.FC<MasterBarangFormModalProps> = ({
       setSatuan('Bal (Keranjang)');
       setHargaReferensiKg(50000);
       setLokasiDefaultGudang('Gudang Utama Pamekasan');
-      setKeterangan('');
+      
       setStatusAktif(true);
       setErrorMessage('');
     }
@@ -113,7 +113,7 @@ export const MasterBarangFormModal: React.FC<MasterBarangFormModalProps> = ({
       satuan: satuan.trim(),
       harga_referensi_kg: Number(hargaReferensiKg),
       lokasi_default_gudang: lokasiDefaultGudang.trim(),
-      keterangan: keterangan.trim(),
+      
       status_aktif: statusAktif,
       tanggal_dibuat: editingItem?.tanggal_dibuat || new Date().toISOString().split('T')[0],
     };
@@ -359,16 +359,7 @@ export const MasterBarangFormModal: React.FC<MasterBarangFormModalProps> = ({
                 </select>
               </div>
 
-              <div>
-                <label className="block text-gray-700 font-semibold mb-1">Karakteristik & Spesifikasi Mutu</label>
-                <textarea
-                  rows={2}
-                  value={keterangan}
-                  onChange={(e) => setKeterangan(e.target.value)}
-                  placeholder="Catatan aroma, kadar air maksimal, kelenturan daun, atau peruntukan linting..."
-                  className="w-full px-3 py-2 bg-white border border-[#ced4da] rounded-sm focus:border-[#b81d24] focus:outline-none text-xs"
-                />
-              </div>
+              
 
               <div className="flex items-center space-x-2 pt-1">
                 <input

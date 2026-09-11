@@ -100,12 +100,6 @@ export const HargaHistoryModal: React.FC<HargaHistoryModalProps> = ({
                         </span>
                       </div>
                       <div>
-                        <span className="text-gray-400 block text-[10px]">Ketentuan Mutu:</span>
-                        <span className="font-semibold text-gray-800 truncate block">
-                          {item.ketentuan || 'Standar Mutu Pabrik'}
-                        </span>
-                      </div>
-                      <div>
                         <span className="text-gray-400 block text-[10px]">Dibuat Oleh:</span>
                         <span className="font-semibold text-gray-800 truncate block">
                           {item.dibuat_oleh || 'Admin Gudang'}

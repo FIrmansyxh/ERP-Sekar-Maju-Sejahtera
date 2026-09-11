@@ -423,7 +423,7 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#b81d24]/60 backdrop-blur-xs overflow-y-auto">
       <div className="bg-white border border-slate-300 rounded-sm shadow-2xl max-w-4xl w-full my-8 flex flex-col max-h-[90vh]">
         
         {/* Header Modal */}
@@ -510,7 +510,7 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
                 type="date"
                 value={tanggalTransaksi}
                 onChange={(e) => setTanggalTransaksi(e.target.value)}
-                className="w-full text-xs px-2.5 py-1.5 bg-white border border-slate-300 rounded-xs focus:ring-1 focus:ring-slate-900 focus:outline-none"
+                className="w-full text-xs px-2.5 py-1.5 bg-white border border-slate-300 rounded-xs focus:ring-1 focus:ring-[#b81d24] focus:outline-none"
               />
             </div>
 
@@ -559,7 +559,7 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
                 placeholder="Catatan tambahan (opsional)"
                 value={catatan}
                 onChange={(e) => setCatatan(e.target.value)}
-                className="w-full text-xs px-2.5 py-1.5 bg-white border border-slate-300 rounded-xs focus:ring-1 focus:ring-slate-900 focus:outline-none"
+                className="w-full text-xs px-2.5 py-1.5 bg-white border border-slate-300 rounded-xs focus:ring-1 focus:ring-[#b81d24] focus:outline-none"
               />
             </div>
           </div>
@@ -580,7 +580,7 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
               <button
                 type="button"
                 onClick={handleAddBalRow}
-                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded-xs transition flex items-center space-x-1 cursor-pointer shadow-xs"
+                className="px-2.5 py-1 bg-[#b81d24] hover:bg-[#b81d24] text-white text-xs font-semibold rounded-xs transition flex items-center space-x-1 cursor-pointer shadow-xs"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Tambah Bal</span>
@@ -588,17 +588,17 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
             </div>
 
             <div className="overflow-x-auto border border-slate-200 rounded-xs">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-100 border-b border-slate-200 text-slate-600 font-semibold text-[11px]">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead className="bg-[#f8f9fa] border-b border-gray-200 text-gray-700 font-bold text-[11px]">
                   <tr>
-                    <th className="py-2 px-2.5 text-center w-10">No</th>
-                    <th className="py-2 px-2.5 w-28">No. Bal</th>
-                    <th className="py-2 px-2.5 w-36">Grade Mutu</th>
-                    <th className="py-2 px-2.5 text-right w-28">Tarif/Kg</th>
-                    <th className="py-2 px-2.5 text-right w-28">Netto (Kg)</th>
-                    <th className="py-2 px-2.5 text-right w-28">Potongan (Rp)</th>
-                    <th className="py-2 px-2.5 text-right w-32">Subtotal Bersih</th>
-                    <th className="py-2 px-2 text-center w-12">Aksi</th>
+                    <th className="py-2.5 px-3 border-r border-gray-200 text-center w-10">No</th>
+                    <th className="py-2.5 px-3 border-r border-gray-200 w-28">No. Bal</th>
+                    <th className="py-2.5 px-3 border-r border-gray-200 w-36">Grade Mutu</th>
+                    <th className="py-2.5 px-3 border-r border-gray-200 text-right w-28">Tarif/Kg</th>
+                    <th className="py-2.5 px-3 border-r border-gray-200 text-right w-28">Netto (Kg)</th>
+                    <th className="py-2.5 px-3 border-r border-gray-200 text-right w-28">Potongan (Rp)</th>
+                    <th className="py-2.5 px-3 border-r border-gray-200 text-right w-32">Subtotal Bersih</th>
+                    <th className="py-2.5 px-3 text-center w-12">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 bg-white">
@@ -619,7 +619,7 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
                               prev.map((r, i) => (i === idx ? { ...r, no_bal: val } : r))
                             );
                           }}
-                          className="w-full font-mono font-bold text-xs px-2 py-1 border border-slate-300 rounded-xs uppercase focus:ring-1 focus:ring-slate-900 focus:outline-none"
+                          className="w-full font-mono font-bold text-xs px-2 py-1 border border-slate-300 rounded-xs uppercase focus:ring-1 focus:ring-[#b81d24] focus:outline-none"
                         />
                       </td>
 
@@ -645,7 +645,7 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
                           min="0"
                           value={row.berat_kg}
                           onChange={(e) => handleBeratChange(idx, parseFloat(e.target.value) || 0)}
-                          className="w-20 text-right font-mono font-bold text-xs px-2 py-1 border border-slate-300 rounded-xs focus:ring-1 focus:ring-slate-900 focus:outline-none ml-auto"
+                          className="w-20 text-right font-mono font-bold text-xs px-2 py-1 border border-slate-300 rounded-xs focus:ring-1 focus:ring-[#b81d24] focus:outline-none ml-auto"
                         />
                       </td>
 
@@ -657,7 +657,7 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
                           min="0"
                           value={row.potongan}
                           onChange={(e) => handlePotonganChange(idx, parseInt(e.target.value, 10) || 0)}
-                          className="w-24 text-right font-mono text-xs px-2 py-1 border border-slate-300 rounded-xs focus:ring-1 focus:ring-slate-900 focus:outline-none ml-auto"
+                          className="w-24 text-right font-mono text-xs px-2 py-1 border border-slate-300 rounded-xs focus:ring-1 focus:ring-[#b81d24] focus:outline-none ml-auto"
                         />
                       </td>
 
@@ -768,7 +768,7 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
           <div className="space-y-2 p-4 bg-amber-50/70 border border-amber-200 rounded-xs">
             <label className="text-xs font-bold text-amber-950 flex items-center space-x-1.5">
               <AlertTriangle className="w-3.5 h-3.5 text-amber-700" />
-              <span>Alasan / Keterangan Pengubahan Data (Wajib Diisi untuk Audit Trail)</span>
+              <span>Alasan Pengubahan Data (Wajib Diisi untuk Audit Trail)</span>
             </label>
             <input
               type="text"
@@ -813,7 +813,7 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
             <button
               type="button"
               onClick={handleSave}
-              className="px-5 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xs transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
+              className="px-5 py-2 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#b81d24] rounded-xs transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
             >
               <Save className="w-4 h-4 text-emerald-400" />
               <span>Simpan Perubahan & Rekam Audit Log</span>
