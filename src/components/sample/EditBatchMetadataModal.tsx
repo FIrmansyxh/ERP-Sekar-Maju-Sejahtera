@@ -46,7 +46,7 @@ export const EditBatchMetadataModal: React.FC<EditBatchMetadataModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#b81d24]/50 backdrop-blur-xs flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-md rounded-sm shadow-xl flex flex-col max-h-[90vh]">
         <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
           <h2 className="text-sm font-bold text-gray-900 flex items-center">

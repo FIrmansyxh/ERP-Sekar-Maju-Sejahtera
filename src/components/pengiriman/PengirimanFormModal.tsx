@@ -285,7 +285,7 @@ export const PengirimanFormModal: React.FC<PengirimanFormModalProps> = ({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-[#b81d24]/40 flex items-center justify-center p-3 sm:p-4 overflow-y-auto font-sans animate-in fade-in duration-150">
+      <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto font-sans animate-in fade-in duration-150">
         <div className="bg-white border border-gray-300 w-full max-w-4xl rounded-none shadow-2xl flex flex-col max-h-[92vh] text-xs text-gray-800">
           
           {/* Header */}
@@ -690,7 +690,7 @@ export const PengirimanFormModal: React.FC<PengirimanFormModalProps> = ({
 
       {/* Confirmation Modal */}
       {isConfirmOpen && (
-        <div className="fixed inset-0 z-60 bg-[#b81d24]/50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-60 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white border border-gray-300 max-w-md w-full p-4 space-y-3 shadow-xl">
             <h3 className="font-bold text-sm text-gray-900">Konfirmasi Penerbitan Surat Jalan</h3>
             <p className="text-xs text-gray-600">

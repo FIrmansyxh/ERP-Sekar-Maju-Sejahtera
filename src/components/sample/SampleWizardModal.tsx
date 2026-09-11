@@ -262,7 +262,7 @@ export const SampleWizardModal: React.FC<SampleWizardModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#b81d24]/50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto font-sans animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto font-sans animate-in fade-in duration-150">
       <div className="bg-white border border-gray-300 w-full max-w-3xl rounded-none shadow-2xl flex flex-col text-xs text-gray-800 max-h-[94vh]">
         
         {/* Header Modal */}

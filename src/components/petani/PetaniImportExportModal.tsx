@@ -141,7 +141,7 @@ export const PetaniImportExportModal: React.FC<PetaniImportExportModalProps> = (
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 overflow-y-auto font-sans">
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto font-sans">
       <div className="bg-white border border-gray-300 w-full max-w-xl rounded-none shadow-xl flex flex-col text-xs text-gray-800">
         
         {/* Header */}
@@ -261,7 +261,7 @@ export const PetaniImportExportModal: React.FC<PetaniImportExportModalProps> = (
 
         {/* Modal Konfirmasi Ekspor */}
         {showExportConfirm && (
-          <div className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
             <div className="bg-white border border-gray-300 w-full max-w-sm rounded-none shadow-xl flex flex-col overflow-hidden">
               <div className="p-4 border-b border-gray-200 flex items-center space-x-2 bg-yellow-50">
                 <AlertTriangle className="w-4 h-4 text-yellow-700" />

@@ -324,7 +324,7 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
     const data = payload[0].payload;
 
     return (
-      <div className="bg-gray-900/95 text-white p-3 rounded-xs shadow-xl border border-gray-700 text-xs backdrop-blur-xs min-w-[220px]">
+      <div className="bg-gray-900/95 text-white p-3 rounded-xs shadow-xl border border-gray-700 text-xs backdrop-blur-sm min-w-[220px]">
         <div className="flex items-center justify-between pb-2 mb-2 border-b border-gray-700">
           <div className="flex items-center space-x-1.5">
             <span

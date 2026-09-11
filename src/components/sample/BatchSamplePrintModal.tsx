@@ -74,7 +74,7 @@ export const BatchSamplePrintModal: React.FC<BatchSamplePrintModalProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 z-50 bg-[#b81d24]/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto font-sans animate-in fade-in duration-150 print:bg-white print:backdrop-blur-none print:p-0 print:block print:overflow-visible print:relative print:inset-auto"
+      className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto font-sans animate-in fade-in duration-150 print:bg-white print:backdrop-blur-none print:p-0 print:block print:overflow-visible print:relative print:inset-auto"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           onClose();

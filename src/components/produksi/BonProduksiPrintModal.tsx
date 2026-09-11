@@ -77,7 +77,7 @@ export const BonProduksiPrintModal: React.FC<BonProduksiPrintModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 print:p-0 print:bg-white overflow-y-auto font-sans animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 print:p-0 print:bg-white overflow-y-auto font-sans animate-in fade-in duration-150">
       <div className="bg-white border border-gray-300 w-full max-w-4xl rounded-none shadow-xl flex flex-col text-xs text-gray-800 print:border-none print:shadow-none print:w-full print:max-w-none max-h-[94vh]">
         
         {/* Modal Topbar (hidden on print) */}

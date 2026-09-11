@@ -117,26 +117,25 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
               {/* Title */}
               <h1 className="text-3xl font-black tracking-tight text-white mb-3 leading-tight">
-                PR. SEKAR MAJU<br />SEJAHTERA
+                PR. SEKAR MAJU SEJAHTERA
               </h1>
-              <p className="text-sm text-red-100/90 leading-relaxed mb-8 font-normal">
-                Sistem Enterprise Resource Planning (ERP) Manajemen<br />
-                Data Petani, Stok Bal, Intake Timbangan, & Logistik.
+              <p className="text-sm text-red-100/90 leading-relaxed mb-8 font-normal pr-4">
+                Sistem Enterprise Resource Planning (ERP) Manajemen Data Petani, Stok Bal, Intake Timbangan, & Logistik.
               </p>
 
               {/* Feature Points */}
               <div className="space-y-4 text-sm font-medium">
-                <div className="flex items-center space-x-3 text-white/95">
-                  <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0" />
-                  <span>Otorisasi Berjenjang (RBAC 7 Roles)</span>
+                <div className="flex items-start space-x-3 text-white/95">
+                  <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                  <span className="leading-snug">Otorisasi Berjenjang (RBAC 7 Roles)</span>
                 </div>
-                <div className="flex items-center space-x-3 text-white/95">
-                  <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0" />
-                  <span>Manajemen Stok Bal & Multi-Gudang Terpusat</span>
+                <div className="flex items-start space-x-3 text-white/95">
+                  <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                  <span className="leading-snug">Manajemen Stok Bal & Multi-Gudang Terpusat</span>
                 </div>
-                <div className="flex items-center space-x-3 text-white/95">
-                  <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0" />
-                  <span>Pelacakan Pengiriman & QC Lab Terintegrasi</span>
+                <div className="flex items-start space-x-3 text-white/95">
+                  <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                  <span className="leading-snug">Pelacakan Pengiriman & QC Lab Terintegrasi</span>
                 </div>
               </div>
             </div>

@@ -250,7 +250,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
   // Filtered & Enriched Bal Data
   const enrichedBalList = useMemo(() => {
     // Map transaksi items to ensure accurate harga_per_kg and total_harga if missing
-    const txItemMap = new Map<string, { harga_per_kg: number; total_kotor: number; nama_petani: string; no_kupon: string; potongan: number; status_pembayaran: string }>();
+    const txItemMap = new Map<string, { harga_per_kg: number; total_kotor: number; nama_petani: string; no_kupon: string; potongan: number; status_pembayaran: string; metode_pembayaran: string }>();
     transaksiList.forEach((tx) => {
       if (tx.items) {
         tx.items.forEach((it) => {
@@ -263,33 +263,45 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
               no_kupon: tx.no_kupon || '',
               potongan: it.potongan || 0,
               status_pembayaran: tx.status_pembayaran || 'belum_lunas',
+              metode_pembayaran: tx.metode_pembayaran || '',
             });
           }
         });
       }
     });
 
-    return barangList.map((bal, originalIndex) => {
-      const txInfo = txItemMap.get(bal.barang_id) || txItemMap.get(bal.no_bal);
-      const hrgBeli = bal.harga_per_kg || txInfo?.harga_per_kg || 0;
-      const netto = bal.berat_kg || 0;
-      const subtotal = bal.total_harga || txInfo?.total_kotor || (netto * hrgBeli);
-      const bruto = bal.berat_bruto_kg && bal.berat_bruto_kg > 0 ? bal.berat_bruto_kg : (netto > 0 ? netto + (bal.potongan_tara_kg || 0) : 0);
-      const tara = bal.potongan_tara_kg !== undefined ? bal.potongan_tara_kg : Math.max(0, bruto - netto);
+    return barangList
+      .map((bal, originalIndex) => {
+        const txInfo = txItemMap.get(bal.barang_id) || txItemMap.get(bal.no_bal);
+        const hrgBeli = bal.harga_per_kg || txInfo?.harga_per_kg || 0;
+        const netto = bal.berat_kg || 0;
+        const subtotal = bal.total_harga || txInfo?.total_kotor || (netto * hrgBeli);
+        const bruto = bal.berat_bruto_kg && bal.berat_bruto_kg > 0 ? bal.berat_bruto_kg : (netto > 0 ? netto + (bal.potongan_tara_kg || 0) : 0);
+        const tara = bal.potongan_tara_kg !== undefined ? bal.potongan_tara_kg : Math.max(0, bruto - netto);
 
-      return {
-        ...bal,
-        originalIndex,
-        berat_bruto_kg: bruto,
-        potongan_tara_kg: tara,
-        harga_per_kg: hrgBeli,
-        total_harga: subtotal,
-        nama_petani: bal.nama_petani || txInfo?.nama_petani || 'Petani Kemitraan',
-        no_kupon: txInfo?.no_kupon || '-',
-        potongan: txInfo?.potongan || 0,
-        status_pembayaran: txInfo?.status_pembayaran || 'belum_lunas',
-      };
-    });
+        return {
+          ...bal,
+          originalIndex,
+          berat_bruto_kg: bruto,
+          potongan_tara_kg: tara,
+          harga_per_kg: hrgBeli,
+          total_harga: subtotal,
+          nama_petani: bal.nama_petani || txInfo?.nama_petani || 'Petani Kemitraan',
+          no_kupon: txInfo?.no_kupon || '-',
+          potongan: txInfo?.potongan || 0,
+          status_pembayaran: txInfo?.status_pembayaran || 'belum_lunas',
+          metode_pembayaran: txInfo?.metode_pembayaran || '',
+          has_tx: !!txInfo,
+        };
+      })
+      .filter((bal) => {
+        // Hapus aset dari laporan jika dari transaksi pembelian tapi belum dibayar (LUNAS/CASH)
+        if (bal.has_tx) {
+          const isLunas = bal.status_pembayaran === 'lunas' || bal.metode_pembayaran === 'cash';
+          return isLunas;
+        }
+        return true; // Jika tidak terkait transaksi, tetap tampilkan
+      });
   }, [barangList, transaksiList]);
 
   // Filter Data

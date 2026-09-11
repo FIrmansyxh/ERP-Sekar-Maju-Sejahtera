@@ -563,7 +563,7 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-[#b81d24]/40 flex items-center justify-center p-2 sm:p-4 overflow-y-auto font-sans animate-in fade-in duration-150">
+      <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto font-sans animate-in fade-in duration-150">
         <div className="bg-white border border-gray-300 w-full max-w-6xl rounded-none shadow-2xl max-h-[94vh] flex flex-col text-xs text-gray-800">
           
           {/* Top Header */}
@@ -814,7 +814,7 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
                         disabled={(activeBalItem.berat_kg || 0) > 0}
                         className="cursor-pointer accent-[#b81d24] w-3.5 h-3.5"
                       />
-                      <span>{activeBalItem.ganti_tikar ? 'Ganti Tikar (+Rp 75rb)' : 'Tikar Madura / Bawaan'}</span>
+                      <span>{activeBalItem.ganti_tikar ? 'Ganti Tikar' : 'Tikar Madura / Bawaan'}</span>
                     </button>
                   </div>
                 </div>
@@ -1026,7 +1026,7 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
                             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-xs ${
                               item.ganti_tikar ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-600'
                             }`}>
-                              {item.ganti_tikar ? 'Ganti (+75rb)' : 'Standar'}
+                              {item.ganti_tikar ? 'Ganti Tikar' : 'Standar'}
                             </span>
                           </td>
 

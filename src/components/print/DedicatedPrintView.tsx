@@ -169,6 +169,13 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
   const handleDownloadPdf = async () => {
     if (!printAreaRef.current) return;
     setIsGeneratingPdf(true);
+    
+    // TEMPORARY FIX FOR HTML2CANVAS WITH SCALED ELEMENTS
+    // html2canvas gets very confused and crops the image if the element has transform: scale()
+    // So we temporarily disable the transform during generation.
+    const originalTransform = printAreaRef.current.style.transform;
+    printAreaRef.current.style.transform = 'none';
+
     try {
       const filename =
         type === 'nota' && foundTransaksi
@@ -181,6 +188,10 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
       // Fallback to browser print dialog if html2canvas/jspdf fails
       window.print();
     } finally {
+      // Restore original transform
+      if (printAreaRef.current) {
+        printAreaRef.current.style.transform = originalTransform;
+      }
       setIsGeneratingPdf(false);
     }
   };
@@ -200,7 +211,7 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
   // NOT FOUND STATE
   if ((type === 'nota' && !foundTransaksi) || (type === 'surat_jalan' && !foundPengiriman)) {
     return (
-      <div className="print-modal-backdrop fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs font-sans">
+      <div className="print-modal-backdrop fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm font-sans">
         <div className="bg-white border border-slate-300 rounded-sm p-6 max-w-md w-full text-center shadow-2xl animate-in zoom-in-95 duration-150">
           <AlertCircle className="w-12 h-12 text-rose-600 mx-auto mb-3" />
           <h2 className="text-sm font-bold text-slate-900 mb-1">
@@ -234,7 +245,7 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
 
   if (type === 'nota' && foundTransaksi && !isNotaLunas) {
     return (
-      <div className="print-modal-backdrop fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs font-sans">
+      <div className="print-modal-backdrop fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm font-sans">
         <div className="bg-white border border-amber-300 rounded-sm p-6 max-w-md w-full text-center shadow-2xl animate-in zoom-in-95 duration-150">
           <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-3 text-amber-700">
             <Lock className="w-6 h-6" />
@@ -262,7 +273,7 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
   }
 
   return (
-    <div className="print-modal-backdrop fixed inset-0 z-[9999] flex flex-col bg-slate-950/80 backdrop-blur-xs font-sans text-slate-900 select-none">
+    <div className="print-modal-backdrop fixed inset-0 z-[9999] flex flex-col bg-slate-950/80 backdrop-blur-sm font-sans text-slate-900 select-none">
       
       {/* Top Header & Main Action Bar (Hidden on print) */}
       <header className="no-print bg-[#1e293b] text-white border-b border-slate-700 shadow-lg px-4 py-2.5 shrink-0 z-50">

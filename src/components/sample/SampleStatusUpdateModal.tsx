@@ -65,7 +65,7 @@ export const SampleStatusUpdateModal: React.FC<SampleStatusUpdateModalProps> = (
   return (
     <>
       <div 
-        className="fixed inset-0 z-50 bg-[#b81d24]/40 flex items-center justify-center p-4 overflow-y-auto font-sans animate-in fade-in duration-150"
+        className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto font-sans animate-in fade-in duration-150"
         onClick={(e) => {
           if (e.target === e.currentTarget && !isConfirmOpen) {
             onClose();

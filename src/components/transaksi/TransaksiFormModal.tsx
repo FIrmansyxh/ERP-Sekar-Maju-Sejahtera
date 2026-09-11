@@ -172,7 +172,7 @@ export const TransaksiFormModal: React.FC<TransaksiFormModalProps> = ({
     const berat = Number(item.beratKg) || 0;
     const totalKotor = berat * tarif;
     const potongan = Number(item.potongan) || 0;
-    const subtotalBersih = Math.round(Math.max(0, totalKotor - potongan));
+    const subtotalBersih = Math.round(Math.max(0, totalKotor - Math.abs(potongan)));
 
     const cleanNoBal = (item.noBal || '').trim();
     const isEmpty = cleanNoBal.length === 0;
@@ -194,7 +194,7 @@ export const TransaksiFormModal: React.FC<TransaksiFormModalProps> = ({
       : undefined;
 
     let validationError: string | null = null;
-    let errorType: 'empty' | 'batch_duplicate' | 'warehouse_exists' | 'invalid_grade' | null = null;
+    let errorType: 'empty' | 'batch_duplicate' | 'warehouse_exists' | 'invalid_grade' | 'negative_discount' | null = null;
 
     if (isEmpty) {
       validationError = 'No Bal wajib diisi';
@@ -208,6 +208,9 @@ export const TransaksiFormModal: React.FC<TransaksiFormModalProps> = ({
     } else if (!activeGrades.some((g) => g.kode_grade === item.kodeGrade)) {
       validationError = `Grade tidak valid / tidak terdaftar di Master Harga Beli`;
       errorType = 'invalid_grade';
+    } else if (potongan < 0) {
+      validationError = `Potongan tidak boleh bernilai negatif`;
+      errorType = 'negative_discount';
     }
 
     return {
@@ -245,7 +248,7 @@ export const TransaksiFormModal: React.FC<TransaksiFormModalProps> = ({
     // Validate duplicate / existing No Bal
     if (hasValidationErrors) {
       alert(
-        `Terdapat ${invalidItems.length} baris dengan No Bal yang tidak valid, duplikat, atau sudah terdaftar di inventaris gudang.\n\nHarap perbaiki No Bal yang ditandai merah sebelum menyimpan transaksi.`
+        `Terdapat ${invalidItems.length} baris dengan masalah validasi (misal: No Bal kosong/duplikat, atau Potongan bernilai negatif).\n\nHarap perbaiki baris yang ditandai merah sebelum menyimpan transaksi.`
       );
       return;
     }
@@ -346,7 +349,7 @@ export const TransaksiFormModal: React.FC<TransaksiFormModalProps> = ({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-[#b81d24]/40 flex items-center justify-center p-2 sm:p-4 overflow-y-auto font-sans animate-in fade-in duration-150">
+      <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto font-sans animate-in fade-in duration-150">
         <div className="bg-white border border-gray-300 w-full max-w-6xl rounded-none shadow-2xl max-h-[94vh] flex flex-col text-xs text-gray-800">
           
           {/* Top Header */}
@@ -646,7 +649,13 @@ export const TransaksiFormModal: React.FC<TransaksiFormModalProps> = ({
                               step="1000"
                               min="0"
                               value={item.potongan}
-                              onChange={(e) => handleItemChange(item.id, 'potongan', Number(e.target.value))}
+                              onChange={(e) => handleItemChange(item.id, 'potongan', Math.max(0, Number(e.target.value)))}
+                              onBlur={(e) => {
+                                const val = Number(e.target.value);
+                                if (val > 0 && val < 1000) {
+                                  handleItemChange(item.id, 'potongan', val * 1000);
+                                }
+                              }}
                               className="w-20 border border-gray-300 rounded-xs px-1.5 py-1 text-right font-mono text-xs text-red-600 font-bold focus:outline-none focus:border-[#b81d24] bg-white"
                             />
                           </div>

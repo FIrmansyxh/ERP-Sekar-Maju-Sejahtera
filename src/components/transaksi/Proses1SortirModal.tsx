@@ -423,7 +423,7 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-[#b81d24]/40 flex items-center justify-center p-2 sm:p-4 overflow-y-auto font-sans animate-in fade-in duration-150">
+      <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto font-sans animate-in fade-in duration-150">
         <div className="bg-white border border-gray-300 w-full max-w-6xl rounded-none shadow-2xl max-h-[94vh] flex flex-col text-xs text-gray-800">
           
           {/* Top Header */}
@@ -470,7 +470,7 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
               <span className="w-5 h-5 rounded-full bg-emerald-700 text-white font-bold text-[10px] flex items-center justify-center shrink-0">
                 3
               </span>
-              <span><strong>Tentukan Grade & Tikar:</strong> Grade A-F & centang ganti tikar (+75rb)</span>
+              <span><strong>Tentukan Grade & Tikar:</strong> Grade A-F & centang ganti tikar</span>
             </div>
             <div className="flex items-center space-x-2 text-gray-700">
               <span className="w-5 h-5 rounded-full bg-amber-700 text-white font-bold text-[10px] flex items-center justify-center shrink-0">
@@ -610,7 +610,7 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
                     className="w-4 h-4 text-[#b81d24] rounded-xs border-gray-300 focus:ring-[#b81d24]"
                   />
                   <span className="font-bold text-gray-700 text-[11px]">
-                    Default Ganti Tikar (+Rp 75rb)
+                    Default Ganti Tikar
                   </span>
                 </label>
               </div>

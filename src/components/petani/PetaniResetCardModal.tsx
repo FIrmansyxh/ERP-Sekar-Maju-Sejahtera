@@ -88,7 +88,7 @@ export const PetaniResetCardModal: React.FC<PetaniResetCardModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 overflow-y-auto font-sans">
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto font-sans">
       <div className="bg-white border border-gray-300 w-full max-w-lg rounded-none shadow-xl flex flex-col text-xs text-gray-800">
         
         {/* Header */}

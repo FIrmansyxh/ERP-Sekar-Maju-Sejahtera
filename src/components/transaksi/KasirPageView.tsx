@@ -791,7 +791,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                   className="py-2.5 px-3 border-r border-gray-200 text-center cursor-pointer hover:bg-gray-100 transition border-r border-gray-200"
                 >
                   <div className="flex items-center justify-center space-x-1">
-                    <span>Jumlah / Beli</span>
+                    <span>Jumlah</span>
                     <ArrowUpDown className="w-3 h-3 text-slate-400" />
                   </div>
                 </th>
@@ -946,7 +946,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                         <div className="font-medium text-slate-900 text-xs">{tx.nama_petani}</div>
                       </td>
 
-                      {/* Jumlah / Beli */}
+                      {/* Jumlah */}
                       <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono text-slate-800">
                         {balCount}
                       </td>
@@ -1016,32 +1016,16 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                             <span>Detail</span>
                           </button>
 
-                          {/* Tombol Cetak (Terkunci ketika belum lunas, baru terbuka setelah lunas) */}
-                          {isLunas && isAllWeighed ? (
-                            <button
-                              type="button"
-                              onClick={() => handleCetakClick(tx)}
-                              className="px-2 py-1 bg-[#dc3545] hover:bg-[#c82333] text-white font-semibold text-[11px] rounded-xs transition cursor-pointer shadow-2xs inline-flex items-center space-x-1"
-                              title="Cetak Nota Pembelian Resmi (Lunas)"
-                            >
-                              <Printer className="w-3 h-3" />
-                              <span>Cetak</span>
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              disabled
-                              className="px-2 py-1 bg-slate-100 border border-slate-300 text-slate-400 font-semibold text-[11px] rounded-xs transition cursor-not-allowed shadow-none inline-flex items-center space-x-1 opacity-70"
-                              title={
-                                !isAllWeighed
-                                  ? "Terkunci: Bal belum selesai ditimbang"
-                                  : "Terkunci: Nota baru dapat dicetak setelah status pembayaran Lunas (Cash)"
-                              }
-                            >
-                              <Lock className="w-3 h-3 text-slate-400" />
-                              <span>Cetak</span>
-                            </button>
-                          )}
+                          {/* Tombol Cetak (Sekarang bisa dicetak kapanpun, draft jika belum lunas) */}
+                          <button
+                            type="button"
+                            onClick={() => handleCetakClick(tx)}
+                            className={`px-2 py-1 text-white font-semibold text-[11px] rounded-xs transition cursor-pointer shadow-2xs inline-flex items-center space-x-1 ${(!isLunas || !isAllWeighed) ? 'bg-amber-600 hover:bg-amber-700' : 'bg-[#dc3545] hover:bg-[#c82333]'}`}
+                            title={(!isLunas || !isAllWeighed) ? "Cetak Nota (Draft / Belum Lunas)" : "Cetak Nota Pembelian Resmi (Lunas)"}
+                          >
+                            <Printer className="w-3 h-3" />
+                            <span>Cetak</span>
+                          </button>
 
                           {/* Tombol Bayar (Jika belum lunas) */}
                           {!isLunas && (
@@ -1213,7 +1197,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
 
       {/* Delete Confirmation Modal */}
       {txToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#b81d24]/60 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="bg-white border border-rose-200 rounded-sm shadow-2xl max-w-md w-full p-5 space-y-4 animate-in fade-in">
             <div className="flex items-center space-x-3 text-rose-600">
               <div className="w-9 h-9 rounded-full bg-rose-100 flex items-center justify-center shrink-0">

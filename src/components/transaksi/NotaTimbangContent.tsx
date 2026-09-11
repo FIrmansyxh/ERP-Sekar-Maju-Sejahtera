@@ -1,6 +1,6 @@
 import React from 'react';
 import { TransaksiPembelian } from '../../types';
-import { formatRupiah, formatDateHariBulanTahun, terbilangRupiah } from '../../utils/formatters';
+import { formatRupiah, formatAccounting, formatDateHariBulanTahun, terbilangRupiah } from '../../utils/formatters';
 import { loadCurrentUser } from '../../utils/storage';
 
 export interface NotaTimbangContentProps {
@@ -44,19 +44,14 @@ export const NotaTimbangContent: React.FC<NotaTimbangContentProps> = ({ transaks
     <div className="space-y-4 text-xs text-gray-900 font-sans">
       {/* Header Kop Resmi - Sederhana, Formal & Profesional */}
       <div className="text-center border-b-2 border-gray-800 pb-3 space-y-1">
-        <div className="flex items-center justify-center space-x-2">
-          <div className="w-6 h-6 bg-[#b81d24] text-white font-bold flex items-center justify-center text-[10px] rounded-xs">
-            SMS
-          </div>
-          <span className="text-xs font-bold tracking-wider text-gray-800 uppercase">
-            PR. SEKAR MAJU SEJAHTERA • PUSAT PAMEKASAN MADURA
-          </span>
-        </div>
-        <h2 className="text-base font-bold tracking-tight text-gray-950 uppercase mt-1">
+        <h1 className="text-2xl font-black tracking-widest text-gray-900 uppercase">
+          S.A GROUP
+        </h1>
+        <h2 className="text-sm font-bold tracking-tight text-gray-800 uppercase mt-1">
           SURAT BUKTI TIMBANG & NOTA PEMBELIAN TEMBAKAU
         </h2>
         <p className="text-[10.5px] text-gray-600">
-          Jl. Raya Tlanakan No. 45, Pamekasan, Madura - Jawa Timur | Telp: (0324) 321888 • NPWP: 01.234.567.8-608.000
+          Jl. Raya Blumbungan, Dusun Kendal, Desa Trasak, Kec. Larangan, Kab. Pamekasan
         </p>
       </div>
 
@@ -90,7 +85,7 @@ export const NotaTimbangContent: React.FC<NotaTimbangContentProps> = ({ transaks
           </div>
         </div>
 
-        {/* Kolom Kanan: Informasi Petani & Petugas */}
+        {/* Kolom Kanan: Informasi Petani */}
         <div className="space-y-1.5 border-l border-gray-200 pl-6">
           <div className="flex justify-between items-center">
             <span className="text-gray-500">Petani / Penjual:</span>
@@ -103,14 +98,6 @@ export const NotaTimbangContent: React.FC<NotaTimbangContentProps> = ({ transaks
             <span className="text-gray-500">Asal / Desa:</span>
             <span className="text-gray-800 truncate max-w-[190px]">{transaksi.desa_kecamatan || '-'}</span>
           </div>
-          <div className="flex justify-between items-center">
-            <span className="text-gray-500">Petugas Loket / Sortir:</span>
-            <span className="font-semibold text-gray-800">{transaksi.operator_nama || 'Petugas Gudang'}</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-gray-500">Petugas Kasir:</span>
-            <span className="font-semibold text-gray-900">{transaksi.dibayar_oleh || 'Petugas Kasir'}</span>
-          </div>
         </div>
       </div>
 
@@ -121,12 +108,11 @@ export const NotaTimbangContent: React.FC<NotaTimbangContentProps> = ({ transaks
             <tr className="bg-gray-100 border-b border-gray-300 font-bold text-gray-800 text-[11px]">
               <th className="py-2 px-2 text-center border-r border-gray-300 w-8">No</th>
               <th className="py-2 px-2.5 border-r border-gray-300 w-20 text-center">No Bal</th>
-              <th className="py-2 px-2 border-r border-gray-300 text-center">Grade</th>
               <th className="py-2 px-2 border-r border-gray-300 text-center">Tikar</th>
+              <th className="py-2 px-2.5 border-r border-gray-300 text-right">Bruto (Kg)</th>
               <th className="py-2 px-2.5 border-r border-gray-300 text-right">Netto (Kg)</th>
               <th className="py-2 px-2.5 border-r border-gray-300 text-right">Tarif / Kg</th>
               <th className="py-2 px-2.5 border-r border-gray-300 text-right">Total Kotor</th>
-              <th className="py-2 px-2.5 border-r border-gray-300 text-right">Potongan</th>
               <th className="py-2 px-2.5 text-right">Subtotal</th>
             </tr>
           </thead>
@@ -139,15 +125,17 @@ export const NotaTimbangContent: React.FC<NotaTimbangContentProps> = ({ transaks
                 <td className="py-1.5 px-2.5 border-r border-gray-200 font-mono font-bold text-gray-900 text-center w-20">
                   {item.no_bal}
                 </td>
-                <td className="py-1.5 px-2 border-r border-gray-200 text-center font-semibold text-gray-800">
-                  Grade {item.kode_grade}
-                </td>
-                <td className="py-1.5 px-2 border-r border-gray-200 text-center text-[10px]">
-                  {item.ganti_tikar ? (
-                    <span className="text-gray-800 font-semibold">Ganti Tikar</span>
+                <td className="py-1.5 px-2 border-r border-gray-200 text-center font-mono text-[10px]">
+                  {item.potongan_tikar && item.potongan_tikar > 0 ? (
+                    <span className="text-gray-900 font-semibold">{formatRupiah(item.potongan_tikar)}</span>
+                  ) : item.ganti_tikar ? (
+                    <span className="text-gray-900 font-semibold">{formatRupiah(75000)}</span>
                   ) : (
-                    <span className="text-gray-500">Standar</span>
+                    <span className="text-gray-400">Standar</span>
                   )}
+                </td>
+                <td className="py-1.5 px-2.5 border-r border-gray-200 text-right font-mono font-medium text-gray-700">
+                  {item.berat_bruto_kg || (item.berat_kg + (item.potongan_tara_kg || 0))} kg
                 </td>
                 <td className="py-1.5 px-2.5 border-r border-gray-200 text-right font-mono font-semibold text-gray-900">
                   {item.berat_kg} kg
@@ -157,9 +145,6 @@ export const NotaTimbangContent: React.FC<NotaTimbangContentProps> = ({ transaks
                 </td>
                 <td className="py-1.5 px-2.5 border-r border-gray-200 text-right font-mono text-gray-700">
                   {formatRupiah(item.total_kotor)}
-                </td>
-                <td className="py-1.5 px-2.5 border-r border-gray-200 text-right font-mono text-gray-700">
-                  {item.potongan ? `-${formatRupiah(item.potongan)}` : 'Rp 0'}
                 </td>
                 <td className="py-1.5 px-2.5 text-right font-mono font-bold text-gray-900">
                   {formatRupiah(item.subtotal_bersih)}
@@ -177,13 +162,12 @@ export const NotaTimbangContent: React.FC<NotaTimbangContentProps> = ({ transaks
               </td>
               <td className="py-2 px-2.5 border-r border-gray-300"></td>
               <td className="py-2 px-2.5 text-right font-mono font-bold text-gray-800 border-r border-gray-300">
-                {formatRupiah(totalKotorRp)}
-              </td>
-              <td className="py-2 px-2.5 text-right font-mono font-bold text-gray-700 border-r border-gray-300">
-                -{formatRupiah(totalPotonganRp)}
+                <span className="text-[9px] text-gray-400 mr-1">Rp</span>
+                {formatAccounting(totalKotorRp)}
               </td>
               <td className="py-2 px-2.5 text-right font-mono font-bold text-gray-950 text-xs">
-                {formatRupiah(grandTotalRp)}
+                <span className="text-[9px] text-gray-400 mr-1">Rp</span>
+                {formatAccounting(grandTotalRp)}
               </td>
             </tr>
           </tbody>
@@ -208,8 +192,15 @@ export const NotaTimbangContent: React.FC<NotaTimbangContentProps> = ({ transaks
               <td className="py-1.5 px-2.5 border-r border-gray-200 text-center font-mono text-gray-900">
                 {totalBal} bal
               </td>
-              <td className="py-1.5 px-2.5 text-right font-mono text-gray-700">
-                {totalPotonganKuli > 0 ? `-${formatRupiah(totalPotonganKuli)}` : 'Rp 0'}
+              <td className="py-1.5 px-2.5 text-right font-mono text-gray-700 flex justify-end items-center">
+                {totalPotonganKuli > 0 ? (
+                  <>
+                    <span className="text-[9px] text-gray-400 mr-1">-Rp</span>
+                    {formatAccounting(totalPotonganKuli)}
+                  </>
+                ) : (
+                  <span className="text-gray-400">Rp 0</span>
+                )}
               </td>
             </tr>
             <tr className="bg-gray-50/60">
@@ -219,27 +210,42 @@ export const NotaTimbangContent: React.FC<NotaTimbangContentProps> = ({ transaks
               <td className="py-1.5 px-2.5 border-r border-gray-200 text-center font-mono text-gray-900">
                 {totalBal} bal
               </td>
-              <td className="py-1.5 px-2.5 text-right font-mono text-gray-700">
-                {totalPotonganTali > 0 ? `-${formatRupiah(totalPotonganTali)}` : 'Rp 0'}
+              <td className="py-1.5 px-2.5 text-right font-mono text-gray-700 flex justify-end items-center">
+                {totalPotonganTali > 0 ? (
+                  <>
+                    <span className="text-[9px] text-gray-400 mr-1">-Rp</span>
+                    {formatAccounting(totalPotonganTali)}
+                  </>
+                ) : (
+                  <span className="text-gray-400">Rp 0</span>
+                )}
               </td>
             </tr>
             <tr className="bg-white">
               <td className="py-1.5 px-2.5 border-r border-gray-200 text-gray-700">
-                Biaya Ganti Tikar (@ Rp 75.000)
+                Biaya Ganti Tikar
               </td>
               <td className="py-1.5 px-2.5 border-r border-gray-200 text-center font-mono text-gray-900">
                 {jumlahGantiTikar} bal
               </td>
-              <td className="py-1.5 px-2.5 text-right font-mono text-gray-700">
-                {totalPotonganTikar > 0 ? `-${formatRupiah(totalPotonganTikar)}` : 'Rp 0'}
+              <td className="py-1.5 px-2.5 text-right font-mono text-gray-700 flex justify-end items-center">
+                {totalPotonganTikar > 0 ? (
+                  <>
+                    <span className="text-[9px] text-gray-400 mr-1">-Rp</span>
+                    {formatAccounting(totalPotonganTikar)}
+                  </>
+                ) : (
+                  <span className="text-gray-400">Rp 0</span>
+                )}
               </td>
             </tr>
             <tr className="bg-gray-100 font-bold border-t border-gray-300 text-gray-900">
               <td colSpan={2} className="py-1.5 px-2.5 text-right uppercase text-[11px] border-r border-gray-300">
                 TOTAL POTONGAN KESELURUHAN:
               </td>
-              <td className="py-1.5 px-2.5 text-right font-mono font-bold text-gray-800 text-xs">
-                -{formatRupiah(totalPotonganRp)}
+              <td className="py-1.5 px-2.5 text-right font-mono font-bold text-gray-800 text-xs flex justify-end items-center">
+                <span className="text-[9px] text-gray-400 mr-1">-Rp</span>
+                {formatAccounting(totalPotonganRp)}
               </td>
             </tr>
           </tbody>
@@ -257,8 +263,9 @@ export const NotaTimbangContent: React.FC<NotaTimbangContentProps> = ({ transaks
               (Diterima Petani)
             </span>
           </div>
-          <span className="font-mono font-bold text-base text-gray-950">
-            {formatRupiah(grandTotalRp)}
+          <span className="font-mono font-bold text-base text-gray-950 flex items-center">
+            <span className="text-xs text-gray-500 mr-2 font-sans font-bold">Rp</span>
+            {formatAccounting(grandTotalRp)}
           </span>
         </div>
       </div>
@@ -282,10 +289,10 @@ export const NotaTimbangContent: React.FC<NotaTimbangContentProps> = ({ transaks
           </div>
         </div>
         <div>
-          <p className="text-gray-600 font-medium">Petugas Kasir</p>
+          <p className="text-gray-600 font-medium">Admin / Kasir</p>
           <div className="h-14 flex items-end justify-center">
             <span className="font-semibold border-b border-gray-800 pb-0.5 min-w-[130px] inline-block text-gray-900">
-              {currentUser?.nama_lengkap || currentUser?.username || 'Petugas Kasir'}
+              {currentUser?.nama_lengkap || currentUser?.username || 'Admin'}
             </span>
           </div>
         </div>

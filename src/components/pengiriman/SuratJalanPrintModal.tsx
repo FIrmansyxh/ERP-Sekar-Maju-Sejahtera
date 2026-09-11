@@ -140,7 +140,7 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 z-50 bg-[#b81d24]/50 flex items-center justify-center p-3 sm:p-4 print:p-0 print:bg-white overflow-y-auto font-sans animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 print:p-0 print:bg-white overflow-y-auto font-sans animate-in fade-in duration-150"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           onClose();

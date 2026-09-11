@@ -1012,7 +1012,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
 
       {/* 8. Drawer / Modal: Detail Riwayat Setoran Petani */}
       {selectedPetaniForDetail && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-3 animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-3 animate-in fade-in duration-150">
           <div className="bg-white w-full max-w-6xl max-h-[90vh] overflow-y-auto border border-gray-300 shadow-2xl flex flex-col">
             
             {/* Modal Header */}

@@ -117,7 +117,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
   const [beratBrutoInput, setBeratBrutoInput] = useState<number | string>('');
   const [beratNettoInput, setBeratNettoInput] = useState<number | string>('');
   const [isNettoManual, setIsNettoManual] = useState<boolean>(false);
-  const [potTikarInput, setPotTikarInput] = useState<number>(75000);
+  const [potTikarInput, setPotTikarInput] = useState<number | ''>('');
   const [lokasiBlok, setLokasiBlok] = useState('Blok A (Utara)');
 
   const [scanFeedback, setScanFeedback] = useState<{ text: string; isError: boolean } | null>(null);
@@ -370,7 +370,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     if (item.ganti_tikar && item.potongan_tikar) {
       setPotTikarInput(item.potongan_tikar);
     } else {
-      setPotTikarInput(75000);
+      setPotTikarInput(item.potongan_tikar || '');
     }
     const isWeighed = (item.berat_kg || 0) > 0;
     setScanFeedback({ 
@@ -557,7 +557,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     liveTara = Math.max(0, Number((liveBruto - liveNetto).toFixed(1)));
   }
 
-  const livePotTikar = isGantiTikarActive ? potTikarInput : 0;
+  const livePotTikar = isGantiTikarActive ? (typeof potTikarInput === 'number' ? potTikarInput : 0) : 0;
   const livePotKuli = 7000;
   const livePotTali = 3000;
   const livePotTotal = livePotKuli + livePotTali + livePotTikar;
@@ -680,6 +680,11 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
         isError: false,
       });
     }
+
+    // Mengosongkan isian di layar (Sesuai dengan Requirement form kembali kosong)
+    setBeratBrutoInput('');
+    setPotTikarInput('');
+    setActiveItemId(null);
 
     setTimeout(() => {
       if (barcodeScannerRef.current) {
@@ -1376,7 +1381,15 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                         <input
                           type="number"
                           value={potTikarInput}
-                          onChange={(e) => setPotTikarInput(parseFloat(e.target.value) || 0)}
+                          onChange={(e) => setPotTikarInput(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                          onBlur={(e) => {
+                            if (e.target.value !== '') {
+                              const val = parseFloat(e.target.value) || 0;
+                              if (val > 0 && val < 1000) {
+                                setPotTikarInput(val * 1000);
+                              }
+                            }
+                          }}
                           disabled={isActiveBalWeighed}
                           className="w-full bg-white border border-gray-300 rounded-xs py-1.5 px-2.5 text-xs font-semibold text-gray-900 focus:outline-none focus:border-[#b81d24] focus:ring-1 focus:ring-[#b81d24] disabled:bg-gray-100 disabled:text-slate-400"
                         />

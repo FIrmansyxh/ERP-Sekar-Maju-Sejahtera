@@ -875,30 +875,15 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
                                   <Scale className="w-3.5 h-3.5" />
                                 </button>
 
-                                {/* 3. Buka Halaman Cetak Nota (Terkunci jika belum lunas) */}
-                                {canPrintNota ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => openPrintDocument('nota', tx.transaksi_id)}
-                                    className="w-7 h-7 rounded-sm flex items-center justify-center text-white bg-[#b81d24] hover:bg-[#9e161c] transition cursor-pointer shadow-xs"
-                                    title="Buka Dialog Cetak / Simpan PDF Nota (Lunas)"
-                                  >
-                                    <Printer className="w-3.5 h-3.5" />
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    disabled
-                                    className="w-7 h-7 rounded-sm flex items-center justify-center bg-slate-100 border border-slate-300 text-slate-400 cursor-not-allowed shadow-none opacity-70"
-                                    title={
-                                      !isWeighingDone
-                                        ? "Terkunci: Selesaikan timbangan terlebih dahulu"
-                                        : "Terkunci: Nota baru dapat dicetak setelah status pembayaran Lunas (Cash)"
-                                    }
-                                  >
-                                    <Lock className="w-3.5 h-3.5 text-slate-400" />
-                                  </button>
-                                )}
+                                {/* 3. Buka Halaman Cetak Nota */}
+                                <button
+                                  type="button"
+                                  onClick={() => openPrintDocument('nota', tx.transaksi_id)}
+                                  className={`w-7 h-7 rounded-sm flex items-center justify-center text-white transition cursor-pointer shadow-xs ${!isWeighingDone ? 'bg-amber-600 hover:bg-amber-700' : 'bg-[#b81d24] hover:bg-[#9e161c]'}`}
+                                  title={!isWeighingDone ? "Cetak Nota (Draft / Belum Selesai Timbang)" : "Buka Dialog Cetak / Simpan PDF Nota"}
+                                >
+                                  <Printer className="w-3.5 h-3.5" />
+                                </button>
 
                                 {/* 3.1. Lihat Detail Transaksi & Nota Timbang (Teal) */}
                                 <button
@@ -1077,30 +1062,15 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
                             <Scale className="w-3.5 h-3.5" />
                           </button>
 
-                          {/* 3. Buka Halaman Cetak Nota (Terkunci jika belum lunas) */}
-                          {canPrintNota ? (
-                            <button
-                              type="button"
-                              onClick={() => openPrintDocument('nota', tx.transaksi_id)}
-                              className="w-7 h-7 rounded-sm flex items-center justify-center text-white bg-[#b81d24] hover:bg-[#9e161c] transition cursor-pointer shadow-xs"
-                              title="Buka Dialog Cetak / Simpan PDF Nota (Lunas)"
-                            >
-                              <Printer className="w-3.5 h-3.5" />
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              disabled
-                              className="w-7 h-7 rounded-sm flex items-center justify-center bg-slate-100 border border-slate-300 text-slate-400 cursor-not-allowed shadow-none opacity-70"
-                              title={
-                                !isWeighingDone
-                                  ? "Terkunci: Selesaikan timbangan terlebih dahulu"
-                                  : "Terkunci: Nota baru dapat dicetak setelah status pembayaran Lunas (Cash)"
-                              }
-                            >
-                              <Lock className="w-3.5 h-3.5 text-slate-400" />
-                            </button>
-                          )}
+                          {/* 3. Buka Halaman Cetak Nota */}
+                          <button
+                            type="button"
+                            onClick={() => openPrintDocument('nota', tx.transaksi_id)}
+                            className={`w-7 h-7 rounded-sm flex items-center justify-center text-white transition cursor-pointer shadow-xs ${!isWeighingDone ? 'bg-amber-600 hover:bg-amber-700' : 'bg-[#b81d24] hover:bg-[#9e161c]'}`}
+                            title={!isWeighingDone ? "Cetak Nota (Draft / Belum Selesai Timbang)" : "Buka Dialog Cetak / Simpan PDF Nota"}
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                          </button>
 
                           {/* 3.1. Lihat Detail Transaksi & Nota Timbang (Teal) */}
                           <button
@@ -1243,7 +1213,7 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
 
       {/* Konfirmasi Hapus Transaksi dengan Alasan Audit Trail */}
       {txToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#b81d24]/60 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="bg-white border border-rose-200 rounded-sm shadow-2xl max-w-md w-full p-5 space-y-4 animate-in fade-in">
             <div className="flex items-center space-x-3 text-rose-600">
               <div className="w-9 h-9 rounded-full bg-rose-100 flex items-center justify-center shrink-0">

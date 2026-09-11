@@ -2461,7 +2461,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
 
       {/* Modal: Pilih Bal dari Stok Gudang untuk Pengiriman Reguler */}
       {isStokModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-[#b81d24]/50 backdrop-blur-2xs animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/50 backdrop-blur-2xs animate-in fade-in duration-150">
           <div className="bg-white rounded-sm border border-gray-300 shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
             {/* Modal Header */}
             <div className="px-5 py-3.5 bg-[#b81d24] text-white flex items-center justify-between">

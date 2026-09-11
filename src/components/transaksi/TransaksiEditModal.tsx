@@ -423,7 +423,7 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#b81d24]/60 backdrop-blur-xs overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
       <div className="bg-white border border-slate-300 rounded-sm shadow-2xl max-w-4xl w-full my-8 flex flex-col max-h-[90vh]">
         
         {/* Header Modal */}
@@ -652,12 +652,11 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
                       {/* Potongan */}
                       <td className="py-2 px-2.5 text-right">
                         <input
-                          type="number"
-                          step="1000"
-                          min="0"
-                          value={row.potongan}
-                          onChange={(e) => handlePotonganChange(idx, parseInt(e.target.value, 10) || 0)}
-                          className="w-24 text-right font-mono text-xs px-2 py-1 border border-slate-300 rounded-xs focus:ring-1 focus:ring-[#b81d24] focus:outline-none ml-auto"
+                          type="text"
+                          value={formatRupiah(row.potongan)}
+                          disabled
+                          className="w-24 text-right font-mono text-xs px-2 py-1 border border-slate-300 rounded-xs bg-slate-100 text-slate-500 cursor-not-allowed ml-auto"
+                          title="Potongan bersifat default (SOP Perusahaan) dan tidak bisa diedit secara manual"
                         />
                       </td>
 
@@ -813,9 +812,9 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
             <button
               type="button"
               onClick={handleSave}
-              className="px-5 py-2 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#b81d24] rounded-xs transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
+              className="px-5 py-2 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#a0181e] rounded-xs transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
             >
-              <Save className="w-4 h-4 text-emerald-400" />
+              <Save className="w-4 h-4 text-white" />
               <span>Simpan Perubahan & Rekam Audit Log</span>
             </button>
           </div>

@@ -93,7 +93,7 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 z-50 bg-[#b81d24]/40 flex items-center justify-center p-3 sm:p-4 overflow-y-auto font-sans animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto font-sans animate-in fade-in duration-150"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -213,34 +213,19 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
         <div className="px-5 py-2.5 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center space-x-2">
             {/* Tombol Cetak Nota (Terkunci jika belum lunas) */}
-            {isLunas && isAllWeighed ? (
-              <button
-                type="button"
-                onClick={() => {
-                  if (onUpdateNotaStatus) onUpdateNotaStatus(transaksi.transaksi_id);
-                  openPrintDocument('nota', transaksi.transaksi_id);
-                }}
-                className="px-3.5 py-1.5 text-xs font-bold rounded-sm bg-[#b81d24] hover:bg-[#a0181e] text-white flex items-center space-x-1.5 transition cursor-pointer shadow-xs"
-                title="Buka Dialog Cetak / Simpan PDF Nota Resmi (Lunas)"
-              >
-                <Printer className="w-3.5 h-3.5" />
-                <span>Cetak Nota</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                disabled
-                className="px-3.5 py-1.5 text-xs font-medium rounded-sm bg-gray-100 border border-gray-200 text-gray-400 flex items-center space-x-1.5 cursor-not-allowed"
-                title={
-                  !isAllWeighed 
-                    ? "Terkunci: Bal belum ditimbang lengkap" 
-                    : "Terkunci: Nota baru dapat dicetak setelah status pembayaran Lunas (Cash)"
-                }
-              >
-                <Lock className="w-3.5 h-3.5 text-gray-400" />
-                <span>Cetak Nota (Terkunci)</span>
-              </button>
-            )}
+            {/* Tombol Cetak (Sekarang bisa dicetak kapanpun, draft jika belum lunas) */}
+            <button
+              type="button"
+              onClick={() => {
+                if (onUpdateNotaStatus) onUpdateNotaStatus(transaksi.transaksi_id);
+                openPrintDocument('nota', transaksi.transaksi_id);
+              }}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-sm text-white flex items-center space-x-1.5 transition cursor-pointer shadow-xs ${(!isLunas || !isAllWeighed) ? 'bg-amber-600 hover:bg-amber-700' : 'bg-[#b81d24] hover:bg-[#a0181e]'}`}
+              title={(!isLunas || !isAllWeighed) ? "Cetak Nota (Draft / Belum Lunas)" : "Buka Dialog Cetak / Simpan PDF Nota Resmi (Lunas)"}
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>Cetak Nota</span>
+            </button>
 
             {/* Tombol Unduh PDF (Terkunci jika belum lunas) */}
             {isLunas && isAllWeighed ? (
@@ -320,7 +305,7 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
 
       {/* Konfirmasi Hapus Transaksi dengan Alasan Audit Trail */}
       {isConfirmDeleteOpen && onDeleteTransaksi && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-[#b81d24]/40 backdrop-blur-xs">
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="bg-white border border-gray-300 rounded-sm shadow-xl max-w-md w-full p-5 space-y-4 animate-in fade-in">
             <div className="flex items-center space-x-3 text-red-600">
               <div className="w-8 h-8 rounded-sm bg-red-50 border border-red-100 flex items-center justify-center shrink-0">

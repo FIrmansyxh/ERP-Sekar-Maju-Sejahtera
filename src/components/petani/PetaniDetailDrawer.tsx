@@ -65,7 +65,7 @@ export const PetaniDetailDrawer: React.FC<PetaniDetailDrawerProps> = ({
 
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex justify-end font-sans">
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex justify-end font-sans">
       <div className="bg-white w-full max-w-xl h-full shadow-2xl flex flex-col border-l border-gray-300 text-xs text-gray-800 animate-in slide-in-from-right duration-200">
         
         {/* Header */}

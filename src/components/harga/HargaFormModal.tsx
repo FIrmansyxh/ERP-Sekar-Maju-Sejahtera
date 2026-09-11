@@ -112,7 +112,7 @@ export const HargaFormModal: React.FC<HargaFormModalProps> = ({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 overflow-y-auto font-sans animate-in fade-in duration-150">
+      <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto font-sans animate-in fade-in duration-150">
         <div className="bg-white border border-gray-300 w-full max-w-lg rounded-none shadow-2xl flex flex-col text-xs text-gray-800">
           
           {/* Header */}
@@ -248,7 +248,7 @@ export const HargaFormModal: React.FC<HargaFormModalProps> = ({
                 </div>
                 <div>
                   <span className="text-gray-500">Jika Ganti Tikar:</span>
-                  <div className="font-bold text-amber-700">+Rp 75.000 / bal</div>
+                  <div className="font-bold text-amber-700">+ Sesuai Nominal Input (Per Bal)</div>
                 </div>
               </div>
 
