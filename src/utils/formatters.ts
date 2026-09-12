@@ -354,16 +354,18 @@ export function formatNumber(val?: number | null, decimals: number = 0): string 
 
 export function generatePetaniId(existingList: any[] = []): string {
   let maxSeq = 0;
+  const currentYear = new Date().getFullYear();
   for (const item of existingList) {
     if (item.petani_id && item.petani_id.startsWith('PTN-')) {
-      const seqStr = item.petani_id.replace('PTN-', '');
-      const parsed = parseInt(seqStr, 10);
+      const parts = item.petani_id.split('-');
+      const lastPart = parts[parts.length - 1];
+      const parsed = parseInt(lastPart, 10);
       if (!isNaN(parsed) && parsed > maxSeq) {
         maxSeq = parsed;
       }
     }
   }
-  return `PTN-${String(maxSeq + 1).padStart(4, '0')}`;
+  return `PTN-${currentYear}-${String(maxSeq + 1).padStart(3, '0')}`;
 }
 
 export function formatDateDDMMYY(dateStr?: string | Date | null): string {

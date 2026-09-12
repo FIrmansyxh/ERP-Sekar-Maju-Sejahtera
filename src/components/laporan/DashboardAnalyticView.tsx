@@ -681,7 +681,6 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
           barangList={barangList}
           hargaList={hargaList}
           onNavigateToHarga={onNavigateToModule ? () => onNavigateToModule('modul-6-laporan-grade') : undefined}
-          onNavigateToGudang={onNavigateToModule ? () => onNavigateToModule('modul-6-laporan-gudang') : undefined}
         />
       )}
 

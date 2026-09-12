@@ -137,6 +137,11 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
 
   const canManagePetani = canUserPerform(userRole, 'canCreatePetani');
 
+  const deletingPetaniTxCount = useMemo(() => {
+    if (!deletingPetaniTarget) return 0;
+    return (transaksiList || []).filter((t) => t.petani_id === deletingPetaniTarget.petani_id).length;
+  }, [deletingPetaniTarget, transaksiList]);
+
   return (
     <div className="space-y-4 font-sans text-gray-800">
       
@@ -259,8 +264,8 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
           </div>
         </div>
 
-        {/* Table Controls (Mode Switcher, Tampil X Data, Quick Filter Status & Pencarian) */}
-        <div className="p-3 bg-white flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+        {/* Table Controls (Mode Switcher, Tampil X Data, Quick Filter Status & Kolom Pencarian Utama) */}
+        <div className="p-3 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs border-b border-gray-100">
           <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
             {/* Tampil X Data Per Halaman */}
             <div className="flex items-center space-x-1.5">
@@ -283,31 +288,42 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
               </select>
               <span className="text-gray-500 hidden sm:inline">per hal.</span>
             </div>
-
+            {searchQuery.trim() && (
+              <span className="text-[11px] text-gray-500 font-medium">
+                Ditemukan: <strong className="text-gray-900">{filteredData.length}</strong> data
+              </span>
+            )}
           </div>
 
-          <div className="flex items-center space-x-2">
-            <span className="text-gray-600 font-medium">Pencarian:</span>
+          {/* Kolom Pencarian (Search Bar) Utama Petani */}
+          <div className="w-full sm:w-80 md:w-96">
             <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-gray-400">
+                <Search className="w-4 h-4" />
+              </div>
               <input
                 id="search-petani-input"
                 type="text"
-                placeholder="Cari ID, Nama, No. HP, Alamat..."
+                placeholder="Cari petani (Nama, ID, No. HP, Alamat)..."
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="border border-gray-300 rounded-sm px-2.5 py-1 text-xs text-gray-800 w-52 sm:w-64 focus:outline-none focus:border-[#b81d24]"
+                className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-300 rounded-sm pl-8 pr-8 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-[#b81d24] focus:ring-1 focus:ring-[#b81d24] transition shadow-2xs"
               />
               {searchQuery && (
                 <button
                   type="button"
                   id="btn-clear-search-petani"
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setCurrentPage(1);
+                  }}
+                  className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
+                  title="Hapus pencarian"
                 >
-                  <X className="w-3 h-3" />
+                  <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
@@ -505,10 +521,16 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
       <ConfirmModal
         isOpen={Boolean(deletingPetaniTarget)}
         title="Konfirmasi Hapus Data Petani"
-        message={`Apakah Anda yakin ingin menghapus data petani "${deletingPetaniTarget?.nama_petani}" (${deletingPetaniTarget?.petani_id}) dari Master Petani?`}
-        detail="Perhatian: Tindakan ini akan menghapus data registrasi petani dari sistem master data."
+        message={`Apakah Anda yakin ingin menghapus data petani "${deletingPetaniTarget?.nama_petani}" (ID: ${deletingPetaniTarget?.petani_id})?`}
+        detail={
+          deletingPetaniTxCount > 0
+            ? `⚠️ PERINGATAN KRITIS: Petani ini memiliki ${deletingPetaniTxCount} transaksi pembelian tercatat. Menghapus data petani ini dapat mempengaruhi integritas data dan riwayat laporan pembelian!`
+            : `Perhatian: Tindakan ini tidak dapat dibatalkan dan akan menghapus seluruh data registrasi petani "${deletingPetaniTarget?.nama_petani}" (${deletingPetaniTarget?.alamat || 'Tanpa Alamat'}) dari sistem master data.`
+        }
         variant="danger"
-        confirmText="Hapus Permanen"
+        isDanger={true}
+        confirmText="Ya, Hapus Permanen"
+        cancelText="Batal"
         onConfirm={() => {
           if (deletingPetaniTarget && onDeletePetani) {
             onDeletePetani(deletingPetaniTarget);

@@ -249,48 +249,60 @@ return (
 
         {/* Table Toolbar / Controls */}
         <div className="p-3 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs border-b border-gray-200">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center space-x-2">
-              <span className="text-gray-600">Tampil</span>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="flex items-center space-x-1.5">
+              <span className="text-gray-600 font-medium">Tampil</span>
               <select
                 value={itemsPerPage}
                 onChange={(e) => {
                   setItemsPerPage(Number(e.target.value));
                   setCurrentPage(1);
                 }}
-                className="border border-gray-300 rounded-sm px-2 py-1 bg-white text-xs text-gray-800 focus:outline-none"
+                className="border border-gray-300 rounded-sm px-2 py-1 bg-white text-xs font-semibold text-gray-800 focus:outline-none focus:border-[#b81d24] cursor-pointer"
               >
                 <option value={5}>5</option>
                 <option value={10}>10</option>
                 <option value={25}>25</option>
                 <option value={50}>50</option>
               </select>
-              <span className="text-gray-600">Data Per Halaman</span>
+              <span className="text-gray-500">per hal.</span>
             </div>
+            {(searchTerm.trim() || statusFilter !== 'all') && (
+              <span className="text-[11px] text-gray-500 font-medium">
+                Ditemukan: <strong className="text-gray-900">{filteredList.length}</strong> harga jual
+              </span>
+            )}
           </div>
 
-          <div className="flex items-center space-x-2 w-full sm:w-auto">
-            <span className="text-gray-600 font-medium">Pencarian:</span>
-            <div className="relative flex-1 sm:w-64">
+          {/* Kolom Pencarian Utama */}
+          <div className="w-full sm:w-80 md:w-96">
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-gray-400">
+                <Search className="w-4 h-4" />
+              </div>
               <input
+                id="search-harga-jual-input"
                 type="text"
-                placeholder="Cari kode..."
+                placeholder="Cari master harga jual (Kode, Grade)..."
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-full border border-gray-300 rounded-sm px-2.5 py-1 text-xs text-gray-800 focus:outline-none focus:border-[#b81d24]"
+                className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-300 rounded-sm pl-8 pr-8 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-[#b81d24] focus:ring-1 focus:ring-[#b81d24] transition shadow-2xs"
               />
               {searchTerm && (
                 <button
+                  type="button"
+                  id="btn-clear-search-harga-jual"
                   onClick={() => {
                     setSearchTerm('');
                     setCurrentPage(1);
                   }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
+                  title="Hapus pencarian"
                 >
-                  <X className="w-3 h-3" />
+                  <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>

@@ -711,38 +711,65 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
           </div>
         </div>
 
-        {/* DataTables Controls (Show Entries & Instant Search) */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-white border-b border-slate-200 text-xs">
-          <div className="flex items-center space-x-2 text-slate-700">
-            <span>Show</span>
-            <select
-              value={itemsPerPage}
-              onChange={(e) => {
-                setItemsPerPage(Number(e.target.value));
-                setCurrentPage(1);
-              }}
-              className="bg-white border border-slate-300 rounded-xs px-2 py-1 text-xs font-medium text-slate-900 focus:outline-none focus:border-slate-800 cursor-pointer"
-            >
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-            <span>entries</span>
+        {/* Controls di atas tabel (Tampil X Data & Kolom Pencarian Utama Transaksi) */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 bg-white border-b border-slate-200 text-xs">
+          <div className="flex flex-wrap items-center gap-2 text-slate-700">
+            <div className="flex items-center space-x-1.5">
+              <span>Show</span>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="bg-white border border-slate-300 rounded-xs px-2 py-1 text-xs font-medium text-slate-900 focus:outline-none focus:border-slate-800 cursor-pointer"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+              <span>entries</span>
+            </div>
+            {tableSearch.trim() && (
+              <span className="text-[11px] text-slate-500 font-medium">
+                Ditemukan: <strong className="text-slate-900">{searchedAndSortedList.length}</strong> data
+              </span>
+            )}
           </div>
 
-          <div className="flex items-center space-x-2 text-slate-700 w-full sm:w-auto justify-end">
-            <span className="font-medium">Search:</span>
-            <input
-              type="text"
-              value={tableSearch}
-              onChange={(e) => {
-                setTableSearch(e.target.value);
-                setCurrentPage(1);
-              }}
-              placeholder="Cari kupon, petani, tanggal..."
-              className="bg-white border border-slate-300 rounded-xs px-2.5 py-1 text-xs text-slate-900 focus:outline-none focus:border-slate-800 w-44 sm:w-60"
-            />
+          {/* Kolom Pencarian (Search Bar) Utama Transaksi */}
+          <div className="w-full sm:w-80 md:w-96">
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
+                <Search className="w-4 h-4" />
+              </div>
+              <input
+                id="search-transaksi-input"
+                type="text"
+                value={tableSearch}
+                onChange={(e) => {
+                  setTableSearch(e.target.value);
+                  setCurrentPage(1);
+                }}
+                placeholder="Cari transaksi (No Kupon, Nama Petani, ID, Tanggal)..."
+                className="w-full bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 rounded-sm pl-8 pr-8 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#b81d24] focus:ring-1 focus:ring-[#b81d24] transition shadow-2xs"
+              />
+              {tableSearch && (
+                <button
+                  type="button"
+                  id="btn-clear-search-transaksi"
+                  onClick={() => {
+                    setTableSearch('');
+                    setCurrentPage(1);
+                  }}
+                  className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                  title="Hapus pencarian"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1076,13 +1103,16 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                             </button>
                           )}
 
-                          {/* Tombol Hapus jika superadmin */}
-                          {userRole === 'superadmin' && (
+                          {/* Tombol Hapus jika superadmin atau admin_utama */}
+                          {(userRole === 'superadmin' || userRole === 'admin_utama') && (
                             <button
                               type="button"
-                              onClick={() => setTxToDelete(tx)}
+                              onClick={() => {
+                                setAlasanHapus('');
+                                setTxToDelete(tx);
+                              }}
                               className="p-1 text-slate-400 hover:text-rose-600 transition cursor-pointer"
-                              title="Hapus Transaksi"
+                              title="Hapus Transaksi (Memerlukan Konfirmasi)"
                             >
                               <Trash2 className="w-3 h-3" />
                             </button>
@@ -1197,53 +1227,111 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
 
       {/* Delete Confirmation Modal */}
       {txToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white border border-rose-200 rounded-sm shadow-2xl max-w-md w-full p-5 space-y-4 animate-in fade-in">
-            <div className="flex items-center space-x-3 text-rose-600">
-              <div className="w-9 h-9 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
-                <Trash2 className="w-5 h-5 text-rose-600" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white border border-rose-300 rounded-none shadow-2xl max-w-lg w-full p-5 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-rose-100">
+              <div className="flex items-center space-x-3 text-rose-600">
+                <div className="w-9 h-9 rounded-sm bg-rose-100 flex items-center justify-center shrink-0 border border-rose-200">
+                  <Trash2 className="w-5 h-5 text-rose-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">Konfirmasi Hapus Transaksi Pembelian</h3>
+                  <p className="text-xs text-rose-600 font-mono font-semibold">
+                    Kupon: {txToDelete.no_kupon} • ID: {txToDelete.transaksi_id}
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">Konfirmasi Hapus Transaksi</h3>
-                <p className="text-xs text-slate-500 font-mono">
-                  {txToDelete.no_kupon} ({txToDelete.transaksi_id})
-                </p>
-              </div>
-            </div>
-
-            <div className="p-3 bg-rose-50/70 border border-rose-200 rounded-xs text-xs text-rose-950 space-y-1">
-              <p>
-                Apakah Anda yakin ingin menghapus transaksi milik Petani <strong>{txToDelete.nama_petani}</strong>?
-              </p>
-              <p className="text-[11px] text-rose-700">
-                • Berat Netto: {txToDelete.berat_kg} Kg ({txToDelete.total_bal || txToDelete.items?.length || 1} Bal)
-                <br />
-                • Total Nilai: {formatRupiah(txToDelete.harga_final || txToDelete.total_harga_beli)}
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Alasan Penghapusan <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={alasanHapus}
-                onChange={(e) => setAlasanHapus(e.target.value)}
-                placeholder="Contoh: Kesalahan input sortir..."
-                className="w-full bg-white border border-slate-300 rounded-sm px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-rose-500"
-              />
-            </div>
-
-            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => {
                   setTxToDelete(null);
                   setAlasanHapus('');
                 }}
-                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-xs rounded-sm transition cursor-pointer"
+                className="text-gray-400 hover:text-gray-600 p-1 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Rincian Transaksi */}
+            <div className="p-3 bg-gray-50 border border-gray-200 rounded-none text-xs text-gray-800 space-y-2">
+              <div className="flex justify-between items-center border-b border-gray-200 pb-1.5">
+                <span className="text-gray-500 font-medium">Petani Penyetor:</span>
+                <span className="font-bold text-gray-900">{txToDelete.nama_petani} <span className="text-[10px] text-gray-500">({txToDelete.petani_id})</span></span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[11px]">
+                <div>
+                  <span className="text-gray-500">Tanggal:</span> <strong className="text-gray-800">{formatDateIndo(txToDelete.tanggal_transaksi)}</strong>
+                </div>
+                <div>
+                  <span className="text-gray-500">Status Bayar:</span> <span className="font-bold uppercase text-slate-800">{txToDelete.status_pembayaran || 'CASH'}</span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Jumlah Bal:</span> <strong className="text-gray-800">{txToDelete.total_bal || (txToDelete.items ? txToDelete.items.length : 1)} Bal</strong>
+                </div>
+                <div>
+                  <span className="text-gray-500">Berat Netto:</span> <strong className="text-gray-800">{txToDelete.berat_kg} Kg</strong>
+                </div>
+              </div>
+              <div className="flex justify-between items-center pt-1 border-t border-gray-200 text-xs font-bold text-gray-900">
+                <span>Total Nilai Transaksi:</span>
+                <span className="text-[#b81d24] text-sm">{formatRupiah(txToDelete.harga_final || txToDelete.total_harga_beli)}</span>
+              </div>
+            </div>
+
+            {/* Warning Box Dampak Penghapusan */}
+            <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-none text-xs text-rose-950 space-y-1">
+              <div className="flex items-center space-x-1.5 font-bold text-rose-800">
+                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>Peringatan Dampak Penghapusan:</span>
+              </div>
+              <ul className="text-[11px] text-rose-800 space-y-0.5 list-disc list-inside pl-1">
+                <li>Seluruh bal inventaris di gudang yang terbit dari transaksi ini akan otomatis ikut dihapus/dibatalkan.</li>
+                <li>Akumulasi setoran total bal dan berat petani terkait akan otomatis disinkronkan kembali.</li>
+                <li>Tindakan ini akan dicatat ke dalam audit trail keamanan sistem.</li>
+              </ul>
+            </div>
+
+            {/* Form Input Alasan */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-gray-700">
+                Alasan Penghapusan (Wajib diisi untuk catatan audit): <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={alasanHapus}
+                onChange={(e) => setAlasanHapus(e.target.value)}
+                placeholder="Contoh: Kesalahan input nomor kupon / duplikasi timbangan..."
+                className="w-full bg-white border border-gray-300 rounded-none px-2.5 py-1.5 text-xs text-gray-900 focus:outline-none focus:border-[#b81d24] focus:ring-1 focus:ring-[#b81d24]"
+              />
+              <div className="flex flex-wrap gap-1 pt-1">
+                {[
+                  'Salah input nomor kupon',
+                  'Duplikasi transaksi timbangan',
+                  'Dibatalkan oleh petani penyetor',
+                  'Koreksi administratif kasir',
+                ].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setAlasanHapus(preset)}
+                    className="text-[10px] px-2 py-0.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-none border border-gray-200 transition cursor-pointer"
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end space-x-2 pt-3 border-t border-gray-200">
+              <button
+                type="button"
+                onClick={() => {
+                  setTxToDelete(null);
+                  setAlasanHapus('');
+                }}
+                className="px-3.5 py-1.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 font-semibold text-xs rounded-none transition cursor-pointer"
               >
                 Batal
               </button>
@@ -1252,14 +1340,15 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 disabled={!alasanHapus.trim()}
                 onClick={() => {
                   if (onDeleteTransaksi && txToDelete) {
-                    onDeleteTransaksi(txToDelete.transaksi_id, alasanHapus);
+                    onDeleteTransaksi(txToDelete.transaksi_id, alasanHapus.trim());
                   }
                   setTxToDelete(null);
                   setAlasanHapus('');
                 }}
-                className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium text-xs rounded-sm transition cursor-pointer shadow-2xs"
+                className="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs rounded-none transition cursor-pointer shadow-xs flex items-center space-x-1.5"
               >
-                Hapus Transaksi
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Ya, Hapus Transaksi</span>
               </button>
             </div>
           </div>

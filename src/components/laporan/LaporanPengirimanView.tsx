@@ -37,7 +37,6 @@ interface LaporanPengirimanViewProps {
   barangList?: Barang[];
   gudangList?: Gudang[];
   userRole?: UserRole;
-  onNavigateToPengiriman?: () => void;
   onNavigateToSample?: () => void;
   onNavigateToBarang?: () => void;
 }
@@ -48,7 +47,6 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
   barangList = [],
   gudangList = [],
   userRole = 'superadmin',
-  onNavigateToPengiriman,
   onNavigateToSample,
   onNavigateToBarang,
 }) => {
@@ -62,6 +60,9 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
   const [sortBy, setSortBy] = useState<'tanggal_desc' | 'tanggal_asc' | 'bal_desc' | 'kg_desc'>('tanggal_desc');
+
+  // Live Table Search for Tab 1
+  const [tableSearch, setTableSearch] = useState('');
 
   // Applied Filter State
   const [appliedFilters, setAppliedFilters] = useState({
@@ -364,19 +365,34 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
     }
   };
 
+  // Search within filtered results for Tab 1
+  const searchedPengirimanList = useMemo(() => {
+    if (!tableSearch.trim()) return filteredPengirimanList;
+    const q = tableSearch.toLowerCase().trim();
+    return filteredPengirimanList.filter((p) => {
+      const matchSJ = (p.no_surat_jalan || '').toLowerCase().includes(q);
+      const matchDriver = (p.driver_nama || '').toLowerCase().includes(q);
+      const matchPlat = (p.plat_nomor || '').toLowerCase().includes(q);
+      const matchTujuan = (p.tujuan || '').toLowerCase().includes(q);
+      const matchKontrak = (p.nomor_kontrak || '').toLowerCase().includes(q);
+      const matchPetugas = (p.petugas || p.dibuat_oleh || '').toLowerCase().includes(q);
+      return matchSJ || matchDriver || matchPlat || matchTujuan || matchKontrak || matchPetugas;
+    });
+  }, [filteredPengirimanList, tableSearch]);
+
   // Tab 1: Paginated Data & Total Pages
   const paginatedData = useMemo(() => {
     if (itemsPerPage >= 100000) {
-      return filteredPengirimanList;
+      return searchedPengirimanList;
     }
     const start = (currentPage - 1) * itemsPerPage;
-    return filteredPengirimanList.slice(start, start + itemsPerPage);
-  }, [filteredPengirimanList, currentPage, itemsPerPage]);
+    return searchedPengirimanList.slice(start, start + itemsPerPage);
+  }, [searchedPengirimanList, currentPage, itemsPerPage]);
 
   const totalPages = useMemo(() => {
-    if (itemsPerPage >= 100000 || filteredPengirimanList.length === 0) return 1;
-    return Math.ceil(filteredPengirimanList.length / itemsPerPage);
-  }, [filteredPengirimanList.length, itemsPerPage]);
+    if (itemsPerPage >= 100000 || searchedPengirimanList.length === 0) return 1;
+    return Math.ceil(searchedPengirimanList.length / itemsPerPage);
+  }, [searchedPengirimanList.length, itemsPerPage]);
 
   // Tab 3: Paginated Sample Data & Total Pages
   const paginatedSampleData = useMemo(() => {
@@ -441,16 +457,6 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
               </>
             )}
           </button>
-
-          {onNavigateToPengiriman && (
-            <button
-              onClick={onNavigateToPengiriman}
-              className="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-xs transition flex items-center space-x-1.5 cursor-pointer"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-              <span>Form Pengiriman DO</span>
-            </button>
-          )}
 
           <button
             onClick={handleDownloadCsv}
@@ -738,29 +744,72 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
       {/* 5. Tab Content 1: Surat Jalan Table */}
       {activeTab === 'surat-jalan' && (
         <div className="bg-white border border-gray-200 shadow-2xs overflow-hidden">
-          <div className="px-4 py-2.5 border-b border-gray-200 bg-[#f8f9fa] flex items-center justify-between">
-            <div className="text-xs font-bold text-gray-800">
-              Daftar Surat Jalan Distribusi (DO) ({filteredPengirimanList.length} Data)
+          {/* Table Toolbar (Tampil X Data & Kolom Pencarian Utama Pengiriman) */}
+          <div className="p-3 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs border-b border-gray-200">
+            <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+              {/* Tampil X Data Per Halaman */}
+              <div className="flex items-center space-x-1.5">
+                <span className="text-gray-600 font-medium">Tampil</span>
+                <select
+                  value={itemsPerPage >= 100000 ? 'all' : itemsPerPage}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setItemsPerPage(val === 'all' ? 100000 : Number(val));
+                    setCurrentPage(1);
+                  }}
+                  className="border border-gray-300 rounded-sm px-2 py-1 bg-white text-xs font-semibold text-gray-800 focus:outline-none focus:border-[#b81d24] cursor-pointer"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                  <option value="all">All</option>
+                </select>
+                <span className="text-gray-500 hidden sm:inline">per hal.</span>
+              </div>
+              <span className="text-[11px] text-gray-500 font-medium">
+                {tableSearch.trim() ? (
+                  <>Ditemukan: <strong className="text-gray-900">{searchedPengirimanList.length}</strong> dari {filteredPengirimanList.length} data</>
+                ) : (
+                  <>Total: <strong className="text-gray-900">{filteredPengirimanList.length}</strong> surat jalan</>
+                )}
+              </span>
             </div>
-            <div className="flex items-center space-x-1.5 text-xs text-gray-600">
-              <span className="font-medium">Tampil</span>
-              <select
-                value={itemsPerPage >= 100000 ? 'all' : itemsPerPage}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setItemsPerPage(val === 'all' ? 100000 : Number(val));
-                  setCurrentPage(1);
-                }}
-                className="border border-gray-300 rounded-xs px-2 py-1 bg-white text-xs text-gray-800 font-semibold focus:outline-none focus:border-[#b81d24]"
-              >
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-                <option value="all">All</option>
-              </select>
+
+            {/* Kolom Pencarian (Search Bar) Utama Pengiriman */}
+            <div className="w-full sm:w-80 md:w-96">
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-gray-400">
+                  <Search className="w-4 h-4" />
+                </div>
+                <input
+                  id="search-laporan-pengiriman-input"
+                  type="text"
+                  placeholder="Cari cepat (No SJ, Pabrik, Driver, Plat)..."
+                  value={tableSearch}
+                  onChange={(e) => {
+                    setTableSearch(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-300 rounded-sm pl-8 pr-8 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-[#b81d24] focus:ring-1 focus:ring-[#b81d24] transition shadow-2xs"
+                />
+                {tableSearch && (
+                  <button
+                    type="button"
+                    id="btn-clear-search-laporan-pengiriman"
+                    onClick={() => {
+                      setTableSearch('');
+                      setCurrentPage(1);
+                    }}
+                    className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
+                    title="Hapus pencarian"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -845,35 +894,15 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
           </div>
 
           {/* Pagination Controls */}
-          {filteredPengirimanList.length > 0 && (
+          {searchedPengirimanList.length > 0 && (
             <div className="p-3 bg-[#f8f9fa] border-t border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center space-x-1.5 text-xs text-gray-600">
-                  <span className="font-medium">Tampil</span>
-                  <select
-                    value={itemsPerPage >= 100000 ? 'all' : itemsPerPage}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setItemsPerPage(val === 'all' ? 100000 : Number(val));
-                      setCurrentPage(1);
-                    }}
-                    className="border border-gray-300 rounded-xs px-2 py-1 bg-white text-xs text-gray-800 font-semibold focus:outline-none focus:border-[#b81d24]"
-                  >
-                    <option value={5}>5</option>
-                    <option value={10}>10</option>
-                    <option value={20}>20</option>
-                    <option value={25}>25</option>
-                    <option value={50}>50</option>
-                    <option value={100}>100</option>
-                    <option value="all">All</option>
-                  </select>
-                </div>
                 <div className="text-xs text-gray-600">
-                  Menampilkan <strong>{(currentPage - 1) * (itemsPerPage >= 100000 ? filteredPengirimanList.length : itemsPerPage) + 1}</strong> - <strong>{Math.min(currentPage * (itemsPerPage >= 100000 ? filteredPengirimanList.length : itemsPerPage), filteredPengirimanList.length)}</strong> dari <strong>{filteredPengirimanList.length}</strong> pengiriman
+                  Menampilkan <strong>{(currentPage - 1) * (itemsPerPage >= 100000 ? searchedPengirimanList.length : itemsPerPage) + 1}</strong> - <strong>{Math.min(currentPage * (itemsPerPage >= 100000 ? searchedPengirimanList.length : itemsPerPage), searchedPengirimanList.length)}</strong> dari <strong>{searchedPengirimanList.length}</strong> pengiriman
                 </div>
                 {itemsPerPage >= 100000 && (
                   <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-xs border border-emerald-200 font-semibold">
-                    Semua {filteredPengirimanList.length} data ditampilkan dalam 1 halaman
+                    Semua {searchedPengirimanList.length} data ditampilkan dalam 1 halaman
                   </span>
                 )}
               </div>
@@ -882,7 +911,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
                 <Pagination
                   currentPage={currentPage}
                   totalPages={totalPages}
-                  totalItems={filteredPengirimanList.length}
+                  totalItems={searchedPengirimanList.length}
                   itemsPerPage={itemsPerPage}
                   onPageChange={(page) => setCurrentPage(page)}
                 />

@@ -75,15 +75,15 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="w-full px-4 sm:px-6">
         <div className="flex items-center justify-between h-14">
           
-          {/* Left: Hamburger / Sidebar Toggle & App Branding */}
-          <div className="flex items-center space-x-2.5">
+          {/* Left: Hamburger / Sidebar Toggle & App Branding / Page Title */}
+          <div className="flex items-center space-x-2.5 min-w-0">
             {onToggleSidebar && (
               <button
                 type="button"
                 onClick={onToggleSidebar}
                 onMouseEnter={onMouseEnterToggle}
                 onMouseLeave={onMouseLeaveToggle}
-                className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-100 active:bg-gray-200 rounded-md transition-colors cursor-pointer flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-gray-200"
+                className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-100 active:bg-gray-200 rounded-md transition-colors cursor-pointer flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-gray-200 shrink-0"
                 title={isSidebarHidden ? "Buka Menu (Sidebar)" : "Sembunyikan Menu (Sidebar)"}
                 aria-label={isSidebarHidden ? "Buka Menu Navigasi" : "Sembunyikan Menu Navigasi"}
               >
@@ -95,9 +95,13 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            <div className="flex items-center">
-              <span className="font-bold text-base sm:text-lg tracking-tight text-gray-900">
-                Sistem Data Gudang
+            <div className="flex items-center space-x-2 min-w-0">
+              <span className="hidden sm:inline-block font-bold text-xs tracking-wider uppercase text-slate-800 bg-slate-100 px-2 py-0.5 rounded-xs border border-slate-200 shrink-0">
+                PR. Sekar Maju Sejahtera
+              </span>
+              <span className="text-gray-300 hidden sm:inline-block">/</span>
+              <span className="font-bold text-sm sm:text-base text-gray-900 tracking-tight truncate max-w-[200px] sm:max-w-[340px] md:max-w-[480px]" title={pageTitle}>
+                {pageTitle}
               </span>
             </div>
           </div>

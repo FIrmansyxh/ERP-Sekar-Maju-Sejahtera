@@ -25,7 +25,8 @@ import {
   ChevronDown,
   ChevronUp,
   ChevronRight,
-  ChevronLeft
+  ChevronLeft,
+  X
 } from 'lucide-react';
 import { Barang, Gudang, Petani, TransaksiPembelian, TabelHarga, UserRole } from '../../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell } from 'recharts';
@@ -78,6 +79,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
   const [filterGrade, setFilterGrade] = useState<string>('ALL');
   const [filterStatusStok, setFilterStatusStok] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [tableSearch, setTableSearch] = useState<string>('');
   const [filterMinBerat, setFilterMinBerat] = useState<string>('');
   const [filterMaxBerat, setFilterMaxBerat] = useState<string>('');
   const [filterMinHarga, setFilterMinHarga] = useState<string>('');
@@ -511,16 +513,33 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
     return Object.values(map).sort((a, b) => a.grade.localeCompare(b.grade));
   }, [sortedData]);
 
+  // Real-time table search within sorted results
+  const searchedData = useMemo(() => {
+    if (!tableSearch.trim()) return sortedData;
+    const q = tableSearch.toLowerCase().trim();
+    return sortedData.filter((item) => {
+      const matchNoBal = (item.no_bal || '').toLowerCase().includes(q);
+      const matchKodeBal = (item.kode_bal || '').toLowerCase().includes(q);
+      const matchBarangId = (item.barang_id || '').toLowerCase().includes(q);
+      const matchGrade = (item.kode_grade || '').toLowerCase().includes(q);
+      const matchPetani = (item.nama_petani || item.petani_id || '').toLowerCase().includes(q);
+      const matchGudang = (item.lokasi_gudang || '').toLowerCase().includes(q);
+      const matchSJ = (item.no_surat_jalan || '').toLowerCase().includes(q);
+      const matchPabrik = (item.tujuan_pabrik || '').toLowerCase().includes(q);
+      return matchNoBal || matchKodeBal || matchBarangId || matchGrade || matchPetani || matchGudang || matchSJ || matchPabrik;
+    });
+  }, [sortedData, tableSearch]);
+
   // Pagination Slice
   const isShowAll = itemsPerPage === -1;
-  const totalPages = isShowAll ? 1 : Math.max(1, Math.ceil(sortedData.length / itemsPerPage));
+  const totalPages = isShowAll ? 1 : Math.max(1, Math.ceil(searchedData.length / itemsPerPage));
   const paginatedData = useMemo(() => {
     if (itemsPerPage === -1) {
-      return sortedData;
+      return searchedData;
     }
     const startIdx = (currentPage - 1) * itemsPerPage;
-    return sortedData.slice(startIdx, startIdx + itemsPerPage);
-  }, [sortedData, currentPage, itemsPerPage]);
+    return searchedData.slice(startIdx, startIdx + itemsPerPage);
+  }, [searchedData, currentPage, itemsPerPage]);
 
   // Helper Badge Color for Grade
   const getGradeBadgeClass = (grade: string) => {
@@ -1161,26 +1180,42 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
       )}
 
       {/* 4. Main Table: Detail Setiap Bal */}
-      <div className="bg-white border border-gray-200 rounded-none shadow-xs overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-sm shadow-xs overflow-hidden">
         
         {/* Table Header Info Bar */}
-        <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
-          <div className="flex items-center space-x-2 text-gray-700 flex-wrap">
-            <span>Menampilkan data</span>
-            <strong className="text-gray-900 font-mono font-bold">
-              {sortedData.length > 0 
-                ? (itemsPerPage === -1 
-                    ? `1 - ${sortedData.length}` 
-                    : `${(currentPage - 1) * itemsPerPage + 1} - ${Math.min(currentPage * itemsPerPage, sortedData.length)}`
-                  ) 
-                : 0}
-            </strong>
-            <span>dari</span>
-            <strong className="text-gray-900 font-mono font-bold">{sortedData.length}</strong>
-            <span>bal terfilter</span>
+        <div className="p-3 bg-white border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+            <div className="flex items-center space-x-1.5">
+              <span className="text-gray-600 font-medium">Tampil</span>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="px-2 py-1 bg-white border border-gray-300 rounded-sm text-xs font-semibold text-gray-800 shadow-2xs focus:outline-hidden focus:border-[#b81d24] cursor-pointer"
+              >
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={-1}>All</option>
+              </select>
+              <span className="text-gray-500 hidden sm:inline">per hal.</span>
+            </div>
+
+            <span className="text-[11px] text-gray-500 font-medium">
+              {tableSearch.trim() ? (
+                <>Ditemukan: <strong className="text-gray-900">{searchedData.length}</strong> dari {sortedData.length} bal</>
+              ) : (
+                <>Total: <strong className="text-gray-900">{sortedData.length}</strong> bal terfilter</>
+              )}
+            </span>
+
             {sortConfigs.length > 0 && (
-              <div className="inline-flex items-center space-x-1.5 ml-2 flex-wrap gap-y-1">
-                <span className="text-[10px] text-gray-500 font-bold uppercase mr-1">Urutan:</span>
+              <div className="inline-flex items-center space-x-1.5 ml-1 flex-wrap gap-y-1">
+                <span className="text-[10px] text-gray-500 font-bold uppercase mr-0.5">Urutan:</span>
                 {sortConfigs.map((config, idx) => (
                   <span key={config.field} className="px-1.5 py-0.5 bg-amber-50 text-amber-900 border border-amber-200 text-[10px] font-bold rounded-xs flex items-center space-x-1">
                     <span>{idx + 1}. {config.field.replace(/_/g, ' ').toUpperCase()}</span>
@@ -1202,30 +1237,38 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
             )}
           </div>
 
-          <div className="flex items-center space-x-3 text-xs text-gray-700">
-            {/* Top View Selector Dropdown */}
-            <div className="flex items-center space-x-1.5">
-              <span className="text-gray-600 font-medium">Tampil</span>
-              <select
-                value={itemsPerPage}
+          {/* Kolom Pencarian (Search Bar) Utama Bal */}
+          <div className="w-full sm:w-80 md:w-96">
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-gray-400">
+                <Search className="w-4 h-4" />
+              </div>
+              <input
+                id="search-laporan-bal-table-input"
+                type="text"
+                placeholder="Cari cepat (No Bal, Grade, Petani, Gudang, DO)..."
+                value={tableSearch}
                 onChange={(e) => {
-                  setItemsPerPage(Number(e.target.value));
+                  setTableSearch(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="px-2 py-1 bg-white border border-gray-300 rounded-xs text-xs font-semibold text-gray-800 shadow-2xs focus:outline-hidden focus:border-red-500 cursor-pointer"
-              >
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-                <option value={-1}>All</option>
-              </select>
+                className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-300 rounded-sm pl-8 pr-8 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-[#b81d24] focus:ring-1 focus:ring-[#b81d24] transition shadow-2xs"
+              />
+              {tableSearch && (
+                <button
+                  type="button"
+                  id="btn-clear-search-laporan-bal-table"
+                  onClick={() => {
+                    setTableSearch('');
+                    setCurrentPage(1);
+                  }}
+                  className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
+                  title="Hapus pencarian"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
-
-            <span className="text-[11px] text-gray-400 italic hidden md:inline">
-              *Klik header kolom untuk mengurutkan (▲ / ▼)
-            </span>
           </div>
         </div>
 
@@ -1521,7 +1564,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
         </div>
 
         {/* Pagination Bar */}
-        {sortedData.length > 0 && (
+        {searchedData.length > 0 && (
           <div className="p-3 bg-[#f8f9fa] border-t border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
             <div className="flex items-center space-x-2">
               <span className="text-gray-600 font-medium">Tampil</span>
@@ -1531,7 +1574,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                   setItemsPerPage(Number(e.target.value));
                   setCurrentPage(1);
                 }}
-                className="px-2 py-1 bg-white border border-gray-300 rounded-xs text-xs font-semibold text-gray-800 shadow-2xs focus:outline-hidden focus:border-red-500 cursor-pointer"
+                className="px-2 py-1 bg-white border border-gray-300 rounded-sm text-xs font-semibold text-gray-800 shadow-2xs focus:outline-hidden focus:border-[#b81d24] cursor-pointer"
               >
                 <option value={5}>5</option>
                 <option value={10}>10</option>
@@ -1542,7 +1585,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
               </select>
               {itemsPerPage === -1 && (
                 <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-xs border border-emerald-200 font-semibold">
-                  Semua {sortedData.length} bal ditampilkan dalam 1 halaman
+                  Semua {searchedData.length} bal ditampilkan dalam 1 halaman
                 </span>
               )}
             </div>

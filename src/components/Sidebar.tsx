@@ -30,7 +30,6 @@ interface SidebarProps {
   pengirimanCount?: number;
   hargaJualCount?: number;
   hargaCount?: number;
-  gudangCount?: number;
   userCount?: number;
   isCollapsed?: boolean;
   userRole?: UserRole;
@@ -80,13 +79,6 @@ export const MODULES_CONFIG = [
     moduleKey: 'laporan-pembelian',
   },
   {
-    id: 'modul-6-laporan-gudang',
-    title: 'Laporan Okupansi & Stok Gudang',
-    subtitle: 'Kapasitas & Inventaris Tembakau',
-    icon: 'Warehouse',
-    moduleKey: 'laporan-gudang',
-  },
-  {
     id: 'modul-6-laporan-petani',
     title: 'Laporan Petani & Setoran',
     subtitle: 'Rekapitulasi Penyetor & Nilai Pembelian',
@@ -120,13 +112,6 @@ export const MODULES_CONFIG = [
     subtitle: 'Kode, Harga Jual & Tgl Berlaku',
     icon: 'DollarSign',
     moduleKey: 'harga-jual',
-  },
-  {
-    id: 'modul-7-gudang',
-    title: 'Master Data Gudang',
-    subtitle: 'Lokasi Simpan & Kapasitas',
-    icon: 'Warehouse',
-    moduleKey: 'gudang',
   },
   {
     id: 'modul-2-barang',
@@ -203,7 +188,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   pengirimanCount = 0,
   hargaJualCount = 0,
   hargaCount = 0,
-  gudangCount = 0,
   userCount = 0,
   isCollapsed = false,
   userRole = 'superadmin',
@@ -221,8 +205,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const checkAccess = (modId: string) => hasModuleAccess(userRole, modId);
 
-  const canSeeReport = checkAccess('modul-6-dashboard-analytic') || checkAccess('modul-6-laporan-bal') || checkAccess('modul-6-laporan-grade') || checkAccess('modul-6-laporan-harga-jual') || checkAccess('modul-6-laporan-pembelian') || checkAccess('modul-6-laporan-gudang') || checkAccess('modul-6-laporan-petani') || checkAccess('modul-6-laporan-pengiriman');
-  const canSeeMaster = checkAccess('modul-1-petani') || checkAccess('modul-3-harga') || checkAccess('modul-3-harga-jual') || checkAccess('modul-7-gudang') || checkAccess('modul-2-barang');
+  const canSeeReport = checkAccess('modul-6-dashboard-analytic') || checkAccess('modul-6-laporan-bal') || checkAccess('modul-6-laporan-grade') || checkAccess('modul-6-laporan-harga-jual') || checkAccess('modul-6-laporan-pembelian') || checkAccess('modul-6-laporan-petani') || checkAccess('modul-6-laporan-pengiriman');
+  const canSeeMaster = checkAccess('modul-1-petani') || checkAccess('modul-3-harga') || checkAccess('modul-3-harga-jual') || checkAccess('modul-2-barang');
   const canSeePembelian = checkAccess('modul-0-sortir') || checkAccess('modul-0-timbangan') || checkAccess('modul-0-kasir') || checkAccess('modul-0-transaksi');
   const canSeePengiriman = checkAccess('modul-5-pengiriman') || checkAccess('modul-4-sample') || checkAccess('modul-status-batch');
   const canSeeUsers = checkAccess('modul-users');
@@ -233,11 +217,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     'modul-6-laporan-grade',
     'modul-6-laporan-harga-jual',
     'modul-6-laporan-pembelian',
-    'modul-6-laporan-gudang',
     'modul-6-laporan-petani',
     'modul-6-laporan-pengiriman',
   ].includes(activeModuleId);
-  const isMasterActive = ['modul-1-petani', 'modul-3-harga', 'modul-3-harga-jual', 'modul-7-gudang', 'modul-2-barang'].includes(activeModuleId);
+  const isMasterActive = ['modul-1-petani', 'modul-3-harga', 'modul-3-harga-jual', 'modul-2-barang'].includes(activeModuleId);
   const isPembelianActive = ['modul-0-sortir', 'modul-0-timbangan', 'modul-0-kasir', 'modul-0-transaksi'].includes(activeModuleId);
   const isPengirimanActive = ['modul-5-pengiriman', 'modul-4-sample', 'modul-status-batch'].includes(activeModuleId);
   const isUsersActive = activeModuleId === 'modul-users';
@@ -319,6 +302,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     }`}
                   >
                     <span>Dashboard Analytic</span>
+                  </button>
+                )}
+
+                {checkAccess('modul-6-laporan-bal') && (
+                  <button
+                    onClick={() => onSelectModule('modul-6-laporan-bal')}
+                    className={`w-full text-left py-1.5 px-2 rounded-xs flex items-center justify-between cursor-pointer ${
+                      activeModuleId === 'modul-6-laporan-bal'
+                        ? 'text-slate-900 font-semibold bg-slate-100'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span>Laporan Bal</span>
                   </button>
                 )}
 
@@ -461,22 +457,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <span>Master Harga Jual</span>
                     <span className="text-[10px] font-mono font-medium px-1 bg-slate-100 text-slate-600 rounded-xs">
                       {hargaJualCount} Kode
-                    </span>
-                  </button>
-                )}
-
-                {checkAccess('modul-7-gudang') && (
-                  <button
-                    onClick={() => onSelectModule('modul-7-gudang')}
-                    className={`w-full text-left py-1.5 px-2 rounded-xs flex items-center justify-between cursor-pointer ${
-                      activeModuleId === 'modul-7-gudang'
-                        ? 'text-slate-900 font-semibold bg-slate-100'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                    }`}
-                  >
-                    <span>Master Data Gudang</span>
-                    <span className="text-[10px] font-mono font-medium px-1 bg-slate-100 text-slate-600 rounded-xs">
-                      {gudangCount}
                     </span>
                   </button>
                 )}

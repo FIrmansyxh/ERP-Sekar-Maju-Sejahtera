@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Package, 
   Edit3, 
@@ -6,7 +6,9 @@ import {
   Calendar, 
   User, 
   Scale,
-  ArrowUpRight
+  ArrowUpRight,
+  Search,
+  X
 } from 'lucide-react';
 import { Barang, StatusStokBarang } from '../../types';
 import { GRADE_COLOR_MAP } from '../../data/initialHargaData';
@@ -22,7 +24,20 @@ export const BarangTable: React.FC<BarangTableProps> = ({
   barangList,
   onEditLocation,
 }) => {
-  const displayItems = items || barangList || [];
+  const [searchQuery, setSearchQuery] = useState('');
+  const allItems = items || barangList || [];
+
+  const displayItems = useMemo(() => {
+    if (!searchQuery.trim()) return allItems;
+    const q = searchQuery.toLowerCase().trim();
+    return allItems.filter(b => 
+      b.no_bal.toLowerCase().includes(q) ||
+      b.barang_id.toLowerCase().includes(q) ||
+      (b.nama_petani && b.nama_petani.toLowerCase().includes(q)) ||
+      (b.lokasi_gudang && b.lokasi_gudang.toLowerCase().includes(q)) ||
+      b.kode_grade.toLowerCase().includes(q)
+    );
+  }, [allItems, searchQuery]);
 
   const getStatusBadge = (status: StatusStokBarang) => {
     switch (status) {
@@ -51,6 +66,43 @@ export const BarangTable: React.FC<BarangTableProps> = ({
 
   return (
     <div className="bg-white rounded-none border border-gray-200 shadow-2xs overflow-hidden">
+      {/* Kolom Pencarian (Search Bar) di atas tabel */}
+      <div className="p-3 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs border-b border-gray-200">
+        <div className="text-gray-600 font-medium">
+          {searchQuery.trim() ? (
+            <span>
+              Ditemukan: <strong className="text-gray-900">{displayItems.length}</strong> dari {allItems.length} barang
+            </span>
+          ) : (
+            <span>Total: <strong className="text-gray-900">{allItems.length}</strong> barang</span>
+          )}
+        </div>
+        <div className="w-full sm:w-80">
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-gray-400">
+              <Search className="w-4 h-4" />
+            </div>
+            <input
+              type="text"
+              placeholder="Cari No Bal, ID, Petani, Lokasi..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-300 rounded-sm pl-8 pr-8 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-[#b81d24] focus:ring-1 focus:ring-[#b81d24] transition shadow-2xs"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
+                title="Hapus pencarian"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
       <div className="overflow-x-auto">
         <table className="w-full text-left text-xs">
           <thead className="bg-[#f8f9fa] text-gray-700 font-bold text-[11px] border-b border-gray-200">

@@ -646,34 +646,65 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
           </div>
         </div>
 
-        {/* Table Pagination Size Control & Live Count */}
+        {/* Table Pagination Size Control, Live Count & Search Bar Utama */}
         <div className="p-3 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs border-b border-gray-100">
-          <div className="flex items-center space-x-2">
-            <span className="text-gray-600">Tampil</span>
-            <select
-              value={itemsPerPage}
-              onChange={(e) => {
-                setItemsPerPage(Number(e.target.value));
-                setCurrentPage(1);
-              }}
-              className="border border-gray-300 rounded-sm px-2 py-1 bg-white text-xs text-gray-800 focus:outline-none"
-            >
-              <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-            <span className="text-gray-600">Data Per Halaman</span>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="flex items-center space-x-1.5">
+              <span className="text-gray-600 font-medium">Tampil</span>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="border border-gray-300 rounded-sm px-2 py-1 bg-white text-xs font-semibold text-gray-800 focus:outline-none focus:border-[#b81d24] cursor-pointer"
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+              <span className="text-gray-500">per hal.</span>
+            </div>
+            {searchQuery.trim() && (
+              <span className="text-[11px] text-gray-500 font-medium">
+                Ditemukan: <strong className="text-gray-900">{filteredData.length}</strong> transaksi
+              </span>
+            )}
           </div>
 
-          <div className="text-[11px] text-gray-500">
-            {startDate || endDate || searchQuery || gradeFilter !== 'all' || statusFilter !== 'all' ? (
-              <span className="text-[#b81d24] font-medium">
-                Filter aktif • Menampilkan {filteredData.length} transaksi
-              </span>
-            ) : (
-              <span className="italic">* Format Tanggal YYYY-MM-DD • Pengelompokan tanggal rapi & kronologis</span>
-            )}
+          {/* Kolom Pencarian (Search Bar) Utama Transaksi */}
+          <div className="w-full sm:w-80 md:w-96">
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-gray-400">
+                <Search className="w-4 h-4" />
+              </div>
+              <input
+                id="search-transaksi-table-input"
+                type="text"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setCurrentPage(1);
+                }}
+                placeholder="Cari transaksi (No Kupon, ID, Petani, Grade)..."
+                className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-300 rounded-sm pl-8 pr-8 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-[#b81d24] focus:ring-1 focus:ring-[#b81d24] transition shadow-2xs"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  id="btn-clear-search-transaksi-table"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setCurrentPage(1);
+                  }}
+                  className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
+                  title="Hapus pencarian"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
 

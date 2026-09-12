@@ -6,7 +6,8 @@ import {
   Search,
   ArrowUpDown,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  X
 } from 'lucide-react';
 import { Barang } from '../../types';
 import { formatNumber, formatRupiah } from '../../utils/formatters';
@@ -192,19 +193,42 @@ export const LaporanKodeBalView: React.FC<LaporanKodeBalViewProps> = ({
         </div>
       </div>
 
-      <div className="bg-white rounded-md shadow-xs border border-gray-200 overflow-hidden">
-        <div className="p-4 border-b border-gray-200 bg-slate-50 flex justify-between items-center">
-          <div className="relative w-64">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search className="h-4 w-4 text-gray-400" />
+      <div className="bg-white rounded-none shadow-[0_1px_2px_rgba(0,0,0,0.02)] border border-gray-200 overflow-hidden">
+        <div className="p-3 border-b border-gray-200 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center space-x-2 text-gray-500 font-medium">
+            <span>Total: <strong className="text-gray-900">{filteredAndSortedData.length}</strong> Kode Bal</span>
+            {searchQuery.trim() && (
+              <span className="text-[11px] text-gray-500 font-medium">
+                (Hasil pencarian)
+              </span>
+            )}
+          </div>
+
+          <div className="w-full sm:w-80 md:w-96">
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-gray-400">
+                <Search className="w-4 h-4" />
+              </div>
+              <input
+                id="search-laporan-kode-bal"
+                type="text"
+                placeholder="Cari Kode Bal..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-300 rounded-sm pl-8 pr-8 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-[#b81d24] focus:ring-1 focus:ring-[#b81d24] transition shadow-2xs"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  id="btn-clear-search-kode-bal"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
+                  title="Hapus pencarian"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
-            <input
-              type="text"
-              placeholder="Cari Kode Bal..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 pr-3 py-1.5 w-full border border-gray-300 rounded-sm text-sm focus:outline-none focus:ring-1 focus:ring-[#b81d24] focus:border-[#b81d24]"
-            />
           </div>
         </div>
 

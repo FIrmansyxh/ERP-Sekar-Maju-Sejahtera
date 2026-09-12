@@ -53,6 +53,9 @@ import { HomeDashboardView } from './components/home/HomeDashboardView';
 //  Dashboard Laporan & Analytic ERP
 import { DashboardAnalyticView } from './components/laporan/DashboardAnalyticView';
 
+// Laporan Bal Tembakau
+import { LaporanBalView } from './components/laporan/LaporanBalView';
+
 // Laporan Detail Bal Tembakau
 import { LaporanKodeBalView } from './components/laporan/LaporanKodeBalView';
 
@@ -79,9 +82,6 @@ import { PetaniImportExportModal } from './components/petani/PetaniImportExportM
 
 // PRD 4.2: Master Harga Beli
 import { HargaManagement } from './components/harga/HargaManagement';
-
-// PRD 4.3: Master Data Gudang
-import { GudangManagement } from './components/gudang/GudangManagement';
 
 // PRD 5.6: Inventaris Bal Gudang
 import { BarangManagement } from './components/barang/BarangManagement';
@@ -439,37 +439,6 @@ export default function App() {
     showToast(`Kata sandi untuk pengguna "${target?.nama_lengkap}" berhasil direset.`);
   };
 
-  // --- Gudang Handlers ---
-  const handleSaveGudang = (newGudang: Gudang) => {
-    const exists = gudangList.some((g) => g.gudang_id === newGudang.gudang_id);
-    let updated: Gudang[];
-    const displayName = newGudang.nama_gudang || newGudang.nama_lokasi;
-    if (exists) {
-      updated = gudangList.map((g) => g.gudang_id === newGudang.gudang_id ? newGudang : g);
-      showToast(`Data fasilitas gudang "${displayName}" berhasil diperbarui.`);
-    } else {
-      updated = [newGudang, ...gudangList];
-      showToast(`Gudang baru "${displayName}" (${newGudang.kode_gudang}) berhasil didaftarkan!`);
-    }
-    setGudangList(updated);
-    saveGudangData(updated);
-  };
-
-  const handleUpdateGudang = (updatedGudang: Gudang) => {
-    const updated = gudangList.map((g) => g.gudang_id === updatedGudang.gudang_id ? updatedGudang : g);
-    setGudangList(updated);
-    saveGudangData(updated);
-    showToast(`Gudang "${updatedGudang.nama_gudang || updatedGudang.nama_lokasi}" berhasil diperbarui.`);
-  };
-
-  const handleDeleteGudang = (gudangId: string) => {
-    const target = gudangList.find((g) => g.gudang_id === gudangId);
-    const updated = gudangList.filter((g) => g.gudang_id !== gudangId);
-    setGudangList(updated);
-    saveGudangData(updated);
-    showToast(`Fasilitas gudang "${target?.nama_gudang || target?.nama_lokasi || gudangId}" berhasil dihapus.`);
-  };
-
   // --- PRD 4.1: Petani Handlers ---
   const handleSavePetani = (petaniData: Petani) => {
     let updated: Petani[];
@@ -514,15 +483,37 @@ export default function App() {
       if (p.petani_id === petaniId) {
         return {
           ...p,
-                  };
+          petani_id: newCardNumber,
+        };
       }
       return p;
     });
 
     setPetaniList(updated);
     savePetaniData(updated);
+
+    // Sinkronisasi id petani pada data transaksi jika ada
+    const updatedTx = transaksiList.map((t) => {
+      if (t.petani_id === petaniId) {
+        return { ...t, petani_id: newCardNumber };
+      }
+      return t;
+    });
+    setTransaksiList(updatedTx);
+    saveTransaksiData(updatedTx);
+
+    // Sinkronisasi id petani pada data barang jika ada
+    const updatedBarang = barangList.map((b) => {
+      if (b.petani_id === petaniId) {
+        return { ...b, petani_id: newCardNumber };
+      }
+      return b;
+    });
+    setBarangList(updatedBarang);
+    saveBarangData(updatedBarang);
+
     setResettingCardPetani(null);
-    showToast(`ID Petani petani berhasil diubah menjadi ${newCardNumber}`);
+    showToast(`ID Petani berhasil diubah menjadi ${newCardNumber}`);
   };
 
   const handleImportSuccess = (imported: Petani[]) => {
@@ -987,6 +978,8 @@ export default function App() {
         return { title: 'Dasbor Menu Utama', breadcrumb: 'PR. SEKAR MAJU SEJAHTERA / Beranda' };
       case 'modul-6-dashboard-analytic':
         return { title: 'Dashboard Laporan & Analytic ERP', breadcrumb: 'Beranda / Dashboard Analytic' };
+      case 'modul-6-laporan-bal':
+        return { title: 'Laporan Bal Tembakau', breadcrumb: 'Beranda / Laporan Bal' };
       case 'modul-6-laporan-kode-bal':
         return { title: 'Laporan Kode Bal', breadcrumb: 'Beranda / Laporan Kode Bal' };
       case 'modul-6-laporan-grade':
@@ -1001,8 +994,8 @@ export default function App() {
         return { title: 'Master Data Petani', breadcrumb: 'Beranda / Master Petani' };
       case 'modul-3-harga':
         return { title: 'Master Harga Beli', breadcrumb: 'Beranda / Master Harga' };
-      case 'modul-7-gudang':
-        return { title: 'Data Master Gudang', breadcrumb: 'Beranda / Master Gudang' };
+      case 'modul-3-harga-jual':
+        return { title: 'Master Harga Jual Pabrik', breadcrumb: 'Beranda / Master Harga Jual' };
       case 'modul-2-barang':
         return { title: 'Inventaris Bal Gudang', breadcrumb: 'Beranda / Inventaris Bal' };
       case 'modul-0-sortir':
@@ -1016,6 +1009,8 @@ export default function App() {
         return { title: 'Pengiriman Reguler (DO Luar)', breadcrumb: 'Beranda / Pengiriman DO' };
       case 'modul-4-sample':
         return { title: 'Pengiriman Sample', breadcrumb: 'Beranda / Pengiriman Sample' };
+      case 'modul-status-batch':
+        return { title: 'Status & Detail Batch Sample', breadcrumb: 'Beranda / Status Batch' };
       case 'modul-users':
         return { title: 'Manajemen Pengguna (RBAC)', breadcrumb: 'Beranda / Manajemen Pengguna' };
       default:
@@ -1065,6 +1060,8 @@ export default function App() {
         totalNonaktif={totalNonaktif}
         onResetData={handleResetToDemo}
         onOpenRoadmap={() => {}}
+        pageTitle={pageInfo.title}
+        pageBreadcrumb={pageInfo.breadcrumb}
         currentUser={currentUser}
         onLogout={handleLogout}
         onOpenUsers={() => handleSelectModule('modul-users')}
@@ -1116,7 +1113,6 @@ export default function App() {
               transaksiCount={transaksiList.length}
               sampleCount={sampleList.length}
               pengirimanCount={pengirimanList.length}
-              gudangCount={gudangList.length}
               hargaJualCount={hargaJualList.length}
               hargaCount={hargaList.length}
               userCount={userList.length}
@@ -1153,6 +1149,20 @@ export default function App() {
                 hargaList={hargaList}
                 userRole={currentRole}
                 onNavigateToModule={(modId) => handleSelectModule(modId)}
+              />
+            )}
+
+            {/* Laporan Bal Tembakau */}
+            {activeModuleId === 'modul-6-laporan-bal' && (
+              <LaporanBalView
+                barangList={barangList}
+                gudangList={gudangList}
+                petaniList={petaniList}
+                transaksiList={transaksiList}
+                hargaList={hargaList}
+                userRole={currentRole}
+                onNavigateToBarang={() => handleSelectModule('modul-2-barang')}
+                onNavigateToTransaksi={() => handleSelectModule('modul-0-transaksi')}
               />
             )}
 
@@ -1196,7 +1206,6 @@ export default function App() {
                 transaksiList={transaksiList}
                 barangList={barangList}
                 userRole={currentRole}
-                onNavigateToPetani={() => handleSelectModule('modul-1-petani')}
                 onNavigateToTransaksi={() => handleSelectModule('modul-0-transaksi')}
               />
             )}
@@ -1209,7 +1218,6 @@ export default function App() {
                 barangList={barangList}
                 gudangList={gudangList}
                 userRole={currentRole}
-                onNavigateToPengiriman={() => handleSelectModule('modul-5-pengiriman')}
                 onNavigateToSample={() => handleSelectModule('modul-4-sample')}
                 onNavigateToBarang={() => handleSelectModule('modul-2-barang')}
               />
@@ -1245,18 +1253,6 @@ export default function App() {
                 userRole={currentRole}
                 onSaveNewPrice={handleSaveNewPrice}
                 onDeleteHarga={handleDeleteHarga}
-              />
-            )}
-
-            {/* PRD 4.3: Data Master Gudang */}
-            {activeModuleId === 'modul-7-gudang' && (
-              <GudangManagement
-                gudangList={gudangList}
-                barangList={barangList}
-                userRole={currentRole}
-                onSaveGudang={handleSaveGudang}
-                onUpdateGudang={handleUpdateGudang}
-                onDeleteGudang={handleDeleteGudang}
               />
             )}
 

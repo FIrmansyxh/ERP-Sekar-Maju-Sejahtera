@@ -20,14 +20,12 @@ export const RoleMatrixModal: React.FC<RoleMatrixModalProps> = ({
     { id: 'modul-0-kasir', name: 'Kasir & Nota Pembayaran' },
     { id: 'modul-1-petani', name: 'Master Petani & Kartu' },
     { id: 'modul-3-harga', name: 'Master Kualitas & Harga' },
-    { id: 'modul-7-gudang', name: 'Master Data Gudang' },
     { id: 'modul-2-barang', name: 'Inventaris Bal Gudang' },
     { id: 'modul-5-pengiriman', name: 'Pengiriman Reguler (DO)' },
     { id: 'modul-4-sample', name: 'Pengiriman Sample' },
     { id: 'modul-6-dashboard-analytic', name: 'Dashboard Analytic ERP' },
     { id: 'modul-6-laporan-grade', name: 'Laporan Mutu Grade' },
     { id: 'modul-6-laporan-pembelian', name: 'Laporan Pembelian Barang' },
-    { id: 'modul-6-laporan-gudang', name: 'Laporan Okupansi & Stok Gudang' },
     { id: 'modul-6-laporan-petani', name: 'Laporan Petani & Setoran' },
     { id: 'modul-6-laporan-pengiriman', name: 'Laporan Pengiriman & DO' },
     { id: 'modul-users', name: 'Manajemen Pengguna (RBAC)' },
@@ -35,7 +33,7 @@ export const RoleMatrixModal: React.FC<RoleMatrixModalProps> = ({
 
   const capabilitiesList = [
     { key: 'canManageUsers', label: 'Kelola Pengguna & Hak Akses (RBAC)' },
-    { key: 'canManageMasterData', label: 'Kelola Master Data (Petani, Harga, Gudang, Bal)' },
+    { key: 'canManageMasterData', label: 'Kelola Master Data (Petani, Harga, Bal)' },
     { key: 'canCreatePetani', label: 'Daftar / Edit Petani Baru' },
     { key: 'canInputTransaksi', label: 'Input Proses Sortir / Timbang Intake' },
     { key: 'canManageStok', label: 'Manajemen Stok Bal & Cetak Label' },

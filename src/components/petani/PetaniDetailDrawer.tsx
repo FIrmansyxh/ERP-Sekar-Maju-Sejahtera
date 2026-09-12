@@ -343,9 +343,15 @@ export const PetaniDetailDrawer: React.FC<PetaniDetailDrawerProps> = ({
         isOpen={isDeleteConfirmOpen}
         title="Konfirmasi Hapus Data Petani"
         message={`Apakah Anda yakin ingin menghapus data petani "${petani.nama_petani}" (${petani.petani_id}) secara permanen?`}
-        detail="Tindakan ini akan menghapus master data registrasi petani dari sistem."
+        detail={
+          realTransactions.length > 0
+            ? `⚠️ PERINGATAN KRITIS: Petani ini memiliki ${realTransactions.length} transaksi pembelian tercatat. Menghapus data petani ini dapat mempengaruhi integritas data dan riwayat laporan pembelian!`
+            : `Perhatian: Tindakan ini tidak dapat dibatalkan dan akan menghapus seluruh data registrasi petani "${petani.nama_petani}" dari sistem master data.`
+        }
         variant="danger"
-        confirmText="Hapus Permanen"
+        isDanger={true}
+        confirmText="Ya, Hapus Permanen"
+        cancelText="Batal"
         onConfirm={() => {
           if (onDeletePetani) {
             onDeletePetani(petani);

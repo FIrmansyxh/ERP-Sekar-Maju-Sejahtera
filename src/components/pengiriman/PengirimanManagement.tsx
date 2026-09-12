@@ -2250,22 +2250,41 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
             
             {/* Filter Toolbar */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-200 pb-3">
-              <div className="relative min-w-[260px]">
-                <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-2.5" />
-                <input
-                  type="text"
-                  placeholder="Cari No. Surat Jalan / Tujuan / Driver / Batch..."
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="w-full pl-8 pr-3 py-1.5 text-xs bg-gray-50 border border-gray-300 rounded-xs focus:ring-1 focus:ring-gray-700"
-                />
+              <div className="w-full sm:w-80 md:w-96">
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-gray-400">
+                    <Search className="w-4 h-4" />
+                  </div>
+                  <input
+                    id="search-pengiriman-do-input"
+                    type="text"
+                    placeholder="Cari No. Surat Jalan / Tujuan / Driver / Batch..."
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-300 rounded-sm pl-8 pr-8 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-[#b81d24] focus:ring-1 focus:ring-[#b81d24] transition shadow-2xs"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      id="btn-clear-search-pengiriman"
+                      onClick={() => {
+                        setSearchQuery('');
+                        setCurrentPage(1);
+                      }}
+                      className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
+                      title="Hapus pencarian"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
 
-              <div className="text-xs text-gray-500 font-mono">
-                Menampilkan {paginatedPengiriman.length} dari {filteredPengiriman.length} Surat Jalan
+              <div className="text-xs text-gray-500 font-medium">
+                Menampilkan <strong className="text-gray-900">{paginatedPengiriman.length}</strong> dari <strong className="text-gray-900">{filteredPengiriman.length}</strong> Surat Jalan
               </div>
             </div>
 

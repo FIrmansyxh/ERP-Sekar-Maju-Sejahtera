@@ -17,7 +17,8 @@ import {
   ArrowDown,
   Scale,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  X
 } from 'lucide-react';
 
 import { TransaksiPembelian, Petani } from '../../types';
@@ -164,6 +165,9 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
     noBall: '',
     supplier: '',
   });
+
+  // Table Real-Time Quick Search
+  const [tableSearch, setTableSearch] = useState('');
 
   // PDF Generation State (Direct Download)
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
@@ -475,6 +479,22 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
       return 0;
     });
   }, [filteredData, sortConfigs]);
+
+  // Real-time table search within sorted results
+  const searchedData = useMemo(() => {
+    if (!tableSearch.trim()) return sortedData;
+    const q = tableSearch.toLowerCase().trim();
+    return sortedData.filter((row) => {
+      const matchKupon = (row.no_kupon || '').toLowerCase().includes(q);
+      const matchPetani = (row.nama_petani || '').toLowerCase().includes(q);
+      const matchNoBal = (row.no_bal || '').toLowerCase().includes(q);
+      const matchGrade = (row.kode_grade || '').toLowerCase().includes(q);
+      const matchItems = row.items?.some(
+        it => (it.no_bal || '').toLowerCase().includes(q) || (it.kode_grade || '').toLowerCase().includes(q)
+      );
+      return matchKupon || matchPetani || matchNoBal || matchGrade || matchItems;
+    });
+  }, [sortedData, tableSearch]);
 
   // Totals Calculation 
   const totals = useMemo(() => {
@@ -1135,19 +1155,50 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
 
       {/* Data Table Card  */}
       <div className="bg-white border border-gray-200 shadow-xs overflow-hidden">
-        <div className="p-3 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2 bg-gray-50/50">
-          <div className="flex items-center space-x-2">
+        <div className="p-3 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white text-xs">
+          <div className="flex flex-wrap items-center gap-2.5">
             <span className="text-xs font-bold text-gray-800 uppercase tracking-wider">
               Tabel Rekapitulasi Pembelian Barang
             </span>
-            <span className="text-xs text-gray-500">
-              ({sortedData.length} baris data • {totals.totalBal} Bal • {totals.totalNetto.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg Netto)
+            <span className="text-[11px] text-gray-500 font-medium">
+              {tableSearch.trim() ? (
+                <>Ditemukan: <strong className="text-gray-900">{searchedData.length}</strong> dari {sortedData.length} baris</>
+              ) : (
+                <>Total: <strong className="text-gray-900">{sortedData.length}</strong> baris data ({totals.totalBal} Bal • {totals.totalNetto.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg Netto)</>
+              )}
+            </span>
+            <span className="text-[10px] text-gray-400 italic hidden md:inline">
+              • Potongan kuli Rp 7.000/bal
             </span>
           </div>
           
-          <span className="text-[11px] text-gray-500 italic">
-            * Potongan kuli Rp 7.000 / bal
-          </span>
+          {/* Kolom Pencarian Cepat Tabel Pembelian */}
+          <div className="w-full sm:w-80 md:w-96">
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-gray-400">
+                <Search className="w-4 h-4" />
+              </div>
+              <input
+                id="search-laporan-pembelian-table-input"
+                type="text"
+                placeholder="Cari cepat (Kupon, Petani, No Bal, Grade)..."
+                value={tableSearch}
+                onChange={(e) => setTableSearch(e.target.value)}
+                className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-300 rounded-sm pl-8 pr-8 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-[#b81d24] focus:ring-1 focus:ring-[#b81d24] transition shadow-2xs"
+              />
+              {tableSearch && (
+                <button
+                  type="button"
+                  id="btn-clear-search-laporan-pembelian-table"
+                  onClick={() => setTableSearch('')}
+                  className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
+                  title="Hapus pencarian"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
         <div className="overflow-x-auto overflow-y-auto max-h-[60vh] border border-gray-200 shadow-sm relative scrollbar-thin">
@@ -1209,16 +1260,16 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {sortedData.length === 0 ? (
+              {searchedData.length === 0 ? (
                 <tr>
                   <td colSpan={11} className="py-10 text-center text-gray-500">
                     <FileText className="w-8 h-8 mx-auto text-gray-300 mb-2" />
-                    <p className="font-semibold">Tidak ada data transaksi yang cocok dengan filter aktif.</p>
-                    <p className="text-[11px] text-gray-400 mt-1">Coba ubah tanggal atau klik "Reset Filter" untuk menampilkan seluruh transaksi.</p>
+                    <p className="font-semibold">Tidak ada data transaksi yang cocok dengan pencarian.</p>
+                    <p className="text-[11px] text-gray-400 mt-1">Coba periksa kata kunci pencarian atau bersihkan kolom pencarian.</p>
                   </td>
                 </tr>
               ) : (
-                sortedData.map((row, idx) => {
+                searchedData.map((row, idx) => {
                   const bruto = row.jenis_timbang === 'bruto' ? (row.berat_terukur_kg || row.berat_kg + 2) : 0;
                   const netto = row.berat_kg || 0;
                   const hrgBeli = row.harga_per_kg || 0;

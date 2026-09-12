@@ -23,7 +23,6 @@ import {
   ArrowUpRight,
   ShieldCheck,
   Scale,
-  ExternalLink,
   Eye,
   EyeOff,
   ChevronUp,
@@ -39,7 +38,6 @@ interface LaporanPetaniViewProps {
   transaksiList: TransaksiPembelian[];
   barangList?: Barang[];
   userRole?: UserRole;
-  onNavigateToPetani?: () => void;
   onNavigateToTransaksi?: () => void;
 }
 
@@ -48,7 +46,6 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
   transaksiList = [],
   barangList = [],
   userRole = 'superadmin',
-  onNavigateToPetani,
   onNavigateToTransaksi,
 }) => {
   // Tabs: 'rekap' | 'top-ranking' | 'wilayah'
@@ -71,6 +68,9 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
     endDate: '',
     sortBy: 'bal_desc',
   });
+
+  // Live Table Search for Tab 1
+  const [tableSearch, setTableSearch] = useState('');
 
   // UI & Detail Drawer State
   const [showSummaryCards, setShowSummaryCards] = useState<boolean>(true);
@@ -350,11 +350,25 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
     }
   };
 
+  // Search within filtered results for Tab 1
+  const searchedPetaniData = useMemo(() => {
+    if (!tableSearch.trim()) return filteredPetaniData;
+    const q = tableSearch.toLowerCase().trim();
+    return filteredPetaniData.filter((p) => {
+      const matchName = (p.nama_petani || '').toLowerCase().includes(q);
+      const matchId = (p.petani_id || '').toLowerCase().includes(q);
+      const matchHp = (p.no_hp || '').toLowerCase().includes(q);
+      const matchWilayah = (p.desa_kecamatan || p.alamat || '').toLowerCase().includes(q);
+      const matchGrade = (p.gradeDominan || '').toLowerCase().includes(q);
+      return matchName || matchId || matchHp || matchWilayah || matchGrade;
+    });
+  }, [filteredPetaniData, tableSearch]);
+
   // Pagination for Tab 1
   const paginatedData = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
-    return filteredPetaniData.slice(start, start + itemsPerPage);
-  }, [filteredPetaniData, currentPage, itemsPerPage]);
+    return searchedPetaniData.slice(start, start + itemsPerPage);
+  }, [searchedPetaniData, currentPage, itemsPerPage]);
 
   return (
     <div className="space-y-4 font-sans text-gray-800">
@@ -390,16 +404,6 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
               </>
             )}
           </button>
-
-          {onNavigateToPetani && (
-            <button
-              onClick={onNavigateToPetani}
-              className="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-xs transition flex items-center space-x-1.5 cursor-pointer"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-              <span>Master Petani</span>
-            </button>
-          )}
 
           <button
             onClick={handleDownloadCsv}
@@ -674,32 +678,71 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
       {/* 5. Tab Content 1: Rekapitulasi Data Petani Table */}
       {activeTab === 'rekap' && (
         <div className="bg-white border border-gray-200 shadow-2xs overflow-hidden">
-          {/* Table Header Bar with Tampil Dropdown */}
-          <div className="p-3 bg-gray-50 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div className="text-xs text-gray-700 font-semibold">
-              Daftar Petani ({filteredPetaniData.length} Data)
+          {/* Table Toolbar (Tampil X Data & Kolom Pencarian Utama Petani) */}
+          <div className="p-3 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs border-b border-gray-200">
+            <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+              {/* Tampil X Data Per Halaman */}
+              <div className="flex items-center space-x-1.5">
+                <span className="text-gray-600 font-medium">Tampil</span>
+                <select
+                  value={itemsPerPage >= 100000 ? 'all' : itemsPerPage}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setItemsPerPage(val === 'all' ? 100000 : Number(val));
+                    setCurrentPage(1);
+                  }}
+                  className="border border-gray-300 rounded-sm px-2 py-1 bg-white text-xs font-semibold text-gray-800 focus:outline-none focus:border-[#b81d24] cursor-pointer"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                  <option value="all">All</option>
+                </select>
+                <span className="text-gray-500 hidden sm:inline">per hal.</span>
+              </div>
+              <span className="text-[11px] text-gray-500 font-medium">
+                {tableSearch.trim() ? (
+                  <>Ditemukan: <strong className="text-gray-900">{searchedPetaniData.length}</strong> dari {filteredPetaniData.length} petani</>
+                ) : (
+                  <>Total: <strong className="text-gray-900">{filteredPetaniData.length}</strong> petani</>
+                )}
+              </span>
             </div>
-            <div className="flex items-center space-x-1.5 text-xs text-gray-600">
-              <span>Tampil</span>
-              <select
-                value={itemsPerPage === filteredPetaniData.length ? 'all' : itemsPerPage}
-                onChange={(e) => {
-                  if (e.target.value === 'all') {
-                    setItemsPerPage(filteredPetaniData.length || 10000);
-                  } else {
-                    setItemsPerPage(Number(e.target.value));
-                  }
-                  setCurrentPage(1);
-                }}
-                className="border border-gray-300 rounded-xs px-2 py-1 bg-white text-xs text-gray-800 font-semibold focus:outline-none focus:border-[#b81d24]"
-              >
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-                <option value="all">All</option>
-              </select>
+
+            {/* Kolom Pencarian (Search Bar) Utama Petani */}
+            <div className="w-full sm:w-80 md:w-96">
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-gray-400">
+                  <Search className="w-4 h-4" />
+                </div>
+                <input
+                  id="search-laporan-petani-input"
+                  type="text"
+                  placeholder="Cari cepat (Nama, ID, No HP, Desa)..."
+                  value={tableSearch}
+                  onChange={(e) => {
+                    setTableSearch(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-300 rounded-sm pl-8 pr-8 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-[#b81d24] focus:ring-1 focus:ring-[#b81d24] transition shadow-2xs"
+                />
+                {tableSearch && (
+                  <button
+                    type="button"
+                    id="btn-clear-search-laporan-petani"
+                    onClick={() => {
+                      setTableSearch('');
+                      setCurrentPage(1);
+                    }}
+                    className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
+                    title="Hapus pencarian"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -802,38 +845,16 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
           </div>
 
           {/* Pagination Controls */}
-          {filteredPetaniData.length > 0 && (
+          {searchedPetaniData.length > 0 && (
             <div className="p-3 bg-[#f8f9fa] border-t border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="flex items-center space-x-3">
                 <div className="text-xs text-gray-600">
-                  Menampilkan <strong>{(currentPage - 1) * itemsPerPage + 1}</strong> - <strong>{Math.min(currentPage * itemsPerPage, filteredPetaniData.length)}</strong> dari <strong>{filteredPetaniData.length}</strong> petani
-                </div>
-                <div className="flex items-center space-x-1.5 text-xs text-gray-600">
-                  <span>Tampil</span>
-                  <select
-                    value={itemsPerPage === filteredPetaniData.length ? 'all' : itemsPerPage}
-                    onChange={(e) => {
-                      if (e.target.value === 'all') {
-                        setItemsPerPage(filteredPetaniData.length || 10000);
-                      } else {
-                        setItemsPerPage(Number(e.target.value));
-                      }
-                      setCurrentPage(1);
-                    }}
-                    className="border border-gray-300 rounded-xs px-2 py-1 bg-white text-xs text-gray-800 font-semibold focus:outline-none focus:border-[#b81d24]"
-                  >
-                    <option value={5}>5</option>
-                    <option value={10}>10</option>
-                    <option value={20}>20</option>
-                    <option value={50}>50</option>
-                    <option value={100}>100</option>
-                    <option value="all">All</option>
-                  </select>
+                  Menampilkan <strong>{(currentPage - 1) * itemsPerPage + 1}</strong> - <strong>{Math.min(currentPage * itemsPerPage, searchedPetaniData.length)}</strong> dari <strong>{searchedPetaniData.length}</strong> petani
                 </div>
               </div>
               <Pagination
                 currentPage={currentPage}
-                totalItems={filteredPetaniData.length}
+                totalItems={searchedPetaniData.length}
                 itemsPerPage={itemsPerPage}
                 onPageChange={(page) => setCurrentPage(page)}
               />
