@@ -54,18 +54,13 @@ import { HomeDashboardView } from './components/home/HomeDashboardView';
 import { DashboardAnalyticView } from './components/laporan/DashboardAnalyticView';
 
 // Laporan Detail Bal Tembakau
-import { LaporanBalView } from './components/laporan/LaporanBalView';
 import { LaporanKodeBalView } from './components/laporan/LaporanKodeBalView';
 
 // Laporan Mutu Grade & Analisis Stok Inventaris
-import { LaporanHargaJualView } from './components/laporan/LaporanHargaJualView';
 import { LaporanGradeView } from './components/laporan/LaporanGradeView';
 
 //  Laporan Pembelian Barang
 import { LaporanPembelianBarangView } from './components/laporan/LaporanPembelianBarangView';
-
-// Laporan Okupansi & Stok Inventaris Gudang
-import { LaporanGudangView } from './components/laporan/LaporanGudangView';
 
 // Laporan Petani & Rekapitulasi Setoran
 import { LaporanPetaniView } from './components/laporan/LaporanPetaniView';
@@ -992,16 +987,12 @@ export default function App() {
         return { title: 'Dasbor Menu Utama', breadcrumb: 'PR. SEKAR MAJU SEJAHTERA / Beranda' };
       case 'modul-6-dashboard-analytic':
         return { title: 'Dashboard Laporan & Analytic ERP', breadcrumb: 'Beranda / Dashboard Analytic' };
-      case 'modul-6-laporan-bal':
-        return { title: 'Laporan Detail Bal Tembakau', breadcrumb: 'Beranda / Laporan Detail Bal' };
       case 'modul-6-laporan-kode-bal':
         return { title: 'Laporan Kode Bal', breadcrumb: 'Beranda / Laporan Kode Bal' };
       case 'modul-6-laporan-grade':
-        return { title: 'Laporan Stok & Mutu Grade', breadcrumb: 'Beranda / Laporan Mutu Grade' };
+        return { title: 'Laporan Harga', breadcrumb: 'Beranda / Laporan Harga' };
       case 'modul-6-laporan-pembelian':
         return { title: 'Laporan Pembelian Barang', breadcrumb: 'Beranda / Laporan Pembelian' };
-      case 'modul-6-laporan-gudang':
-        return { title: 'Laporan Okupansi & Stok Gudang', breadcrumb: 'Beranda / Laporan Gudang' };
       case 'modul-6-laporan-petani':
         return { title: 'Laporan Petani & Rekapitulasi Setoran', breadcrumb: 'Beranda / Laporan Petani' };
       case 'modul-6-laporan-pengiriman':
@@ -1165,43 +1156,12 @@ export default function App() {
               />
             )}
 
-            {/* Laporan Detail Bal Tembakau */}
-            {activeModuleId === 'modul-6-laporan-bal' && (
-              <LaporanBalView
-                barangList={barangList}
-                gudangList={gudangList}
-                petaniList={petaniList}
-                transaksiList={transaksiList}
-                hargaList={hargaList}
-                userRole={currentRole}
-                onNavigateToBarang={() => handleSelectModule('modul-2-barang')}
-                onNavigateToTransaksi={() => handleSelectModule('modul-0-transaksi')}
-                onNavigateToGudang={() => handleSelectModule('modul-7-gudang')}
-              />
-            )}
-
             {/* Laporan Kode Bal */}
             {activeModuleId === 'modul-6-laporan-kode-bal' && (
               <LaporanKodeBalView barangList={barangList} />
             )}
 
-            {/* Laporan Harga Jual / Laporan Harga */}
-            {activeModuleId === 'modul-6-laporan-harga-jual' && (
-              <LaporanGradeView
-                initialTab="jual"
-                hargaJualList={hargaJualList}
-                hargaList={hargaList}
-                barangList={barangList}
-                transaksiList={transaksiList}
-                pengirimanList={pengirimanList}
-                sampleList={sampleList}
-                gudangList={gudangList}
-                userRole={currentRole}
-                onNavigateToHarga={() => handleSelectModule('modul-3-harga')}
-                onNavigateToHargaJual={() => handleSelectModule('modul-3-harga-jual')}
-                onNavigateToBarang={() => handleSelectModule('modul-2-barang')}
-              />
-            )}
+            {/* Laporan Harga */}
             {activeModuleId === 'modul-6-laporan-grade' && (
               <LaporanGradeView
                 initialTab="beli"
@@ -1219,26 +1179,13 @@ export default function App() {
               />
             )}
 
-            {/*  Laporan Pembelian Barang */}
+            {/* Laporan Pembelian Barang */}
             {activeModuleId === 'modul-6-laporan-pembelian' && (
               <LaporanPembelianBarangView
                 transaksiList={transaksiList}
                 petaniList={petaniList}
                 userRole={currentRole}
                 onNavigateToTransaksi={() => handleSelectModule('modul-0-transaksi')}
-              />
-            )}
-
-            {/* Laporan Okupansi & Stok Gudang */}
-            {activeModuleId === 'modul-6-laporan-gudang' && (
-              <LaporanGudangView
-                gudangList={gudangList}
-                barangList={barangList}
-                petaniList={petaniList}
-                transaksiList={transaksiList}
-                userRole={currentRole}
-                onNavigateToGudang={() => handleSelectModule('modul-7-gudang')}
-                onNavigateToBarang={() => handleSelectModule('modul-2-barang')}
               />
             )}
 

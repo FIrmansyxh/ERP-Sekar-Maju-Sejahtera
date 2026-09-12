@@ -984,7 +984,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                     ref={dropdownRef}
                     className="absolute left-0 right-0 top-full mt-1 z-30 bg-white border border-gray-200 rounded-sm shadow-lg overflow-hidden divide-y divide-gray-100 max-h-72 overflow-y-auto"
                   >
-                    <div className="px-2.5 py-1.5 bg-[#f8f9fa] text-[10px] font-semibold text-gray-600 tracking-wider flex items-center justify-between border-b border-gray-200 sticky top-0 z-10">
+                    <div className="px-2.5 py-1.5 bg-[#f8f9fa] text-[10px] font-semibold text-gray-600 tracking-wider flex items-center justify-between border-b border-gray-200 z-10">
                       <div className="flex items-center space-x-1.5">
                         <span>Rekomendasi Bal ({balSuggestions.length}):</span>
                         {unweighedCount > 0 && (

@@ -1820,7 +1820,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
               {/* Data Table */}
               <div className="border border-gray-300 rounded-xs overflow-x-auto max-h-[480px] overflow-y-auto">
                 <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-gray-100 sticky top-0 border-b border-gray-300 text-gray-700 font-bold z-10">
+                  <thead className="bg-gray-100 border-b border-gray-300 text-gray-700 font-bold z-10">
                     <tr>
                       {sourceMode === 'sample_batch' ? (
                         <>
@@ -2524,7 +2524,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
             {/* Modal Items Table */}
             <div className="flex-1 overflow-y-auto max-h-[460px] p-0">
               <table className="w-full text-left text-xs border-collapse">
-                <thead className="bg-gray-100 sticky top-0 border-b border-gray-300 text-gray-700 font-bold z-10">
+                <thead className="bg-gray-100 border-b border-gray-300 text-gray-700 font-bold z-10">
                   <tr>
                     <th className="p-2.5 w-10 text-center">Pilih</th>
                     <th className="p-2.5 w-28">No. Bal</th>

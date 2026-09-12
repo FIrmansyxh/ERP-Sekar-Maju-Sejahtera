@@ -1152,7 +1152,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
 
         <div className="overflow-x-auto overflow-y-auto max-h-[60vh] border border-gray-200 shadow-sm relative scrollbar-thin">
           <table className="w-full text-left text-xs border-collapse min-w-[1100px]">
-            <thead className="sticky top-0 z-10 shadow-sm">
+            <thead className="z-10 shadow-sm">
               <tr className="bg-gray-100 text-gray-700 font-bold border-b border-gray-200 uppercase text-[10px] tracking-wider">
                 <th 
                   className="py-2.5 px-2.5 text-center border-r border-gray-200 cursor-pointer hover:bg-gray-200/80 transition select-none"

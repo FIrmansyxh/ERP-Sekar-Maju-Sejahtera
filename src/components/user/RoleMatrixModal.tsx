@@ -113,7 +113,7 @@ export const RoleMatrixModal: React.FC<RoleMatrixModalProps> = ({
               <table className="w-full text-left border-collapse text-[11px]">
                 <thead>
                   <tr className="bg-gray-100 border-b border-gray-200 text-gray-700 font-bold">
-                    <th className="py-2 px-3 border-r border-gray-200 sticky left-0 bg-gray-100 z-10 w-48">
+                    <th className="py-2 px-3 border-r border-gray-200 bg-gray-100 w-48">
                       Modul Sistem
                     </th>
                     {ALL_ROLES.map((r) => (
@@ -126,7 +126,7 @@ export const RoleMatrixModal: React.FC<RoleMatrixModalProps> = ({
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {modulesList.map((mod) => (
                     <tr key={mod.id} className="hover:bg-gray-50/80">
-                      <td className="py-2 px-3 font-semibold text-gray-900 border-r border-gray-200 sticky left-0 bg-white z-10">
+                      <td className="py-2 px-3 font-semibold text-gray-900 border-r border-gray-200 bg-white">
                         {mod.name}
                       </td>
                       {ALL_ROLES.map((r) => {
@@ -161,7 +161,7 @@ export const RoleMatrixModal: React.FC<RoleMatrixModalProps> = ({
               <table className="w-full text-left border-collapse text-[11px]">
                 <thead>
                   <tr className="bg-gray-100 border-b border-gray-200 text-gray-700 font-bold">
-                    <th className="py-2 px-3 border-r border-gray-200 sticky left-0 bg-gray-100 z-10 w-56">
+                    <th className="py-2 px-3 border-r border-gray-200 bg-gray-100 w-56">
                       Kemampuan Wewenang
                     </th>
                     {ALL_ROLES.map((r) => (
@@ -174,7 +174,7 @@ export const RoleMatrixModal: React.FC<RoleMatrixModalProps> = ({
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {capabilitiesList.map((cap) => (
                     <tr key={cap.key} className="hover:bg-gray-50/80">
-                      <td className="py-2 px-3 font-semibold text-gray-900 border-r border-gray-200 sticky left-0 bg-white z-10">
+                      <td className="py-2 px-3 font-semibold text-gray-900 border-r border-gray-200 bg-white">
                         {cap.label}
                       </td>
                       {ALL_ROLES.map((r) => {

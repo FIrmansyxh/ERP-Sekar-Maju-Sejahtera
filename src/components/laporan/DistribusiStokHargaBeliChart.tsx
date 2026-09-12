@@ -538,19 +538,6 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
               <PieChartIcon className="w-3 h-3" />
               <span>Donat</span>
             </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('table')}
-              className={`px-2 py-1 text-[11px] font-semibold rounded-xs transition cursor-pointer flex items-center space-x-1 ${
-                viewMode === 'table'
-                  ? 'bg-white text-gray-900 shadow-2xs'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-              title="Tabel Rincian Lengkap"
-            >
-              <TableIcon className="w-3 h-3" />
-              <span>Tabel</span>
-            </button>
           </div>
         </div>
       </div>
@@ -879,114 +866,6 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
               </div>
             )}
 
-            {/* View Mode: Table or Bottom Summary Matrix */}
-            {(viewMode === 'table' || viewMode === 'dual') && (
-              <div className="mt-4 pt-4 border-t border-gray-100">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-gray-800 flex items-center space-x-1.5">
-                    <TableIcon className="w-3.5 h-3.5 text-gray-500" />
-                    <span>Tabel Rincian Lengkap per Kode Tarif Harga Beli</span>
-                  </span>
-                  <span className="text-[11px] text-gray-500">
-                    Menampilkan {aggregatedData.items.length} kode harga beli aktif
-                  </span>
-                </div>
-
-                <div className="overflow-x-auto border border-gray-200 rounded-xs">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead className="bg-gray-50 text-gray-700 font-bold border-b border-gray-200 text-[10px] uppercase tracking-wider">
-                      <tr>
-                        <th className="py-2.5 px-3">Kode Grade</th>
-                        <th className="py-2.5 px-3">Nama Klasifikasi Mutu</th>
-                        <th className="py-2.5 px-3 text-right">Tarif Beli (Rp/kg)</th>
-                        <th className="py-2.5 px-3 text-center">Fisik Bal</th>
-                        <th className="py-2.5 px-3 text-center">Pangsa Bal</th>
-                        <th className="py-2.5 px-3 text-right">Tonase (Kg)</th>
-                        <th className="py-2.5 px-3 text-right">Valuasi Stok Modal (Rp)</th>
-                        <th className="py-2.5 px-3 text-center">Status Gudang</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 bg-white">
-                      {aggregatedData.items.map((item) => (
-                        <tr key={item.kode_grade} className="hover:bg-gray-50/80 transition">
-                          <td className="py-2.5 px-3">
-                            <div className="flex items-center space-x-2">
-                              <span
-                                className="w-2.5 h-2.5 rounded-full shrink-0"
-                                style={{ backgroundColor: item.color }}
-                              />
-                              <span className="font-mono font-bold text-gray-900">
-                                Grade {item.kode_grade}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="py-2.5 px-3 text-gray-700 font-medium">
-                            {item.nama_grade}
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-800">
-                            {formatRupiah(item.harga_per_kg)}
-                          </td>
-                          <td className="py-2.5 px-3 text-center font-mono font-bold text-gray-900">
-                            {item.balCount.toLocaleString('id-ID')} Bal
-                          </td>
-                          <td className="py-2.5 px-3 text-center">
-                            <div className="inline-flex items-center space-x-1.5">
-                              <span className="font-bold text-[#b81d24]">{item.pctBal}%</span>
-                              <div className="w-12 bg-gray-200 h-1.5 rounded-full overflow-hidden hidden sm:block">
-                                <div
-                                  className="h-full bg-zinc-800"
-                                  style={{ width: `${Math.min(100, item.pctBal * 2.5)}%` }}
-                                />
-                              </div>
-                            </div>
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-mono font-semibold text-blue-900">
-                            {item.totalKg.toLocaleString('id-ID')} kg
-                            <span className="text-[10px] text-gray-500 block">
-                              ({(item.totalKg / 1000).toFixed(2)} Ton)
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-mono font-bold text-gray-900">
-                            Rp {item.totalNilai.toLocaleString('id-ID')}
-                          </td>
-                          <td className="py-2.5 px-3 text-center">
-                            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-semibold rounded-xs">
-                              {item.diGudangCount} Simpan
-                              {item.siapKirimCount > 0 && ` • ${item.siapKirimCount} Siap Kirim`}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot className="bg-gray-100 font-bold text-gray-900 border-t border-gray-300">
-                      <tr>
-                        <td colSpan={3} className="py-2.5 px-3 text-left uppercase text-[11px]">
-                          Total Keseluruhan
-                        </td>
-                        <td className="py-2.5 px-3 text-center font-mono font-bold">
-                          {aggregatedData.grandTotalBal.toLocaleString('id-ID')} Bal
-                        </td>
-                        <td className="py-2.5 px-3 text-center font-mono font-bold">
-                          100.0%
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-mono font-bold text-blue-950">
-                          {aggregatedData.grandTotalKg.toLocaleString('id-ID')} kg
-                          <span className="text-[10px] text-gray-600 block">
-                            ({(aggregatedData.grandTotalKg / 1000).toFixed(2)} Ton)
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-950">
-                          Rp {aggregatedData.grandTotalNilai.toLocaleString('id-ID')}
-                        </td>
-                        <td className="py-2.5 px-3 text-center text-[10px] text-gray-600">
-                          Rata-rata: {formatRupiah(Math.round(aggregatedData.weightedAvgPrice))}/kg
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>

@@ -322,19 +322,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   </button>
                 )}
 
-                {checkAccess('modul-6-laporan-bal') && (
-                  <button
-                    onClick={() => onSelectModule('modul-6-laporan-bal')}
-                    className={`w-full text-left py-1.5 px-2 rounded-xs flex items-center justify-between cursor-pointer ${
-                      activeModuleId === 'modul-6-laporan-bal'
-                        ? 'text-slate-900 font-semibold bg-slate-100'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                    }`}
-                  >
-                    <span>Laporan Bal</span>
-                  </button>
-                )}
-
                 {checkAccess('modul-6-laporan-kode-bal') && (
                   <button
                     onClick={() => onSelectModule('modul-6-laporan-kode-bal')}
@@ -361,18 +348,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   </button>
                 )}
 
-                                {checkAccess('modul-6-laporan-harga-jual') && (
-                  <button
-                    onClick={() => onSelectModule('modul-6-laporan-harga-jual')}
-                    className={`w-full text-left py-1.5 px-2 rounded-xs flex items-center justify-between cursor-pointer ${
-                      activeModuleId === 'modul-6-laporan-harga-jual'
-                        ? 'text-slate-900 font-semibold bg-slate-100'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                    }`}
-                  >
-                    <span>Laporan Harga Jual</span>
-                  </button>
-                )}
                 {checkAccess('modul-6-laporan-pembelian') && (
                   <button
                     onClick={() => onSelectModule('modul-6-laporan-pembelian')}
@@ -383,19 +358,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     }`}
                   >
                     <span>Laporan Pembelian</span>
-                  </button>
-                )}
-
-                {checkAccess('modul-6-laporan-gudang') && (
-                  <button
-                    onClick={() => onSelectModule('modul-6-laporan-gudang')}
-                    className={`w-full text-left py-1.5 px-2 rounded-xs flex items-center justify-between cursor-pointer ${
-                      activeModuleId === 'modul-6-laporan-gudang'
-                        ? 'text-slate-900 font-semibold bg-slate-100'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                    }`}
-                  >
-                    <span>Laporan Gudang</span>
                   </button>
                 )}
 

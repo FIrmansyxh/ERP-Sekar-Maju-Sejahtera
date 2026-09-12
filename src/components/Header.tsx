@@ -71,7 +71,7 @@ export const Header: React.FC<HeaderProps> = ({
   const canManageUsers = currentUser ? canUserPerform(currentUser.role, 'canManageUsers') : false;
 
   return (
-    <header className="bg-white border-b border-gray-200 text-gray-800 sticky top-0 z-30 select-none shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+    <header className="bg-white border-b border-gray-200 text-gray-800 select-none shadow-[0_1px_2px_rgba(0,0,0,0.03)] z-30">
       <div className="w-full px-4 sm:px-6">
         <div className="flex items-center justify-between h-14">
           
