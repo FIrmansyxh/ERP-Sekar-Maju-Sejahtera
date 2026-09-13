@@ -18,7 +18,7 @@ import {
   AlertTriangle,
   Lock
 } from 'lucide-react';
-import { TransaksiPembelian, Petani, TabelHarga, Barang, Gudang, UserRole, User as UserType } from '../../types';
+import { TransaksiPembelian, Petani, TabelHarga, Barang, UserRole, User as UserType } from '../../types';
 import { formatRupiah, formatAccounting, formatDateIndo, formatNoKupon } from '../../utils/formatters';
 import { TransaksiDetailModal } from './TransaksiDetailModal';
 import { PembayaranKasirModal } from './PembayaranKasirModal';
@@ -32,7 +32,6 @@ interface KasirPageViewProps {
   petaniList: Petani[];
   hargaList: TabelHarga[];
   barangList: Barang[];
-  gudangList?: Gudang[];
   userRole: UserRole;
   currentUser?: UserType | null;
   initialKuponNo?: string;
@@ -48,7 +47,6 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
   petaniList = [],
   hargaList = [],
   barangList = [],
-  gudangList = [],
   userRole,
   currentUser,
   initialKuponNo,
@@ -1103,8 +1101,8 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                             </button>
                           )}
 
-                          {/* Tombol Hapus jika superadmin atau admin_utama */}
-                          {(userRole === 'superadmin' || userRole === 'admin_utama') && (
+                          {/* Tombol Hapus khusus superadmin */}
+                          {(userRole === 'superadmin') && (
                             <button
                               type="button"
                               onClick={() => {
@@ -1214,7 +1212,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
           petaniList={petaniList}
           hargaList={hargaList}
           barangList={barangList}
-          gudangList={gudangList}
+          
           currentUser={currentUser}
           onSaveTransaksi={(newTx, generatedBarang) => {
             onSaveTransaksi(newTx, generatedBarang);
@@ -1286,7 +1284,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 <span>Peringatan Dampak Penghapusan:</span>
               </div>
               <ul className="text-[11px] text-rose-800 space-y-0.5 list-disc list-inside pl-1">
-                <li>Seluruh bal inventaris di gudang yang terbit dari transaksi ini akan otomatis ikut dihapus/dibatalkan.</li>
+                <li>Seluruh bal inventaris yang terbit dari transaksi ini akan otomatis ikut dihapus/dibatalkan.</li>
                 <li>Akumulasi setoran total bal dan berat petani terkait akan otomatis disinkronkan kembali.</li>
                 <li>Tindakan ini akan dicatat ke dalam audit trail keamanan sistem.</li>
               </ul>

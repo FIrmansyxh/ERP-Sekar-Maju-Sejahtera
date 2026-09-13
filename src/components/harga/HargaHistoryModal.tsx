@@ -59,12 +59,12 @@ export const HargaHistoryModal: React.FC<HargaHistoryModalProps> = ({
             </span>
 
             <div className="divide-y divide-gray-200 border border-gray-200">
-              {historyItems.map((item) => {
+              {historyItems.map((item, idx) => {
                 const isCurrentActive = item.status === 'aktif';
 
                 return (
                   <div
-                    key={item.harga_id}
+                    key={`${item.harga_id}-${idx}`}
                     className={`p-3.5 transition ${
                       isCurrentActive ? 'bg-[#f8f9fa] border-l-4 border-l-[#b81d24]' : 'bg-white'
                     }`}

@@ -79,20 +79,6 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
   const [metricMode, setMetricMode] = useState<MetricMode>('bal');
   const [viewMode, setViewMode] = useState<ViewMode>('dual');
   const [stockScope, setStockScope] = useState<StockScope>('aktif');
-  const [selectedGudang, setSelectedGudang] = useState<string>('ALL');
-
-  // Daftar lokasi gudang unik untuk filter
-  const uniqueGudangList = useMemo(() => {
-    const set = new Set<string>();
-    barangList.forEach((b) => {
-      if (b.lokasi_gudang && b.lokasi_gudang.trim()) {
-        // Ambil nama gudang sebelum garis miring jika ada format "Gudang / Blok"
-        const mainGudang = b.lokasi_gudang.split('/')[0].trim();
-        set.add(mainGudang);
-      }
-    });
-    return Array.from(set).sort();
-  }, [barangList]);
 
   // Map harga standar dari master harga
   const masterHargaMap = useMemo(() => {
@@ -120,17 +106,9 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
         }
       }
 
-      // Filter gudang
-      if (selectedGudang !== 'ALL') {
-        const balGudang = (b.lokasi_gudang || '').split('/')[0].trim();
-        if (!balGudang.toLowerCase().includes(selectedGudang.toLowerCase())) {
-          return false;
-        }
-      }
-
       return true;
     });
-  }, [barangList, stockScope, selectedGudang]);
+  }, [barangList, stockScope]);
 
   // Aggregasi data per Kode Harga Beli
   const aggregatedData = useMemo(() => {
@@ -422,24 +400,6 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
                 Semua Inventaris
               </button>
             </div>
-
-            {/* Filter Lokasi Gudang */}
-            {uniqueGudangList.length > 1 && (
-              <div className="flex items-center space-x-1.5">
-                <select
-                  value={selectedGudang}
-                  onChange={(e) => setSelectedGudang(e.target.value)}
-                  className="px-2 py-1 text-[11px] font-semibold bg-white border border-gray-300 rounded-xs text-gray-700 cursor-pointer"
-                >
-                  <option value="ALL">Semua Gudang ({uniqueGudangList.length})</option>
-                  {uniqueGudangList.map((gud) => (
-                    <option key={gud} value={gud}>
-                      {gud}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
 
             {/* Export CSV Button */}
             <button
@@ -827,9 +787,9 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
                 {/* Legend Cards List */}
                 <div className="md:col-span-5 space-y-1.5 max-h-80 overflow-y-auto pr-1">
                   <div className="text-xs font-bold text-gray-800 mb-2">Rincian Komposisi:</div>
-                  {aggregatedData.items.map((item) => (
+                  {aggregatedData.items.map((item, idx) => (
                     <div
-                      key={item.kode_grade}
+                      key={`${item.kode_grade}-${idx}`}
                       className="p-2 bg-gray-50 hover:bg-gray-100 rounded-xs border border-gray-200 flex items-center justify-between text-xs transition"
                     >
                       <div className="flex items-center space-x-2">

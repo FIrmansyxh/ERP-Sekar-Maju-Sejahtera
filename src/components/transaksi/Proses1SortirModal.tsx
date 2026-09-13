@@ -16,7 +16,7 @@ import {
   Check,
   AlertTriangle
 } from 'lucide-react';
-import { Petani, TabelHarga, TransaksiPembelian, TransaksiItemBal, Gudang, User as UserType, Barang } from '../../types';
+import { Petani, TabelHarga, TransaksiPembelian, TransaksiItemBal, User as UserType, Barang } from '../../types';
 import { formatRupiah, formatNoKupon, generateTransaksiId, hitungPotonganTaraKg } from '../../utils/formatters';
 import { loadTransaksiData } from '../../utils/storage';
 import { ConfirmModal } from '../common/ConfirmModal';
@@ -26,7 +26,6 @@ interface Proses1SortirModalProps {
   onClose: () => void;
   petaniList: Petani[];
   hargaList: TabelHarga[];
-  gudangList?: Gudang[];
   barangList: Barang[];
   currentUser?: UserType | null;
   onSaveSortir: (newTx: TransaksiPembelian) => void;
@@ -49,7 +48,6 @@ export const Proses1SortirModal: React.FC<Proses1SortirModalProps> = ({
   onClose,
   petaniList,
   hargaList,
-  gudangList = [],
   barangList,
   currentUser,
   onSaveSortir,
@@ -72,7 +70,6 @@ export const Proses1SortirModal: React.FC<Proses1SortirModalProps> = ({
   });
   const [selectedPetaniId, setSelectedPetaniId] = useState('');
   const [tanggal, setTanggal] = useState(new Date().toISOString().split('T')[0]);
-  const [lokasiGudang, setLokasiGudang] = useState(gudangList?.[0]?.nama_gudang || 'Gudang Utama Pamekasan');
   const [adminSortirNama, setAdminSortirNama] = useState('Admin 1 & 2 (Meja Sortir Intake)');
   const [petugasSortirNama, setPetugasSortirNama] = useState(currentUser?.nama_lengkap || 'Sistem');
   const [catatan, setCatatan] = useState('');
@@ -395,7 +392,6 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
       berat_terukur_kg: 0,
       potongan_tara_kg: balItems.reduce((acc, curr) => acc + hitungPotonganTaraKg(0, curr.gantiTikar || false, curr.noBal), 0),
       berat_kg: 0,
-      lokasi_gudang: lokasiGudang.trim() || 'Gudang Utama Pamekasan',
       harga_per_kg: balItems[0]?.hargaPerKg || 0,
       total_kotor: 0,
       potongan_kuli: totalPotonganKuli,
@@ -536,28 +532,10 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
                 />
               </div>
 
-              {/* Lokasi Gudang Intake */}
-              <div>
-                <label className="block text-gray-700 font-bold mb-1">
-                  4. Gudang Intake
-                </label>
-                <SearchableSelect
-                  value={lokasiGudang}
-                  onChange={(val) => setLokasiGudang(val)}
-                  options={gudangList && gudangList.length > 0
-                    ? gudangList.map((g) => ({ value: g.nama_gudang, label: g.nama_gudang }))
-                    : [
-                        { value: 'Gudang Utama Pamekasan', label: 'Gudang Utama Pamekasan' },
-                        { value: 'Gudang Produksi Rokok', label: 'Gudang Produksi Rokok' },
-                        { value: 'Gudang Sumenep', label: 'Gudang Sumenep' }
-                      ]}
-                />
-              </div>
-
               {/* Petugas Sortir & Grader */}
               <div>
                 <label className="block text-gray-700 font-bold mb-1">
-                  5. Petugas Sortir / Grader
+                  4. Petugas Sortir / Grader
                 </label>
                 <input
                   type="text"

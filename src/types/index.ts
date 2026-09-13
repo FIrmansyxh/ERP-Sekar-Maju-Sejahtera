@@ -60,20 +60,6 @@ export interface RolePermissionInfo {
 
 export type StatusStokBarang = 'di_gudang' | 'siap_kirim' | 'keluar' | 'terkirim_sample';
 
-export interface Gudang {
-  gudang_id: string; // e.g. "GDG-PMK-01"
-  kode_gudang: string; // e.g. "GDG-PMK-01"
-  nama_gudang: string; // e.g. "Gudang Pusat Induk & Intake - Pamekasan"
-  nama_lokasi?: string; // alias
-  unit_cabang?: string;
-  alamat: string;
-  kapasitas_bal: number;
-  kepala_gudang: string; // Penanggung Jawab
-  kontak: string; // Nomor HP
-  status_aktif: boolean;
-  deskripsi?: string;
-  daftar_blok_rak?: string[]; // optional backward compatibility
-}
 
 export interface Barang {
   barang_id: string; // Unique ID, e.g. BAL-20260823-001
@@ -86,8 +72,6 @@ export interface Barang {
   berat_bruto_kg?: number; // Gross weight
   potongan_tara_kg?: number; // Tare deduction
   status_stok: StatusStokBarang;
-  gudang_id?: string;
-  lokasi_gudang: string; // Location in warehouse
   tanggal_masuk: string; // ISO string / YYYY-MM-DD
   tanggal_keluar?: string;
   petani_id: string;
@@ -175,7 +159,6 @@ export interface TransaksiPembelian {
   berat_terukur_kg: number;
   potongan_tara_kg: number; // total tara berat kg
   berat_kg: number; // Berat Netto Final (calculated)
-  lokasi_gudang: string; // Lokasi Simpan
   harga_per_kg: number; // Snapshot harga saat transaksi
   rate_potongan_per_10kg?: number;
   total_kotor?: number;
@@ -234,7 +217,6 @@ export interface SampleItemDetail {
   catatan_nego?: string; // Notes for price negotiation / counter offer
   tanggal_evaluasi?: string;
   nama_petani?: string;
-  lokasi_gudang?: string;
   sudah_dikirim_do?: boolean; // True if DO / Delivery Order has been created
   no_surat_jalan_do?: string; // SJ reference
 }
@@ -342,7 +324,6 @@ export interface StockOpnameItemDetail {
   kode_bal_pembeli?: string;
   kode_grade: string;
   berat_kg: number;
-  lokasi_gudang: string;
   status_sistem: StatusStokBarang;
   status_fisik: 'ditemukan' | 'tidak_ditemukan' | 'tambahan_baru';
   waktu_scan?: string;
@@ -353,7 +334,6 @@ export interface StockOpnameSession {
   judul_opname: string;
   tanggal_opname: string;
   petugas_opname: string;
-  lokasi_gudang: string;
   target_grade: string;
   total_sistem_bal: number;
   total_fisik_bal: number;
@@ -373,5 +353,17 @@ export interface ModuleNav {
   prdStatus: 'active' | 'next' | 'planned';
   icon: string;
   description: string;
+}
+
+export interface AuditLogEntry {
+  log_id: string;
+  timestamp: string; // ISO string
+  user_nama: string;
+  user_role: string;
+  modul: string;
+  aksi: string; // e.g. 'TAMBAH_TRANSAKSI', 'UBAH_TRANSAKSI', 'HAPUS_TRANSAKSI', 'TIMBANG_BAL'
+  target_id: string;
+  deskripsi: string;
+  rincian_perubahan?: string[];
 }
 

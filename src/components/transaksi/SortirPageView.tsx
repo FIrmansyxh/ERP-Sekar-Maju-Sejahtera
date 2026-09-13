@@ -18,7 +18,7 @@ import {
   ChevronRight,
   RotateCcw
 } from 'lucide-react';
-import { TransaksiPembelian, Petani, TabelHarga, Barang, Gudang, TransaksiItemBal, UserRole, User as UserType } from '../../types';
+import { TransaksiPembelian, Petani, TabelHarga, Barang, TransaksiItemBal, UserRole, User as UserType } from '../../types';
 import { formatRupiah, formatNoKupon, formatDateHariBulanTahun, generateTransaksiId, hitungPotonganTaraKg } from '../../utils/formatters';
 
 interface SortirPageViewProps {
@@ -26,7 +26,6 @@ interface SortirPageViewProps {
   hargaList: TabelHarga[];
   transaksiList: TransaksiPembelian[];
   barangList?: Barang[];
-  gudangList?: Gudang[];
   userRole: UserRole;
   currentUser?: UserType | null;
   onSaveTransaksi: (newTx: TransaksiPembelian, generatedBarang: Barang | Barang[]) => void;
@@ -38,7 +37,6 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
   hargaList = [],
   transaksiList = [],
   barangList = [],
-  gudangList = [],
   userRole,
   currentUser,
   onSaveTransaksi,
@@ -59,7 +57,6 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
   });
   const [selectedPetaniId, setSelectedPetaniId] = useState('');
   const [tanggal, setTanggal] = useState(new Date().toISOString().split('T')[0]);
-  const [lokasiGudang, setLokasiGudang] = useState(gudangList?.[0]?.nama_gudang || 'Gudang Utama Pamekasan');
   const [petugasSortirNama, setPetugasSortirNama] = useState(currentUser?.nama_lengkap || 'Sistem');
 
   // Active bal items state for current batch
@@ -328,6 +325,11 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
       return;
     }
 
+    if (isKuponExists) {
+      alert(`Nomor kupon "${noKupon}" sudah digunakan oleh transaksi lain. Harap gunakan nomor kupon yang berbeda.`);
+      return;
+    }
+
     const txId = generateTransaksiId(tanggal, transaksiList);
     const seqPart = txId.split('-')[2] || '001';
     const kuponFinal = noKupon.trim() || `KUP${seqPart.padStart(4, '0')}`;
@@ -345,7 +347,6 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
       no_bal: item.no_bal,
       berat_kg: 0,
       status_stok: 'di_gudang',
-      lokasi_gudang: item.lokasi_simpan || lokasiGudang || 'Gudang Utama Pamekasan',
       tanggal_masuk: tanggal,
       petani_id: currentPetani.petani_id,
       nama_petani: currentPetani.nama_petani,
@@ -359,7 +360,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
       no_kupon: kuponFinal,
       petani_id: currentPetani.petani_id,
       nama_petani: currentPetani.nama_petani,
-            no_hp: currentPetani.no_hp || '-',
+      no_hp: currentPetani.no_hp || '-',
       desa_kecamatan: currentPetani.alamat || currentPetani.desa_kecamatan || 'Pamekasan',
       no_bal: balItems.map((i) => i.no_bal).join(', '),
       kode_grade: gradeSummary,
@@ -374,7 +375,6 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
       berat_terukur_kg: 0,
       potongan_tara_kg: balItems.reduce((acc, i) => acc + (i.potongan_tara_kg || 0), 0),
       berat_kg: 0,
-      lokasi_gudang: lokasiGudang,
       harga_per_kg: avgHarga,
       total_kotor: 0,
       potongan_kuli: balItems.reduce((acc, i) => acc + (i.potongan_kuli || 7000), 0),
@@ -518,27 +518,10 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
               />
             </div>
 
-            {/* 4. Gudang Intake */}
+            {/* 4. Petugas Sortir */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                4. Gudang Intake
-              </label>
-              <SearchableSelect
-                value={lokasiGudang}
-                onChange={(val) => setLokasiGudang(val)}
-                options={gudangList && gudangList.length > 0 ? gudangList.map(g => ({ value: g.nama_gudang, label: g.nama_gudang })) : [
-                  { value: 'Gudang Utama Pamekasan', label: 'Gudang Utama Pamekasan' },
-                  { value: 'Gudang Produksi Rokok', label: 'Gudang Produksi Rokok' },
-                  { value: 'Gudang Sumenep', label: 'Gudang Sumenep' }
-                ]}
-                placeholder="Pilih Gudang Intake..."
-              />
-            </div>
-
-            {/* 5. Petugas Sortir */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                5. Petugas Sortir / Grader
+                4. Petugas Sortir / Grader
               </label>
               <input
                 type="text"
@@ -775,8 +758,9 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
               <button
                 type="button"
                 onClick={() => handleSaveSortirData(false)}
-                disabled={balItems.length === 0}
-                className="flex-1 sm:flex-none px-4 py-2 bg-[#b81d24] hover:bg-[#b81d24] text-white font-medium text-xs rounded-sm transition flex items-center justify-center space-x-1.5 cursor-pointer disabled:opacity-50 shadow-2xs"
+                disabled={balItems.length === 0 || isKuponExists}
+                title={isKuponExists ? 'Nomor kupon sudah digunakan oleh transaksi lain' : undefined}
+                className="flex-1 sm:flex-none px-4 py-2 bg-[#b81d24] hover:bg-[#b81d24] text-white font-medium text-xs rounded-sm transition flex items-center justify-center space-x-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-2xs"
               >
                 <Check className="w-4 h-4 text-emerald-400" />
                 <span>Simpan Data Sortir</span>

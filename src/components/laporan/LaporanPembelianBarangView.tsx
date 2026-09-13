@@ -24,8 +24,9 @@ import {
 import { TransaksiPembelian, Petani } from '../../types';
 import { downloadCsvFile, downloadElementAsPdf } from '../../utils/printDownload';
 import { formatDateHariBulanTahun } from '../../utils/formatters';
+import { hitungNilaiBal, hitungModalTransaksi } from '../../utils/finance';
 
-export type SortField = 'default' | 'tanggal' | 'kupon' | 'petani' | 'no_bal' | 'kode_beli' | 'bruto' | 'netto' | 'potongan' | 'total_harga' | 'jumlah_bayar';
+export type SortField = 'default' | 'tanggal' | 'kupon' | 'petani' | 'no_bal' | 'kode_beli' | 'bruto' | 'netto' | 'potongan_kuli' | 'potongan_tikar' | 'total_harga' | 'jumlah_bayar';
 
 interface LaporanPembelianBarangViewProps {
   transaksiList: TransaksiPembelian[];
@@ -146,7 +147,8 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
       kodeBeli: 80,
       bruto: 80,
       netto: 80,
-      potongan: 100,
+      potonganKuli: 100,
+      potonganTikar: 100,
       totalHarga: 120,
       jumlahBayar: 120
     };
@@ -444,28 +446,32 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
             comparison = ntA - ntB;
             break;
           }
-          case 'potongan': {
-            const ptA = a.total_potongan || 7000;
-            const ptB = b.total_potongan || 7000;
+          case 'potongan_kuli': {
+            const ptA = Number(a.potongan_kuli || 0);
+            const ptB = Number(b.potongan_kuli || 0);
+            comparison = ptA - ptB;
+            break;
+          }
+          case 'potongan_tikar': {
+            const ptA = Number(a.potongan_tikar || 0);
+            const ptB = Number(b.potongan_tikar || 0);
             comparison = ptA - ptB;
             break;
           }
           case 'total_harga': {
-            const ntA = a.berat_kg || 0;
-            const thA = a.total_harga_beli || (ntA * (a.harga_per_kg || 0));
-            const ntB = b.berat_kg || 0;
-            const thB = b.total_harga_beli || (ntB * (b.harga_per_kg || 0));
+            const thA = hitungModalTransaksi(a);
+            const thB = hitungModalTransaksi(b);
             comparison = thA - thB;
             break;
           }
           case 'jumlah_bayar': {
-            const ptA = a.total_potongan || 7000;
-            const thA = a.total_harga_beli || ((a.berat_kg || 0) * (a.harga_per_kg || 0));
-            const jA = a.harga_final || (thA - ptA);
+            const thA = hitungModalTransaksi(a);
+            const ptA = Number(a.total_potongan || 0);
+            const jA = a.harga_final !== undefined && a.harga_final !== null ? a.harga_final : (thA - ptA);
             
-            const ptB = b.total_potongan || 7000;
-            const thB = b.total_harga_beli || ((b.berat_kg || 0) * (b.harga_per_kg || 0));
-            const jB = b.harga_final || (thB - ptB);
+            const thB = hitungModalTransaksi(b);
+            const ptB = Number(b.total_potongan || 0);
+            const jB = b.harga_final !== undefined && b.harga_final !== null ? b.harga_final : (thB - ptB);
             
             comparison = jA - jB;
             break;
@@ -513,11 +519,12 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
       const bruto = row.jenis_timbang === 'bruto' ? (row.berat_terukur_kg || row.berat_kg + 2) : 0;
       const netto = row.berat_kg || 0;
       const hrgBeli = row.harga_per_kg || 0;
-      const potKuli = row.potongan_kuli || 7000;
-      const potTikar = row.potongan_tikar || 0;
-      const potTotal = row.total_potongan || (potKuli + potTikar);
-      const subtotalHrgBeli = row.total_harga_beli || (netto * hrgBeli);
-      const jmlBayar = row.harga_final || (subtotalHrgBeli - potTotal);
+      const potKuli = Number(row.potongan_kuli || 0);
+      const potTikar = Number(row.potongan_tikar || 0);
+      const potTotal = Number(row.total_potongan !== undefined ? row.total_potongan : (potKuli + potTikar));
+      // Hitung murni modal tembakau (Netto * Harga Beli) menggunakan helper terpusat
+      const subtotalHrgBeli = hitungModalTransaksi(row);
+      const jmlBayar = row.harga_final !== undefined && row.harga_final !== null ? row.harga_final : (subtotalHrgBeli - potTotal);
 
       totalBal += balCount;
       totalBruto += bruto;
@@ -576,9 +583,9 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
           }
           const bNetto = it.berat_kg || 0;
           const bBruto = it.berat_bruto_kg || (bNetto > 0 ? bNetto + (it.potongan_tara_kg || 0) : 0);
-          const pot = it.potongan || ((it.potongan_kuli || 7000) + (it.potongan_tali || 0) + (it.potongan_tikar || 0));
-          const subtotal = it.total_kotor || (bNetto * (it.harga_per_kg || 0));
-          const jmlBayar = it.subtotal_bersih || (subtotal - pot);
+          const pot = Number(it.potongan !== undefined ? it.potongan : ((it.potongan_kuli || 0) + (it.potongan_tali || 0) + (it.potongan_tikar || 0)));
+          const subtotal = hitungNilaiBal(it);
+          const jmlBayar = it.subtotal_bersih !== undefined ? it.subtotal_bersih : (subtotal - pot);
 
           map[gr].totalBal += 1;
           map[gr].totalBruto += bBruto;
@@ -602,9 +609,9 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
         }
         const bNetto = row.berat_kg || 0;
         const bBruto = row.jenis_timbang === 'bruto' ? (row.berat_terukur_kg || bNetto + 2) : bNetto;
-        const pot = row.total_potongan || ((row.potongan_kuli || 7000) + (row.potongan_tikar || 0));
-        const subtotal = row.total_harga_beli || (bNetto * (row.harga_per_kg || 0));
-        const jmlBayar = row.harga_final || (subtotal - pot);
+        const pot = Number(row.total_potongan !== undefined ? row.total_potongan : ((row.potongan_kuli || 0) + (row.potongan_tikar || 0)));
+        const subtotal = hitungModalTransaksi(row);
+        const jmlBayar = row.harga_final !== undefined && row.harga_final !== null ? row.harga_final : (subtotal - pot);
         const balCount = row.total_bal || 1;
 
         map[gr].totalBal += balCount;
@@ -632,15 +639,19 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
       'Kode Beli',
       'Bruto (kg)',
       'Netto (kg)',
-      'Potongan (Rp)',
+      'Potongan Kuli (Rp)',
+      'Potongan Tikar (Rp)',
       'Total Harga Beli (Rp)',
       'Jumlah Bayar (Rp)',
     ];
 
     const rows: (string | number)[][] = sortedData.map((row, idx) => {
       const bruto = row.jenis_timbang === 'bruto' ? (row.berat_terukur_kg || row.berat_kg + 2) : 0;
-      const subtotalHrgBeli = row.total_harga_beli || (row.berat_kg * row.harga_per_kg);
-      const jmlBayar = row.harga_final || (subtotalHrgBeli - (row.total_potongan || 7000));
+      const subtotalHrgBeli = hitungModalTransaksi(row);
+      const potKuli = Number(row.potongan_kuli || 0);
+      const potTikar = Number(row.potongan_tikar || 0);
+      const totalPot = Number(row.total_potongan !== undefined ? row.total_potongan : (potKuli + potTikar));
+      const jmlBayar = row.harga_final !== undefined && row.harga_final !== null ? row.harga_final : (subtotalHrgBeli - totalPot);
       const rowGrades = getTransactionUniqueGrades(row);
       const gradeStr = rowGrades.length > 0 ? rowGrades.join(', ') : (row.kode_grade || '-');
 
@@ -653,16 +664,17 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
         gradeStr,
         bruto,
         row.berat_kg || 0,
-        row.total_potongan || 7000,
+        potKuli,
+        potTikar,
         subtotalHrgBeli,
         jmlBayar,
       ];
     });
 
     // Add Sub-Ringkasan by Kode Beli
-    rows.push(['', '', '', '', '', '', '', '', '', '', '']);
-    rows.push(['--- SUB-RINGKASAN BERDASARKAN KODE BELI (GRADE) ---', '', '', '', '', '', '', '', '', '', '']);
-    rows.push(['Kode Beli (Grade)', 'Jumlah Bal', 'Total Bruto (kg)', 'Total Netto (kg)', 'Rata-rata (kg/bal)', '% Kontribusi Berat', 'Total Potongan (Rp)', 'Total Harga Beli (Rp)', 'Total Jumlah Bayar (Rp)', '', '']);
+    rows.push(['', '', '', '', '', '', '', '', '', '', '', '']);
+    rows.push(['--- SUB-RINGKASAN BERDASARKAN KODE BELI (GRADE) ---', '', '', '', '', '', '', '', '', '', '', '']);
+    rows.push(['Kode Beli (Grade)', 'Jumlah Bal', 'Total Bruto (kg)', 'Total Netto (kg)', 'Rata-rata (kg/bal)', '% Kontribusi Berat', 'Total Potongan (Rp)', 'Total Harga Beli (Rp)', 'Total Jumlah Bayar (Rp)', '', '', '']);
     
     gradeSummary.forEach((gs) => {
       const avg = gs.totalBal > 0 ? (gs.totalNetto / gs.totalBal).toFixed(2) : '0';
@@ -679,13 +691,14 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
         Math.round(gs.totalJumlahBayar),
         '',
         '',
+        '',
       ]);
     });
 
     // Add Summary rows
-    rows.push(['', '', '', '', '', '', '', '', '', '', '']);
-    rows.push(['', '', '', '', '', 'TOTAL POTONGAN OUT (KULI)', '', '', totals.totalPotonganKuli, '', '']);
-    rows.push(['', '', '', '', '', 'TOTAL POTONGAN GANTI TIKAR', '', '', totals.totalPotonganTikar, '', '']);
+    rows.push(['', '', '', '', '', '', '', '', '', '', '', '']);
+    rows.push(['', '', '', '', '', 'TOTAL POTONGAN OUT (KULI)', '', '', totals.totalPotonganKuli, '', '', '']);
+    rows.push(['', '', '', '', '', 'TOTAL POTONGAN GANTI TIKAR', '', '', '', totals.totalPotonganTikar, '', '']);
     rows.push([
       '',
       '',
@@ -695,7 +708,8 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
       'TOTAL AKUMULASI KESELURUHAN',
       totals.totalBruto,
       totals.totalNetto,
-      totals.totalPotonganAll,
+      totals.totalPotonganKuli,
+      totals.totalPotonganTikar,
       totals.totalNilaiHargaBeli,
       totals.totalJumlahBayar,
     ]);
@@ -1128,7 +1142,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
       </div>
 
       {/* Quick Summary Pill Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
         <div className="bg-white p-2.5 border border-gray-200">
           <div className="text-gray-500 text-[11px]">Total Data Ditemukan</div>
           <div className="text-base font-bold text-gray-900 mt-0.5">{totals.count} Transaksi Bal</div>
@@ -1140,9 +1154,15 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
           </div>
         </div>
         <div className="bg-white p-2.5 border border-gray-200">
-          <div className="text-gray-500 text-[11px]">Total Potongan (Kuli + Tikar)</div>
+          <div className="text-gray-500 text-[11px]">Total Potongan Kuli</div>
           <div className="text-base font-bold text-amber-700 mt-0.5">
-            Rp {totals.totalPotonganAll.toLocaleString('id-ID')}
+            Rp {totals.totalPotonganKuli.toLocaleString('id-ID')}
+          </div>
+        </div>
+        <div className="bg-white p-2.5 border border-gray-200">
+          <div className="text-gray-500 text-[11px]">Total Potongan Tikar</div>
+          <div className="text-base font-bold text-amber-700 mt-0.5">
+            Rp {totals.totalPotonganTikar.toLocaleString('id-ID')}
           </div>
         </div>
         <div className="bg-white p-2.5 border border-gray-200">
@@ -1166,9 +1186,6 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
               ) : (
                 <>Total: <strong className="text-gray-900">{sortedData.length}</strong> baris data ({totals.totalBal} Bal • {totals.totalNetto.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg Netto)</>
               )}
-            </span>
-            <span className="text-[10px] text-gray-400 italic hidden md:inline">
-              • Potongan kuli Rp 7.000/bal
             </span>
           </div>
           
@@ -1254,7 +1271,8 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
                 <ResizableHeader colKey="kodeBeli" title="Kode Beli" colWidths={colWidths} setColWidths={setColWidths} align="center" minWidth={60} sortField="kode_beli" sortConfigs={sortConfigs} onSort={handleSort} />
                 <ResizableHeader colKey="bruto" title="Bruto (kg)" colWidths={colWidths} setColWidths={setColWidths} align="right" minWidth={60} sortField="bruto" sortConfigs={sortConfigs} onSort={handleSort} />
                 <ResizableHeader colKey="netto" title="Netto (kg)" colWidths={colWidths} setColWidths={setColWidths} align="right" minWidth={60} sortField="netto" sortConfigs={sortConfigs} onSort={handleSort} />
-                <ResizableHeader colKey="potongan" title="Potongan" colWidths={colWidths} setColWidths={setColWidths} align="right" minWidth={70} sortField="potongan" sortConfigs={sortConfigs} onSort={handleSort} />
+                <ResizableHeader colKey="potonganKuli" title="Pot. Kuli" colWidths={colWidths} setColWidths={setColWidths} align="right" minWidth={70} sortField="potongan_kuli" sortConfigs={sortConfigs} onSort={handleSort} />
+                <ResizableHeader colKey="potonganTikar" title="Pot. Tikar" colWidths={colWidths} setColWidths={setColWidths} align="right" minWidth={70} sortField="potongan_tikar" sortConfigs={sortConfigs} onSort={handleSort} />
                 <ResizableHeader colKey="totalHarga" title="Total Harga Beli" colWidths={colWidths} setColWidths={setColWidths} align="right" minWidth={80} sortField="total_harga" sortConfigs={sortConfigs} onSort={handleSort} />
                 <ResizableHeader colKey="jumlahBayar" title="Jumlah Bayar" colWidths={colWidths} setColWidths={setColWidths} align="right" minWidth={90} className="bg-red-50/50 font-extrabold text-[#b81d24]" sortField="jumlah_bayar" sortConfigs={sortConfigs} onSort={handleSort} />
               </tr>
@@ -1273,9 +1291,11 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
                   const bruto = row.jenis_timbang === 'bruto' ? (row.berat_terukur_kg || row.berat_kg + 2) : 0;
                   const netto = row.berat_kg || 0;
                   const hrgBeli = row.harga_per_kg || 0;
-                  const totalPotonganRow = row.total_potongan || 7000;
-                  const totalHargaBeliRow = row.total_harga_beli || (netto * hrgBeli);
-                  const jumlahBayarRow = row.harga_final || (totalHargaBeliRow - totalPotonganRow);
+                  const potonganKuliRow = Number(row.potongan_kuli || 0);
+                  const potonganTikarRow = Number(row.potongan_tikar || 0);
+                  const totalPotonganRow = Number(row.total_potongan !== undefined ? row.total_potongan : (potonganKuliRow + potonganTikarRow));
+                  const totalHargaBeliRow = hitungModalTransaksi(row);
+                  const jumlahBayarRow = row.harga_final !== undefined && row.harga_final !== null ? row.harga_final : (totalHargaBeliRow - totalPotonganRow);
                   const tglDisplay = formatDateHariBulanTahun(row.tanggal_transaksi);
 
                   return (
@@ -1361,12 +1381,17 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
                         <div className="truncate">{netto.toFixed(1)}</div>
                       </td>
 
-                      {/* 9. Potongan */}
-                      <td className="py-2 px-2.5 text-right font-mono text-amber-800 border-r border-gray-100 truncate" style={{ maxWidth: colWidths.potongan }}>
-                        <div className="truncate">{Math.round(totalPotonganRow).toLocaleString('id-ID')}</div>
+                      {/* 9. Potongan Kuli */}
+                      <td className="py-2 px-2.5 text-right font-mono text-amber-800 border-r border-gray-100 truncate" style={{ maxWidth: colWidths.potonganKuli }}>
+                        <div className="truncate">{potonganKuliRow > 0 ? Math.round(potonganKuliRow).toLocaleString('id-ID') : '-'}</div>
                       </td>
 
-                      {/* 10. Total Harga Beli */}
+                      {/* 10. Potongan Tikar */}
+                      <td className="py-2 px-2.5 text-right font-mono text-amber-800 border-r border-gray-100 truncate" style={{ maxWidth: colWidths.potonganTikar }}>
+                        <div className="truncate">{potonganTikarRow > 0 ? Math.round(potonganTikarRow).toLocaleString('id-ID') : '-'}</div>
+                      </td>
+
+                      {/* 11. Total Harga Beli */}
                       <td className="py-2 px-3 text-right font-mono font-semibold text-gray-900 border-r border-gray-100 truncate" style={{ maxWidth: colWidths.totalHarga }}>
                         <div className="truncate">{Math.round(totalHargaBeliRow).toLocaleString('id-ID')}</div>
                       </td>
@@ -1392,7 +1417,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
                   <td className="py-2 px-2.5 text-right font-mono text-amber-900 font-bold border-r border-gray-300 whitespace-nowrap">
                     Rp {Math.round(totals.totalPotonganKuli).toLocaleString('id-ID')}
                   </td>
-                  <td colSpan={2} className="py-2 px-3 bg-gray-50/30 border-b border-gray-200"></td>
+                  <td colSpan={3} className="py-2 px-3 bg-gray-50/30 border-b border-gray-200"></td>
                 </tr>
 
                 {/* Baris Total Potongan Ganti Tikar */}
@@ -1400,6 +1425,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
                   <td colSpan={8} className="py-2 px-3 text-right font-semibold text-amber-900 border-r border-gray-300 whitespace-nowrap">
                     Total Potongan Ganti Tikar:
                   </td>
+                  <td className="py-2 px-3 bg-gray-50/30 border-b border-gray-200 border-r border-gray-300"></td>
                   <td className="py-2 px-2.5 text-right font-mono text-amber-900 font-bold border-r border-gray-300 whitespace-nowrap">
                     Rp {Math.round(totals.totalPotonganTikar).toLocaleString('id-ID')}
                   </td>
@@ -1418,7 +1444,10 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
                     {totals.totalNetto.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg
                   </td>
                   <td className="py-3 px-2.5 text-right font-mono text-amber-950 border-r border-gray-300 whitespace-nowrap bg-amber-50/70 font-bold">
-                    Rp {Math.round(totals.totalPotonganAll).toLocaleString('id-ID')}
+                    Rp {Math.round(totals.totalPotonganKuli).toLocaleString('id-ID')}
+                  </td>
+                  <td className="py-3 px-2.5 text-right font-mono text-amber-950 border-r border-gray-300 whitespace-nowrap bg-amber-50/70 font-bold">
+                    Rp {Math.round(totals.totalPotonganTikar).toLocaleString('id-ID')}
                   </td>
                   <td className="py-3 px-3 text-right font-mono border-r border-gray-300 whitespace-nowrap bg-gray-100 font-bold text-gray-900">
                     Rp {Math.round(totals.totalNilaiHargaBeli).toLocaleString('id-ID')}
@@ -1528,9 +1557,9 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
                 const bruto = row.jenis_timbang === 'bruto' ? (row.berat_terukur_kg || row.berat_kg + 2) : 0;
                 const netto = row.berat_kg || 0;
                 const hrgBeli = row.harga_per_kg || 0;
-                const totalPotonganRow = row.total_potongan || 7000;
-                const totalHargaBeliRow = row.total_harga_beli || (netto * hrgBeli);
-                const jumlahBayarRow = row.harga_final || (totalHargaBeliRow - totalPotonganRow);
+                const totalPotonganRow = Number(row.total_potongan !== undefined ? row.total_potongan : ((row.potongan_kuli || 0) + (row.potongan_tikar || 0)));
+                const totalHargaBeliRow = hitungModalTransaksi(row);
+                const jumlahBayarRow = row.harga_final !== undefined && row.harga_final !== null ? row.harga_final : (totalHargaBeliRow - totalPotonganRow);
                 const tglDisplay = formatDateHariBulanTahun(row.tanggal_transaksi);
 
                 return (

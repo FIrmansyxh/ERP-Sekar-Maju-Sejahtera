@@ -14,8 +14,7 @@ import {
   CheckCircle2,
   ShieldAlert
 } from 'lucide-react';
-import { Petani, TabelHarga, TransaksiPembelian, Barang, Gudang, TransaksiItemBal } from '../../types';
-import { getGudangLocationOptions } from '../../data/initialGudangData';
+import { Petani, TabelHarga, TransaksiPembelian, Barang, TransaksiItemBal } from '../../types';
 import { formatRupiah, generateBalId, generateNoBalSimple, generateNextUniqueNoBal, generateTransaksiId } from '../../utils/formatters';
 import { loadTransaksiData } from '../../utils/storage';
 import { ConfirmModal } from '../common/ConfirmModal';
@@ -26,7 +25,6 @@ interface TransaksiFormModalProps {
   petaniList: Petani[];
   hargaList: TabelHarga[];
   barangList?: Barang[];
-  gudangList?: Gudang[];
   onSaveTransaksi: (newTx: TransaksiPembelian, generatedBarang: Barang | Barang[]) => void;
 }
 
@@ -45,13 +43,10 @@ export const TransaksiFormModal: React.FC<TransaksiFormModalProps> = ({
   petaniList,
   hargaList,
   barangList = [],
-  gudangList,
   onSaveTransaksi,
 }) => {
-  const gudangOptions = getGudangLocationOptions(gudangList);
   const [selectedPetaniId, setSelectedPetaniId] = useState('');
   const [operatorNama, setOperatorNama] = useState('Budi Hartono (Loket 1 - Pamekasan)');
-  const [lokasiGudang, setLokasiGudang] = useState(gudangOptions[0] || 'Gudang Utama Pamekasan');
   const [catatan, setCatatan] = useState('');
   const [tanggal, setTanggal] = useState(new Date().toISOString().split('T')[0]);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
@@ -300,7 +295,6 @@ export const TransaksiFormModal: React.FC<TransaksiFormModalProps> = ({
         harga_per_kg: item.tarif,
         total_harga: Number(item.beratKg) * item.tarif,
         status_stok: 'di_gudang',
-        lokasi_gudang: lokasiGudang.trim() || 'Gudang Utama Pamekasan',
         tanggal_masuk: dateFormatted,
         petani_id: currentPetani.petani_id,
         transaksi_pembelian_id: txId,
@@ -326,7 +320,6 @@ export const TransaksiFormModal: React.FC<TransaksiFormModalProps> = ({
       berat_terukur_kg: totalBeratNetto + totalBalCount * 2,
       potongan_tara_kg: totalBalCount * 2,
       berat_kg: totalBeratNetto,
-      lokasi_gudang: lokasiGudang.trim() || 'Gudang Utama Pamekasan',
       harga_per_kg: computedItems[0]?.tarif || 0,
       total_kotor: totalKotorKeseluruhan,
       potongan_kuli: 7000 * totalBalCount,
@@ -436,17 +429,6 @@ export const TransaksiFormModal: React.FC<TransaksiFormModalProps> = ({
                     value={operatorNama}
                     onChange={(e) => setOperatorNama(e.target.value)}
                     className="flex-1 border border-[#ced4da] rounded-sm px-2.5 py-1.5 text-xs focus:outline-none focus:border-[#b81d24] bg-white"
-                  />
-                </div>
-
-                <div className="flex items-center">
-                  <label className="w-32 text-gray-700 font-bold">Lokasi Gudang Masuk</label>
-                  <SearchableSelect
-                    value={lokasiGudang}
-                    onChange={(val) => setLokasiGudang(val)}
-                    options={gudangOptions.map(opt => ({ value: opt, label: opt }))}
-                    placeholder="Pilih Gudang..."
-                    className="flex-1"
                   />
                 </div>
               </div>

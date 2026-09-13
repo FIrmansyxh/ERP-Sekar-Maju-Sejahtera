@@ -40,7 +40,7 @@ export const HargaManagement: React.FC<HargaManagementProps> = ({
   const countActive = useMemo(() => hargaList.filter((h) => h.status === 'aktif').length, [hargaList]);
   const countInactive = useMemo(() => hargaList.filter((h) => h.status === 'nonaktif').length, [hargaList]);
   
-  const canManage = userRole === 'superadmin' || userRole === 'admin_utama';
+  const canManage = userRole === 'superadmin' || userRole === 'admin_sortir';
   const [formKode, setFormKode] = useState('');
   const [formHarga, setFormHarga] = useState<number | ''>('');
   const [formTanggalBerlaku, setFormTanggalBerlaku] = useState('');
@@ -336,7 +336,7 @@ return (
                 </tr>
               ) : (
                 paginatedList.map((item, index) => (
-                  <tr key={item.harga_id} className="hover:bg-[#f8f9fa] transition-colors border-b border-gray-100 last:border-0">
+                  <tr key={`${item.harga_id}-${index}`} className="hover:bg-[#f8f9fa] transition-colors border-b border-gray-100 last:border-0">
                     <td className="py-2.5 px-3 border-r border-gray-200 text-center text-gray-500">
                       {(currentPage - 1) * itemsPerPage + index + 1}
                     </td>

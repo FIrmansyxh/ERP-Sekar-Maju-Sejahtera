@@ -31,6 +31,7 @@ import {
 import { Petani, TransaksiPembelian, Barang, UserRole } from '../../types';
 import { downloadCsvFile, downloadElementAsPdf } from '../../utils/printDownload';
 import { formatDateHariBulanTahun } from '../../utils/formatters';
+import { hitungModalTransaksi } from '../../utils/finance';
 import { Pagination } from '../common/Pagination';
 
 interface LaporanPetaniViewProps {
@@ -122,8 +123,8 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
 
       // Calculate Total Pembelian Rupiah (setelah potongan)
       const totalNilaiRp = filteredTxs.reduce((sum, t) => {
-        const subtotal = t.total_harga_beli || (t.berat_kg * t.harga_per_kg);
-        const jmlBayar = t.harga_final || (subtotal - (t.total_potongan || 7000));
+        const subtotal = hitungModalTransaksi(t);
+        const jmlBayar = t.harga_final !== undefined && t.harga_final !== null ? t.harga_final : (subtotal - Number(t.total_potongan || 0));
         return sum + jmlBayar;
       }, 0);
 
@@ -1116,8 +1117,9 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
                     </thead>
                     <tbody className="divide-y divide-gray-200">
                       {selectedPetaniForDetail.txList.map((t, idx) => {
-                        const subtotal = t.total_harga_beli || (t.berat_kg * t.harga_per_kg);
-                        const jmlBayar = t.harga_final || (subtotal - (t.total_potongan || 7000));
+                        const subtotal = hitungModalTransaksi(t);
+                        const potongan = Number(t.total_potongan || 0);
+                        const jmlBayar = t.harga_final !== undefined && t.harga_final !== null ? t.harga_final : (subtotal - potongan);
                         return (
                           <tr key={t.transaksi_id} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'} hover:bg-gray-100/80 transition-colors`}>
                             <td className="py-2 px-2.5 text-center font-mono text-gray-500">{idx + 1}</td>
@@ -1143,7 +1145,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
                               Rp {t.harga_per_kg.toLocaleString('id-ID')}
                             </td>
                             <td className="py-2 px-2.5 text-right font-mono text-gray-500">
-                              Rp {(t.total_potongan || 7000).toLocaleString('id-ID')}
+                              Rp {potongan.toLocaleString('id-ID')}
                             </td>
                             <td className="py-2 px-2.5 text-right font-mono font-bold text-[#b81d24]">
                               Rp {jmlBayar.toLocaleString('id-ID')}

@@ -36,7 +36,6 @@ import {
   PengirimanSample, 
   BatchPengirimanSample, 
   SampleItemDetail,
-  Gudang, 
   Petani, 
   UserRole, 
   TabelHarga, 
@@ -57,7 +56,6 @@ interface PengirimanManagementProps {
   sampleList?: PengirimanSample[];
   batchSampleList?: BatchPengirimanSample[];
   selectedBatchId?: string;
-  gudangList?: Gudang[];
   petaniList?: Petani[];
   hargaJualList?: MasterHargaJual[];
   tabelHarga?: TabelHarga[];
@@ -74,7 +72,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   sampleList = [],
   batchSampleList = [],
   selectedBatchId,
-  gudangList = [],
   petaniList = [],
   hargaJualList = [],
   tabelHarga = [],
@@ -126,9 +123,8 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   const [platNomor, setPlatNomor] = useState('');
   const [noKontrak, setNoKontrak] = useState(`PO-DJA-${new Date().getFullYear()}-089`);
 
-  // Create View Filters (Grade, Lokasi Gudang, Petani) for regular mode
+  // Create View Filters (Grade, Petani) for regular mode
   const [filterGrade, setFilterGrade] = useState<string>('all');
-  const [filterGudang, setFilterGudang] = useState<string>('all');
   const [filterPetani, setFilterPetani] = useState<string>('all');
   const [filterSearchBal, setFilterSearchBal] = useState<string>('');
 
@@ -573,6 +569,14 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
         setScanInputText('');
         return;
       }
+      if (targetBal.status_stok === 'terkirim_sample') {
+        setScanAlert({
+          type: 'error',
+          message: `PERINGATAN: Bal #${targetBal.no_bal || targetBal.barang_id} sedang berstatus TERKIRIM SAMPLE QC (belum kembali ke gudang)!`,
+        });
+        setScanInputText('');
+        return;
+      }
 
       setRegulerManifestBalIds((prev) => prev.includes(targetBal.barang_id) ? prev : [...prev, targetBal.barang_id]);
 
@@ -617,9 +621,9 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     }
   });
 
-  // Available bal in warehouse (status_stok === 'di_gudang' or 'terkirim_sample')
+  // Available bal in warehouse (strictly status_stok === 'di_gudang' only)
   const availableBalList = useMemo(() => {
-    return barangList.filter((b) => b.status_stok === 'di_gudang' || b.status_stok === 'terkirim_sample');
+    return barangList.filter((b) => b.status_stok === 'di_gudang');
   }, [barangList]);
 
   // Filtered bal for the warehouse selection modal
@@ -631,8 +635,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
         const noBal = (b.no_bal || '').toLowerCase();
         const bId = (b.barang_id || '').toLowerCase();
         const pet = (b.nama_petani || '').toLowerCase();
-        const gud = (b.lokasi_gudang || '').toLowerCase();
-        return noBal.includes(q) || bId.includes(q) || pet.includes(q) || gud.includes(q);
+        return noBal.includes(q) || bId.includes(q) || pet.includes(q);
       }
       return true;
     });
@@ -661,12 +664,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   const filteredBalForShipment = useMemo(() => {
     return availableBalList.filter((b) => {
       if (filterGrade !== 'all' && b.kode_grade !== filterGrade) return false;
-      if (filterGudang !== 'all') {
-        const matchGudang =
-          (b.gudang_id && b.gudang_id === filterGudang) ||
-          b.lokasi_gudang.toLowerCase().includes(filterGudang.toLowerCase());
-        if (!matchGudang) return false;
-      }
       if (filterPetani !== 'all') {
         const matchPetani =
           (b.petani_id && b.petani_id === filterPetani) ||
@@ -682,7 +679,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       }
       return true;
     });
-  }, [availableBalList, filterGrade, filterGudang, filterPetani, filterSearchBal]);
+  }, [availableBalList, filterGrade, filterPetani, filterSearchBal]);
 
   // Active batch object
   const activeBatchObj = useMemo(() => {
@@ -715,7 +712,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       const bId = (b.barang_id || '').toLowerCase();
       const gr = (b.kode_grade || '').toLowerCase();
       const pet = (b.nama_petani || '').toLowerCase();
-      const gName = (b.lokasi_gudang || '').toLowerCase();
       const noBalClean = noBal.replace(/[^a-zA-Z0-9]/g, '');
 
       return (
@@ -724,7 +720,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
         gr === q ||
         gr.startsWith(q) ||
         pet.includes(q) ||
-        gName.includes(q) ||
         (qClean && noBalClean.includes(qClean))
       );
     });
@@ -956,7 +951,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     setCustomKodeHargaMap({});
     setScanAlert(null);
     setFilterGrade('all');
-    setFilterGudang('all');
     setFilterPetani('all');
     setFilterSearchBal('');
     setErrorMessage('');
@@ -1668,8 +1662,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                               </div>
                               <div className="text-[11px] text-gray-500 flex items-center space-x-2">
                                 <span>Petani: <strong className="text-gray-700">{bal.nama_petani || 'Petani Madura'}</strong></span>
-                                <span>•</span>
-                                <span className="truncate max-w-[220px]">{bal.lokasi_gudang}</span>
                               </div>
                             </div>
 
@@ -2056,7 +2048,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                                 {formatNumber(bal.berat_kg, 1)} Kg
                               </td>
                               <td className="p-2 text-[11px] text-gray-600">
-                                <strong>{bal.nama_petani || '-'}</strong> • <span className="text-gray-400">{bal.lokasi_gudang || '-'}</span>
+                                <strong>{bal.nama_petani || '-'}</strong>
                               </td>
 
                               {/* Dropdown Kode Master Harga Jual */}
@@ -2345,9 +2337,38 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                             <div className="text-gray-400 font-mono">{krm.plat_nomor || '-'}</div>
                           </td>
                           <td className="p-2.5 text-center">
-                            <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 rounded-xs">
-                              Terkirim DO
-                            </span>
+                            {(() => {
+                              const status = krm.status || 'dikirim';
+                              const statusConfig: Record<string, { label: string; bg: string; text: string }> = {
+                                dimuat: { label: 'Dimuat', bg: 'bg-amber-100', text: 'text-amber-800' },
+                                dalam_perjalanan: { label: 'Perjalanan', bg: 'bg-blue-100', text: 'text-blue-800' },
+                                diterima: { label: 'Diterima', bg: 'bg-indigo-100', text: 'text-indigo-800' },
+                                dikirim: { label: 'Terkirim DO', bg: 'bg-emerald-100', text: 'text-emerald-800' },
+                                selesai: { label: 'Selesai', bg: 'bg-emerald-200', text: 'text-emerald-900' },
+                              };
+                              const cfg = statusConfig[status] || { label: status, bg: 'bg-slate-100', text: 'text-slate-800' };
+                              return (
+                                <div className="inline-flex flex-col items-center gap-1">
+                                  <span className={`px-2 py-0.5 text-[10px] font-bold rounded-xs ${cfg.bg} ${cfg.text}`}>
+                                    {cfg.label}
+                                  </span>
+                                  {onUpdatePengiriman && (
+                                    <select
+                                      value={status}
+                                      onChange={(e) => onUpdatePengiriman({ ...krm, status: e.target.value as any })}
+                                      className="text-[9px] bg-white border border-slate-200 rounded px-1 py-0.5 text-slate-700 cursor-pointer focus:outline-none"
+                                      title="Perbarui Status Logistik DO"
+                                    >
+                                      <option value="dimuat">Dimuat</option>
+                                      <option value="dikirim">Terkirim DO</option>
+                                      <option value="dalam_perjalanan">Perjalanan</option>
+                                      <option value="diterima">Diterima</option>
+                                      <option value="selesai">Selesai</option>
+                                    </select>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </td>
                           <td className="p-2.5 text-center">
                             <div className="flex items-center justify-center space-x-1.5">
@@ -2361,7 +2382,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                                 <span>Cetak DO</span>
                               </button>
                               
-                              {(userRole === 'superadmin' || userRole === 'admin_utama') && (
+                              {(userRole === 'superadmin' || userRole === 'admin_pengiriman' || userRole === 'kepala_gudang') && (
                                 <>
                                   <button
                                     type="button"
@@ -2609,7 +2630,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                             {formatNumber(b.berat_kg, 1)} Kg
                           </td>
                           <td className="p-2.5 text-[11px] text-gray-600">
-                            <strong>{b.nama_petani || 'Petani Madura'}</strong> • <span className="text-gray-400">{b.lokasi_gudang || '-'}</span>
+                            <strong>{b.nama_petani || 'Petani Madura'}</strong>
                           </td>
                           <td className="p-2.5 text-center">
                             {isAlreadyInManifest ? (

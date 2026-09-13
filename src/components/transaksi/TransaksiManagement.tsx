@@ -31,7 +31,7 @@ import {
   Edit3,
   Lock
 } from 'lucide-react';
-import { TransaksiPembelian, Petani, TabelHarga, Barang, UserRole, Gudang, User as UserType } from '../../types';
+import { TransaksiPembelian, Petani, TabelHarga, Barang, UserRole, User as UserType } from '../../types';
 import { formatRupiah, formatDateHariBulanTahun } from '../../utils/formatters';
 import { TransaksiFormModal } from './TransaksiFormModal';
 import { TransaksiDetailModal } from './TransaksiDetailModal';
@@ -48,7 +48,6 @@ interface TransaksiManagementProps {
   petaniList: Petani[];
   hargaList: TabelHarga[];
   barangList: Barang[];
-  gudangList?: Gudang[];
   userRole: UserRole;
   currentUser?: UserType | null;
   onSaveTransaksi: (newTx: TransaksiPembelian, generatedBarang: Barang | Barang[]) => void;
@@ -62,7 +61,6 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
   petaniList = [],
   hargaList = [],
   barangList = [],
-  gudangList = [],
   userRole,
   currentUser,
   onSaveTransaksi,
@@ -1169,7 +1167,7 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
         onClose={() => setIsSortirModalOpen(false)}
         petaniList={petaniList}
         hargaList={hargaList}
-        gudangList={gudangList}
+        
         barangList={barangList}
         currentUser={currentUser}
         onSaveSortir={(newTx) => { onSaveTransaksi(newTx, []); setIsSortirModalOpen(false); }}
@@ -1184,7 +1182,7 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
           setSelectedBarcodeForTimbang(undefined);
         }}
         transaksiList={transaksiList}
-        gudangList={gudangList}
+        
         currentUser={currentUser}
         initialTransaksi={selectedTxForTimbang}
         initialBarcodeToSelect={selectedBarcodeForTimbang}
@@ -1220,7 +1218,7 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
           petaniList={petaniList}
           hargaList={hargaList}
           barangList={barangList}
-          gudangList={gudangList}
+          
           currentUser={currentUser}
           onSaveTransaksi={(newTx, generatedBarang) => {
             onSaveTransaksi(newTx, generatedBarang);
@@ -1238,7 +1236,7 @@ export const TransaksiManagement: React.FC<TransaksiManagementProps> = ({
         petaniList={petaniList}
         hargaList={hargaList}
         barangList={barangList}
-        gudangList={gudangList}
+        
         onSaveTransaksi={onSaveTransaksi}
       />
 

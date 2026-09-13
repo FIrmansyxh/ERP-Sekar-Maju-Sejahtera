@@ -9,8 +9,8 @@ import {
   PengirimanSample, 
   BatchPengirimanSample,
   PengirimanBarang,
-  Gudang,
-  User 
+  User,
+  AuditLogEntry
 } from '../types';
 import LZString from 'lz-string';
 
@@ -21,10 +21,11 @@ const safeSetItem = (key: string, data: any) => {
     const jsonStr = JSON.stringify(data);
     const compressed = LZString.compressToUTF16(jsonStr);
     
-    // Only persist User and Auth data to local storage to avoid forced logout on refresh
-    if (key.includes('users') || key.includes('current_user') || key.includes('auth')) {
+    // Always persist to localStorage, with fallback to memoryStore if storage quota is exceeded
+    try {
       localStorage.setItem(key, compressed);
-    } else {
+    } catch (storageErr) {
+      console.warn(`localStorage quota exceeded for ${key}, falling back to memory store`, storageErr);
       memoryStore.set(key, compressed);
     }
   } catch (err) {
@@ -34,10 +35,13 @@ const safeSetItem = (key: string, data: any) => {
 
 const safeGetItem = (key: string) => {
   try {
-    let compressed = null;
-    if (key.includes('users') || key.includes('current_user') || key.includes('auth')) {
+    let compressed: string | null = null;
+    try {
       compressed = localStorage.getItem(key);
-    } else {
+    } catch (e) {
+      // ignore
+    }
+    if (!compressed) {
       compressed = memoryStore.get(key) || null;
     }
     
@@ -64,7 +68,6 @@ import { INITIAL_HARGA_JUAL_DATA } from '../data/initialHargaJualData';
 import { INITIAL_TRANSAKSI_DATA } from '../data/initialTransaksiData';
 import { INITIAL_SAMPLE_DATA, INITIAL_BATCH_SAMPLE_DATA } from '../data/initialSampleData';
 import { INITIAL_PENGIRIMAN_DATA } from '../data/initialPengirimanData';
-import { INITIAL_GUDANG_DATA } from '../data/initialGudangData';
 import { INITIAL_USER_DATA } from '../data/initialUserData';
 
 const KEY_PETANI = 'erp_tembakau_petani_v31';
@@ -77,9 +80,9 @@ const KEY_TRANSAKSI = 'erp_tembakau_transaksi_v31';
 const KEY_SAMPLE = 'erp_tembakau_sample_v31';
 const KEY_BATCH_SAMPLE = 'erp_tembakau_batch_sample_v31';
 const KEY_PENGIRIMAN = 'erp_tembakau_pengiriman_v31';
-const KEY_GUDANG = 'erp_tembakau_gudang_v31';
 const KEY_USERS = 'erp_tembakau_users_v31';
 const KEY_CURRENT_USER = 'erp_tembakau_current_user_v31';
+const KEY_AUDIT_LOG = 'erp_tembakau_audit_log_v31';
 
 // Clean up old version demo caches
 (function purgeLegacyDemoCaches() {
@@ -321,8 +324,6 @@ const PURGED_BAL_PREFIXES = ['A-250826-2630', 'A-250826-2930', 'A-250826-2931', 
 
 const MASTER_WH_LOCATIONS = [
   'Gudang Utama Pamekasan',
-  'Gudang Produksi Rokok',
-  'Gudang Sumenep',
 ];
 
 // --- BARANG ---
@@ -332,20 +333,22 @@ export function loadBarangData(): Barang[] {
     if (saved !== null) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed)) {
+        let hasChanges = false;
         // Clean out items associated with deleted transactions and normalize locations
-        const cleaned = parsed.map((b, idx) => {
+        const cleaned = parsed.map((b) => {
           if (!b) return null;
-          if (b.transaksi_id && PURGED_TX_IDS.includes(b.transaksi_id)) return null;
-          if (b.barang_id && PURGED_BAL_PREFIXES.some((p) => b.barang_id.includes(p))) return null;
-          
-          let loc = b.lokasi_gudang || '';
-          if (!loc || loc.includes('Gudang Utama') || loc === 'Gudang Pusat') {
-            loc = MASTER_WH_LOCATIONS[idx % MASTER_WH_LOCATIONS.length];
+          if (b.transaksi_id && PURGED_TX_IDS.includes(b.transaksi_id)) {
+            hasChanges = true;
+            return null;
           }
-          return { ...b, lokasi_gudang: loc };
+          if (b.barang_id && PURGED_BAL_PREFIXES.some((p) => b.barang_id.includes(p))) {
+            hasChanges = true;
+            return null;
+          }
+          return b;
         }).filter(Boolean) as Barang[];
         
-        if (cleaned.length !== parsed.length) {
+        if (hasChanges || cleaned.length !== parsed.length) {
           saveBarangData(cleaned);
         }
         return cleaned;
@@ -372,7 +375,48 @@ export function loadHargaData(): TabelHarga[] {
     const saved = safeGetItem(KEY_HARGA);
     if (saved !== null) {
       const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        // Clean up duplicate harga_id if any exists
+        const seenIds = new Set<string>();
+        const cleaned: TabelHarga[] = [];
+        let hasDuplicate = false;
+
+        for (let i = 0; i < parsed.length; i++) {
+          const item = parsed[i];
+          if (!item || !item.harga_id) continue;
+          if (seenIds.has(item.harga_id)) {
+            hasDuplicate = true;
+            if (item.status === 'nonaktif') {
+              cleaned.push({
+                ...item,
+                harga_id: `${item.harga_id}-archived-${i}`,
+              });
+            } else {
+              const existing = cleaned.find((c) => c.harga_id === item.harga_id);
+              if (
+                existing &&
+                existing.harga_per_kg === item.harga_per_kg &&
+                existing.kode_grade === item.kode_grade
+              ) {
+                // Exact duplicate copy: discard it
+                continue;
+              }
+              cleaned.push({
+                ...item,
+                harga_id: `${item.harga_id}-dup-${i}`,
+              });
+            }
+          } else {
+            seenIds.add(item.harga_id);
+            cleaned.push(item);
+          }
+        }
+
+        if (hasDuplicate) {
+          saveHargaData(cleaned);
+        }
+        return cleaned;
+      }
     }
   } catch (err) {
     console.error('Failed to load harga data:', err);
@@ -383,7 +427,22 @@ export function loadHargaData(): TabelHarga[] {
 
 export function saveHargaData(data: TabelHarga[]): void {
   try {
-    safeSetItem(KEY_HARGA, data);
+    const seenIds = new Set<string>();
+    const sanitized: TabelHarga[] = [];
+    for (let i = 0; i < data.length; i++) {
+      const item = data[i];
+      if (!item || !item.harga_id) continue;
+      if (seenIds.has(item.harga_id)) {
+        sanitized.push({
+          ...item,
+          harga_id: `${item.harga_id}-rev-${i}`,
+        });
+      } else {
+        seenIds.add(item.harga_id);
+        sanitized.push(item);
+      }
+    }
+    safeSetItem(KEY_HARGA, sanitized);
   } catch (err) {
     console.error('Failed to save harga data:', err);
   }
@@ -424,20 +483,14 @@ export function loadTransaksiData(): TransaksiPembelian[] {
         const idMap = new Map<string, string>();
 
         // Clean out transactions requested to be deleted, normalize IDs to TRX-DDMMYYYY-XXX, and remove no_bukti_kas
-        const cleaned = parsed.map((t, idx) => {
+        const cleaned = parsed.map((t) => {
           if (!t) return null;
           if (t.transaksi_id && PURGED_TX_IDS.includes(t.transaksi_id)) {
             hasChanges = true;
             return null;
           }
           
-          let loc = t.lokasi_gudang || '';
-          if (!loc || loc.includes('Gudang Utama') || loc === 'Gudang Pusat') {
-            loc = MASTER_WH_LOCATIONS[idx % MASTER_WH_LOCATIONS.length];
-            hasChanges = true;
-          }
-
-          const clean = { ...t, lokasi_gudang: loc };
+          let clean = { ...t };
 
           // Remove redundant no_bukti_kas if present
           if ('no_bukti_kas' in clean) {
@@ -597,30 +650,43 @@ export function savePengirimanData(data: PengirimanBarang[]): void {
   }
 }
 
-// --- MASTER GUDANG ---
-export function loadGudangData(): Gudang[] {
+// --- LOG AKTIVITAS & AUDIT TRAIL (SUPER ADMIN EXCLUSIVE) ---
+export function loadAuditLogData(): AuditLogEntry[] {
   try {
-    const saved = safeGetItem(KEY_GUDANG);
+    const saved = safeGetItem(KEY_AUDIT_LOG);
     if (saved !== null) {
       const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch (err) {
-    console.error('Failed to load gudang data:', err);
+    console.error('Failed to load audit log data:', err);
   }
-  saveGudangData(INITIAL_GUDANG_DATA);
-  return INITIAL_GUDANG_DATA;
+  return [];
 }
 
-export function saveGudangData(data: Gudang[]): void {
+export function saveAuditLogData(data: AuditLogEntry[]): void {
   try {
-    safeSetItem(KEY_GUDANG, data);
+    safeSetItem(KEY_AUDIT_LOG, data);
   } catch (err) {
-    console.error('Failed to save gudang data:', err);
+    console.error('Failed to save audit log data:', err);
   }
 }
 
-// --- LOG AKTIVITAS & AUDIT TRAIL (SUPER ADMIN EXCLUSIVE) ---
+export function recordAuditLog(entry: Omit<AuditLogEntry, 'log_id' | 'timestamp'>): void {
+  try {
+    const logs = loadAuditLogData();
+    const newEntry: AuditLogEntry = {
+      ...entry,
+      log_id: `LOG-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      timestamp: new Date().toISOString(),
+    };
+    // Keep last 500 audit logs to preserve storage
+    const updated = [newEntry, ...logs].slice(0, 500);
+    saveAuditLogData(updated);
+  } catch (err) {
+    console.error('Failed to record audit log:', err);
+  }
+}
 
 
 
@@ -642,7 +708,6 @@ export function resetAllERPData() {
   saveSampleData(INITIAL_SAMPLE_DATA);
   saveBatchSampleData(INITIAL_BATCH_SAMPLE_DATA);
   savePengirimanData(INITIAL_PENGIRIMAN_DATA);
-  saveGudangData(INITIAL_GUDANG_DATA);
   saveUserData(INITIAL_USER_DATA);
   return {
     petani: INITIAL_PETANI_DATA,
@@ -655,7 +720,6 @@ export function resetAllERPData() {
     sample: INITIAL_SAMPLE_DATA,
     batch_sample: INITIAL_BATCH_SAMPLE_DATA,
     pengiriman: INITIAL_PENGIRIMAN_DATA,
-    gudang: INITIAL_GUDANG_DATA,
     users: INITIAL_USER_DATA,
   };
 }

@@ -37,7 +37,6 @@ import {
   StatusSample, 
   StatusBatchSample, 
   Barang, 
-  Gudang, 
   Petani, 
   UserRole,
   MasterHargaJual,
@@ -57,7 +56,6 @@ interface SampleManagementProps {
   sampleList: PengirimanSample[];
   batchSampleList?: BatchPengirimanSample[];
   barangList: Barang[];
-  gudangList?: Gudang[];
   petaniList?: Petani[];
   hargaJualList?: MasterHargaJual[];
   hargaList?: TabelHarga[];
@@ -76,7 +74,6 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
   sampleList = [],
   batchSampleList = [],
   barangList = [],
-  gudangList = [],
   petaniList = [],
   hargaJualList = [],
   hargaList = [],
@@ -295,7 +292,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
       badgeText: 'TERSEDIA',
       badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-300',
       message: `Bal #${bal.no_bal || bal.barang_id} siap digunakan.`,
-      detail: `Grade ${bal.kode_grade} • ${bal.berat_kg} kg • ${bal.lokasi_gudang || 'Gudang'}`,
+      detail: `Grade ${bal.kode_grade} • ${bal.berat_kg} kg`,
     };
   };
 
@@ -372,14 +369,13 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
   // Create Batch Form State
   const [tujuanBuyer, setTujuanBuyer] = useState('');
   const [permintaanBuyer, setPermintaanBuyer] = useState('');
-  const [sumberGudang, setSumberGudang] = useState(gudangList[0]?.nama_gudang || 'Gudang Utama Pamekasan');
+  const [sumberGudang, setSumberGudang] = useState('Gudang Utama Pamekasan');
   const [tanggalKirim, setTanggalKirim] = useState(new Date().toISOString().split('T')[0]);
   const [dikirimOleh, setDikirimOleh] = useState('');
   const [catatanBatchForm, setCatatanBatchForm] = useState('Sample batch resmi untuk evaluasi organoleptik dan uji kadar air sebelum DO.');
 
   // Bal selection filters inside Create Form
   const [filterGradeBal, setFilterGradeBal] = useState<string>('all');
-  const [filterGudangBal, setFilterGudangBal] = useState<string>('all');
   const [filterPetaniBal, setFilterPetaniBal] = useState<string>('all');
   const [searchBalText, setSearchBalText] = useState<string>('');
 
@@ -685,7 +681,6 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
       const finalBruto = s.beratBrutoKg || existingItem?.berat_bruto_kg || resolveBeratBruto(matchedBal, finalNetto);
       const finalTara = s.potonganTaraKg || existingItem?.potongan_tara_kg || matchedBal?.potongan_tara_kg || 0;
       const finalPetani = matchedBal?.nama_petani || txItemMap.get(s.barangId)?.nama_petani || txItemMap.get(s.noBal)?.nama_petani || existingItem?.nama_petani || '-';
-      const finalGudang = matchedBal?.lokasi_gudang || existingItem?.lokasi_gudang || sumberGudang;
 
       return {
         sample_item_id: existingItem?.sample_item_id || generateSampleId(s.grade, null, idx + 1),
@@ -702,7 +697,6 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
         status_item: existingItem?.status_item || 'dikirim',
         sudah_dikirim_do: existingItem?.sudah_dikirim_do || false,
         nama_petani: finalPetani,
-        lokasi_gudang: finalGudang,
       };
     });
 

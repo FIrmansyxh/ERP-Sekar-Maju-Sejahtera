@@ -1,0 +1,288 @@
+import React, { useState, useMemo, useEffect } from 'react';
+import { 
+  ShieldCheck, 
+  Search, 
+  RefreshCw, 
+  Download, 
+  Clock, 
+  User, 
+  Layers, 
+  FileText, 
+  AlertTriangle, 
+  CheckCircle2,
+  Trash2,
+  Filter
+} from 'lucide-react';
+import { AuditLogEntry } from '../../types';
+import { loadAuditLogData } from '../../utils/storage';
+import { formatDateTimeIndo } from '../../utils/formatters';
+import { Pagination } from '../common/Pagination';
+
+export const AuditTrailView: React.FC = () => {
+  const [logs, setLogs] = useState<AuditLogEntry[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterModul, setFilterModul] = useState<string>('all');
+  const [filterAksi, setFilterAksi] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [itemsPerPage, setItemsPerPage] = useState<number>(15);
+
+  const refreshLogs = () => {
+    const data = loadAuditLogData();
+    setLogs(data);
+  };
+
+  useEffect(() => {
+    refreshLogs();
+  }, []);
+
+  const modulesList = useMemo(() => {
+    const set = new Set<string>();
+    logs.forEach((l) => {
+      if (l.modul) set.add(l.modul);
+    });
+    return Array.from(set);
+  }, [logs]);
+
+  const actionsList = useMemo(() => {
+    const set = new Set<string>();
+    logs.forEach((l) => {
+      if (l.aksi) set.add(l.aksi);
+    });
+    return Array.from(set);
+  }, [logs]);
+
+  const filteredLogs = useMemo(() => {
+    return logs.filter((log) => {
+      if (filterModul !== 'all' && log.modul !== filterModul) return false;
+      if (filterAksi !== 'all' && log.aksi !== filterAksi) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchUser = log.user_nama.toLowerCase().includes(q);
+        const matchRole = log.user_role.toLowerCase().includes(q);
+        const matchTarget = log.target_id.toLowerCase().includes(q);
+        const matchDesc = log.deskripsi.toLowerCase().includes(q);
+        return matchUser || matchRole || matchTarget || matchDesc;
+      }
+      return true;
+    });
+  }, [logs, filterModul, filterAksi, searchQuery]);
+
+  const totalPages = Math.ceil(filteredLogs.length / itemsPerPage) || 1;
+  const paginatedLogs = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredLogs.slice(start, start + itemsPerPage);
+  }, [filteredLogs, currentPage, itemsPerPage]);
+
+  const handleExportCSV = () => {
+    if (filteredLogs.length === 0) return;
+    const headers = ['Timestamp', 'User', 'Role', 'Modul', 'Aksi', 'Target ID', 'Deskripsi', 'Rincian Perubahan'];
+    const rows = filteredLogs.map((l) => [
+      `"${l.timestamp}"`,
+      `"${l.user_nama.replace(/"/g, '""')}"`,
+      `"${l.user_role}"`,
+      `"${l.modul}"`,
+      `"${l.aksi}"`,
+      `"${l.target_id}"`,
+      `"${l.deskripsi.replace(/"/g, '""')}"`,
+      `"${(l.rincian_perubahan || []).join('; ').replace(/"/g, '""')}"`
+    ]);
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `Audit_Trail_ERP_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const getAksiBadge = (aksi: string) => {
+    switch (aksi) {
+      case 'TAMBAH_TRANSAKSI':
+        return <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 rounded">TAMBAH</span>;
+      case 'UBAH_TRANSAKSI':
+        return <span className="px-2 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-800 rounded">KOREKSI</span>;
+      case 'HAPUS_TRANSAKSI':
+        return <span className="px-2 py-0.5 text-[10px] font-bold bg-rose-100 text-rose-800 rounded">HAPUS</span>;
+      case 'TIMBANG_BAL':
+        return <span className="px-2 py-0.5 text-[10px] font-bold bg-blue-100 text-blue-800 rounded">TIMBANG</span>;
+      default:
+        return <span className="px-2 py-0.5 text-[10px] font-bold bg-slate-100 text-slate-800 rounded">{aksi}</span>;
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Banner Super Admin */}
+      <div className="bg-slate-900 text-white p-4 rounded-sm border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 rounded bg-[#b81d24] text-white flex items-center justify-center shrink-0">
+            <ShieldCheck className="w-6 h-6" />
+          </div>
+          <div>
+            <h3 className="font-bold text-sm tracking-wide">Audit Trail & Rekaman Log Aktivitas Sistem</h3>
+            <p className="text-xs text-slate-400">
+              Pencatatan riwayat kronologis otomatis untuk transaksi, koreksi timbangan, perubahan data, dan penghapusan record.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center space-x-2 shrink-0">
+          <button
+            type="button"
+            onClick={refreshLogs}
+            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded transition flex items-center space-x-1.5 border border-slate-700 cursor-pointer"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Segarkan</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleExportCSV}
+            disabled={filteredLogs.length === 0}
+            className="px-3 py-1.5 bg-[#b81d24] hover:bg-[#9e161c] text-white text-xs font-semibold rounded transition flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Ekspor CSV</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Filter Bar */}
+      <div className="bg-white border border-slate-200 p-3 rounded-sm grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+        <div>
+          <label className="block text-slate-600 font-semibold mb-1">Cari Log / User / Target ID</label>
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setCurrentPage(1);
+              }}
+              placeholder="Ketik nama user, kupon, atau deskripsi..."
+              className="w-full pl-8 pr-3 py-1.5 border border-slate-300 rounded text-xs focus:ring-1 focus:ring-[#b81d24] focus:outline-none"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-slate-600 font-semibold mb-1">Filter Modul</label>
+          <select
+            value={filterModul}
+            onChange={(e) => {
+              setFilterModul(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="w-full p-1.5 border border-slate-300 rounded text-xs bg-white focus:outline-none"
+          >
+            <option value="all">Semua Modul ({modulesList.length})</option>
+            {modulesList.map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-slate-600 font-semibold mb-1">Filter Tipe Aksi</label>
+          <select
+            value={filterAksi}
+            onChange={(e) => {
+              setFilterAksi(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="w-full p-1.5 border border-slate-300 rounded text-xs bg-white focus:outline-none"
+          >
+            <option value="all">Semua Tipe Aksi ({actionsList.length})</option>
+            {actionsList.map((a) => (
+              <option key={a} value={a}>{a}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Log Table */}
+      <div className="bg-white border border-slate-200 rounded-sm overflow-hidden shadow-2xs">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                <th className="p-3 w-40">Waktu & Tanggal</th>
+                <th className="p-3 w-44">User / Operator</th>
+                <th className="p-3 w-32">Modul</th>
+                <th className="p-3 w-28 text-center">Aksi</th>
+                <th className="p-3 w-36">Target ID</th>
+                <th className="p-3">Deskripsi & Rincian Perubahan</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 font-normal text-slate-700">
+              {paginatedLogs.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="p-8 text-center text-slate-400">
+                    <FileText className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                    <p className="font-semibold">Belum ada riwayat aktivitas audit yang tercatat.</p>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Setiap aktivitas simpan timbangan, koreksi data, atau hapus transaksi akan otomatis terekam di sini.
+                    </p>
+                  </td>
+                </tr>
+              ) : (
+                paginatedLogs.map((entry) => (
+                  <tr key={entry.log_id} className="hover:bg-slate-50 transition">
+                    <td className="p-3 text-[11px] text-slate-500 font-mono whitespace-nowrap">
+                      {new Date(entry.timestamp).toLocaleString('id-ID', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                      })}
+                    </td>
+                    <td className="p-3">
+                      <div className="font-semibold text-slate-800">{entry.user_nama}</div>
+                      <div className="text-[10px] text-slate-400 font-mono">Role: {entry.user_role}</div>
+                    </td>
+                    <td className="p-3 font-medium text-slate-700 whitespace-nowrap">
+                      {entry.modul}
+                    </td>
+                    <td className="p-3 text-center whitespace-nowrap">
+                      {getAksiBadge(entry.aksi)}
+                    </td>
+                    <td className="p-3 font-mono text-[11px] font-semibold text-slate-800 whitespace-nowrap">
+                      {entry.target_id}
+                    </td>
+                    <td className="p-3 text-slate-600">
+                      <div>{entry.deskripsi}</div>
+                      {entry.rincian_perubahan && entry.rincian_perubahan.length > 0 && (
+                        <ul className="mt-1 space-y-0.5 list-disc list-inside text-[11px] text-slate-500 bg-slate-50 p-1.5 rounded border border-slate-150">
+                          {entry.rincian_perubahan.map((r, idx) => (
+                            <li key={idx}>{r}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Footer Pagination */}
+        <div className="p-3 border-t border-slate-200 bg-slate-50 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
+          <span className="text-slate-500 text-[11px]">
+            Menampilkan {filteredLogs.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, filteredLogs.length)} dari {filteredLogs.length} rekaman audit
+          </span>
+          {totalPages > 1 && (
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};

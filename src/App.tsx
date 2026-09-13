@@ -6,7 +6,6 @@ import {
   TransaksiPembelian, 
   PengirimanSample, 
   PengirimanBarang,
-  Gudang,
   User,
   UserRole,
   MasterHargaJual,
@@ -29,13 +28,12 @@ import {
   saveBatchSampleData,
   loadPengirimanData, 
   savePengirimanData,
-  loadGudangData, 
-  saveGudangData,
   loadUserData, 
   saveUserData,
   loadCurrentUser, 
   saveCurrentUser,
-  resetToDemoData
+  resetToDemoData,
+  recordAuditLog
 } from './utils/storage';
 import { hasModuleAccess } from './utils/rbac';
 import { Header } from './components/Header';
@@ -90,7 +88,6 @@ import { BarangManagement } from './components/barang/BarangManagement';
 import { SortirPageView } from './components/transaksi/SortirPageView';
 import { TimbanganPageView } from './components/transaksi/TimbanganPageView';
 import { KasirPageView } from './components/transaksi/KasirPageView';
-import { TransaksiManagement } from './components/transaksi/TransaksiManagement';
 
 // PRD 6.1: Pengiriman Reguler (DO Luar)
 import { PengirimanManagement } from './components/pengiriman/PengirimanManagement';
@@ -102,7 +99,7 @@ import { StatusBatchPengirimanManagement } from './components/pengiriman/StatusB
 import { HargaJualManagement } from './components/harga_jual/HargaJualManagement';
 import { DedicatedPrintView } from './components/print/DedicatedPrintView';
 
-import { CheckCircle2, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 
 export default function App() {
   // Check URL params for standalone print route (e.g. ?cetak=nota&id=... or ?cetak=surat_jalan&id=...)
@@ -238,7 +235,6 @@ export default function App() {
   const [sampleList, setSampleList] = useState<PengirimanSample[]>(() => loadSampleData());
   const [pengirimanList, setPengirimanList] = useState<PengirimanBarang[]>(() => loadPengirimanData());
 
-  const [gudangList, setGudangList] = useState<Gudang[]>(() => loadGudangData());
   
   const [hargaJualList, setHargaJualList] = useState<MasterHargaJual[]>(() => loadHargaJualData());
   const [batchSampleList, setBatchSampleList] = useState<BatchPengirimanSample[]>(() => loadBatchSampleData());
@@ -294,7 +290,6 @@ export default function App() {
     setTransaksiList(loadTransaksiData());
     setSampleList(loadSampleData());
     setPengirimanList(loadPengirimanData());
-    setGudangList(loadGudangData());
     setHargaJualList(loadHargaJualData());
     setBatchSampleList(loadBatchSampleData());
     
@@ -303,6 +298,12 @@ export default function App() {
   // Check RBAC module access whenever activeModuleId or currentUser changes
   const handleSelectModule = (moduleId: string) => {
     if (!currentUser) return;
+
+    if (currentUser.status_aktif === false && moduleId !== 'modul-home') {
+      showToast('Akun Anda dinonaktifkan. Silakan hubungi Administrator.', 'info');
+      setActiveModuleId('modul-home');
+      return;
+    }
 
     if (hasModuleAccess(currentUser.role, moduleId)) {
       setActiveModuleId(moduleId);
@@ -590,12 +591,24 @@ export default function App() {
   // --- PRD 4.2: Harga Handlers ---
   const handleSaveNewPrice = (newPrice: TabelHarga, oldPriceIdToArchive?: string) => {
     let updatedList = [...hargaList];
-    if (oldPriceIdToArchive) {
-      updatedList = updatedList.map((h) =>
-        h.harga_id === oldPriceIdToArchive ? { ...h, status: 'nonaktif' as const } : h
-      );
+
+    // Check if this is an in-place update of an existing price record
+    const existingIndex = updatedList.findIndex((h) => h.harga_id === newPrice.harga_id);
+
+    if (existingIndex !== -1) {
+      // In-place edit of existing price
+      updatedList[existingIndex] = newPrice;
+    } else {
+      // Archive previous active price if specified and distinct
+      if (oldPriceIdToArchive && oldPriceIdToArchive !== newPrice.harga_id) {
+        updatedList = updatedList.map((h) =>
+          h.harga_id === oldPriceIdToArchive ? { ...h, status: 'nonaktif' as const } : h
+        );
+      }
+      // Prepend new price record, ensuring uniqueness
+      updatedList = [newPrice, ...updatedList.filter((h) => h.harga_id !== newPrice.harga_id)];
     }
-    updatedList = [newPrice, ...updatedList];
+
     setHargaList(updatedList);
     saveHargaData(updatedList);
     showToast(`Tarif baru Grade ${newPrice.kode_grade} (Rp ${newPrice.harga_per_kg.toLocaleString('id-ID')}) aktif!`);
@@ -611,14 +624,20 @@ export default function App() {
 
   // --- PRD 5.6: Barang / Inventaris Handlers ---
   const handleUpdateBarang = (updated: Barang) => {
+    if (currentUser?.status_aktif === false) return showToast('Akun Anda dinonaktifkan.', 'info');
     const list = barangList.map((b) => (b.barang_id === updated.barang_id ? updated : b));
     setBarangList(list);
     saveBarangData(list);
-    showToast(`Lokasi rak bal ${updated.no_bal} diperbarui ke "${updated.lokasi_gudang}".`);
+    showToast(`Data bal ${updated.no_bal} berhasil diperbarui.`);
   };
 
   // ---  Transaksi Pembelian Handlers ---
   const handleSaveTransaksi = (newTx: TransaksiPembelian, generatedBarang: Barang | Barang[]) => {
+    if (currentUser?.status_aktif === false) {
+      showToast('Akun Anda dinonaktifkan. Aksi tidak dapat dilakukan.', 'info');
+      return;
+    }
+
     const oldTx = transaksiList.find((t) => t.transaksi_id === newTx.transaksi_id);
     const exists = Boolean(oldTx);
     const updatedTxList = exists
@@ -720,19 +739,48 @@ export default function App() {
           diffSummary.push(`Status bayar: ${oldTx.status_pembayaran} -> ${newTx.status_pembayaran}`);
         }
 
-        
+        recordAuditLog({
+          user_nama: currentUser?.nama_lengkap || 'Sistem',
+          user_role: currentRole,
+          modul: 'Transaksi Pembelian',
+          aksi: 'UBAH_TRANSAKSI',
+          target_id: newTx.transaksi_id,
+          deskripsi: `Koreksi data transaksi ${newTx.transaksi_id} (${newTx.nama_petani})`,
+          rincian_perubahan: diffSummary.length > 0 ? diffSummary : ['Pembaruan rincian timbang/status'],
+        });
       }
     } else {
-      
+      recordAuditLog({
+        user_nama: currentUser?.nama_lengkap || 'Sistem',
+        user_role: currentRole,
+        modul: 'Transaksi Pembelian',
+        aksi: 'TAMBAH_TRANSAKSI',
+        target_id: newTx.transaksi_id,
+        deskripsi: `Pencatatan transaksi baru ${newTx.transaksi_id} (Kupon: ${newTx.no_kupon}, Petani: ${newTx.nama_petani}, ${balCount} Bal)`,
+      });
     }
 
-    
     showToast(`Transaksi ${newTx.transaksi_id} (${balCount} Bal, ${newTx.berat_kg} Kg) berhasil disimpan!`);
   };
 
   const handleDeleteTransaksi = (transaksiId: string, alasanHapus?: string) => {
+    if (currentUser?.status_aktif === false) {
+      showToast('Akun Anda dinonaktifkan. Aksi tidak dapat dilakukan.', 'info');
+      return;
+    }
+
     const txToDelete = transaksiList.find((t) => t.transaksi_id === transaksiId);
     if (!txToDelete) return;
+
+    recordAuditLog({
+      user_nama: currentUser?.nama_lengkap || 'Sistem',
+      user_role: currentRole,
+      modul: 'Transaksi Pembelian',
+      aksi: 'HAPUS_TRANSAKSI',
+      target_id: transaksiId,
+      deskripsi: `Penghapusan transaksi ${transaksiId} (Kupon: ${txToDelete.no_kupon}, Petani: ${txToDelete.nama_petani}). Alasan: ${alasanHapus || 'Tanpa keterangan'}`,
+      rincian_perubahan: [`Alasan: ${alasanHapus || '-'}`],
+    });
 
     // 1. Remove from transaksiList
     const updatedTxList = transaksiList.filter((t) => t.transaksi_id !== transaksiId);
@@ -786,6 +834,7 @@ export default function App() {
 
   // --- PRD 6.2: Pengiriman Sample Handlers ---
   const handleSaveNewSample = (sample: PengirimanSample) => {
+    if (currentUser?.status_aktif === false) return showToast('Akun Anda dinonaktifkan.', 'info');
     const updated = [sample, ...sampleList];
     setSampleList(updated);
     saveSampleData(updated);
@@ -793,6 +842,7 @@ export default function App() {
   };
 
   const handleSaveBatchSamples = (newSamples: PengirimanSample[], updatedBarangs: Barang[]) => {
+    if (currentUser?.status_aktif === false) return showToast('Akun Anda dinonaktifkan.', 'info');
     const updatedSampleList = [...newSamples, ...sampleList];
     setSampleList(updatedSampleList);
     saveSampleData(updatedSampleList);
@@ -814,6 +864,7 @@ export default function App() {
 
   // --- PRD 6.1: Pengiriman Barang (DO) Handlers ---
   const handleSaveNewPengiriman = (newPengiriman: PengirimanBarang, updatedBarangIds: string[]) => {
+    if (currentUser?.status_aktif === false) return showToast('Akun Anda dinonaktifkan.', 'info');
     const updatedPengirimanList = [newPengiriman, ...pengirimanList];
     setPengirimanList(updatedPengirimanList);
     savePengirimanData(updatedPengirimanList);
@@ -878,6 +929,7 @@ export default function App() {
 
 
   const handleSaveBatchSample = (newBatch: BatchPengirimanSample, updatedBarangs: Barang[]) => {
+    if (currentUser?.status_aktif === false) return showToast('Akun Anda dinonaktifkan.', 'info');
     const updated = [newBatch, ...batchSampleList];
     setBatchSampleList(updated);
     saveBatchSampleData(updated);
@@ -893,6 +945,7 @@ export default function App() {
 
 
   const handleDeleteBatchSample = (batchId: string, revertedBarangs?: Barang[]) => {
+    if (currentUser?.status_aktif === false) return showToast('Akun Anda dinonaktifkan.', 'info');
     const list = batchSampleList.filter(b => b.batch_id !== batchId);
     setBatchSampleList(list);
     saveBatchSampleData(list);
@@ -959,7 +1012,6 @@ export default function App() {
     setTransaksiList(loadTransaksiData());
     setSampleList(loadSampleData());
     setPengirimanList(loadPengirimanData());
-    setGudangList(loadGudangData());
     setUserList(loadUserData());
     setHargaJualList(loadHargaJualData());
     setBatchSampleList(loadBatchSampleData());
@@ -1088,7 +1140,6 @@ export default function App() {
             transaksiCount={transaksiList.length}
             sampleCount={sampleList.length}
             pengirimanCount={pengirimanList.length}
-            gudangCount={gudangList.length}
             hargaJualCount={hargaJualList.length}
             hargaCount={hargaList.length}
             userCount={userList.length}
@@ -1147,6 +1198,7 @@ export default function App() {
                 sampleList={sampleList}
                 pengirimanList={pengirimanList}
                 hargaList={hargaList}
+                hargaJualList={hargaJualList}
                 userRole={currentRole}
                 onNavigateToModule={(modId) => handleSelectModule(modId)}
               />
@@ -1156,7 +1208,7 @@ export default function App() {
             {activeModuleId === 'modul-6-laporan-bal' && (
               <LaporanBalView
                 barangList={barangList}
-                gudangList={gudangList}
+                
                 petaniList={petaniList}
                 transaksiList={transaksiList}
                 hargaList={hargaList}
@@ -1181,7 +1233,7 @@ export default function App() {
                 transaksiList={transaksiList}
                 pengirimanList={pengirimanList}
                 sampleList={sampleList}
-                gudangList={gudangList}
+                
                 userRole={currentRole}
                 onNavigateToHarga={() => handleSelectModule('modul-3-harga')}
                 onNavigateToHargaJual={() => handleSelectModule('modul-3-harga-jual')}
@@ -1216,7 +1268,7 @@ export default function App() {
                 pengirimanList={pengirimanList}
                 sampleList={sampleList}
                 barangList={barangList}
-                gudangList={gudangList}
+                
                 userRole={currentRole}
                 onNavigateToSample={() => handleSelectModule('modul-4-sample')}
                 onNavigateToBarang={() => handleSelectModule('modul-2-barang')}
@@ -1275,7 +1327,7 @@ export default function App() {
                 hargaList={hargaList}
                 transaksiList={transaksiList}
                 barangList={barangList}
-                gudangList={gudangList}
+                
                 userRole={currentRole}
                 currentUser={currentUser}
                 onSaveTransaksi={(newTx, newBarangs) => {
@@ -1298,7 +1350,7 @@ export default function App() {
                 petaniList={petaniList}
                 hargaList={hargaList}
                 barangList={barangList}
-                gudangList={gudangList}
+                
                 userRole={currentRole}
                 currentUser={currentUser}
                 initialKuponNo={targetKuponNo}
@@ -1327,7 +1379,7 @@ export default function App() {
                 petaniList={petaniList}
                 hargaList={hargaList}
                 barangList={barangList}
-                gudangList={gudangList}
+                
                 userRole={currentRole}
                 currentUser={currentUser}
                 initialKuponNo={targetKuponNo}
@@ -1351,7 +1403,7 @@ export default function App() {
                 sampleList={sampleList}
                 batchSampleList={batchSampleList}
                 barangList={barangList}
-                gudangList={gudangList}
+                
                 petaniList={petaniList}
                 hargaJualList={hargaJualList}
                 hargaList={hargaList}
@@ -1383,7 +1435,7 @@ export default function App() {
                 sampleList={sampleList}
                 batchSampleList={batchSampleList}
                 selectedBatchId={selectedBatchIdForShipment}
-                gudangList={gudangList}
+                
                 petaniList={petaniList}
                 hargaJualList={hargaJualList}
                 tabelHarga={hargaList}
@@ -1400,7 +1452,7 @@ export default function App() {
               <UserManagement
                 userList={userList}
                 currentUser={currentUser}
-                gudangList={gudangList}
+                
                 onSaveUser={handleSaveUser}
                 onDeleteUser={handleDeleteUser}
                 onToggleStatus={handleToggleUserStatus}

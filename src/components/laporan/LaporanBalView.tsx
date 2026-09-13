@@ -28,22 +28,21 @@ import {
   ChevronLeft,
   X
 } from 'lucide-react';
-import { Barang, Gudang, Petani, TransaksiPembelian, TabelHarga, UserRole } from '../../types';
+import { Barang, Petani, TransaksiPembelian, TabelHarga, UserRole } from '../../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell } from 'recharts';
 import { formatRupiah, formatNumber, formatDateHariBulanTahun } from '../../utils/formatters';
 import { downloadCsvFile, downloadElementAsPdf } from '../../utils/printDownload';
+import { hitungNilaiBal } from '../../utils/finance';
 import { Pagination } from '../common/Pagination';
 
 interface LaporanBalViewProps {
   barangList: Barang[];
-  gudangList?: Gudang[];
   petaniList?: Petani[];
   transaksiList?: TransaksiPembelian[];
   hargaList?: TabelHarga[];
   userRole?: UserRole;
   onNavigateToBarang?: () => void;
   onNavigateToTransaksi?: () => void;
-  onNavigateToGudang?: () => void;
 }
 
 type SortField = 
@@ -56,26 +55,22 @@ type SortField =
   | 'harga_per_kg'
   | 'total_harga'
   | 'nama_petani'
-  | 'lokasi_gudang'
   | 'status_stok';
 
 type SortDirection = 'asc' | 'desc' | 'none';
 
 export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
   barangList = [],
-  gudangList = [],
   petaniList = [],
   transaksiList = [],
   hargaList = [],
   userRole = 'superadmin',
   onNavigateToBarang,
   onNavigateToTransaksi,
-  onNavigateToGudang,
 }) => {
   // Filter States
   const [filterStartDate, setFilterStartDate] = useState<string>('');
   const [filterEndDate, setFilterEndDate] = useState<string>('');
-  const [filterGudang, setFilterGudang] = useState<string>('ALL');
   const [filterGrade, setFilterGrade] = useState<string>('ALL');
   const [filterStatusStok, setFilterStatusStok] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -89,7 +84,6 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
   const [appliedFilters, setAppliedFilters] = useState({
     startDate: '',
     endDate: '',
-    gudang: 'ALL',
     grade: 'ALL',
     statusStok: 'ALL',
     search: '',
@@ -161,21 +155,12 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
     return Array.from(grades).sort();
   }, [barangList]);
 
-  const uniqueWarehouses = useMemo(() => {
-    const warehouses = new Set<string>();
-    barangList.forEach((b) => {
-      if (b.lokasi_gudang) warehouses.add(b.lokasi_gudang.trim());
-    });
-    return Array.from(warehouses).sort();
-  }, [barangList]);
-
   // Handle Search / Apply Filters
   const handleApplyFilters = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setAppliedFilters({
       startDate: filterStartDate,
       endDate: filterEndDate,
-      gudang: filterGudang,
       grade: filterGrade,
       statusStok: filterStatusStok,
       search: searchQuery.trim(),
@@ -191,7 +176,6 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
   const handleResetFilters = () => {
     setFilterStartDate('');
     setFilterEndDate('');
-    setFilterGudang('ALL');
     setFilterGrade('ALL');
     setFilterStatusStok('ALL');
     setSearchQuery('');
@@ -202,7 +186,6 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
     setAppliedFilters({
       startDate: '',
       endDate: '',
-      gudang: 'ALL',
       grade: 'ALL',
       statusStok: 'ALL',
       search: '',
@@ -275,9 +258,11 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
     return barangList
       .map((bal, originalIndex) => {
         const txInfo = txItemMap.get(bal.barang_id) || txItemMap.get(bal.no_bal);
-        const hrgBeli = bal.harga_per_kg || txInfo?.harga_per_kg || 0;
+        const fallbackGradePrice = hargaList.find(h => h.kode_grade?.toUpperCase() === bal.kode_grade?.toUpperCase())?.harga_per_kg || 0;
+        const hrgBeli = bal.harga_per_kg || txInfo?.harga_per_kg || fallbackGradePrice;
         const netto = bal.berat_kg || 0;
-        const subtotal = bal.total_harga || txInfo?.total_kotor || (netto * hrgBeli);
+        // Hitung nilai murni bal menggunakan helper terpusat (Netto * Harga Beli)
+        const subtotal = hitungNilaiBal({ berat_kg: netto, harga_per_kg: hrgBeli }, fallbackGradePrice);
         const bruto = bal.berat_bruto_kg && bal.berat_bruto_kg > 0 ? bal.berat_bruto_kg : (netto > 0 ? netto + (bal.potongan_tara_kg || 0) : 0);
         const tara = bal.potongan_tara_kg !== undefined ? bal.potongan_tara_kg : Math.max(0, bruto - netto);
 
@@ -319,12 +304,6 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
         const itemDate = item.tanggal_masuk.split('T')[0];
         if (itemDate > appliedFilters.endDate) return false;
       }
-      // Lokasi Gudang
-      if (appliedFilters.gudang !== 'ALL') {
-        if (!item.lokasi_gudang || !item.lokasi_gudang.toLowerCase().includes(appliedFilters.gudang.toLowerCase())) {
-          return false;
-        }
-      }
       // Kode Grade
       if (appliedFilters.grade !== 'ALL') {
         if (item.kode_grade?.toUpperCase() !== appliedFilters.grade.toUpperCase()) {
@@ -363,10 +342,9 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
         const matchId = item.barang_id?.toLowerCase().includes(q);
         const matchPetani = item.nama_petani?.toLowerCase().includes(q);
         const matchKupon = item.no_kupon?.toLowerCase().includes(q);
-        const matchGudang = item.lokasi_gudang?.toLowerCase().includes(q);
         const matchGrade = item.kode_grade?.toLowerCase().includes(q);
 
-        if (!matchNoBal && !matchKode && !matchId && !matchPetani && !matchKupon && !matchGudang && !matchGrade) {
+        if (!matchNoBal && !matchKode && !matchId && !matchPetani && !matchKupon && !matchGrade) {
           return false;
         }
       }
@@ -425,12 +403,6 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
             comparison = pA.localeCompare(pB);
             break;
           }
-          case 'lokasi_gudang': {
-            const locA = a.lokasi_gudang || '';
-            const locB = b.lokasi_gudang || '';
-            comparison = locA.localeCompare(locB);
-            break;
-          }
           case 'status_stok': {
             const stA = a.status_stok || '';
             const stB = b.status_stok || '';
@@ -463,7 +435,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
       const netto = b.berat_kg || 0;
       const bruto = b.berat_bruto_kg || 0;
       const tara = b.potongan_tara_kg || 0;
-      const subtotal = b.total_harga || 0;
+      const subtotal = hitungNilaiBal(b);
       const hrg = b.harga_per_kg || 0;
 
       totalNetto += netto;
@@ -508,7 +480,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
       }
       map[g].balCount += 1;
       map[g].totalNetto += b.berat_kg || 0;
-      map[g].totalNilai += b.total_harga || 0;
+      map[g].totalNilai += hitungNilaiBal(b);
     });
     return Object.values(map).sort((a, b) => a.grade.localeCompare(b.grade));
   }, [sortedData]);
@@ -523,10 +495,9 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
       const matchBarangId = (item.barang_id || '').toLowerCase().includes(q);
       const matchGrade = (item.kode_grade || '').toLowerCase().includes(q);
       const matchPetani = (item.nama_petani || item.petani_id || '').toLowerCase().includes(q);
-      const matchGudang = (item.lokasi_gudang || '').toLowerCase().includes(q);
       const matchSJ = (item.no_surat_jalan || '').toLowerCase().includes(q);
       const matchPabrik = (item.tujuan_pabrik || '').toLowerCase().includes(q);
-      return matchNoBal || matchKodeBal || matchBarangId || matchGrade || matchPetani || matchGudang || matchSJ || matchPabrik;
+      return matchNoBal || matchKodeBal || matchBarangId || matchGrade || matchPetani || matchSJ || matchPabrik;
     });
   }, [sortedData, tableSearch]);
 
@@ -1017,7 +988,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
           </div>
 
           <form onSubmit={handleApplyFilters} className="space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 text-xs">
               
               {/* Filter 1: Tanggal Dari */}
               <div>
@@ -1051,26 +1022,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                 </div>
               </div>
 
-              {/* Filter 3: Lokasi Gudang */}
-              <div>
-                <label className="block text-[11px] font-semibold text-gray-700 mb-1">
-                  Lokasi Gudang
-                </label>
-                <select
-                  value={filterGudang}
-                  onChange={(e) => setFilterGudang(e.target.value)}
-                  className="w-full px-2 py-1.5 bg-white border border-[#ced4da] rounded-none text-xs focus:outline-none focus:border-slate-800"
-                >
-                  <option value="ALL">-- Semua Gudang / Lokasi --</option>
-                  {uniqueWarehouses.map((w) => (
-                    <option key={w} value={w}>
-                      {w}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Filter 4: Kode Grade / Beli */}
+              {/* Filter 3: Kode Grade / Beli */}
               <div>
                 <label className="block text-[11px] font-semibold text-gray-700 mb-1">
                   Kode Grade / Beli
@@ -1089,7 +1041,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                 </select>
               </div>
 
-              {/* Filter 5: Status Stok */}
+              {/* Filter 4: Status Stok */}
               <div>
                 <label className="block text-[11px] font-semibold text-gray-700 mb-1">
                   Status Stok Bal
@@ -1107,7 +1059,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                 </select>
               </div>
 
-              {/* Filter 6: Search Keyword */}
+              {/* Filter 5: Search Keyword */}
               <div>
                 <label className="block text-[11px] font-semibold text-gray-700 mb-1">
                   Cari No Bal / Petani / Kupon
@@ -1338,18 +1290,6 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                   </div>
                 </th>
 
-                {/* 6. Lokasi Gudang */}
-                <th
-                  onClick={() => handleHeaderSort('lokasi_gudang')}
-                  className="py-2.5 px-3 border-r border-gray-200 cursor-pointer hover:bg-gray-200/80 transition group select-none"
-                  title="Klik untuk urutkan Lokasi Gudang"
-                >
-                  <div className="flex items-center justify-between space-x-1">
-                    <span>Lokasi Gudang</span>
-                    {renderSortIndicator('lokasi_gudang')}
-                  </div>
-                </th>
-
                 {/* 7. Berat Bruto (kg) */}
                 <th
                   onClick={() => handleHeaderSort('berat_bruto_kg')}
@@ -1488,13 +1428,6 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                             Kupon: {bal.no_kupon}
                           </span>
                         )}
-                      </td>
-
-                      {/* 6. Lokasi Gudang */}
-                      <td className="py-2 px-3 text-gray-700 border-r border-gray-100 text-[11px]">
-                        <div className="truncate max-w-[160px]" title={bal.lokasi_gudang}>
-                          {bal.lokasi_gudang || '-'}
-                        </div>
                       </td>
 
                       {/* 7. Bruto */}
@@ -1638,8 +1571,8 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                 <span>{appliedFilters.grade === 'ALL' ? 'Semua Grade' : `Grade ${appliedFilters.grade}`}</span>
               </div>
               <div>
-                <span className="font-semibold text-gray-600">Filter Lokasi Gudang:</span>{' '}
-                <span>{appliedFilters.gudang === 'ALL' ? 'Semua Gudang' : appliedFilters.gudang}</span>
+                <span className="font-semibold text-gray-600">Lokasi Fasilitas:</span>{' '}
+                <span>Gudang Utama Pamekasan</span>
               </div>
               <div>
                 <span className="font-semibold text-gray-600">Waktu Cetak Dokumen:</span>{' '}

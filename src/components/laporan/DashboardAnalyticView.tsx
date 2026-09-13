@@ -23,10 +23,21 @@ import {
   PengirimanSample, 
   PengirimanBarang, 
   TabelHarga,
+  MasterHargaJual,
   UserRole 
 } from '../../types';
 import { downloadCsvFile } from '../../utils/printDownload';
 import { formatRupiah } from '../../utils/formatters';
+import { loadHargaJualData } from '../../utils/storage';
+import {
+  hitungTotalModal,
+  hitungTotalPenjualan,
+  hitungValuasiGudang,
+  hitungProfitBersih,
+  hitungValuasiStokGudang,
+  hitungProfitPengiriman,
+  hitungModalTransaksi,
+} from '../../utils/finance';
 import { GRADE_PALETTE, getGradePalette } from './LaporanGradeView';
 import { DistribusiStokHargaBeliChart } from './DistribusiStokHargaBeliChart';
 
@@ -36,6 +47,7 @@ interface DashboardAnalyticViewProps {
   sampleList: PengirimanSample[];
   pengirimanList: PengirimanBarang[];
   hargaList?: TabelHarga[];
+  hargaJualList?: MasterHargaJual[];
   userRole: UserRole;
   onNavigateToModule?: (moduleId: string) => void;
 }
@@ -46,19 +58,25 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
   sampleList = [],
   pengirimanList = [],
   hargaList = [],
+  hargaJualList = [],
   userRole,
   onNavigateToModule,
 }) => {
   const isQCOnly = userRole === 'qc_mutu';
 
-  // 1. Total Pembelian (Modal Kotor: Petani + Biaya Kuli/Tali)
+  // 1. Total Pembelian (Modal Murni: Netto × Harga Beli, abaikan potongan tali/kuli/tikar)
   const totalPembelianRupiah = useMemo(() => {
+    // HANYA hitung pembelian jika transaksi sudah LUNAS (dibayar)
+    const lunasTrx = transaksiList.filter(t => t.status_pembayaran === 'lunas');
+    return hitungTotalModal(lunasTrx);
+  }, [transaksiList]);
+
+  // Total Bal yang Dibeli
+  const totalBalDibeli = useMemo(() => {
     return transaksiList.reduce((sum, t) => {
-      // HANYA hitung pembelian jika transaksi sudah LUNAS (dibayar)
       if (t.status_pembayaran !== 'lunas') return sum;
-      
-      const subtotal = t.total_harga_beli || (t.berat_kg * t.harga_per_kg);
-      return sum + subtotal;
+      const count = t.total_bal || (t.items && t.items.length > 0 ? t.items.length : (t.barang_ids ? t.barang_ids.length : 1));
+      return sum + count;
     }, 0);
   }, [transaksiList]);
 
@@ -71,117 +89,77 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
     }, 0);
   }, [transaksiList]);
 
-  // Total Terkirim ke Pabrik Luar (Reguler)
-  const totalTerkirimKg = useMemo(() => {
-    return pengirimanList.reduce((sum, p) => sum + (p.total_berat_kg || 0), 0);
-  }, [pengirimanList]);
-
-  // 3. Stok Aktif di Gudang & Transit (Di Gudang / Siap Kirim / Transit)
+  // 3. Stok Aktif di Gudang & 4. Valuasi (Stok Gudang = Sisa bal di gudang × Netto × Harga Beli)
   const stokAktifGudang = useMemo(() => {
-    const activePengirimanIds = new Set(
-      pengirimanList.filter(p => p.status !== 'diterima' && p.status !== 'selesai')
-        .map(p => p.pengiriman_id)
-    );
-
-    // Get all valid references from transactions to filter out orphaned/deleted items
+    // Filter out items that are orphaned from non-lunas transactions if applicable
     const validRefsFromTx = new Set<string>();
-    transaksiList.forEach(tx => { if (tx.status_pembayaran === "lunas") {
-      tx.items?.forEach(item => {
-        if (item.barang_id) validRefsFromTx.add(item.barang_id);
-        if (item.no_bal) validRefsFromTx.add(item.no_bal);
-        if (item.barcode) validRefsFromTx.add(item.barcode);
-      });
-      tx.barang_ids?.forEach(id => validRefsFromTx.add(id)); }
+    transaksiList.forEach(tx => { 
+      if (tx.status_pembayaran === "lunas") {
+        tx.items?.forEach(item => {
+          if (item.barang_id) validRefsFromTx.add(item.barang_id);
+          if (item.no_bal) validRefsFromTx.add(item.no_bal);
+          if (item.barcode) validRefsFromTx.add(item.barcode);
+        });
+        tx.barang_ids?.forEach(id => validRefsFromTx.add(id)); 
+      }
     });
 
-    const balAktif = barangList.filter(b => {
-      // Clean up orphaned items
+    const validBarangList = barangList.filter(b => {
       if (b.transaksi_pembelian_id && !validRefsFromTx.has(b.barang_id) && !validRefsFromTx.has(b.no_bal)) return false;
-
-      if (b.status_stok === 'di_gudang' || b.status_stok === 'siap_kirim' || b.status_stok === 'terkirim_sample') return true;
-      if (b.status_stok === 'keluar' && b.pengiriman_id && activePengirimanIds.has(b.pengiriman_id)) return true;
-      return false;
+      return true;
     });
 
-    const totalKg = balAktif.reduce((sum, b) => sum + (b.berat_kg || 0), 0);
-    return {
-      count: balAktif.length,
-      totalKg,
-    };
-  }, [barangList, pengirimanList, transaksiList]);
+    return hitungValuasiStokGudang(validBarangList, hargaList);
+  }, [barangList, transaksiList, hargaList]);
 
-  // Helper to get price
+  // Helper to get fallback price
   const getPriceByGrade = (kodeGrade: string) => {
     const h = (hargaList || []).find(x => (x.kode_grade || '').toUpperCase() === (kodeGrade || '').toUpperCase());
     return h ? (h.harga_per_kg || 50000) : 50000;
   };
 
-  // NEW: Total Penjualan (Omset)
-  const totalPenjualanRupiah = useMemo(() => {
-    const completedPengiriman = pengirimanList.filter(p => p.status === 'diterima' || p.status === 'selesai');
-    return completedPengiriman.reduce((sum, p) => {
-      // Prioritize explicit deal value on the DO
-      if (p.total_nilai_deal && p.total_nilai_deal > 0) return sum + p.total_nilai_deal;
-      
-      // Otherwise, iterate through goods and use harga_deal_map or fallback to actual buy price
-      let DOValue = 0;
-      let hasValidItemVal = false;
-      
-      (p.barang_ids || []).forEach(bid => {
-        const b = barangList.find(x => x.barang_id === bid);
-        if (b) {
-          const hargaJual = p.harga_deal_map?.[bid] || 0;
-          if (hargaJual > 0) {
-            DOValue += (b.berat_kg || 0) * hargaJual;
-            hasValidItemVal = true;
-          } else {
-            // DO NOT fallback to buy price, this causes phantom sales.
-            // A sale without a deal price is 0
-            DOValue += 0;
-          }
-        }
-      });
-      
-      // Do not use extreme fallback. If deal price is 0, DO value is 0.
-      return sum + DOValue;
-    }, 0);
-  }, [pengirimanList, barangList, hargaList]);
-
-  // NEW: Valuasi Aset (Nilai Saat Ini)
+  // 4. Valuasi (Stok Gudang) menggunakan helper hitungValuasiGudang
   const totalValuasiRupiah = useMemo(() => {
-    const activePengirimanIds = new Set(
-      pengirimanList.filter(p => p.status !== 'diterima' && p.status !== 'selesai')
-        .map(p => p.pengiriman_id)
+    return hitungValuasiGudang(stokAktifGudang.items, hargaList);
+  }, [stokAktifGudang, hargaList]);
+
+  // Master Harga Jual Aktif
+  const activeHargaJualMaster = useMemo(() => {
+    if (hargaJualList && hargaJualList.length > 0) return hargaJualList;
+    return loadHargaJualData();
+  }, [hargaJualList]);
+
+  // 5. Metrik Bal Terkirim, Total Penjualan & Keuntungan Bersih (Menggunakan helper terpusat hitungProfitPengiriman)
+  const shippedBalMetrics = useMemo(() => {
+    return hitungProfitPengiriman(
+      pengirimanList,
+      barangList,
+      activeHargaJualMaster,
+      hargaList
     );
+  }, [pengirimanList, barangList, activeHargaJualMaster, hargaList]);
 
-    // Get all valid references from transactions to filter out orphaned/deleted items
-    const validRefsFromTx = new Set<string>();
-    transaksiList.forEach(tx => { if (tx.status_pembayaran === "lunas") {
-      tx.items?.forEach(item => {
-        if (item.barang_id) validRefsFromTx.add(item.barang_id);
-        if (item.no_bal) validRefsFromTx.add(item.no_bal);
-        if (item.barcode) validRefsFromTx.add(item.barcode);
-      });
-      tx.barang_ids?.forEach(id => validRefsFromTx.add(id)); }
-    });
+  // Total Penjualan menggunakan helper hitungTotalPenjualan
+  const totalPenjualanRupiah = useMemo(() => {
+    return hitungTotalPenjualan([
+      {
+        total_nilai_deal: shippedBalMetrics.totalPenjualan,
+      },
+    ]);
+  }, [shippedBalMetrics]);
 
-    const balValuasi = barangList.filter(b => {
-      // Clean up orphaned items (if it came from a transaction, it must exist in that transaction)
-      if (b.transaksi_pembelian_id && !validRefsFromTx.has(b.barang_id) && !validRefsFromTx.has(b.no_bal)) return false;
+  // Total Keuntungan Bersih = Selisih (Harga Jual - Harga Beli) bal terkirim menggunakan hitungProfitBersih
+  const totalKeuntunganBersih = useMemo(() => {
+    return hitungProfitBersih([
+      {
+        total_penjualan: shippedBalMetrics.totalPenjualan,
+        total_modal: shippedBalMetrics.totalHargaBeliTerkirim,
+      },
+    ]);
+  }, [shippedBalMetrics]);
 
-      if (b.status_stok === 'di_gudang' || b.status_stok === 'siap_kirim' || b.status_stok === 'terkirim_sample') return true;
-      if (b.status_stok === 'keluar' && b.pengiriman_id && activePengirimanIds.has(b.pengiriman_id)) return true;
-      return false;
-    });
-
-    return balValuasi.reduce((sum, b) => {
-      // Use actual buy price if available, fallback to market grade price
-      const cost = b.total_harga || ((b.berat_kg || 0) * (b.harga_per_kg || getPriceByGrade(b.kode_grade))); return sum + cost;
-    }, 0);
-  }, [barangList, pengirimanList, hargaList]);
-  
-  // NEW: Keuntungan Bersih = Penjualan + Valuasi Aset - Pembelian
-  const totalKeuntunganBersih = totalPenjualanRupiah + totalValuasiRupiah - totalPembelianRupiah;
+  // Total Terkirim ke Pabrik Luar (Reguler)
+  const totalTerkirimKg = shippedBalMetrics.totalKgTerkirim;
   
 
   // 4. Approval Rate Lab QC
@@ -248,14 +226,14 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
       const key = t.petani_id || t.nama_petani;
       const existing = map.get(key) || { nama: t.nama_petani, balCount: 0, totalKg: 0, totalNilai: 0 };
       
-      const subtotal = t.total_harga_beli || (t.berat_kg * t.harga_per_kg);
-      const jmlBayar = t.harga_final !== undefined && t.harga_final !== 0 ? t.harga_final : (subtotal - (t.total_potongan || (7000 * (t.total_bal || 1))));
+      // Murni modal harga beli tembakau (netto × harga beli), abaikan potongan
+      const subtotal = hitungModalTransaksi(t);
 
       const balInTx = t.total_bal || (t.items && t.items.length) || (t.barang_ids && t.barang_ids.length) || 1;
 
       existing.balCount += balInTx;
       existing.totalKg += (t.berat_kg || 0);
-      existing.totalNilai += jmlBayar;
+      existing.totalNilai += subtotal;
       map.set(key, existing);
     });
 
@@ -274,69 +252,17 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
   }, [transaksiList, barangList]);
 
 
-  // Profitabilitas
+  // Profitabilitas (Disinkronkan dengan rumus shippedBalMetrics)
   const profitStats = useMemo(() => {
-    let totalHargaBeliSold = 0;
-    let totalHargaJualSold = 0;
-    let soldBalCount = 0;
-    let totalPercentageSum = 0;
-
-    pengirimanList.forEach((pengiriman) => {
-      if (pengiriman.status !== 'diterima' && pengiriman.status !== 'selesai') return;
-      
-      let doHargaBeli = 0;
-      let doHargaJual = 0;
-      let doBalCount = 0;
-      
-      // Calculate buy price for items in this DO
-      pengiriman.barang_ids.forEach((balId) => {
-        const bal = barangList.find(b => b.barang_id === balId);
-        if (bal) {
-          doHargaBeli += bal.total_harga || ((bal.harga_per_kg || getPriceByGrade(bal.kode_grade)) * (bal.berat_kg || 0));
-          doBalCount += 1;
-        }
-      });
-
-      // Avoid division by zero
-      if (doBalCount === 0 || doHargaBeli === 0) return;
-      
-      // Calculate sell price
-      if (pengiriman.total_nilai_deal && pengiriman.total_nilai_deal > 0) {
-          doHargaJual = pengiriman.total_nilai_deal;
-      } else {
-          // Iterate items if no DO total
-          pengiriman.barang_ids.forEach((balId) => {
-            const bal = barangList.find(b => b.barang_id === balId);
-            if (bal) {
-               const hargaJual = pengiriman.harga_deal_map?.[balId] || 0;
-               doHargaJual += hargaJual * (bal.berat_kg || 0);
-            }
-          });
-      }
-      
-      if (doHargaJual > 0 && doHargaBeli > 0) {
-          totalHargaBeliSold += doHargaBeli;
-          totalHargaJualSold += doHargaJual;
-          soldBalCount += doBalCount;
-          // Weighted average for the DO
-          const doProfitPct = ((doHargaJual - doHargaBeli) / doHargaBeli) * 100;
-          totalPercentageSum += doProfitPct * doBalCount; 
-      }
-    });
-
-    const netProfit = totalHargaJualSold - totalHargaBeliSold;
-    const totalProfitPct = totalHargaBeliSold > 0 ? (netProfit / totalHargaBeliSold) * 100 : 0;
-    const avgProfitPctPerBal = soldBalCount > 0 ? totalPercentageSum / soldBalCount : 0;
-
     return {
-      netProfit,
-      totalProfitPct,
-      avgProfitPctPerBal,
-      soldBalCount,
-      totalHargaBeliSold,
-      totalHargaJualSold,
+      netProfit: shippedBalMetrics.keuntunganBersih,
+      totalProfitPct: shippedBalMetrics.roiPct,
+      avgProfitPctPerBal: shippedBalMetrics.totalBalTerkirim > 0 ? (shippedBalMetrics.roiPct / shippedBalMetrics.totalBalTerkirim) : 0,
+      soldBalCount: shippedBalMetrics.totalBalTerkirim,
+      totalHargaBeliSold: shippedBalMetrics.totalHargaBeliTerkirim,
+      totalHargaJualSold: shippedBalMetrics.totalPenjualan,
     };
-  }, [pengirimanList, barangList, hargaList]);
+  }, [shippedBalMetrics]);
 
   const trendPembelianBulanan = useMemo(() => {
     const monthlyData: Record<string, number> = {};
@@ -369,19 +295,25 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
   // Export functions 
   const exportBukuKasPembelian = () => {
     const headers = ['No', 'ID Transaksi', 'Kupon', 'Tanggal', 'Nama Petani', 'No Bal', 'Grade', 'Netto (kg)', 'Harga Beli (Rp/kg)', 'Potongan (Rp)', 'Jumlah Bayar (Rp)'];
-    const rows = transaksiList.map((t, idx) => [
-      idx + 1,
-      t.transaksi_id,
-      t.no_kupon || '-',
-      t.tanggal_transaksi ? t.tanggal_transaksi.split('T')[0] : '-',
-      t.nama_petani,
-      t.no_bal,
-      t.kode_grade,
-      t.berat_kg,
-      t.harga_per_kg,
-      t.total_potongan || (7000 * (t.total_bal || 1)),
-      t.harga_final !== undefined && t.harga_final !== 0 ? t.harga_final : (t.berat_kg * t.harga_per_kg - (t.total_potongan || (7000 * (t.total_bal || 1)))),
-    ]);
+    const rows = transaksiList.map((t, idx) => {
+      const modal = hitungModalTransaksi(t);
+      const potongan = Number(t.total_potongan || 0);
+      const bayar = t.harga_final !== undefined && t.harga_final !== 0 ? t.harga_final : (modal - potongan);
+
+      return [
+        idx + 1,
+        t.transaksi_id,
+        t.no_kupon || '-',
+        t.tanggal_transaksi ? t.tanggal_transaksi.split('T')[0] : '-',
+        t.nama_petani,
+        t.no_bal,
+        t.kode_grade,
+        t.berat_kg,
+        t.harga_per_kg,
+        potongan,
+        bayar,
+      ];
+    });
     downloadCsvFile('Buku_Kas_Pembelian_Petani', headers, rows);
   };
 
@@ -393,7 +325,6 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
       b.kode_grade,
       b.berat_kg,
       b.status_stok,
-      b.lokasi_gudang,
       b.tanggal_masuk,
       b.nama_petani || '-',
     ]);
@@ -474,7 +405,7 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
           
           {/* 1. Total Pembelian Petani */}
           <div className="bg-white p-4 border border-gray-200 shadow-xs relative overflow-hidden">
-            <div className="flex items-center justify-between" title="Total modal pembelian aset barang (Dibayar ke Petani + Dibayar cash untuk Potongan/Operasional)">
+            <div className="flex items-center justify-between" title="Total modal murni pembelian tembakau (Berat Netto × Harga Beli/kg, abaikan potongan tali/kuli/tikar)">
               <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">
                 Total Pembelian (Modal)
               </span>
@@ -486,14 +417,14 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
               Rp {totalPembelianRupiah.toLocaleString('id-ID')}
             </div>
             <div className="flex items-center justify-between text-[10px] text-gray-500 mt-2 pt-2 border-t border-gray-100">
-              <span>Total Modal Kotor</span>
-              <span className="font-semibold text-gray-700">{transaksiList.length} Nota</span>
+              <span title="Murni Berat Netto × Harga Beli/kg">Modal Murni Semua Bal</span>
+              <span className="font-semibold text-gray-700">{totalBalDibeli} Bal ({transaksiList.length} Nota)</span>
             </div>
           </div>
 
           {/* 2. Total Penjualan */}
           <div className="bg-white p-4 border border-gray-200 shadow-xs relative overflow-hidden">
-            <div className="flex items-center justify-between" title="Total nilai uang dari barang yang telah laku dan dikirim">
+            <div className="flex items-center justify-between" title="Total penjualan bal tembakau yang sudah dikirimkan surat jalan dan barangnya sampai (Netto × Harga Jual Deal)">
               <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">
                 Total Penjualan
               </span>
@@ -505,14 +436,14 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
               Rp {totalPenjualanRupiah.toLocaleString('id-ID')}
             </div>
             <div className="flex items-center justify-between text-[10px] text-gray-500 mt-2 pt-2 border-t border-gray-100">
-              <span>Barang yang Laku/Keluar</span>
-              <span className="font-semibold text-gray-700">{pengirimanList.length} DO</span>
+              <span>Bal Terkirim ke Pabrik</span>
+              <span className="font-semibold text-gray-700">{shippedBalMetrics.totalBalTerkirim} Bal ({shippedBalMetrics.validShippedDO.length} DO)</span>
             </div>
           </div>
 
           {/* 3. Valuasi Aset di Gudang */}
           <div className="bg-white p-4 border border-gray-200 shadow-xs relative overflow-hidden">
-            <div className="flex items-center justify-between" title="Estimasi nilai harta berupa tembakau yang FISIKNYA SAAT INI MASIH ADA DI GUDANG">
+            <div className="flex items-center justify-between" title="Estimasi modal bal yang statusnya masih tersimpan di gudang (Berat Netto × Harga Beli/kg)">
               <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">
                 Valuasi (Stok Gudang)
               </span>
@@ -524,18 +455,18 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
               Rp {totalValuasiRupiah.toLocaleString('id-ID')}
             </div>
             <div className="flex items-center justify-between text-[10px] text-gray-500 mt-2 pt-2 border-t border-gray-100">
-              <span>Nilai Harta Saat Ini</span>
-              <span className="font-semibold text-gray-700">{stokAktifGudang.count} Bal</span>
+              <span>Sisa Bal di Gudang</span>
+              <span className="font-semibold text-gray-700">{stokAktifGudang.count} Bal ({stokAktifGudang.totalKg.toLocaleString('id-ID')} kg)</span>
             </div>
           </div>
 
           {/* 4. Total Keuntungan Bersih */}
-          <div className="bg-white p-4 border border-emerald-200 shadow-xs relative overflow-hidden bg-emerald-50/10">
-            <div className="flex items-center justify-between" title="Penjualan + Valuasi Aset - Total Pembelian">
-              <span className="text-xs font-bold text-emerald-800 uppercase tracking-wide">
+          <div className={`bg-white p-4 border shadow-xs relative overflow-hidden ${totalKeuntunganBersih >= 0 ? 'border-emerald-200 bg-emerald-50/10' : 'border-rose-200 bg-rose-50/10'}`}>
+            <div className="flex items-center justify-between" title="Total dari selisih (Harga Jual - Harga Beli) setiap bal yang sudah dikirimkan">
+              <span className={`text-xs font-bold uppercase tracking-wide ${totalKeuntunganBersih >= 0 ? 'text-emerald-800' : 'text-rose-800'}`}>
                 Keuntungan Bersih
               </span>
-              <span className="p-1.5 bg-emerald-100 text-emerald-800 rounded-sm">
+              <span className={`p-1.5 rounded-sm ${totalKeuntunganBersih >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
                 <span className="inline-flex items-center justify-center font-bold leading-none w-4 h-4">Rp</span>
               </span>
             </div>
@@ -543,7 +474,10 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
               {totalKeuntunganBersih < 0 ? '-' : ''}Rp {Math.abs(totalKeuntunganBersih).toLocaleString('id-ID')}
             </div>
             <div className="flex items-center justify-between text-[10px] text-gray-500 mt-2 pt-2 border-t border-gray-100">
-              <span className="italic text-emerald-800/70 truncate mr-2">(Penjualan + Valuasi) - Modal</span>
+              <span className="italic text-gray-600 truncate mr-1">Selisih Jual - Beli Bal Terkirim</span>
+              <span className={`font-bold font-mono ${totalKeuntunganBersih >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                {shippedBalMetrics.totalPenjualan > 0 ? `${shippedBalMetrics.profitMarginPct >= 0 ? '+' : ''}${shippedBalMetrics.profitMarginPct.toFixed(1)}%` : '0%'}
+              </span>
             </div>
           </div>
 

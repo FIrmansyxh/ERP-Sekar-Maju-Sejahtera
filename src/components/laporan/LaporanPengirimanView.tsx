@@ -27,7 +27,7 @@ import {
   ArrowUp,
   ArrowDown
 } from 'lucide-react';
-import { PengirimanBarang, PengirimanSample, Barang, Gudang, UserRole } from '../../types';
+import { PengirimanBarang, PengirimanSample, Barang, UserRole } from '../../types';
 import { downloadCsvFile, downloadElementAsPdf } from '../../utils/printDownload';
 import { Pagination } from '../common/Pagination';
 
@@ -35,7 +35,6 @@ interface LaporanPengirimanViewProps {
   pengirimanList: PengirimanBarang[];
   sampleList?: PengirimanSample[];
   barangList?: Barang[];
-  gudangList?: Gudang[];
   userRole?: UserRole;
   onNavigateToSample?: () => void;
   onNavigateToBarang?: () => void;
@@ -45,7 +44,6 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
   pengirimanList = [],
   sampleList = [],
   barangList = [],
-  gudangList = [],
   userRole = 'superadmin',
   onNavigateToSample,
   onNavigateToBarang,
@@ -1213,7 +1211,6 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
                         <td className="py-2.5 px-3 border-r border-gray-200 font-semibold text-gray-800">
                           {b.nama_petani || '-'}
                         </td>
-                        <td className="py-2.5 px-3 border-r border-gray-200 text-gray-600">{b.lokasi_gudang}</td>
                         <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono text-gray-600">
                           {b.tanggal_keluar || b.tanggal_masuk}
                         </td>

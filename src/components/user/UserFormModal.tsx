@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, UserPlus, UserCheck, Shield, Building2, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { SearchableSelect } from '../common/SearchableSelect';
-import { User, UserRole, Gudang } from '../../types';
+import { User, UserRole } from '../../types';
 import { ALL_ROLES, ROLE_DEFINITIONS } from '../../utils/rbac';
 
 interface UserFormModalProps {
@@ -10,7 +10,6 @@ interface UserFormModalProps {
   onSave: (user: User) => void;
   editingUser?: User | null;
   existingUsers: User[];
-  gudangList: Gudang[];
 }
 
 export const UserFormModal: React.FC<UserFormModalProps> = ({
@@ -19,7 +18,6 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
   onSave,
   editingUser,
   existingUsers,
-  gudangList,
 }) => {
   const isEdit = Boolean(editingUser);
 
@@ -54,11 +52,11 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
       setRole('admin_sortir');
       setEmail('');
       setNoHp('');
-      setUnitPenugasan(gudangList.length > 0 ? gudangList[0].nama_gudang : 'Gudang Utama A - Wringin Anom');
+      setUnitPenugasan('Gudang Utama Pamekasan');
       setStatusAktif(true);
       setError(null);
     }
-  }, [editingUser, isOpen, existingUsers, gudangList]);
+  }, [editingUser, isOpen, existingUsers]);
 
   if (!isOpen) return null;
 
@@ -84,8 +82,8 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
       return;
     }
 
-    if (!isEdit && !password.trim()) {
-      setError('Kata sandi awal wajib diisi untuk pengguna baru.');
+    if (!isEdit && (!password.trim() || password.trim().length < 6)) {
+      setError('Kata sandi awal minimal 6 karakter untuk keamanan akun pengguna baru.');
       return;
     }
 
@@ -97,7 +95,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
       role,
       email: email.trim() || undefined,
       no_hp: noHp.trim() || undefined,
-      unit_penugasan: unitPenugasan.trim() || 'Gudang Utama A - Wringin Anom',
+      unit_penugasan: 'Gudang Utama Pamekasan',
       status_aktif: statusAktif,
       dibuat_pada: editingUser?.dibuat_pada || new Date().toISOString(),
       terakhir_login: editingUser?.terakhir_login,
@@ -238,30 +236,19 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
               )}
             </div>
 
-            {/* Unit Penugasan / Gudang */}
+            {/* Unit Penugasan */}
             <div className="sm:col-span-2">
               <label className="block font-semibold text-gray-700 mb-1">
-                Unit Fasilitas / Penugasan Gudang <span className="text-red-500">*</span>
+                Unit Fasilitas / Penugasan Gudang
               </label>
-              <div className="space-y-1.5">
-                <input
-                  type="text"
-                  list="gudang-options"
-                  value={unitPenugasan}
-                  onChange={(e) => setUnitPenugasan(e.target.value)}
-                  placeholder="Pilih atau ketik unit gudang/posisi..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-sm focus:ring-1 focus:ring-red-500 focus:border-red-500 text-xs"
-                  required
-                />
-                <datalist id="gudang-options">
-                  <option value="Pusat Manajemen Pamekasan (Semua Unit)" />
-                  {gudangList.map((g) => (
-                    <option key={g.gudang_id} value={g.nama_gudang} />
-                  ))}
-                  <option value="Laboratorium Uji Mutu & QC Temanggung" />
-                  <option value="Armada & Distribusi Pabrik Sekar Maju Sejahtera" />
-                </datalist>
-              </div>
+              <input
+                type="text"
+                value="Gudang Utama Pamekasan"
+                readOnly
+                disabled
+                className="w-full px-3 py-2 border border-gray-200 bg-gray-50 text-gray-600 rounded-sm text-xs cursor-not-allowed"
+              />
+              <p className="text-[10px] text-gray-500 mt-0.5">Sistem terkonfigurasi tunggal pada Gudang Utama Pamekasan.</p>
             </div>
 
             {/* Email */}

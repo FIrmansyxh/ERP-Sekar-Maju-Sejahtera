@@ -32,10 +32,10 @@ import {
   TransaksiPembelian, 
   PengirimanBarang, 
   PengirimanSample, 
-  Gudang, 
   UserRole 
 } from '../../types';
 import { downloadCsvFile, downloadElementAsPdf } from '../../utils/printDownload';
+import { hitungNilaiBal } from '../../utils/finance';
 import { Pagination } from '../common/Pagination';
 
 // Uniform Black (Hitam) for grade metrics
@@ -54,7 +54,6 @@ interface LaporanGradeViewProps {
   transaksiList: TransaksiPembelian[];
   pengirimanList: PengirimanBarang[];
   sampleList: PengirimanSample[];
-  gudangList?: Gudang[];
   userRole?: UserRole;
   initialTab?: 'beli' | 'jual';
   onNavigateToHarga?: () => void;
@@ -69,7 +68,6 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
   transaksiList = [],
   pengirimanList = [],
   sampleList = [],
-  gudangList = [],
   userRole = 'superadmin',
   initialTab = 'beli',
   onNavigateToHarga,
@@ -148,7 +146,6 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
   const [showMatriksBeli, setShowMatriksBeli] = useState<boolean>(false);
   const [showMatriksJual, setShowMatriksJual] = useState<boolean>(false);
   const [selectedGradeCode, setSelectedGradeCode] = useState<string>('');
-  const [filterGudang, setFilterGudang] = useState<string>('ALL');
   const [filterStatusStok, setFilterStatusStok] = useState<string>('ALL');
   const [searchBalQuery, setSearchBalQuery] = useState<string>('');
   const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
@@ -220,11 +217,9 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
         .map(p => p.pengiriman_id)
     );
 
-    // Total active bal in warehouse + in transit
+    // Total active bal physically remaining in warehouse
     const activeBal = barangList.filter((b) => {
-      if (b.status_stok === 'di_gudang' || b.status_stok === 'siap_kirim' || b.status_stok === 'terkirim_sample') return true;
-      if (b.status_stok === 'keluar' && b.pengiriman_id && activePengirimanIds.has(b.pengiriman_id)) return true;
-      return false;
+      return b.status_stok === 'di_gudang' || b.status_stok === 'siap_kirim' || b.status_stok === 'terkirim_sample';
     });
     const totalActiveBalCount = activeBal.length || 1;
     const totalActiveBalKg = activeBal.reduce((sum, b) => sum + (b.berat_kg || 0), 0) || 1;
@@ -239,11 +234,11 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
       const persenStokBal = (stokBal / totalActiveBalCount) * 100;
       const persenStokKg = (stokKg / totalActiveBalKg) * 100;
       
-      // Calculate valuasi using actual buy price if available, fallback to grade price
-      const valuasiRupiah = inGudangBal.reduce((sum, b) => sum + (b.total_harga || ((b.berat_kg || 0) * (b.harga_per_kg || g.price))), 0);
+      // Calculate valuasi using actual buy price if available, fallback to grade price via hitungNilaiBal
+      const valuasiRupiah = inGudangBal.reduce((sum, b) => sum + hitungNilaiBal(b, g.price), 0);
 
       // Inbound / Intake (From Transaksi)
-      // Note: If transaction has items, count items with this grade. If single bal transaction without items, check t.kode_grade.
+      // Murni modal harga beli tembakau (Netto * Harga Beli/kg), abaikan potongan tali/kuli/tikar
       let intakeBal = 0;
       let intakeKg = 0;
       let intakeNilai = 0;
@@ -253,15 +248,17 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
           t.items.forEach((item) => {
             if ((item.kode_grade || '').toUpperCase() === g.code) {
               intakeBal += 1;
-              intakeKg += Number(item.berat_kg || 0);
-              intakeNilai += Number(item.subtotal_bersih || 0);
+              const kg = Number(item.berat_kg || 0);
+              intakeKg += kg;
+              intakeNilai += hitungNilaiBal(item, g.price);
             }
           });
         } else if ((t.kode_grade || '').toUpperCase() === g.code) {
           const balInTx = t.total_bal || (t.barang_ids && t.barang_ids.length) || 1;
+          const kg = Number(t.berat_kg || 0);
           intakeBal += balInTx;
-          intakeKg += (t.berat_kg || 0);
-          intakeNilai += (t.harga_final || t.total_harga_beli || 0);
+          intakeKg += kg;
+          intakeNilai += hitungNilaiBal({ berat_kg: kg, harga_per_kg: t.harga_per_kg }, g.price);
         }
       });
 
@@ -347,13 +344,6 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
       if (selectedGradeCode && selectedGradeCode !== 'ALL' && b.kode_grade.toUpperCase() !== selectedGradeCode.toUpperCase()) {
         return false;
       }
-      // Gudang filter
-      if (filterGudang !== 'ALL') {
-        const qGudang = filterGudang.toLowerCase();
-        if (!b.lokasi_gudang || !b.lokasi_gudang.toLowerCase().includes(qGudang)) {
-          return false;
-        }
-      }
       // Status Stok filter
       if (filterStatusStok !== 'ALL' && b.status_stok !== filterStatusStok) {
         return false;
@@ -364,8 +354,7 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
         const matchBalId = (b.barang_id || '').toLowerCase().includes(q);
         const matchNoBal = (b.no_bal || '').toLowerCase().includes(q);
         const matchPetani = (b.nama_petani || '').toLowerCase().includes(q);
-        const matchLokasi = (b.lokasi_gudang || '').toLowerCase().includes(q);
-        if (!matchBalId && !matchNoBal && !matchPetani && !matchLokasi) {
+        if (!matchBalId && !matchNoBal && !matchPetani) {
           return false;
         }
       }
@@ -373,7 +362,7 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
     });
 
 
-  }, [barangList, selectedGradeCode, filterGudang, filterStatusStok, searchBalQuery]);
+  }, [barangList, selectedGradeCode, filterStatusStok, searchBalQuery]);
   const [selectedHargaJualCode, setSelectedHargaJualCode] = useState<string>('ALL');
 
   const hargaJualMetrics = useMemo(() => {
@@ -542,7 +531,6 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
         b.berat_kg,
         estPrice,
         b.status_stok,
-        b.lokasi_gudang,
         b.nama_petani || '-',
         b.tanggal_masuk,
         b.catatan || '-',
@@ -695,7 +683,7 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
               </span>
             </h2>
             <p className="text-[11px] text-gray-500 mt-0.5">
-              Urutan berdasarkan jumlah inventaris bal aktif terbanyak di seluruh fasilitas gudang.
+              Urutan berdasarkan jumlah inventaris bal aktif terbanyak di Gudang Utama Pamekasan.
             </p>
           </div>
 
@@ -945,26 +933,6 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
             </datalist>
           </div>
 
-          {/* Gudang Filter */}
-          <div>
-            <label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">Lokasi Gudang:</label>
-            <select
-              value={filterGudang}
-              onChange={(e) => {
-                setFilterGudang(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full bg-white border border-gray-300 px-2 py-1.5 text-xs rounded-none focus:border-gray-800 focus:outline-none text-gray-800"
-            >
-              <option value="ALL">Semua Gudang</option>
-              {gudangList.map((gdg) => (
-                <option key={gdg.gudang_id} value={gdg.nama_gudang}>
-                  {gdg.nama_gudang}
-                </option>
-              ))}
-            </select>
-          </div>
-
           {/* Status Stok Filter */}
           <div>
             <label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">Status Stok:</label>
@@ -1059,7 +1027,7 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
                         {bal.nama_petani || '-'}
                       </td>
                       <td className="py-2 px-3 text-gray-600 text-[11px]">
-                        {bal.lokasi_gudang}
+                        
                       </td>
                       <td className="py-2 px-3 text-center">
                         <span className={`px-2 py-0.5 text-[10px] font-bold rounded-none ${
@@ -1355,7 +1323,7 @@ const contentBeli = (
               </span>
             </h2>
             <p className="text-[11px] text-gray-500 mt-0.5">
-              Urutan berdasarkan jumlah inventaris bal aktif terbanyak di seluruh fasilitas gudang.
+              Urutan berdasarkan jumlah inventaris bal aktif terbanyak di Gudang Utama Pamekasan.
             </p>
           </div>
 
@@ -1605,26 +1573,6 @@ const contentBeli = (
             </datalist>
           </div>
 
-          {/* Gudang Filter */}
-          <div>
-            <label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">Lokasi Gudang:</label>
-            <select
-              value={filterGudang}
-              onChange={(e) => {
-                setFilterGudang(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full bg-white border border-gray-300 px-2 py-1.5 text-xs rounded-none focus:border-gray-800 focus:outline-none text-gray-800"
-            >
-              <option value="ALL">Semua Gudang</option>
-              {gudangList.map((gdg) => (
-                <option key={gdg.gudang_id} value={gdg.nama_gudang}>
-                  {gdg.nama_gudang}
-                </option>
-              ))}
-            </select>
-          </div>
-
           {/* Status Stok Filter */}
           <div>
             <label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">Status Stok:</label>
@@ -1719,7 +1667,7 @@ const contentBeli = (
                         {bal.nama_petani || '-'}
                       </td>
                       <td className="py-2 px-3 text-gray-600 text-[11px]">
-                        {bal.lokasi_gudang}
+                        
                       </td>
                       <td className="py-2 px-3 text-center">
                         <span className={`px-2 py-0.5 text-[10px] font-bold rounded-none ${

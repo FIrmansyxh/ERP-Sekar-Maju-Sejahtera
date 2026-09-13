@@ -24,12 +24,11 @@ import {
   Petani, 
   TabelHarga, 
   Barang, 
-  Gudang, 
   TransaksiItemBal, 
   User as UserType 
 } from '../../types';
+import { recordAuditLog } from '../../utils/storage';
 import { formatRupiah, generateBalId, generateNextUniqueNoBal } from '../../utils/formatters';
-import { getGudangLocationOptions } from '../../data/initialGudangData';
 
 interface TransaksiEditModalProps {
   isOpen: boolean;
@@ -38,7 +37,6 @@ interface TransaksiEditModalProps {
   petaniList: Petani[];
   hargaList: TabelHarga[];
   barangList?: Barang[];
-  gudangList?: Gudang[];
   currentUser?: UserType | null;
   onSaveTransaksi: (newTx: TransaksiPembelian, generatedBarang: Barang | Barang[]) => void;
   onSuccessToast?: (msg: string) => void;
@@ -69,18 +67,15 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
   petaniList = [],
   hargaList = [],
   barangList = [],
-  gudangList = [],
   currentUser,
   onSaveTransaksi,
   onSuccessToast,
 }) => {
-  const gudangOptions = getGudangLocationOptions(gudangList);
   const activeGrades = useMemo(() => hargaList.filter(h => h.status === 'aktif'), [hargaList]);
 
   // Form Fields
   const [selectedPetaniId, setSelectedPetaniId] = useState('');
   const [tanggalTransaksi, setTanggalTransaksi] = useState('');
-  const [lokasiGudang, setLokasiGudang] = useState('');
   const [statusPembayaran, setStatusPembayaran] = useState<'lunas' | 'belum_lunas'>('belum_lunas');
   const [catatan, setCatatan] = useState('');
   const [catatanKasir, setCatatanKasir] = useState('');
@@ -95,7 +90,6 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
       setTanggalTransaksi(
         transaksi.tanggal_transaksi ? transaksi.tanggal_transaksi.split(' ')[0] : new Date().toISOString().split('T')[0]
       );
-      setLokasiGudang(transaksi.lokasi_gudang || gudangOptions[0] || 'Gudang Utama Pamekasan');
       setStatusPembayaran(transaksi.status_pembayaran === 'lunas' ? 'lunas' : 'belum_lunas');
       setCatatan(transaksi.catatan || '');
       setCatatanKasir(transaksi.catatan_kasir || '');
@@ -319,7 +313,7 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
 
     // Prepare updated items
     const updatedItems: TransaksiItemBal[] = balRows.map((row, idx) => {
-      const generatedBarangId = row.barang_id || (transaksi.barang_ids?.[idx]) || generateBalId(row.kode_grade, idx + 1);
+      const generatedBarangId = row.barang_id || (transaksi.barang_ids?.[idx]) || `BAL-${transaksi.transaksi_id.replace('TRX-', '')}-${String(idx + 1).padStart(2, '0')}`;
       return {
         item_id: row.item_id,
         barang_id: generatedBarangId,
@@ -363,7 +357,6 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
       status_pembayaran: statusPembayaran,
       metode_pembayaran: statusPembayaran === 'lunas' ? (transaksi.metode_pembayaran || 'cash') : undefined,
       tanggal_transaksi: tanggalTransaksi,
-      lokasi_gudang: lokasiGudang,
       catatan: catatan.trim(),
       catatan_kasir: catatanKasir.trim(),
       items: updatedItems,
@@ -386,7 +379,6 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
       nama_petani: transaksi.nama_petani,
       transaksi_pembelian_id: updatedTx.transaksi_id,
       tanggal_masuk: tanggalTransaksi,
-      lokasi_gudang: lokasiGudang,
       tanggal_keluar: undefined,
     }));
 
@@ -412,8 +404,15 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
     });
 
     // Record Detailed Audit Log
-    
-
+    recordAuditLog({
+      user_nama: currentUser?.nama_lengkap || 'Admin',
+      user_role: currentUser?.role || 'admin_sortir',
+      modul: 'Koreksi Transaksi',
+      aksi: 'UBAH_TRANSAKSI',
+      target_id: updatedTx.transaksi_id,
+      deskripsi: `Koreksi data transaksi ${updatedTx.no_kupon} (${updatedTx.nama_petani}). Alasan: ${alasanEdit.trim()}`,
+      rincian_perubahan: changesList,
+    });
     // Save transaction state
     onSaveTransaksi(updatedTx, updatedBarangs);
     if (onSuccessToast) {
@@ -532,20 +531,6 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
                 <option value="belum_lunas">Belum Lunas (Kredit/Kasir)</option>
                 <option value="lunas">Lunas (Sudah Dibayarkan)</option>
               </select>
-            </div>
-
-            {/* Lokasi Gudang */}
-            <div className="lg:col-span-2 space-y-1">
-              <label className="text-xs font-semibold text-slate-700 flex items-center space-x-1">
-                <Warehouse className="w-3.5 h-3.5 text-slate-500" />
-                <span>Lokasi Gudang Simpan</span>
-              </label>
-              <SearchableSelect
-                value={lokasiGudang}
-                onChange={(val) => setLokasiGudang(val)}
-                options={gudangOptions.map(opt => ({ value: opt, label: opt }))}
-                placeholder="Lokasi Gudang..."
-              />
             </div>
 
             {/* Catatan / Keterangan Transaksi */}

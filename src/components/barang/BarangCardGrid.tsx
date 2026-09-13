@@ -117,13 +117,6 @@ export const BarangCardGrid: React.FC<BarangCardGridProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center space-x-1.5">
-                <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                <span className="font-semibold text-gray-800 truncate font-mono text-[11px]">
-                  {barang.lokasi_gudang}
-                </span>
-              </div>
-
               <div className="flex items-center space-x-1.5 text-[11px] text-gray-500">
                 <Clock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                 <span>Masuk: {barang.tanggal_masuk}</span>

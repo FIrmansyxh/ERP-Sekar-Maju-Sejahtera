@@ -45,9 +45,9 @@ export const HomeDashboardView: React.FC<HomeDashboardViewProps> = ({
     { no: 9, nama: 'Master Petani', judul: 'Data Petani Tembakau & Kartu Scan Setoran', modId: 'modul-1-petani' },
     { no: 10, nama: 'Master Harga Beli', judul: 'Tarif Acuan Grade A-F Tembakau Masuk', modId: 'modul-3-harga' },
     { no: 11, nama: 'Master Harga Jual Pabrik', judul: 'Daftar Kode & Master Harga Jual Tembakau ke Pabrik Rekanan', modId: 'modul-3-harga-jual' },
-    { no: 12, nama: 'Inventaris Bal Gudang', judul: 'Stok Fisik Bal & Lokasi Simpan', modId: 'modul-2-barang' },
+    { no: 12, nama: 'Inventaris Bal Gudang', judul: 'Stok Fisik Bal & Blok Penyimpanan', modId: 'modul-2-barang' },
     { no: 13, nama: 'Sortir', judul: 'Proses 1: Kupon Petani, Sortir Mutu Grade Bal & Penentuan No Bal', modId: 'modul-0-sortir' },
-    { no: 14, nama: 'Timbangan', judul: 'Proses 2: Standby Scan No Bal, Input Berat Bruto/Netto & Lokasi Gudang', modId: 'modul-0-timbangan' },
+    { no: 14, nama: 'Timbangan', judul: 'Proses 2: Standby Scan No Bal, Input Berat Bruto/Netto & Blok Simpan', modId: 'modul-0-timbangan' },
     { no: 15, nama: 'Kasir', judul: 'Proses 3: Data Pembelian Barang, Rekap Pembayaran & Cetak Nota Resmi', modId: 'modul-0-kasir' },
     { no: 16, nama: 'Pengiriman Reguler (DO Luar)', judul: 'Surat Jalan Pengiriman Bal ke Buyer Pabrik Rokok', modId: 'modul-5-pengiriman' },
     { no: 17, nama: 'Pengiriman Sample', judul: 'Uji Laboratorium Mutu & Approval Grade Sample (3 Sedang Pengiriman, 1 Sedang Berangkat, 4 Selesai)', modId: 'modul-4-sample' },
@@ -85,7 +85,7 @@ export const HomeDashboardView: React.FC<HomeDashboardViewProps> = ({
                 )}
               </div>
               <p className="text-xs text-gray-500 mt-0.5">
-                Unit Penugasan: <strong className="text-gray-700">{currentUser.unit_penugasan}</strong> • Akun: <code className="text-gray-600">@{currentUser.username}</code>
+                Unit Penugasan: <strong className="text-gray-700">{currentUser.unit_penugasan || 'Gudang Utama Pamekasan'}</strong> • Akun: <code className="text-gray-600">@{currentUser.username}</code>
               </p>
             </div>
           </div>

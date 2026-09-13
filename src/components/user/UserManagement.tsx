@@ -15,7 +15,7 @@ import {
   CheckCircle,
   Plus
 } from 'lucide-react';
-import { User, UserRole, Gudang } from '../../types';
+import { User, UserRole } from '../../types';
 import { ALL_ROLES, ROLE_DEFINITIONS, getRoleInfo } from '../../utils/rbac';
 import { formatDateTimeIndo } from '../../utils/formatters';
 import { UserFormModal } from './UserFormModal';
@@ -23,11 +23,11 @@ import { UserResetPasswordModal } from './UserResetPasswordModal';
 import { RoleMatrixModal } from './RoleMatrixModal';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { Pagination } from '../common/Pagination';
+import { AuditTrailView } from './AuditTrailView';
 
 interface UserManagementProps {
   userList: User[];
   currentUser: User | null;
-  gudangList: Gudang[];
   onSaveUser: (user: User) => void;
   onDeleteUser: (userId: string) => void;
   onToggleStatus: (userId: string) => void;
@@ -37,12 +37,14 @@ interface UserManagementProps {
 export const UserManagement: React.FC<UserManagementProps> = ({
   userList,
   currentUser,
-  gudangList,
   onSaveUser,
   onDeleteUser,
   onToggleStatus,
   onResetPassword,
 }) => {
+  // Tab switcher
+  const [activeTab, setActiveTab] = useState<'users' | 'audit'>('users');
+
   // Filter & Pagination states
   const [isFilterOpen, setIsFilterOpen] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -104,8 +106,43 @@ export const UserManagement: React.FC<UserManagementProps> = ({
   return (
     <div className="space-y-4 font-sans text-gray-800">
       
-      {/* 1. Collapsible Filter Section (matching Transaksi & Petani style) */}
-      <div className="bg-white border border-gray-200 rounded-none shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+      {/* Tab Navigation for Super Admin */}
+      <div className="flex items-center space-x-2 border-b border-gray-200 pb-2">
+        <button
+          type="button"
+          onClick={() => setActiveTab('users')}
+          className={`px-3.5 py-1.5 text-xs font-bold rounded-xs flex items-center space-x-2 cursor-pointer transition ${
+            activeTab === 'users'
+              ? 'bg-[#b81d24] text-white shadow-xs'
+              : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+          }`}
+        >
+          <Users className="w-3.5 h-3.5" />
+          <span>Daftar Pengguna ({userList.length})</span>
+        </button>
+
+        {currentUser?.role === 'superadmin' && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('audit')}
+            className={`px-3.5 py-1.5 text-xs font-bold rounded-xs flex items-center space-x-2 cursor-pointer transition ${
+              activeTab === 'audit'
+                ? 'bg-[#b81d24] text-white shadow-xs'
+                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+            }`}
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>Audit Trail & Log Aktivitas (Super Admin)</span>
+          </button>
+        )}
+      </div>
+
+      {activeTab === 'audit' ? (
+        <AuditTrailView />
+      ) : (
+        <>
+          {/* 1. Collapsible Filter Section (matching Transaksi & Petani style) */}
+          <div className="bg-white border border-gray-200 rounded-none shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
         <button
           onClick={() => setIsFilterOpen(!isFilterOpen)}
           className="w-full px-4 py-3 flex items-center justify-between text-left text-xs font-bold text-gray-800 bg-white hover:bg-gray-50 transition cursor-pointer"
@@ -488,6 +525,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({
         </div>
 
       </div>
+      </>
+      )}
 
       {/* Form Modal */}
       <UserFormModal
@@ -499,7 +538,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({
         onSave={onSaveUser}
         editingUser={editingUser}
         existingUsers={userList}
-        gudangList={gudangList}
       />
 
       {/* Reset Password Modal */}

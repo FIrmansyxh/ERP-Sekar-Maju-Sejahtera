@@ -24,7 +24,7 @@ import {
   Unlock,
   Lock
 } from 'lucide-react';
-import { TransaksiPembelian, TransaksiItemBal, Barang, Gudang, User as UserType } from '../../types';
+import { TransaksiPembelian, TransaksiItemBal, Barang, User as UserType } from '../../types';
 import { formatRupiah, formatDateHariBulanTahun, hitungPotonganTaraKg } from '../../utils/formatters';
 import { ConfirmModal } from '../common/ConfirmModal';
 
@@ -32,7 +32,6 @@ interface Proses2TimbangModalProps {
   isOpen: boolean;
   onClose: () => void;
   transaksiList: TransaksiPembelian[];
-  gudangList?: Gudang[];
   currentUser?: UserType | null;
   initialTransaksi?: TransaksiPembelian | null;
   initialBarcodeToSelect?: string;
@@ -55,7 +54,6 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
   isOpen,
   onClose,
   transaksiList,
-  gudangList = [],
   currentUser,
   initialTransaksi,
   initialBarcodeToSelect,
@@ -519,8 +517,6 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
           harga_per_kg: it.harga_per_kg,
           total_harga: (it.berat_kg || 0) * (it.harga_per_kg || 0),
           status_stok: 'di_gudang' as const,
-          gudang_id: 'GDG-001',
-          lokasi_gudang: `${currentTx.lokasi_gudang || 'Gudang Pusat'} - ${it.lokasi_simpan || BLOK_GUDANG_OPTIONS[0]}`,
           tanggal_masuk: currentTx.tanggal_transaksi ? currentTx.tanggal_transaksi.split(' ')[0].split('T')[0] : new Date().toISOString().split('T')[0],
           petani_id: currentTx.petani_id,
           transaksi_pembelian_id: currentTx.transaksi_id,

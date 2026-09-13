@@ -52,11 +52,11 @@ export const LaporanAnalytics: React.FC<LaporanAnalyticsProps> = ({
   const [selectedPeriod, setSelectedPeriod] = useState<'all' | 'today' | 'month' | 'year'>('all');
 
   // Executive KPI Calculations
-  const totalPembelianRp = transaksiList.reduce((acc, tx) => acc + (tx.harga_final || 0), 0);
+  const totalPembelianRp = transaksiList.reduce((acc, tx) => acc + (tx.total_harga_beli || ((tx.berat_kg || 0) * (tx.harga_per_kg || 0))), 0);
   const totalTonaseMasukKg = transaksiList.reduce((acc, tx) => acc + (tx.berat_kg || 0), 0);
   const totalTonaseKeluarKg = pengirimanList.reduce((acc, k) => acc + (k.total_berat_kg || 0), 0);
 
-  const stokAktifBal = barangList.filter((b) => b.status_stok === 'di_gudang');
+  const stokAktifBal = barangList.filter((b) => b.status_stok === 'di_gudang' || b.status_stok === 'siap_kirim' || b.status_stok === 'terkirim_sample');
   const totalStokAktifKg = stokAktifBal.reduce((acc, b) => acc + (b.berat_kg || 0), 0);
 
   // Approval Rate Sample
@@ -98,7 +98,7 @@ export const LaporanAnalytics: React.FC<LaporanAnalyticsProps> = ({
         };
       }
       farmerMap[key].totalKg += (tx.berat_kg || 0);
-      farmerMap[key].totalRp += (tx.harga_final || 0);
+      farmerMap[key].totalRp += (tx.total_harga_beli || ((tx.berat_kg || 0) * (tx.harga_per_kg || 0)));
       const balInTx = tx.total_bal || (tx.items && tx.items.length) || (tx.barang_ids && tx.barang_ids.length) || 1;
       farmerMap[key].countBal += balInTx;
     });
@@ -138,14 +138,13 @@ export const LaporanAnalytics: React.FC<LaporanAnalyticsProps> = ({
       ]);
       downloadCsvFile(filename, headers, rows);
     } else if (type === 'stok') {
-      const headers = ['No Bal', 'No Bal', 'Grade', 'Berat (KG)', 'Status Stok', 'Lokasi Gudang', 'Petani Asal', 'Tanggal Masuk', 'Tanggal Keluar'];
+      const headers = ['No Bal', 'No Bal', 'Grade', 'Berat (KG)', 'Status Stok', 'Petani Asal', 'Tanggal Masuk', 'Tanggal Keluar'];
       const rows = barangList.map((b) => [
         b.barang_id,
         b.no_bal,
         b.kode_grade,
         b.berat_kg,
         b.status_stok,
-        b.lokasi_gudang,
         b.nama_petani || '',
         b.tanggal_masuk,
         b.tanggal_keluar || '',

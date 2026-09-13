@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Save, ArrowLeft, Package, AlertCircle } from 'lucide-react';
 import { SearchableSelect } from '../common/SearchableSelect';
 import { MasterBarang } from '../../types';
-import { STANDARD_GUDANG_LOCATIONS } from '../../data/initialGudangData';
 import { ConfirmModal } from '../common/ConfirmModal';
 
 interface MasterBarangFormModalProps {
@@ -345,18 +344,14 @@ export const MasterBarangFormModal: React.FC<MasterBarangFormModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-gray-700 font-semibold mb-1">Lokasi Default Penempatan Rak Gudang</label>
-                <select
-                  value={lokasiDefaultGudang}
-                  onChange={(e) => setLokasiDefaultGudang(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-[#ced4da] rounded-sm focus:border-[#b81d24] focus:outline-none text-xs text-gray-900 cursor-pointer"
-                >
-                  {STANDARD_GUDANG_LOCATIONS.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                </select>
+                <label className="block text-gray-700 font-semibold mb-1">Gudang Penyimpanan</label>
+                <input
+                  type="text"
+                  value="Gudang Utama Pamekasan"
+                  readOnly
+                  disabled
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-sm text-xs text-gray-500 cursor-not-allowed"
+                />
               </div>
 
               

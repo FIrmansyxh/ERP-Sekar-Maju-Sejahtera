@@ -22,15 +22,15 @@ import {
   ChevronDown,
   Save
 } from 'lucide-react';
-import { TransaksiPembelian, Petani, TabelHarga, Barang, Gudang, TransaksiItemBal, UserRole, User as UserType } from '../../types';
+import { TransaksiPembelian, Petani, TabelHarga, Barang, TransaksiItemBal, UserRole, User as UserType } from '../../types';
 import { formatRupiah, formatNoKupon, formatDateHariBulanTahun, hitungPotonganTaraKg } from '../../utils/formatters';
+import { recordAuditLog } from '../../utils/storage';
 
 interface TimbanganPageViewProps {
   transaksiList: TransaksiPembelian[];
   petaniList: Petani[];
   hargaList: TabelHarga[];
   barangList: Barang[];
-  gudangList?: Gudang[];
   userRole: UserRole;
   currentUser?: UserType | null;
   initialKuponNo?: string;
@@ -46,7 +46,6 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
   petaniList = [],
   hargaList = [],
   barangList = [],
-  gudangList = [],
   userRole,
   currentUser,
   initialKuponNo,
@@ -614,7 +613,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
 
     const updatedItemsWithId = updatedItems.map((it, idx) => ({
       ...it,
-      barang_id: it.barang_id || `BAL-${currentTx.transaksi_id}-${String(idx + 1).padStart(2, '0')}`
+      barang_id: it.barang_id || `BAL-${currentTx.transaksi_id.replace('TRX-', '')}-${String(idx + 1).padStart(2, '0')}`
     }));
 
     // Generated Barang inventory records
@@ -627,7 +626,6 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
       harga_per_kg: it.harga_per_kg,
       total_harga: (it.berat_kg || 0) * (it.harga_per_kg || 0),
       status_stok: 'di_gudang',
-      lokasi_gudang: `${currentTx.lokasi_gudang || 'Gudang Pusat'} - ${it.lokasi_simpan || lokasiBlok}`,
       tanggal_masuk: currentTx.tanggal_transaksi?.split(' ')[0] || new Date().toISOString().split('T')[0],
       petani_id: currentTx.petani_id,
       nama_petani: currentTx.nama_petani,
@@ -643,6 +641,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
       bal_selesai_timbang: weighedCount,
       berat_terukur_kg: totalBrutoKg,
       berat_kg: totalNettoKg,
+      harga_per_kg: totalNettoKg > 0 ? Math.round(totalKotorAll / totalNettoKg) : (currentTx.harga_per_kg || 0),
       total_kotor: totalKotorAll,
       potongan_tara_kg: updatedItems.reduce((acc, it) => acc + (it.potongan_tara_kg || 0), 0),
       potongan_kuli: updatedItems.reduce((acc, it) => acc + (it.potongan_kuli || 7000), 0),
@@ -659,6 +658,14 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     onSaveTransaksi(updatedTx, updatedBarangs);
 
     // Record activity log for Super Admin accountability audit trail
+    recordAuditLog({
+      user_nama: currentUser?.nama_lengkap || 'Operator Timbang Digital',
+      user_role: userRole,
+      modul: 'Timbangan Bal',
+      aksi: 'TIMBANG_BAL',
+      target_id: activeBalItem.no_bal,
+      deskripsi: `Penimbangan bal ${activeBalItem.no_bal} (Kupon: ${currentTx.no_kupon}) - Bruto: ${liveBruto} Kg, Tara: ${liveTara} Kg, Netto: ${liveNetto} Kg, Lokasi: ${lokasiBlok}`,
+    });
     
 
     setSaveSuccessMsg(`✓ Berat Bal "${activeBalItem.no_bal}" (${liveNetto} Kg) berhasil disimpan ke ${lokasiBlok}!`);

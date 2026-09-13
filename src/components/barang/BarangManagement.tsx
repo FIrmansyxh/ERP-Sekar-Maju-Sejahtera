@@ -17,7 +17,6 @@ import {
   Sparkles
 } from 'lucide-react';
 import { Barang, StatusStokBarang, UserRole } from '../../types';
-import { BarangEditLocationModal } from './BarangEditLocationModal';
 import { Pagination } from '../common/Pagination';
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
 
@@ -42,7 +41,6 @@ export const BarangManagement: React.FC<BarangManagementProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGrade, setSelectedGrade] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
-  const [selectedWarehouse, setSelectedWarehouse] = useState<string>('all');
   const [itemsPerPage, setItemsPerPage] = useState<number>(10);
   const [currentPage, setCurrentPage] = useState<number>(1);
 
@@ -51,9 +49,6 @@ export const BarangManagement: React.FC<BarangManagementProps> = ({
   const countSample = useMemo(() => barangList.filter((b) => b.status_stok === 'terkirim_sample').length, [barangList]);
   const countKeluar = useMemo(() => barangList.filter((b) => b.status_stok === 'keluar').length, [barangList]);
 
-  // Modals
-  const [editingLocationBarang, setEditingLocationBarang] = useState<Barang | null>(null);
-
   // Filter logic
   const filteredItems = useMemo(() => {
     return barangList.filter((b) => {
@@ -61,18 +56,14 @@ export const BarangManagement: React.FC<BarangManagementProps> = ({
         searchQuery === '' ||
         b.no_bal.toLowerCase().includes(searchQuery.toLowerCase()) ||
         b.barang_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (b.nama_petani && b.nama_petani.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (b.lokasi_gudang && b.lokasi_gudang.toLowerCase().includes(searchQuery.toLowerCase()));
+        (b.nama_petani && b.nama_petani.toLowerCase().includes(searchQuery.toLowerCase()));
 
       const matchGrade = selectedGrade === 'all' || b.kode_grade === selectedGrade;
       const matchStatus = selectedStatus === 'all' || b.status_stok === selectedStatus;
-      const matchGdg =
-        selectedWarehouse === 'all' ||
-        b.lokasi_gudang.toLowerCase().includes(selectedWarehouse.toLowerCase());
 
-      return matchSearch && matchGrade && matchStatus && matchGdg;
+      return matchSearch && matchGrade && matchStatus;
     });
-  }, [barangList, searchQuery, selectedGrade, selectedStatus, selectedWarehouse]);
+  }, [barangList, searchQuery, selectedGrade, selectedStatus]);
 
   // Hook scanner: when barcode scanner reads a bal number on this page, fill search query automatically
   useBarcodeScanner((scannedNoBal) => {
@@ -115,7 +106,7 @@ export const BarangManagement: React.FC<BarangManagementProps> = ({
         </button>
 
         {isFilterOpen && (
-          <div className="p-4 border-t border-gray-100 bg-white grid grid-cols-1 md:grid-cols-4 gap-3.5 text-xs">
+          <div className="p-4 border-t border-gray-100 bg-white grid grid-cols-1 md:grid-cols-3 gap-3.5 text-xs">
             <div>
               <label className="block text-gray-600 font-semibold mb-1">Grade Tembakau</label>
               <select
@@ -153,28 +144,12 @@ export const BarangManagement: React.FC<BarangManagementProps> = ({
               </select>
             </div>
 
-            <div>
-              <label className="block text-gray-600 font-semibold mb-1">Lokasi Fasilitas Gudang</label>
-              <SearchableSelect
-                value={selectedWarehouse}
-                onChange={(val) => {
-                  setSelectedWarehouse(val);
-                  setCurrentPage(1);
-                }}
-                options={[
-                  { value: 'all', label: 'Semua Gudang' },
-                  ...Array.from(new Set(barangList.map(b => b.lokasi_gudang))).filter(Boolean).sort().map(loc => ({ value: loc, label: loc }))
-                ]}
-              />
-            </div>
-
             <div className="flex items-end">
               <button
                 onClick={() => {
                   setSearchQuery('');
                   setSelectedGrade('all');
                   setSelectedStatus('all');
-                  setSelectedWarehouse('all');
                   setCurrentPage(1);
                 }}
                 className="w-full px-3 py-1.5 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-sm transition cursor-pointer"
@@ -293,7 +268,6 @@ export const BarangManagement: React.FC<BarangManagementProps> = ({
                 <th className="py-2.5 px-3 border-r border-gray-200 text-center w-20">Grade</th>
                 <th className="py-2.5 px-3 border-r border-gray-200 text-right w-28">Berat Netto</th>
                 <th className="py-2.5 px-3 border-r border-gray-200">Petani Pemasok</th>
-                <th className="py-2.5 px-3 border-r border-gray-200">Lokasi Gudang</th>
                 <th className="py-2.5 px-3 border-r border-gray-200 text-center w-28">Tgl Masuk</th>
                 <th className="py-2.5 px-3 border-r border-gray-200 text-center w-28">Status Stok</th>
                 <th className="py-2.5 px-3 text-center w-20">Aksi</th>
@@ -306,16 +280,15 @@ export const BarangManagement: React.FC<BarangManagementProps> = ({
                   <td colSpan={9} className="py-8 text-center text-gray-500 bg-white">
                     <div className="text-sm font-bold text-gray-700">Tidak ada data bal tembakau</div>
                     <div className="mt-1">
-                      {selectedStatus !== 'all' || searchQuery || selectedGrade !== 'all' || selectedWarehouse !== 'all'
+                      {selectedStatus !== 'all' || searchQuery || selectedGrade !== 'all'
                         ? 'Coba sesuaikan kata kunci pencarian atau reset filter status'
                         : 'Belum ada data stok bal yang tersimpan'}
                     </div>
-                    {(selectedStatus !== 'all' || searchQuery || selectedGrade !== 'all' || selectedWarehouse !== 'all') && (
+                    {(selectedStatus !== 'all' || searchQuery || selectedGrade !== 'all') && (
                       <button
                         onClick={() => {
                           setSelectedStatus('all');
                           setSelectedGrade('all');
-                          setSelectedWarehouse('all');
                           setSearchQuery('');
                           setCurrentPage(1);
                         }}
@@ -369,9 +342,6 @@ export const BarangManagement: React.FC<BarangManagementProps> = ({
                           {b.nama_petani || '-'}
                           <span className="block text-[10px] font-mono text-gray-400">{b.petani_id}</span>
                         </td>
-                        <td className="py-2.5 px-3 border-r border-gray-200 text-gray-700">
-                          {b.lokasi_gudang}
-                        </td>
                         <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono text-gray-600">
                           {b.tanggal_masuk}
                         </td>
@@ -379,13 +349,8 @@ export const BarangManagement: React.FC<BarangManagementProps> = ({
                           {statusBadge}
                         </td>
                         <td className="py-2 px-3 text-center">
-                          <button
-                            onClick={() => setEditingLocationBarang(b)}
-                            className="w-6 h-6 rounded-full bg-[#545b62] hover:bg-[#464c52] text-white flex items-center justify-center text-[10px] transition cursor-pointer shadow-xs mx-auto"
-                            title="Ubah Lokasi Gudang"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
+                          {/* Aksi Placeholder */}
+                          <span className="text-gray-400">-</span>
                         </td>
                       </tr>
                     );
@@ -411,18 +376,6 @@ export const BarangManagement: React.FC<BarangManagementProps> = ({
       </div>
 
       {/* Edit Location Modal */}
-      {editingLocationBarang && (
-        <BarangEditLocationModal
-          isOpen={Boolean(editingLocationBarang)}
-          onClose={() => setEditingLocationBarang(null)}
-          barang={editingLocationBarang}
-          onSaveLocation={(updated) => {
-            onUpdateBarang(updated);
-            setEditingLocationBarang(null);
-          }}
-        />
-      )}
-
     </div>
   );
 };
