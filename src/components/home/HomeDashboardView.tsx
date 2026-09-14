@@ -50,7 +50,7 @@ export const HomeDashboardView: React.FC<HomeDashboardViewProps> = ({
     { no: 14, nama: 'Timbangan', judul: 'Proses 2: Standby Scan No Bal, Input Berat Bruto/Netto & Blok Simpan', modId: 'modul-0-timbangan' },
     { no: 15, nama: 'Kasir', judul: 'Proses 3: Data Pembelian Barang, Rekap Pembayaran & Cetak Nota Resmi', modId: 'modul-0-kasir' },
     { no: 16, nama: 'Pengiriman Reguler (DO Luar)', judul: 'Surat Jalan Pengiriman Bal ke Buyer Pabrik Rokok', modId: 'modul-5-pengiriman' },
-    { no: 17, nama: 'Pengiriman Sample', judul: 'Uji Laboratorium Mutu & Approval Grade Sample (3 Sedang Pengiriman, 1 Sedang Berangkat, 4 Selesai)', modId: 'modul-4-sample' },
+    { no: 17, nama: 'Pengiriman Sample', judul: 'Uji Laboratorium Mutu & Approval Grade Sample Internal/Eksternal', modId: 'modul-4-sample' },
     { no: 18, nama: 'Status & Detail Batch', judul: 'Detail Evaluasi QC Sortir Buyer & Monitoring Distribusi Ekspedisi', modId: 'modul-status-batch' },
     { no: 19, nama: 'Manajemen Pengguna (RBAC)', judul: 'Otorisasi Staf & Hak Akses Role Kerja', modId: 'modul-users' },
   ];

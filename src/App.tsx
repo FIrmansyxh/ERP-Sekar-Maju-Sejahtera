@@ -36,6 +36,7 @@ import {
   recordAuditLog
 } from './utils/storage';
 import { hasModuleAccess } from './utils/rbac';
+import { hashPassword } from './utils/crypto';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 
@@ -393,19 +394,28 @@ export default function App() {
   };
 
   // --- User Management Handlers ---
-  const handleSaveUser = (savedUser: User) => {
-    const exists = userList.some((u) => u.user_id === savedUser.user_id);
+  const handleSaveUser = async (savedUser: User) => {
+    const existingUser = userList.find((u) => u.user_id === savedUser.user_id);
+    let finalPassword = savedUser.password;
+    
+    if (finalPassword && (!existingUser || existingUser.password !== finalPassword)) {
+      finalPassword = await hashPassword(finalPassword);
+    }
+    
+    const processedUser = { ...savedUser, password: finalPassword };
+    const exists = Boolean(existingUser);
+    
     let updated: User[];
     if (exists) {
-      updated = userList.map((u) => u.user_id === savedUser.user_id ? savedUser : u);
-      showToast(`Data akun pengguna "${savedUser.nama_lengkap}" berhasil diperbarui.`);
-      if (currentUser?.user_id === savedUser.user_id) {
-        setCurrentUser(savedUser);
-        saveCurrentUser(savedUser);
+      updated = userList.map((u) => u.user_id === processedUser.user_id ? processedUser : u);
+      showToast(`Data akun pengguna "${processedUser.nama_lengkap}" berhasil diperbarui.`);
+      if (currentUser?.user_id === processedUser.user_id) {
+        setCurrentUser(processedUser);
+        saveCurrentUser(processedUser);
       }
     } else {
-      updated = [savedUser, ...userList];
-      showToast(`Pengguna baru "${savedUser.nama_lengkap}" (${savedUser.username}) berhasil didaftarkan!`);
+      updated = [processedUser, ...userList];
+      showToast(`Pengguna baru "${processedUser.nama_lengkap}" (${processedUser.username}) berhasil didaftarkan!`);
     }
     setUserList(updated);
     saveUserData(updated);
@@ -432,8 +442,9 @@ export default function App() {
     saveUserData(updated);
   };
 
-  const handleResetUserPassword = (userId: string, newPass: string) => {
-    const updated = userList.map((u) => u.user_id === userId ? { ...u, password: newPass } : u);
+  const handleResetUserPassword = async (userId: string, newPass: string) => {
+    const hashedPass = await hashPassword(newPass);
+    const updated = userList.map((u) => u.user_id === userId ? { ...u, password: hashedPass } : u);
     setUserList(updated);
     saveUserData(updated);
     const target = userList.find((u) => u.user_id === userId);
@@ -638,8 +649,10 @@ export default function App() {
       return;
     }
 
-    const oldTx = transaksiList.find((t) => t.transaksi_id === newTx.transaksi_id);
+    const oldTxRaw = transaksiList.find((t) => t.transaksi_id === newTx.transaksi_id);
+    const oldTx = oldTxRaw ? JSON.parse(JSON.stringify(oldTxRaw)) as TransaksiPembelian : undefined;
     const exists = Boolean(oldTx);
+    
     const updatedTxList = exists
       ? transaksiList.map((t) => (t.transaksi_id === newTx.transaksi_id ? newTx : t))
       : [newTx, ...transaksiList];

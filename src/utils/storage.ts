@@ -1,3 +1,4 @@
+import { hashPassword } from './crypto';
 import { 
   Petani, 
   Barang, 
@@ -169,15 +170,6 @@ export function loadCurrentUser(): User | null {
         return parsed;
       }
     }
-
-    // Default to the primary active superadmin user to prevent session drop on page reload
-    const allUsers = loadUserData();
-    const activeAdmin = allUsers.find((u) => u.role === 'superadmin' && u.status_aktif) || allUsers.find((u) => u.status_aktif);
-    if (activeAdmin) {
-      // Auto-heal session
-      saveCurrentUser(activeAdmin);
-      return activeAdmin;
-    }
   } catch (err) {
     console.error('Failed to load current user:', err);
   }
@@ -204,7 +196,9 @@ export function saveCurrentUser(user: User | null): void {
   }
 }
 
-export function authenticateUser(usernameInput: string, passwordInput: string): { success: boolean; user?: User; message: string } {
+
+
+export async function authenticateUser(usernameInput: string, passwordInput: string): Promise<{ success: boolean; user?: User; message: string }> {
   const users = loadUserData();
   const cleanUsername = usernameInput.trim().toLowerCase();
   const found = users.find(
@@ -220,8 +214,21 @@ export function authenticateUser(usernameInput: string, passwordInput: string): 
   }
 
   // Check password
-  if (found.password && found.password !== passwordInput) {
-    return { success: false, message: 'Kata sandi (password) yang Anda masukkan salah.' };
+  if (found.password) {
+    // Migration fallback: if the stored password doesn't look like a SHA-256 hash (64 chars),
+    // and matches the plain text exactly, we allow it (for dummy/legacy users).
+    const isHash = found.password.length === 64;
+    const inputHash = await hashPassword(passwordInput);
+
+    if (isHash) {
+      if (found.password !== inputHash) {
+        return { success: false, message: 'Kata sandi (password) yang Anda masukkan salah.' };
+      }
+    } else {
+      if (found.password !== passwordInput) {
+        return { success: false, message: 'Kata sandi (password) yang Anda masukkan salah.' };
+      }
+    }
   }
 
   // Update last login

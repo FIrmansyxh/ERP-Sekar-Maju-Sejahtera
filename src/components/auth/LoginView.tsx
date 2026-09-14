@@ -46,8 +46,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
     setIsLoading(true);
     setError(null);
 
-    setTimeout(() => {
-      const result = authenticateUser(username, password);
+    setTimeout(async () => {
+      const result = await authenticateUser(username, password);
       setIsLoading(false);
       if (result.success && result.user) {
         onLoginSuccess(result.user);
@@ -69,8 +69,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
     setPassword(targetUser.password || 'admin123');
     setIsLoading(true);
 
-    setTimeout(() => {
-      const result = authenticateUser(targetUser.username, targetUser.password || 'admin123');
+    setTimeout(async () => {
+      const result = await authenticateUser(targetUser.username, targetUser.password || 'admin123');
       setIsLoading(false);
       if (result.success && result.user) {
         onLoginSuccess(result.user);
@@ -255,15 +255,16 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 </button>
               </form>
 
-              {/* Quick Role Tester (Neutral & Clean Monochrome Style) */}
-              <div className="mt-5 pt-3.5 border-t border-gray-200">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center space-x-1.5 text-[10px] font-bold text-gray-700 uppercase tracking-wider">
-                    <KeyRound className="w-3 h-3 text-[#b81d24]" />
-                    <span>AKSES CEPAT PENGUJIAN ROLE (1-KLIK):</span>
+              {/* Quick Role Tester (Neutral & Clean Monochrome Style) - DEV ONLY */}
+              {import.meta.env.DEV && (
+                <div className="mt-5 pt-3.5 border-t border-gray-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center space-x-1.5 text-[10px] font-bold text-gray-700 uppercase tracking-wider">
+                      <KeyRound className="w-3 h-3 text-[#b81d24]" />
+                      <span>AKSES CEPAT PENGUJIAN ROLE (1-KLIK):</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-gray-400">6 Role</span>
                   </div>
-                  <span className="text-[10px] font-mono text-gray-400">6 Role</span>
-                </div>
 
                 {/* 6 RBAC Roles Quick Login Buttons */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
@@ -322,6 +323,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   </button>
                 </div>
               </div>
+              )}
 
             </div>
           </div>
