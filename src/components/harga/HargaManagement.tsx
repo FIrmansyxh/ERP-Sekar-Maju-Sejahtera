@@ -298,23 +298,23 @@ return (
         </div>
 
         {/* Table View */}
-        <div className="overflow-x-auto border-t border-gray-200">
+        <div className="overflow-x-auto border-t border-slate-200">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-[#f8f9fa] border-b border-gray-200 text-[11px] font-bold text-gray-700">
-                <th className="py-2.5 px-3 border-r border-gray-200 w-12 text-center">No</th>
-                <th className="py-2.5 px-3 border-r border-gray-200 w-32">Kode</th>
-                <th className="py-2.5 px-3 border-r border-gray-200 w-40">Harga Beli</th>
-                <th className="py-2.5 px-3 border-r border-gray-200 w-32">Tgl Berlaku</th>
-                <th className="py-2.5 px-3 border-r border-gray-200 w-24 text-center">Status</th>
+              <tr className="bg-slate-50/90 border-b border-slate-200 text-xs font-semibold text-slate-600">
+                <th className="py-2.5 px-3 w-12 text-center">No</th>
+                <th className="py-2.5 px-3 w-32">Kode</th>
+                <th className="py-2.5 px-3 w-40">Harga Beli</th>
+                <th className="py-2.5 px-3 w-36">Tgl Berlaku</th>
+                <th className="py-2.5 px-3 w-28 text-center">Status</th>
                 {canManage && <th className="py-2.5 px-3 text-center w-24">Aksi</th>}
               </tr>
             </thead>
-            <tbody className="text-xs text-gray-800">
+            <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
               {paginatedList.length === 0 ? (
                 <tr>
-                  <td colSpan={canManage ? 6 : 5} className="py-8 text-center text-gray-500 bg-white">
-                    <div className="text-sm font-bold text-gray-700">Tidak ada data Master Harga Beli</div>
+                  <td colSpan={canManage ? 6 : 5} className="py-8 text-center text-slate-500 bg-white">
+                    <div className="text-sm font-semibold text-slate-700">Tidak ada data Master Harga Beli</div>
                     <div className="mt-1">
                       {statusFilter !== 'all' || searchTerm
                         ? 'Coba sesuaikan kata kunci pencarian atau reset filter status'
@@ -327,7 +327,7 @@ return (
                           setSearchTerm('');
                           setCurrentPage(1);
                         }}
-                        className="mt-3 px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 text-xs font-medium rounded-sm transition cursor-pointer"
+                        className="mt-3 px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-xs font-medium rounded transition-colors cursor-pointer"
                       >
                         Reset Semua Filter
                       </button>
@@ -336,30 +336,30 @@ return (
                 </tr>
               ) : (
                 paginatedList.map((item, index) => (
-                  <tr key={`${item.harga_id}-${index}`} className="hover:bg-[#f8f9fa] transition-colors border-b border-gray-100 last:border-0">
-                    <td className="py-2.5 px-3 border-r border-gray-200 text-center text-gray-500">
+                  <tr key={`${item.harga_id}-${index}`} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="py-2.5 px-3 text-center font-mono text-slate-500">
                       {(currentPage - 1) * itemsPerPage + index + 1}
                     </td>
-                    <td className="py-2.5 px-3 border-r border-gray-200 font-mono font-bold text-[#b81d24]">
+                    <td className="py-2.5 px-3 font-mono font-semibold text-slate-900">
                       {item.kode_grade}
                     </td>
-                    <td className="py-2.5 px-3 border-r border-gray-200 font-mono font-bold text-gray-900">
+                    <td className="py-2.5 px-3 font-mono font-semibold text-slate-900">
                       {formatRupiah(item.harga_per_kg)}/kg
                     </td>
-                    <td className="py-2.5 px-3 border-r border-gray-200">
-                      <div className="flex items-center space-x-1.5 text-gray-600">
-                        <Calendar className="w-3.5 h-3.5" />
+                    <td className="py-2.5 px-3">
+                      <div className="flex items-center space-x-1.5 text-slate-600 font-mono text-xs">
+                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
                         <span>{item.tanggal_berlaku || '-'}</span>
                       </div>
                     </td>
-                    <td className="py-2.5 px-3 border-r border-gray-200 text-center">
+                    <td className="py-2.5 px-3 text-center">
                       {item.status === 'aktif' ? (
-                        <span className="px-2 py-0.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-sm text-[10px] font-bold flex items-center justify-center space-x-1 w-max mx-auto">
+                        <span className="px-2 py-0.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded text-[11px] font-medium inline-flex items-center justify-center space-x-1">
                           <CheckCircle2 className="w-3 h-3" />
                           <span>Aktif</span>
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 bg-gray-100 border border-gray-200 text-gray-600 rounded-sm text-[10px] font-bold flex items-center justify-center space-x-1 w-max mx-auto">
+                        <span className="px-2 py-0.5 bg-slate-100 border border-slate-200 text-slate-600 rounded text-[11px] font-medium inline-flex items-center justify-center space-x-1">
                           <XCircle className="w-3 h-3" />
                           <span>Nonaktif</span>
                         </span>
@@ -371,7 +371,7 @@ return (
                           <button
                             type="button"
                             onClick={() => handleOpenEditModal(item)}
-                            className="p-1.5 text-[#b81d24] hover:text-[#9e161c] hover:bg-rose-50 rounded-xs transition cursor-pointer"
+                            className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors cursor-pointer"
                             title="Edit Master Harga Beli"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
@@ -379,7 +379,7 @@ return (
                           <button
                             type="button"
                             onClick={() => setItemToDelete(item)}
-                            className="p-1.5 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-xs transition cursor-pointer"
+                            className="p-1.5 text-slate-400 hover:text-red-700 hover:bg-red-50 rounded transition-colors cursor-pointer"
                             title="Hapus Master Harga Beli"
                           >
                             <Trash2 className="w-3.5 h-3.5" />

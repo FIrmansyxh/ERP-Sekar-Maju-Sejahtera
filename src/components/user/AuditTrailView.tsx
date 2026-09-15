@@ -99,15 +99,15 @@ export const AuditTrailView: React.FC = () => {
   const getAksiBadge = (aksi: string) => {
     switch (aksi) {
       case 'TAMBAH_TRANSAKSI':
-        return <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 rounded">TAMBAH</span>;
+        return <span className="px-2 py-0.5 text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 rounded">TAMBAH</span>;
       case 'UBAH_TRANSAKSI':
-        return <span className="px-2 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-800 rounded">KOREKSI</span>;
+        return <span className="px-2 py-0.5 text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200 rounded">KOREKSI</span>;
       case 'HAPUS_TRANSAKSI':
-        return <span className="px-2 py-0.5 text-[10px] font-bold bg-rose-100 text-rose-800 rounded">HAPUS</span>;
+        return <span className="px-2 py-0.5 text-[11px] font-medium bg-rose-50 text-rose-700 border border-rose-200 rounded">HAPUS</span>;
       case 'TIMBANG_BAL':
-        return <span className="px-2 py-0.5 text-[10px] font-bold bg-blue-100 text-blue-800 rounded">TIMBANG</span>;
+        return <span className="px-2 py-0.5 text-[11px] font-medium bg-sky-50 text-sky-700 border border-sky-200 rounded">TIMBANG</span>;
       default:
-        return <span className="px-2 py-0.5 text-[10px] font-bold bg-slate-100 text-slate-800 rounded">{aksi}</span>;
+        return <span className="px-2 py-0.5 text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200 rounded">{aksi}</span>;
     }
   };
 
@@ -202,17 +202,17 @@ export const AuditTrailView: React.FC = () => {
       </div>
 
       {/* Log Table */}
-      <div className="bg-white border border-slate-200 rounded-sm overflow-hidden shadow-2xs">
+      <div className="bg-white border border-slate-200 rounded-md overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
-                <th className="p-3 w-40">Waktu & Tanggal</th>
-                <th className="p-3 w-44">User / Operator</th>
-                <th className="p-3 w-32">Modul</th>
-                <th className="p-3 w-28 text-center">Aksi</th>
-                <th className="p-3 w-36">Target ID</th>
-                <th className="p-3">Deskripsi & Rincian Perubahan</th>
+              <tr className="bg-slate-50/90 text-slate-600 font-semibold border-b border-slate-200 text-xs">
+                <th className="py-2.5 px-3 w-40">Waktu & Tanggal</th>
+                <th className="py-2.5 px-3 w-44">User / Operator</th>
+                <th className="py-2.5 px-3 w-32">Modul</th>
+                <th className="py-2.5 px-3 w-28 text-center">Aksi</th>
+                <th className="py-2.5 px-3 w-36">Target ID</th>
+                <th className="py-2.5 px-3">Deskripsi & Rincian Perubahan</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-normal text-slate-700">
@@ -220,7 +220,7 @@ export const AuditTrailView: React.FC = () => {
                 <tr>
                   <td colSpan={6} className="p-8 text-center text-slate-400">
                     <FileText className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                    <p className="font-semibold">Belum ada riwayat aktivitas audit yang tercatat.</p>
+                    <p className="font-semibold text-slate-700">Belum ada riwayat aktivitas audit yang tercatat.</p>
                     <p className="text-[11px] text-slate-400 mt-1">
                       Setiap aktivitas simpan timbangan, koreksi data, atau hapus transaksi akan otomatis terekam di sini.
                     </p>
@@ -228,8 +228,8 @@ export const AuditTrailView: React.FC = () => {
                 </tr>
               ) : (
                 paginatedLogs.map((entry) => (
-                  <tr key={entry.log_id} className="hover:bg-slate-50 transition">
-                    <td className="p-3 text-[11px] text-slate-500 font-mono whitespace-nowrap">
+                  <tr key={entry.log_id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="py-2.5 px-3 text-[11px] text-slate-500 font-mono whitespace-nowrap">
                       {new Date(entry.timestamp).toLocaleString('id-ID', {
                         day: '2-digit',
                         month: 'short',
@@ -239,23 +239,23 @@ export const AuditTrailView: React.FC = () => {
                         second: '2-digit',
                       })}
                     </td>
-                    <td className="p-3">
-                      <div className="font-semibold text-slate-800">{entry.user_nama}</div>
+                    <td className="py-2.5 px-3">
+                      <div className="font-semibold text-slate-900">{entry.user_nama}</div>
                       <div className="text-[10px] text-slate-400 font-mono">Role: {entry.user_role}</div>
                     </td>
-                    <td className="p-3 font-medium text-slate-700 whitespace-nowrap">
+                    <td className="py-2.5 px-3 font-medium text-slate-700 whitespace-nowrap">
                       {entry.modul}
                     </td>
-                    <td className="p-3 text-center whitespace-nowrap">
+                    <td className="py-2.5 px-3 text-center whitespace-nowrap">
                       {getAksiBadge(entry.aksi)}
                     </td>
-                    <td className="p-3 font-mono text-[11px] font-semibold text-slate-800 whitespace-nowrap">
+                    <td className="py-2.5 px-3 font-mono text-[11px] font-semibold text-slate-900 whitespace-nowrap">
                       {entry.target_id}
                     </td>
-                    <td className="p-3 text-slate-600">
+                    <td className="py-2.5 px-3 text-slate-600">
                       <div>{entry.deskripsi}</div>
                       {entry.rincian_perubahan && entry.rincian_perubahan.length > 0 && (
-                        <ul className="mt-1 space-y-0.5 list-disc list-inside text-[11px] text-slate-500 bg-slate-50 p-1.5 rounded border border-slate-150">
+                        <ul className="mt-1 space-y-0.5 list-disc list-inside text-[11px] text-slate-500 bg-slate-50 p-1.5 rounded border border-slate-200">
                           {entry.rincian_perubahan.map((r, idx) => (
                             <li key={idx}>{r}</li>
                           ))}

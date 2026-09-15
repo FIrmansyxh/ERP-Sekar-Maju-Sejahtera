@@ -1039,19 +1039,19 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
             )}
 
             {/* Bal Items Status Table in Active Transaction */}
-            <div className="border border-gray-200">
-              <div className="p-3 bg-white border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="border border-slate-200 rounded-md overflow-hidden bg-white">
+              <div className="p-3.5 bg-slate-50/70 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div className="flex items-center space-x-2">
-                  <h3 className="font-bold text-gray-900 text-xs uppercase tracking-wide">
+                  <h3 className="font-semibold text-slate-800 text-xs tracking-wide">
                     Daftar Bal Dalam Kupon ({weighedBalCount} dari {totalBalCount} Selesai Ditimbang)
                   </h3>
                 </div>
 
                 <div className="flex items-center space-x-2">
-                  <span className={`px-2.5 py-1 text-[11px] font-bold rounded-xs ${
-                    isAllWeighed ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' : 'bg-amber-100 text-amber-900 border border-amber-300'
+                  <span className={`px-2.5 py-1 text-[11px] font-medium rounded ${
+                    isAllWeighed ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-amber-50 text-amber-800 border border-amber-200'
                   }`}>
-                    {isAllWeighed ? '✓ Seluruh Bal Selesai Ditimbang' : '⏳ Masih Ada Bal Belum Ditimbang'}
+                    {isAllWeighed ? 'Seluruh Bal Selesai Ditimbang' : 'Masih Ada Bal Belum Ditimbang'}
                   </span>
                 </div>
               </div>
@@ -1059,23 +1059,23 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse text-xs min-w-[800px]">
                   <thead>
-                    <tr className="bg-[#f8f9fa] border-b border-gray-200 text-gray-700 font-bold">
-                      <th className="py-2 px-2.5 text-center border-r border-gray-200 w-10">No</th>
-                      <th className="py-2 px-3 border-r border-gray-200">No Bal / Barcode</th>
-                      <th className="py-2 px-3 border-r border-gray-200 text-center">Grade</th>
-                      <th className="py-2 px-3 border-r border-gray-200 text-right">Tarif / Kg</th>
-                      <th className="py-2 px-3 border-r border-gray-200 text-center">Status Tikar</th>
-                      <th className="py-2 px-3 border-r border-gray-200 text-center">Berat Bruto</th>
-                      <th className="py-2 px-3 border-r border-gray-200 text-center">Tara</th>
-                      <th className="py-2 px-3 border-r border-gray-200 text-center">Berat Netto</th>
-                      <th className="py-2 px-3 border-r border-gray-200">Lokasi Simpan</th>
-                      <th className="py-2 px-3 border-r border-gray-200 text-right">Potongan</th>
-                      <th className="py-2 px-3 border-r border-gray-200 text-right">Subtotal Bersih</th>
-                      <th className="py-2 px-2.5 text-center w-20">Aksi</th>
+                    <tr className="bg-slate-50/90 border-b border-slate-200 text-slate-600 font-semibold text-xs">
+                      <th className="py-2.5 px-3 text-center w-12">No</th>
+                      <th className="py-2.5 px-3">No Bal / Barcode</th>
+                      <th className="py-2.5 px-3 text-center">Grade</th>
+                      <th className="py-2.5 px-3 text-right">Tarif / Kg</th>
+                      <th className="py-2.5 px-3 text-center">Status Tikar</th>
+                      <th className="py-2.5 px-3 text-center">Berat Bruto</th>
+                      <th className="py-2.5 px-3 text-center">Tara</th>
+                      <th className="py-2.5 px-3 text-center">Berat Netto</th>
+                      <th className="py-2.5 px-3">Lokasi Simpan</th>
+                      <th className="py-2.5 px-3 text-right">Potongan</th>
+                      <th className="py-2.5 px-3 text-right">Subtotal Bersih</th>
+                      <th className="py-2.5 px-3 text-center w-20">Aksi</th>
                     </tr>
                   </thead>
 
-                  <tbody className="divide-y divide-gray-200 bg-white">
+                  <tbody className="divide-y divide-slate-100 bg-white text-slate-700">
                     {workingItems.map((item, index) => {
                       const isWeighed = (item.berat_kg || 0) > 0;
                       const isSelected = item.item_id === selectedItemBalId;
@@ -1083,67 +1083,67 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
                       return (
                         <tr 
                           key={item.item_id} 
-                          className={`hover:bg-gray-50/80 cursor-pointer ${
-                            isSelected ? 'bg-emerald-50/60 font-medium' : ''
+                          className={`hover:bg-slate-50/80 transition-colors cursor-pointer ${
+                            isSelected ? 'bg-emerald-50/40 font-medium' : ''
                           }`}
                           onClick={() => handleSelectBal(item)}
                         >
-                          <td className="py-2 px-2.5 text-center border-r border-gray-200 font-mono text-gray-500">
+                          <td className="py-2.5 px-3 text-center font-mono text-slate-500">
                             {index + 1}
                           </td>
 
-                          <td className="py-2 px-3 border-r border-gray-200 font-mono font-bold text-gray-900">
+                          <td className="py-2.5 px-3 font-mono font-semibold text-slate-900">
                             {item.no_bal}
                           </td>
 
-                          <td className="py-2 px-3 border-r border-gray-200 text-center font-bold text-gray-800">
+                          <td className="py-2.5 px-3 text-center font-medium text-slate-800">
                             Grade {item.kode_grade}
                           </td>
 
-                          <td className="py-2 px-3 border-r border-gray-200 text-right font-mono text-gray-700">
+                          <td className="py-2.5 px-3 text-right font-mono text-slate-600">
                             {formatRupiah(item.harga_per_kg)}
                           </td>
 
-                          <td className="py-2 px-3 border-r border-gray-200 text-center">
-                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-xs ${
-                              item.ganti_tikar ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-600'
+                          <td className="py-2.5 px-3 text-center">
+                            <span className={`text-[10px] font-medium px-2 py-0.5 rounded ${
+                              item.ganti_tikar ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-slate-100 text-slate-600 border border-slate-200'
                             }`}>
                               {item.ganti_tikar ? 'Ganti Tikar' : 'Standar'}
                             </span>
                           </td>
 
-                          <td className="py-2 px-3 border-r border-gray-200 text-center font-mono font-bold text-gray-900">
-                            {isWeighed ? `${item.berat_bruto_kg} kg` : <span className="text-amber-600">Belum timbang</span>}
+                          <td className="py-2.5 px-3 text-center font-mono font-medium text-slate-900">
+                            {isWeighed ? `${item.berat_bruto_kg} kg` : <span className="text-amber-700">Belum timbang</span>}
                           </td>
 
-                          <td className="py-2 px-3 border-r border-gray-200 text-center font-mono text-gray-600">
+                          <td className="py-2.5 px-3 text-center font-mono text-slate-500">
                             {item.potongan_tara_kg || hitungPotonganTaraKg(item.berat_bruto_kg || 0, item.ganti_tikar || false, item.no_bal)} kg
                           </td>
 
-                          <td className="py-2 px-3 border-r border-gray-200 text-center font-mono font-black text-emerald-800">
+                          <td className="py-2.5 px-3 text-center font-mono font-semibold text-emerald-800">
                             {isWeighed ? `${item.berat_kg} kg` : '-'}
                           </td>
 
-                          <td className="py-2 px-3 border-r border-gray-200 font-medium text-gray-800">
+                          <td className="py-2.5 px-3 font-medium text-slate-700">
                             {item.lokasi_simpan || '-'}
                           </td>
 
-                          <td className="py-2 px-3 border-r border-gray-200 text-right font-mono text-red-600 font-medium">
+                          <td className="py-2.5 px-3 text-right font-mono text-slate-600">
                             {isWeighed ? `-${formatRupiah(item.potongan)}` : '-'}
                           </td>
 
-                          <td className="py-2 px-3 border-r border-gray-200 text-right font-mono font-bold text-[#b81d24]">
+                          <td className="py-2.5 px-3 text-right font-mono font-semibold text-slate-900">
                             {isWeighed ? formatRupiah(item.subtotal_bersih) : '-'}
                           </td>
 
-                          <td className="py-2 px-2.5 text-center">
+                          <td className="py-2.5 px-3 text-center">
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleSelectBal(item);
                               }}
-                              className="px-2 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-900 font-bold rounded-xs text-[10px]"
+                              className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-medium rounded text-[11px] transition-colors cursor-pointer"
                             >
                               Timbang
                             </button>
@@ -1156,22 +1156,22 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
               </div>
 
               {/* Bottom Summary Strip */}
-              <div className="p-3.5 bg-gray-50 border-t border-gray-200 grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
-                <div className="flex justify-between border-r border-gray-200 pr-3">
-                  <span className="text-gray-500">Total Berat Netto:</span>
-                  <span className="font-black font-mono text-emerald-800 text-sm">{totalBeratNetto} kg</span>
+              <div className="p-3.5 bg-slate-50/80 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs text-slate-700">
+                <div className="flex justify-between pr-3">
+                  <span className="text-slate-500">Total Berat Netto:</span>
+                  <span className="font-semibold font-mono text-emerald-800">{totalBeratNetto} kg</span>
                 </div>
-                <div className="flex justify-between border-r border-gray-200 pr-3">
-                  <span className="text-gray-500">Total Kotor:</span>
-                  <span className="font-bold font-mono text-gray-900">{formatRupiah(totalKotorAll)}</span>
+                <div className="flex justify-between pr-3">
+                  <span className="text-slate-500">Total Kotor:</span>
+                  <span className="font-semibold font-mono text-slate-800">{formatRupiah(totalKotorAll)}</span>
                 </div>
-                <div className="flex justify-between border-r border-gray-200 pr-3">
-                  <span className="text-gray-500">Total Potongan:</span>
-                  <span className="font-bold font-mono text-red-600">-{formatRupiah(totalPotonganAll)}</span>
+                <div className="flex justify-between pr-3">
+                  <span className="text-slate-500">Total Potongan:</span>
+                  <span className="font-semibold font-mono text-slate-700">-{formatRupiah(totalPotonganAll)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600 font-bold">Total Pembayaran Bersih:</span>
-                  <span className="font-black font-mono text-[#b81d24] text-sm">{formatRupiah(totalHargaFinalAll)}</span>
+                  <span className="text-slate-700 font-medium">Total Pembayaran Bersih:</span>
+                  <span className="font-semibold font-mono text-slate-900">{formatRupiah(totalHargaFinalAll)}</span>
                 </div>
               </div>
             </div>

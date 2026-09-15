@@ -747,27 +747,27 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto border-t border-slate-200">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="bg-[#f8f9fa] border-b border-gray-200 text-gray-700 font-bold uppercase text-[10px] tracking-wider">
-                  <th className="py-2.5 px-3 border-r border-gray-200 w-10 text-center">No</th>
-                  <th className="py-2.5 px-3 border-r border-gray-200">ID & Nama Petani</th>
-                  <th className="py-2.5 px-3 border-r border-gray-200">Kontak & Wilayah</th>
-                  <th className="py-2.5 px-2 border-r border-gray-200 text-center w-20">Status</th>
-                  <th className="py-2.5 px-3 border-r border-gray-200 text-center">Total Transaksi</th>
-                  <th className="py-2.5 px-3 border-r border-gray-200 text-center">Total Bal</th>
-                  <th className="py-2.5 px-3 border-r border-gray-200 text-right">Total Netto (Kg)</th>
-                  <th className="py-2.5 px-3 border-r border-gray-200 text-right">Total Nilai Beli (Rp)</th>
-                  <th className="py-2.5 px-2 border-r border-gray-200 text-center w-24">Grade Dominan</th>
-                  <th className="py-2.5 px-3 border-r border-gray-200 text-center">Setoran Terakhir</th>
-                  <th className="py-2.5 px-2 text-center w-24">Aksi</th>
+                <tr className="bg-slate-50/90 border-b border-slate-200 text-slate-600 font-semibold text-xs">
+                  <th className="py-2.5 px-3 w-12 text-center">No</th>
+                  <th className="py-2.5 px-3">ID & Nama Petani</th>
+                  <th className="py-2.5 px-3">Kontak & Wilayah</th>
+                  <th className="py-2.5 px-3 text-center w-24">Status</th>
+                  <th className="py-2.5 px-3 text-center">Total Transaksi</th>
+                  <th className="py-2.5 px-3 text-center">Total Bal</th>
+                  <th className="py-2.5 px-3 text-right">Total Netto (Kg)</th>
+                  <th className="py-2.5 px-3 text-right">Total Nilai Beli (Rp)</th>
+                  <th className="py-2.5 px-3 text-center w-28">Grade Dominan</th>
+                  <th className="py-2.5 px-3 text-center">Setoran Terakhir</th>
+                  <th className="py-2.5 px-3 text-center w-24">Aksi</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody className="divide-y divide-slate-100 text-slate-700">
                 {paginatedData.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="py-8 text-center text-gray-500 italic">
+                    <td colSpan={11} className="py-8 text-center text-slate-500 italic">
                       Tidak ada data petani yang sesuai dengan parameter filter pencarian.
                     </td>
                   </tr>
@@ -777,62 +777,61 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
                     return (
                       <tr 
                         key={p.petani_id}
-                        className={`${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'} hover:bg-gray-100/80 transition-colors cursor-pointer`}
+                        className="hover:bg-slate-50/80 transition-colors cursor-pointer"
                         onClick={() => setSelectedPetaniForDetail(p)}
                       >
-                        <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono text-gray-500">
+                        <td className="py-2.5 px-3 text-center font-mono text-slate-500">
                           {rowNumber}
                         </td>
-                        <td className="py-2.5 px-3 border-r border-gray-200">
-                          <div className="font-bold text-gray-900">{p.nama_petani}</div>
-                          <div className="text-[10px] font-mono text-gray-500 flex items-center space-x-1 mt-0.5">
+                        <td className="py-2.5 px-3">
+                          <div className="font-semibold text-slate-900">{p.nama_petani}</div>
+                          <div className="text-[11px] font-mono text-slate-500 flex items-center space-x-1 mt-0.5">
                             <span>ID: {p.petani_id}</span>
-                            
                           </div>
                         </td>
-                        <td className="py-2.5 px-3 border-r border-gray-200">
-                          <div className="text-gray-800 font-medium">{p.desa_kecamatan || p.alamat || '-'}</div>
-                          <div className="text-[10px] text-gray-500 font-mono mt-0.5">{p.no_hp || '-'}</div>
+                        <td className="py-2.5 px-3">
+                          <div className="text-slate-800 font-medium">{p.desa_kecamatan || p.alamat || '-'}</div>
+                          <div className="text-[11px] text-slate-500 font-mono mt-0.5">{p.no_hp || '-'}</div>
                         </td>
-                        <td className="py-2.5 px-2 border-r border-gray-200 text-center">
+                        <td className="py-2.5 px-3 text-center">
                           {p.status_aktif ? (
-                            <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xs text-[10px] font-semibold">
+                            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[11px] font-medium">
                               Aktif
                             </span>
                           ) : (
-                            <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 border border-gray-300 rounded-xs text-[10px] font-semibold">
+                            <span className="px-2 py-0.5 bg-slate-100 text-slate-600 border border-slate-200 rounded text-[11px] font-medium">
                               Nonaktif
                             </span>
                           )}
                         </td>
-                        <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono font-medium text-gray-800">
+                        <td className="py-2.5 px-3 text-center font-mono font-medium text-slate-700">
                           {p.totalTransaksi > 0 ? `${p.totalTransaksi}x` : '-'}
                         </td>
-                        <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono font-bold text-gray-900">
+                        <td className="py-2.5 px-3 text-center font-mono font-semibold text-slate-900">
                           {p.totalBal > 0 ? `${p.totalBal} Bal` : '-'}
                         </td>
-                        <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono font-bold text-blue-900">
+                        <td className="py-2.5 px-3 text-right font-mono font-semibold text-slate-900">
                           {p.totalKg > 0 ? `${p.totalKg.toLocaleString('id-ID')} kg` : '0 kg'}
                         </td>
-                        <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono font-bold text-[#b81d24]">
+                        <td className="py-2.5 px-3 text-right font-mono font-semibold text-slate-900">
                           {p.totalNilaiRp > 0 ? `Rp ${p.totalNilaiRp.toLocaleString('id-ID')}` : 'Rp 0'}
                         </td>
-                        <td className="py-2.5 px-2 border-r border-gray-200 text-center">
+                        <td className="py-2.5 px-3 text-center">
                           {p.gradeDominan !== '-' ? (
-                            <span className="px-2 py-0.5 bg-zinc-900 text-white rounded-xs text-[10px] font-bold">
+                            <span className="px-2 py-0.5 bg-slate-800 text-white rounded text-[11px] font-medium">
                               Grade {p.gradeDominan}
                             </span>
                           ) : (
-                            <span className="text-gray-400 text-[10px]">-</span>
+                            <span className="text-slate-400 text-[11px]">-</span>
                           )}
                         </td>
-                        <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono text-[11px] text-gray-600">
+                        <td className="py-2.5 px-3 text-center font-mono text-[11px] text-slate-600">
                           {p.lastTxDate}
                         </td>
-                        <td className="py-2.5 px-2 text-center" onClick={(e) => e.stopPropagation()}>
+                        <td className="py-2.5 px-3 text-center" onClick={(e) => e.stopPropagation()}>
                           <button
                             onClick={() => setSelectedPetaniForDetail(p)}
-                            className="px-2 py-1 text-[11px] font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xs transition cursor-pointer"
+                            className="px-2.5 py-1 text-[11px] font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded transition-colors cursor-pointer"
                           >
                             Rincian
                           </button>
@@ -880,11 +879,11 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
               </div>
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto border-t border-slate-200">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="bg-gray-50 text-gray-700 font-bold border-b border-gray-200 text-[10px] uppercase">
-                    <th className="py-2.5 px-3 text-center w-12">Peringkat</th>
+                  <tr className="bg-slate-50/90 text-slate-600 font-semibold border-b border-slate-200 text-xs">
+                    <th className="py-2.5 px-3 text-center w-14">Peringkat</th>
                     <th className="py-2.5 px-3">Nama Petani</th>
                     <th className="py-2.5 px-3">Desa / Wilayah</th>
                     <th className="py-2.5 px-3 text-center">Jumlah Bal</th>
@@ -892,10 +891,10 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
                     <th className="py-2.5 px-3 text-right">Total Nilai Beli</th>
                     <th className="py-2.5 px-3 text-center">Grade Dominan</th>
                     <th className="py-2.5 px-3 text-center">Proporsi Pasokan</th>
-                    <th className="py-2.5 px-2 text-center w-20">Aksi</th>
+                    <th className="py-2.5 px-3 text-center w-24">Aksi</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-slate-100 text-slate-700">
                   {filteredPetaniData
                     .filter((p) => p.totalKg > 0)
                     .slice(0, 10)
@@ -903,55 +902,55 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
                       const totalAllKg = overallKPIs.totalKgSetor || 1;
                       const persen = ((p.totalKg / totalAllKg) * 100).toFixed(1);
                       return (
-                        <tr key={p.petani_id} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'} hover:bg-gray-100/80 transition-colors`}>
+                        <tr key={p.petani_id} className="hover:bg-slate-50/80 transition-colors">
                           <td className="py-2.5 px-3 text-center">
                             <span
-                              className={`inline-flex items-center justify-center w-6 h-6 text-xs font-bold ${
+                              className={`inline-flex items-center justify-center w-6 h-6 text-xs font-semibold rounded ${
                                 idx === 0
-                                  ? 'bg-amber-500 text-white shadow-xs'
+                                  ? 'bg-amber-100 text-amber-900 border border-amber-300'
                                   : idx === 1
-                                  ? 'bg-gray-400 text-white'
+                                  ? 'bg-slate-200 text-slate-800'
                                   : idx === 2
-                                  ? 'bg-amber-700 text-white'
-                                  : 'bg-gray-100 text-gray-700'
+                                  ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                                  : 'bg-slate-100 text-slate-600'
                               }`}
                             >
                               {idx + 1}
                             </span>
                           </td>
                           <td className="py-2.5 px-3">
-                            <div className="font-bold text-gray-900">{p.nama_petani}</div>
-                            <div className="text-[10px] text-gray-500 font-mono">ID: {p.petani_id}</div>
+                            <div className="font-semibold text-slate-900">{p.nama_petani}</div>
+                            <div className="text-[11px] text-slate-500 font-mono">ID: {p.petani_id}</div>
                           </td>
-                          <td className="py-2.5 px-3 text-gray-600">
+                          <td className="py-2.5 px-3 text-slate-600">
                             {p.desa_kecamatan || p.alamat || '-'}
                           </td>
-                          <td className="py-2.5 px-3 text-center font-mono font-bold text-gray-900">
+                          <td className="py-2.5 px-3 text-center font-mono font-semibold text-slate-900">
                             {p.totalBal} Bal
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono font-bold text-blue-900">
+                          <td className="py-2.5 px-3 text-right font-mono font-semibold text-slate-900">
                             {p.totalKg.toLocaleString('id-ID')} kg
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono font-bold text-[#b81d24]">
+                          <td className="py-2.5 px-3 text-right font-mono font-semibold text-slate-900">
                             Rp {p.totalNilaiRp.toLocaleString('id-ID')}
                           </td>
                           <td className="py-2.5 px-3 text-center">
-                            <span className="px-2 py-0.5 bg-zinc-900 text-white text-[10px] font-bold">
+                            <span className="px-2 py-0.5 bg-slate-800 text-white text-[11px] font-medium rounded">
                               Grade {p.gradeDominan}
                             </span>
                           </td>
                           <td className="py-2.5 px-3 text-center">
                             <div className="flex items-center space-x-2 justify-center">
-                              <div className="w-16 bg-gray-200 h-2 rounded-xs overflow-hidden">
-                                <div className="bg-[#b81d24] h-full" style={{ width: `${persen}%` }}></div>
+                              <div className="w-16 bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                                <div className="bg-slate-700 h-full rounded-full" style={{ width: `${persen}%` }}></div>
                               </div>
-                              <span className="text-[10px] font-mono text-gray-600">{persen}%</span>
+                              <span className="text-[11px] font-mono text-slate-600">{persen}%</span>
                             </div>
                           </td>
-                          <td className="py-2.5 px-2 text-center">
+                          <td className="py-2.5 px-3 text-center">
                             <button
                               onClick={() => setSelectedPetaniForDetail(p)}
-                              className="px-2 py-1 text-[11px] font-semibold text-[#b81d24] hover:bg-red-50 rounded-xs transition cursor-pointer"
+                              className="px-2.5 py-1 text-[11px] font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded transition-colors cursor-pointer"
                             >
                               Detail
                             </button>
@@ -968,12 +967,12 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
 
       {/* 7. Tab Content 3: Sebaran Wilayah / Desa Aggregates */}
       {activeTab === 'wilayah' && (
-        <div className="bg-white border border-gray-200 shadow-2xs overflow-hidden">
-          <div className="p-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
-            <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+        <div className="bg-white border border-slate-200 rounded-md overflow-hidden">
+          <div className="p-3 border-b border-slate-200 bg-slate-50/80 flex items-center justify-between">
+            <h3 className="text-xs font-semibold text-slate-800 tracking-wide">
               Rekapitulasi Sebaran Pasokan per Desa & Wilayah
             </h3>
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-slate-500">
               Total {wilayahAggregates.length} Wilayah
             </span>
           </div>
@@ -981,46 +980,46 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="bg-gray-100 text-gray-700 font-bold uppercase text-[10px] border-b border-gray-200">
-                  <th className="py-2.5 px-3 border-r border-gray-200 text-center w-12">No</th>
-                  <th className="py-2.5 px-4 border-r border-gray-200">Nama Desa / Wilayah</th>
-                  <th className="py-2.5 px-4 border-r border-gray-200 text-center">Jumlah Petani</th>
-                  <th className="py-2.5 px-4 border-r border-gray-200 text-center">Total Setoran Bal</th>
-                  <th className="py-2.5 px-4 border-r border-gray-200 text-right">Total Netto (Kg)</th>
-                  <th className="py-2.5 px-4 border-r border-gray-200 text-right">Total Nilai Pembelian (Rp)</th>
+                <tr className="bg-slate-50/90 text-slate-600 font-semibold border-b border-slate-200 text-xs">
+                  <th className="py-2.5 px-3 text-center w-12">No</th>
+                  <th className="py-2.5 px-4">Nama Desa / Wilayah</th>
+                  <th className="py-2.5 px-4 text-center">Jumlah Petani</th>
+                  <th className="py-2.5 px-4 text-center">Total Setoran Bal</th>
+                  <th className="py-2.5 px-4 text-right">Total Netto (Kg)</th>
+                  <th className="py-2.5 px-4 text-right">Total Nilai Pembelian (Rp)</th>
                   <th className="py-2.5 px-4 text-center">Kontribusi Pasokan</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody className="divide-y divide-slate-100 text-slate-700">
                 {wilayahAggregates.map((w, idx) => {
                   const totalKg = overallKPIs.totalKgSetor || 1;
                   const persen = ((w.totalKg / totalKg) * 100).toFixed(1);
                   return (
-                    <tr key={w.desa} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'} hover:bg-gray-100/80 transition-colors`}>
-                      <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono text-gray-500">
+                    <tr key={w.desa} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-2.5 px-3 text-center font-mono text-slate-500">
                         {idx + 1}
                       </td>
-                      <td className="py-2.5 px-4 border-r border-gray-200 font-bold text-gray-900">
+                      <td className="py-2.5 px-4 font-semibold text-slate-900">
                         {w.desa}
                       </td>
-                      <td className="py-2.5 px-4 border-r border-gray-200 text-center font-mono font-medium text-gray-700">
+                      <td className="py-2.5 px-4 text-center font-mono font-medium text-slate-700">
                         {w.countPetani} Petani
                       </td>
-                      <td className="py-2.5 px-4 border-r border-gray-200 text-center font-mono font-bold text-gray-900">
+                      <td className="py-2.5 px-4 text-center font-mono font-semibold text-slate-900">
                         {w.totalBal} Bal
                       </td>
-                      <td className="py-2.5 px-4 border-r border-gray-200 text-right font-mono font-bold text-blue-900">
+                      <td className="py-2.5 px-4 text-right font-mono font-semibold text-slate-900">
                         {w.totalKg.toLocaleString('id-ID')} kg
                       </td>
-                      <td className="py-2.5 px-4 border-r border-gray-200 text-right font-mono font-bold text-[#b81d24]">
+                      <td className="py-2.5 px-4 text-right font-mono font-semibold text-slate-900">
                         Rp {w.totalNilai.toLocaleString('id-ID')}
                       </td>
                       <td className="py-2.5 px-4 text-center">
                         <div className="flex items-center justify-center space-x-2">
-                          <div className="w-20 bg-gray-200 h-2 rounded-xs overflow-hidden">
-                            <div className="bg-[#b81d24] h-full" style={{ width: `${persen}%` }}></div>
+                          <div className="w-20 bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                            <div className="bg-slate-700 h-full rounded-full" style={{ width: `${persen}%` }}></div>
                           </div>
-                          <span className="text-[10px] font-mono text-gray-600">{persen}%</span>
+                          <span className="text-[11px] font-mono text-slate-600">{persen}%</span>
                         </div>
                       </td>
                     </tr>
@@ -1035,58 +1034,58 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
       {/* 8. Drawer / Modal: Detail Riwayat Setoran Petani */}
       {selectedPetaniForDetail && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-3 animate-in fade-in duration-150">
-          <div className="bg-white w-full max-w-6xl max-h-[90vh] overflow-y-auto border border-gray-300 shadow-2xl flex flex-col">
+          <div className="bg-white w-full max-w-6xl max-h-[90vh] overflow-y-auto border border-slate-300 rounded-md shadow-2xl flex flex-col">
             
             {/* Modal Header */}
-            <div className="p-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+            <div className="p-4 border-b border-slate-200 bg-slate-50/80 flex items-center justify-between">
               <div>
                 <div className="flex items-center space-x-2">
-                  <h3 className="text-sm font-bold text-gray-900">
+                  <h3 className="text-sm font-semibold text-slate-900">
                     Riwayat Lengkap Setoran: {selectedPetaniForDetail.nama_petani}
                   </h3>
-                  <span className={`px-2 py-0.5 text-[10px] font-bold rounded-xs ${
-                    selectedPetaniForDetail.status_aktif ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-700'
+                  <span className={`px-2 py-0.5 text-[11px] font-medium rounded ${
+                    selectedPetaniForDetail.status_aktif ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-slate-100 text-slate-700 border border-slate-200'
                   }`}>
                     {selectedPetaniForDetail.status_aktif ? 'Aktif' : 'Nonaktif'}
                   </span>
                 </div>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  ID: <span className="font-mono font-semibold text-gray-700">{selectedPetaniForDetail.petani_id}</span> • 
-                  Desa: <span className="text-gray-700">{selectedPetaniForDetail.desa_kecamatan || selectedPetaniForDetail.alamat}</span> • 
-                  No HP: <span className="text-gray-700">{selectedPetaniForDetail.no_hp || '-'}</span>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  ID: <span className="font-mono font-medium text-slate-700">{selectedPetaniForDetail.petani_id}</span> • 
+                  Desa: <span className="text-slate-700">{selectedPetaniForDetail.desa_kecamatan || selectedPetaniForDetail.alamat}</span> • 
+                  No HP: <span className="text-slate-700">{selectedPetaniForDetail.no_hp || '-'}</span>
                 </p>
               </div>
               <button
                 onClick={() => setSelectedPetaniForDetail(null)}
-                className="p-1 hover:bg-gray-200 rounded-xs text-gray-500 hover:text-gray-900 cursor-pointer"
+                className="p-1 hover:bg-slate-200 rounded text-slate-500 hover:text-slate-900 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Modal Summary Stats */}
-            <div className="p-4 bg-white grid grid-cols-4 gap-3 border-b border-gray-200">
-              <div className="p-2.5 bg-gray-50 border border-gray-200 text-center">
-                <div className="text-[10px] font-bold text-gray-500 uppercase">Total Transaksi</div>
-                <div className="text-base font-bold font-mono text-gray-900 mt-0.5">
+            <div className="p-4 bg-white grid grid-cols-4 gap-3 border-b border-slate-200">
+              <div className="p-2.5 bg-slate-50/80 border border-slate-200 rounded text-center">
+                <div className="text-[11px] font-medium text-slate-500 uppercase">Total Transaksi</div>
+                <div className="text-base font-semibold font-mono text-slate-900 mt-0.5">
                   {selectedPetaniForDetail.totalTransaksi} Kali
                 </div>
               </div>
-              <div className="p-2.5 bg-gray-50 border border-gray-200 text-center">
-                <div className="text-[10px] font-bold text-gray-500 uppercase">Total Bal Disetor</div>
-                <div className="text-base font-bold font-mono text-gray-900 mt-0.5">
+              <div className="p-2.5 bg-slate-50/80 border border-slate-200 rounded text-center">
+                <div className="text-[11px] font-medium text-slate-500 uppercase">Total Bal Disetor</div>
+                <div className="text-base font-semibold font-mono text-slate-900 mt-0.5">
                   {selectedPetaniForDetail.totalBal} Bal
                 </div>
               </div>
-              <div className="p-2.5 bg-gray-50 border border-gray-200 text-center">
-                <div className="text-[10px] font-bold text-gray-500 uppercase">Total Netto (Kg)</div>
-                <div className="text-base font-bold font-mono text-blue-900 mt-0.5">
+              <div className="p-2.5 bg-slate-50/80 border border-slate-200 rounded text-center">
+                <div className="text-[11px] font-medium text-slate-500 uppercase">Total Netto (Kg)</div>
+                <div className="text-base font-semibold font-mono text-slate-900 mt-0.5">
                   {selectedPetaniForDetail.totalKg.toLocaleString('id-ID')} kg
                 </div>
               </div>
-              <div className="p-2.5 bg-gray-50 border border-gray-200 text-center">
-                <div className="text-[10px] font-bold text-gray-500 uppercase">Total Nilai Beli</div>
-                <div className="text-sm font-bold font-mono text-[#b81d24] mt-0.5 truncate">
+              <div className="p-2.5 bg-slate-50/80 border border-slate-200 rounded text-center">
+                <div className="text-[11px] font-medium text-slate-500 uppercase">Total Nilai Beli</div>
+                <div className="text-sm font-semibold font-mono text-slate-900 mt-0.5 truncate">
                   Rp {selectedPetaniForDetail.totalNilaiRp.toLocaleString('id-ID')}
                 </div>
               </div>
@@ -1094,60 +1093,60 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
 
             {/* Modal Transaction Table */}
             <div className="p-4 flex-1 overflow-y-auto">
-              <h4 className="text-xs font-bold text-gray-800 uppercase tracking-wider mb-2">
+              <h4 className="text-xs font-semibold text-slate-800 tracking-wide mb-2.5">
                 Daftar Nota Timbang & Transaksi Pembelian
               </h4>
 
               {selectedPetaniForDetail.txList && selectedPetaniForDetail.txList.length > 0 ? (
-                <div className="border border-gray-200 overflow-x-auto">
+                <div className="border border-slate-200 rounded overflow-x-auto">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
-                      <tr className="bg-gray-100 text-gray-700 font-bold border-b border-gray-200 text-[10px] uppercase">
-                        <th className="py-2 px-2.5 text-center">No</th>
-                        <th className="py-2 px-2.5">ID Transaksi</th>
-                        <th className="py-2 px-2.5">Tanggal</th>
-                        <th className="py-2 px-2.5 text-center">Kupon</th>
-                        <th className="py-2 px-2.5">No Bal</th>
-                        <th className="py-2 px-2.5">Grade</th>
-                        <th className="py-2 px-2.5 text-right">Netto (Kg)</th>
-                        <th className="py-2 px-2.5 text-right">Harga/kg</th>
-                        <th className="py-2 px-2.5 text-right">Potongan</th>
-                        <th className="py-2 px-2.5 text-right">Jumlah Bayar</th>
+                      <tr className="bg-slate-50/90 text-slate-600 font-semibold border-b border-slate-200 text-xs">
+                        <th className="py-2.5 px-3 text-center w-12">No</th>
+                        <th className="py-2.5 px-3">ID Transaksi</th>
+                        <th className="py-2.5 px-3">Tanggal</th>
+                        <th className="py-2.5 px-3 text-center">Kupon</th>
+                        <th className="py-2.5 px-3">No Bal</th>
+                        <th className="py-2.5 px-3">Grade</th>
+                        <th className="py-2.5 px-3 text-right">Netto (Kg)</th>
+                        <th className="py-2.5 px-3 text-right">Harga/kg</th>
+                        <th className="py-2.5 px-3 text-right">Potongan</th>
+                        <th className="py-2.5 px-3 text-right">Jumlah Bayar</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-200">
+                    <tbody className="divide-y divide-slate-100 text-slate-700">
                       {selectedPetaniForDetail.txList.map((t, idx) => {
                         const subtotal = hitungModalTransaksi(t);
                         const potongan = Number(t.total_potongan || 0);
                         const jmlBayar = t.harga_final !== undefined && t.harga_final !== null ? t.harga_final : (subtotal - potongan);
                         return (
-                          <tr key={t.transaksi_id} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'} hover:bg-gray-100/80 transition-colors`}>
-                            <td className="py-2 px-2.5 text-center font-mono text-gray-500">{idx + 1}</td>
-                            <td className="py-2 px-2.5 font-mono font-semibold text-gray-800">{t.transaksi_id}</td>
-                            <td className="py-2 px-2.5 text-gray-600 font-mono text-xs">{formatDateHariBulanTahun(t.tanggal_transaksi)}</td>
-                            <td className="py-2 px-2.5 text-center font-mono font-bold text-gray-700">{t.no_kupon || '-'}</td>
-                            <td className="py-2 px-2.5">
-                              <span className="font-semibold text-gray-900">{t.no_bal}</span>
+                          <tr key={t.transaksi_id} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="py-2.5 px-3 text-center font-mono text-slate-500">{idx + 1}</td>
+                            <td className="py-2.5 px-3 font-mono font-medium text-slate-800">{t.transaksi_id}</td>
+                            <td className="py-2.5 px-3 text-slate-600 font-mono text-xs">{formatDateHariBulanTahun(t.tanggal_transaksi)}</td>
+                            <td className="py-2.5 px-3 text-center font-mono font-semibold text-slate-700">{t.no_kupon || '-'}</td>
+                            <td className="py-2.5 px-3">
+                              <span className="font-semibold text-slate-900">{t.no_bal}</span>
                             </td>
-                            <td className="py-2 px-2.5 max-w-[150px]">
+                            <td className="py-2.5 px-3 max-w-[150px]">
                               <div className="flex flex-wrap gap-1">
                                 {String(t.kode_grade).split(',').map((g, i) => (
-                                  <span key={i} className="px-1.5 py-0.5 bg-zinc-900 text-white text-[10px] font-bold rounded-xs whitespace-nowrap">
+                                  <span key={i} className="px-2 py-0.5 bg-slate-800 text-white text-[11px] font-medium rounded whitespace-nowrap">
                                     {g.trim()}
                                   </span>
                                 ))}
                               </div>
                             </td>
-                            <td className="py-2 px-2.5 text-right font-mono font-bold text-blue-900">
+                            <td className="py-2.5 px-3 text-right font-mono font-semibold text-slate-900">
                               {t.berat_kg} kg
                             </td>
-                            <td className="py-2 px-2.5 text-right font-mono text-gray-700">
+                            <td className="py-2.5 px-3 text-right font-mono text-slate-600">
                               Rp {t.harga_per_kg.toLocaleString('id-ID')}
                             </td>
-                            <td className="py-2 px-2.5 text-right font-mono text-gray-500">
+                            <td className="py-2.5 px-3 text-right font-mono text-slate-500">
                               Rp {potongan.toLocaleString('id-ID')}
                             </td>
-                            <td className="py-2 px-2.5 text-right font-mono font-bold text-[#b81d24]">
+                            <td className="py-2.5 px-3 text-right font-mono font-semibold text-slate-900">
                               Rp {jmlBayar.toLocaleString('id-ID')}
                             </td>
                           </tr>
@@ -1157,17 +1156,17 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
                   </table>
                 </div>
               ) : (
-                <div className="p-6 text-center text-gray-500 italic bg-gray-50 border border-gray-200">
+                <div className="p-6 text-center text-slate-500 italic bg-slate-50 border border-slate-200 rounded">
                   Belum ada catatan transaksi timbang untuk petani ini.
                 </div>
               )}
             </div>
 
             {/* Modal Footer */}
-            <div className="p-3 bg-gray-50 border-t border-gray-200 flex justify-end">
+            <div className="p-3 bg-slate-50 border-t border-slate-200 flex justify-end">
               <button
                 onClick={() => setSelectedPetaniForDetail(null)}
-                className="px-4 py-1.5 bg-gray-800 hover:bg-black text-white text-xs font-bold rounded-xs transition cursor-pointer"
+                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded transition-colors cursor-pointer"
               >
                 Tutup
               </button>

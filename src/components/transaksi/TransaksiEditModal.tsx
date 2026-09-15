@@ -582,29 +582,29 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
               </button>
             </div>
 
-            <div className="overflow-x-auto border border-slate-200 rounded-xs">
+            <div className="overflow-x-auto border border-slate-200 rounded-md">
               <table className="w-full text-left border-collapse text-xs">
-                <thead className="bg-[#f8f9fa] border-b border-gray-200 text-gray-700 font-bold text-[11px]">
-                  <tr>
-                    <th className="py-2.5 px-3 border-r border-gray-200 text-center w-10">No</th>
-                    <th className="py-2.5 px-3 border-r border-gray-200 w-28">No. Bal</th>
-                    <th className="py-2.5 px-3 border-r border-gray-200 w-36">Grade Mutu</th>
-                    <th className="py-2.5 px-3 border-r border-gray-200 text-right w-28">Tarif/Kg</th>
-                    <th className="py-2.5 px-3 border-r border-gray-200 text-right w-28">Netto (Kg)</th>
-                    <th className="py-2.5 px-3 border-r border-gray-200 text-right w-28">Potongan (Rp)</th>
-                    <th className="py-2.5 px-3 border-r border-gray-200 text-right w-32">Subtotal Bersih</th>
+                <thead>
+                  <tr className="bg-slate-50/90 border-b border-slate-200 text-slate-600 font-semibold text-xs">
+                    <th className="py-2.5 px-3 text-center w-10">No</th>
+                    <th className="py-2.5 px-3 w-28">No. Bal</th>
+                    <th className="py-2.5 px-3 w-36">Grade Mutu</th>
+                    <th className="py-2.5 px-3 text-right w-28">Tarif/Kg</th>
+                    <th className="py-2.5 px-3 text-right w-28">Netto (Kg)</th>
+                    <th className="py-2.5 px-3 text-right w-28">Potongan (Rp)</th>
+                    <th className="py-2.5 px-3 text-right w-32">Subtotal Bersih</th>
                     <th className="py-2.5 px-3 text-center w-12">Aksi</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200 bg-white">
+                <tbody className="divide-y divide-slate-100 bg-white text-slate-700">
                   {balRows.map((row, idx) => (
-                    <tr key={row.item_id || idx} className="hover:bg-slate-50/70">
-                      <td className="py-2 px-2.5 text-center text-slate-400 font-mono text-[11px]">
+                    <tr key={row.item_id || idx} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-2.5 px-3 text-center text-slate-400 font-mono text-[11px]">
                         {idx + 1}
                       </td>
 
                       {/* No Bal */}
-                      <td className="py-2 px-2.5">
+                      <td className="py-2.5 px-3">
                         <input
                           type="text"
                           value={row.no_bal}
@@ -614,12 +614,12 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
                               prev.map((r, i) => (i === idx ? { ...r, no_bal: val } : r))
                             );
                           }}
-                          className="w-full font-mono font-bold text-xs px-2 py-1 border border-slate-300 rounded-xs uppercase focus:ring-1 focus:ring-[#b81d24] focus:outline-none"
+                          className="w-full font-mono font-medium text-xs px-2 py-1 border border-slate-300 rounded uppercase focus:ring-1 focus:ring-[#b81d24] focus:outline-none"
                         />
                       </td>
 
                       {/* Grade */}
-                      <td className="py-2 px-2.5">
+                      <td className="py-2.5 px-3">
                         <SearchableSelect allowCustom={true} value={row.kode_grade}
                           onChange={(val) => handleGradeChange(idx, val)}
                           options={activeGrades.map(g => ({ value: g.kode_grade, label: `Grade ${g.kode_grade} (${formatRupiah(g.harga_per_kg)})` }))}
@@ -628,45 +628,45 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
                       </td>
 
                       {/* Tarif/Kg */}
-                      <td className="py-2 px-2.5 text-right font-mono text-slate-700">
+                      <td className="py-2.5 px-3 text-right font-mono text-slate-700">
                         {formatRupiah(row.harga_per_kg)}
                       </td>
 
                       {/* Netto Kg */}
-                      <td className="py-2 px-2.5 text-right">
+                      <td className="py-2.5 px-3 text-right">
                         <input
                           type="number"
                           step="0.1"
                           min="0"
                           value={row.berat_kg}
                           onChange={(e) => handleBeratChange(idx, parseFloat(e.target.value) || 0)}
-                          className="w-20 text-right font-mono font-bold text-xs px-2 py-1 border border-slate-300 rounded-xs focus:ring-1 focus:ring-[#b81d24] focus:outline-none ml-auto"
+                          className="w-20 text-right font-mono font-semibold text-xs px-2 py-1 border border-slate-300 rounded focus:ring-1 focus:ring-[#b81d24] focus:outline-none ml-auto"
                         />
                       </td>
 
                       {/* Potongan */}
-                      <td className="py-2 px-2.5 text-right">
+                      <td className="py-2.5 px-3 text-right">
                         <input
                           type="text"
                           value={formatRupiah(row.potongan)}
                           disabled
-                          className="w-24 text-right font-mono text-xs px-2 py-1 border border-slate-300 rounded-xs bg-slate-100 text-slate-500 cursor-not-allowed ml-auto"
+                          className="w-24 text-right font-mono text-xs px-2 py-1 border border-slate-200 rounded bg-slate-50 text-slate-500 cursor-not-allowed ml-auto"
                           title="Potongan bersifat default (SOP Perusahaan) dan tidak bisa diedit secara manual"
                         />
                       </td>
 
                       {/* Subtotal */}
-                      <td className="py-2 px-2.5 text-right font-mono font-bold text-slate-900">
+                      <td className="py-2.5 px-3 text-right font-mono font-semibold text-slate-900">
                         {formatRupiah(row.subtotal_bersih)}
                       </td>
 
                       {/* Action */}
-                      <td className="py-2 px-2 text-center">
+                      <td className="py-2.5 px-3 text-center">
                         <button
                           type="button"
                           onClick={() => handleRemoveBalRow(idx)}
                           disabled={balRows.length <= 1}
-                          className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xs transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                          className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
                           title="Hapus Bal dari transaksi ini"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -677,15 +677,15 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
                 </tbody>
 
                 {/* Table Footer Totals */}
-                <tfoot className="bg-slate-100 font-bold border-t border-slate-300 text-slate-800">
+                <tfoot className="bg-slate-50/90 font-semibold border-t border-slate-200 text-slate-800">
                   <tr>
                     <td colSpan={4} className="py-2.5 px-3 text-right">
                       TOTAL AKHIR:
                     </td>
-                    <td className="py-2.5 px-2.5 text-right font-mono text-slate-900">
+                    <td className="py-2.5 px-3 text-right font-mono text-slate-900">
                       {totalNettoBaru} Kg
                     </td>
-                    <td className="py-2.5 px-2.5 text-right font-mono text-slate-700">
+                    <td className="py-2.5 px-3 text-right font-mono text-slate-700">
                       {formatRupiah(totalPotonganBaru)}
                     </td>
                     <td className="py-2.5 px-2.5 text-right font-mono text-emerald-800 text-sm">

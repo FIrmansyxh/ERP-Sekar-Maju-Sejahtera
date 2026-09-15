@@ -402,7 +402,7 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
     );
   }, [trendPembelianData]);
 
-  // Custom Interactive Tooltip untuk Tren Pembelian
+  // Custom Interactive Tooltip untuk Tren Pembelian (solid, non-transparan)
   const CustomTrendTooltip = ({ active, payload }: any) => {
     if (!active || !payload || !payload.length) return null;
     const data = payload[0].payload;
@@ -417,23 +417,23 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
     const avgNilaiPerTrx = data.countTrx > 0 ? Math.round(data.totalNilai / data.countTrx) : 0;
 
     return (
-      <div className="bg-gray-900/95 text-white p-3.5 rounded-xs shadow-2xl border border-gray-700 text-xs backdrop-blur-md min-w-[260px] max-w-[320px] pointer-events-none">
+      <div className="bg-slate-900 text-white p-3.5 rounded-md shadow-2xl border border-slate-700 text-xs min-w-[260px] max-w-[320px] pointer-events-none opacity-100">
         {/* Header Tooltip */}
-        <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-gray-700/80">
+        <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-slate-700">
           <div className="flex items-center space-x-2">
-            <span className="p-1 bg-red-950/80 text-red-400 rounded-xs border border-red-800/60">
+            <span className="p-1 bg-red-950 text-red-400 rounded-xs border border-red-800">
               <Calendar className="w-3.5 h-3.5" />
             </span>
             <div>
-              <p className="font-bold text-sm text-gray-100 tracking-tight leading-tight">
+              <p className="font-bold text-sm text-slate-100 tracking-tight leading-tight">
                 {data.fullLabel || data.label}
               </p>
-              <span className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
                 Periode {periodeWaktu}
               </span>
             </div>
           </div>
-          <span className="font-mono text-[10px] bg-gray-800 text-amber-300 font-bold px-2 py-0.5 rounded-xs border border-gray-700">
+          <span className="font-mono text-[10px] bg-slate-800 text-amber-300 font-bold px-2 py-0.5 rounded-xs border border-slate-700">
             {data.countTrx} Transaksi
           </span>
         </div>
@@ -442,14 +442,14 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
         <div
           className={`p-2.5 rounded-xs mb-2.5 border ${
             trendMetric === 'nilai'
-              ? 'bg-blue-950/60 border-blue-800/80'
+              ? 'bg-blue-950 border-blue-800'
               : trendMetric === 'tonase'
-              ? 'bg-emerald-950/60 border-emerald-800/80'
-              : 'bg-red-950/60 border-red-800/80'
+              ? 'bg-emerald-950 border-emerald-800'
+              : 'bg-red-950 border-red-800'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-gray-300">
+            <span className="text-[11px] font-semibold text-slate-300">
               {trendMetric === 'nilai'
                 ? 'Total Modal Pembelian:'
                 : trendMetric === 'tonase'
@@ -472,9 +472,9 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
                 : `${data.totalBal.toLocaleString('id-ID')} Bal`}
             </span>
           </div>
-          <div className="flex items-center justify-between text-[10px] text-gray-400 mt-1">
+          <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1">
             <span>Kontribusi thd Total:</span>
-            <span className="font-mono font-bold text-gray-200">
+            <span className="font-mono font-bold text-slate-200">
               {trendMetric === 'nilai' ? pctNilai : trendMetric === 'tonase' ? pctKg : pctBal}%
             </span>
           </div>
@@ -482,27 +482,27 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
 
         {/* Rincian Angka Lengkap */}
         <div className="space-y-1.5 text-[11px]">
-          <div className="flex justify-between items-center text-gray-300">
+          <div className="flex justify-between items-center text-slate-300">
             <span className="flex items-center space-x-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />
               <span>Fisik Bal:</span>
             </span>
             <span className="font-mono font-bold text-white">
-              {data.totalBal.toLocaleString('id-ID')} Bal <span className="text-[10px] text-gray-400 font-normal">({pctBal}%)</span>
+              {data.totalBal.toLocaleString('id-ID')} Bal <span className="text-[10px] text-slate-400 font-normal">({pctBal}%)</span>
             </span>
           </div>
 
-          <div className="flex justify-between items-center text-gray-300">
+          <div className="flex justify-between items-center text-slate-300">
             <span className="flex items-center space-x-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
               <span>Tonase Bersih:</span>
             </span>
             <span className="font-mono font-bold text-emerald-300">
-              {data.totalKg.toLocaleString('id-ID')} kg <span className="text-[10px] text-gray-400 font-normal">({(data.totalKg / 1000).toFixed(2)} Ton)</span>
+              {data.totalKg.toLocaleString('id-ID')} kg <span className="text-[10px] text-slate-400 font-normal">({(data.totalKg / 1000).toFixed(2)} Ton)</span>
             </span>
           </div>
 
-          <div className="flex justify-between items-center text-gray-300">
+          <div className="flex justify-between items-center text-slate-300">
             <span className="flex items-center space-x-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-400 inline-block" />
               <span>Nilai Modal:</span>
@@ -514,13 +514,13 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
         </div>
 
         {/* Rata-Rata Statistik Sekunder */}
-        <div className="mt-2.5 pt-2 border-t border-gray-800 grid grid-cols-2 gap-1.5 text-[10px]">
-          <div className="bg-gray-800/70 p-1.5 rounded-xs">
-            <p className="text-gray-400">Rata-rata/Bal</p>
-            <p className="font-mono font-bold text-gray-200 mt-0.5">{avgBeratPerBal} kg/bal</p>
+        <div className="mt-2.5 pt-2 border-t border-slate-800 grid grid-cols-2 gap-1.5 text-[10px]">
+          <div className="bg-slate-800 p-1.5 rounded-xs">
+            <p className="text-slate-400">Rata-rata/Bal</p>
+            <p className="font-mono font-bold text-slate-200 mt-0.5">{avgBeratPerBal} kg/bal</p>
           </div>
-          <div className="bg-gray-800/70 p-1.5 rounded-xs">
-            <p className="text-gray-400">Tarif Rata-rata</p>
+          <div className="bg-slate-800 p-1.5 rounded-xs">
+            <p className="text-slate-400">Tarif Rata-rata</p>
             <p className="font-mono font-bold text-amber-300 mt-0.5">{formatRupiah(avgHargaPerKg)}/kg</p>
           </div>
         </div>
@@ -989,6 +989,7 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
                     <Tooltip
                       content={<CustomTrendTooltip />}
                       cursor={{ fill: 'rgba(243, 244, 246, 0.7)' }}
+                      wrapperStyle={{ zIndex: 100, outline: 'none' }}
                     />
                     <Bar 
                       dataKey={trendMetric === 'nilai' ? 'totalNilai' : trendMetric === 'tonase' ? 'totalKg' : 'totalBal'} 

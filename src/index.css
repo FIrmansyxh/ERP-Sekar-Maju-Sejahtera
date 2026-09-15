@@ -10,7 +10,21 @@
   }
 }
 
-/* ERP Global Table Zebra Striping for High Readability */
+/* ERP Global Table System for High Ergonomic Readability */
+table {
+  color: #334155; /* Slate-700: optimal dark gray contrast for long working hours */
+  border-collapse: collapse;
+}
+
+table:not(.custom-border) th,
+table:not(.custom-border) td {
+  border-color: #e2e8f0;
+}
+
+table thead th {
+  color: #475569; /* Slate-600 */
+}
+
 table:not(.no-zebra) > tbody > tr:nth-child(odd):not(.no-zebra-row) {
   background-color: #ffffff;
 }

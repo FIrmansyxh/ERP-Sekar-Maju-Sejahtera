@@ -331,14 +331,14 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
         </div>
 
         {/* Table View */}
-        <div className="overflow-x-auto border-t border-gray-200">
+        <div className="overflow-x-auto border-t border-slate-200">
           <table className="w-full text-left border-collapse">
-            <thead className="bg-[#f8f9fa]">
-              <tr className="border-b border-gray-200 text-[11px] font-bold text-gray-700">
-                <th className="py-2.5 px-3 text-center w-12 border-r border-gray-200">No</th>
+            <thead className="bg-slate-50/80">
+              <tr className="border-b border-slate-200 text-xs font-semibold text-slate-600">
+                <th className="py-3 px-4 text-center w-14">No</th>
                 <th 
                   onClick={() => handleSort('petani_id')}
-                  className="py-2.5 px-3 border-r border-gray-200 cursor-pointer hover:bg-gray-100 select-none w-36"
+                  className="py-3 px-4 cursor-pointer hover:bg-slate-100/70 select-none w-36 transition-colors"
                 >
                   <div className="flex items-center justify-between">
                     <span>ID Petani</span>
@@ -347,25 +347,25 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
                 </th>
                 <th 
                   onClick={() => handleSort('nama')}
-                  className="py-2.5 px-3 border-r border-gray-200 cursor-pointer hover:bg-gray-100 select-none"
+                  className="py-3 px-4 cursor-pointer hover:bg-slate-100/70 select-none transition-colors"
                 >
                   <div className="flex items-center justify-between">
                     <span>Nama Petani</span>
                     {renderSortIcon('nama')}
                   </div>
                 </th>
-                <th className="py-2.5 px-3 border-r border-gray-200 w-36 text-center">Nomor HP</th>
-                <th className="py-2.5 px-3 border-r border-gray-200">Alamat Lengkap</th>
-                <th className="py-2.5 px-3 border-r border-gray-200 text-center w-24">Status</th>
-                <th className="py-2.5 px-3 border-r border-gray-200 text-center w-24">Total Bal</th>
-                <th className="py-2.5 px-3 text-center w-28">Aksi</th>
+                <th className="py-3 px-4 w-36 text-center">Nomor HP</th>
+                <th className="py-3 px-4">Alamat Lengkap</th>
+                <th className="py-3 px-4 text-center w-24">Status</th>
+                <th className="py-3 px-4 text-center w-24">Total Bal</th>
+                <th className="py-3 px-4 text-center w-28">Aksi</th>
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-gray-200 text-xs">
+            <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
               {displayItems.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-gray-500">
+                  <td colSpan={8} className="py-12 text-center text-slate-500">
                     <div>Tidak ada data petani yang sesuai dengan kriteria filter atau pencarian.</div>
                     {(statusFilter !== 'all' || searchQuery.trim() !== '') && (
                       <button
@@ -376,7 +376,7 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
                           setSearchQuery('');
                           setCurrentPage(1);
                         }}
-                        className="mt-2 inline-flex items-center space-x-1 text-xs text-[#b81d24] hover:underline font-semibold cursor-pointer"
+                        className="mt-2 inline-flex items-center space-x-1 text-xs text-slate-800 hover:text-slate-900 hover:underline font-semibold cursor-pointer"
                       >
                         <RefreshCw className="w-3 h-3" />
                         <span>Tampilkan Semua Petani (Reset Filter)</span>
@@ -390,46 +390,46 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
                     return (
                       <tr 
                         key={petani.petani_id}
-                        className={`transition-colors hover:bg-amber-50/60 ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'}`}
+                        className={`transition-colors hover:bg-slate-50/80 ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/40'}`}
                       >
                         {/* No */}
-                        <td className="py-2.5 px-3 text-center border-r border-gray-200 font-mono text-gray-600">
+                        <td className="py-3 px-4 text-center font-mono text-slate-500">
                           {itemNumber}
                         </td>
 
                         {/* ID Petani */}
-                        <td className="py-2.5 px-3 border-r border-gray-200 font-mono font-bold text-[#b81d24]">
+                        <td className="py-3 px-4 font-mono font-semibold text-slate-900">
                           {petani.petani_id}
                         </td>
 
                         {/* Nama Petani */}
-                        <td className="py-2.5 px-3 border-r border-gray-200 font-bold text-gray-900">
+                        <td className="py-3 px-4 font-medium text-slate-900">
                           {petani.nama_petani}
                         </td>
 
                         {/* No HP */}
-                        <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono text-gray-700">
+                        <td className="py-3 px-4 text-center font-mono text-slate-600">
                           {petani.no_hp || '-'}
                         </td>
 
                         {/* Alamat */}
-                        <td className="py-2.5 px-3 border-r border-gray-200 text-gray-700 truncate max-w-xs">
+                        <td className="py-3 px-4 text-slate-600 truncate max-w-xs">
                           {petani.alamat || petani.desa_kecamatan || '-'}
                         </td>
 
                         {/* Status */}
-                        <td className="py-2.5 px-3 border-r border-gray-200 text-center">
-                          <span className={`inline-block px-2 py-0.5 text-[10px] font-bold rounded ${
+                        <td className="py-3 px-4 text-center">
+                          <span className={`inline-block px-2.5 py-0.5 text-[11px] font-medium rounded-sm border ${
                             petani.status_aktif 
-                              ? 'bg-green-50 text-green-700 border border-green-200' 
-                              : 'bg-gray-100 text-gray-500 border border-gray-200'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                              : 'bg-slate-100 text-slate-600 border-slate-200'
                           }`}>
                             {petani.status_aktif ? 'Aktif' : 'Nonaktif'}
                           </span>
                         </td>
 
                         {/* Total Bal */}
-                        <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono font-medium text-gray-800">
+                        <td className="py-3 px-4 text-center font-mono font-medium text-slate-800">
                           {(() => {
                             const realTransactions = transaksiList.filter((tx) => tx.petani_id === petani.petani_id);
                             const totalBal = realTransactions.reduce((acc, tx) => acc + (tx.total_bal || (tx.items ? tx.items.length : 0)), 0);
@@ -438,32 +438,32 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
                         </td>
 
                         {/* Action Buttons */}
-                        <td className="py-2 px-3 text-center">
+                        <td className="py-2.5 px-4 text-center">
                           <div className="flex items-center justify-center space-x-1.5">
                             {/* Info Button */}
                             <button
                               onClick={() => onViewDetail(petani)}
-                              className="w-6 h-6 rounded-full bg-[#6c757d] hover:bg-[#5a6268] text-white flex items-center justify-center text-[10px] transition cursor-pointer shadow-xs"
+                              className="w-7 h-7 rounded bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-900 flex items-center justify-center text-[10px] transition-colors cursor-pointer border border-slate-200 hover:border-slate-300"
                               title="Detail Petani"
                             >
                               <Info className="w-3.5 h-3.5" />
                             </button>
 
-                            {/* Print ID Card Button */}
+                            {/* Print ID Card Button (Warna merah korporat PR. Sekar Maju Sejahtera) */}
                             <button
                               onClick={() => onPrintCard(petani)}
-                              className="w-6 h-6 rounded-full bg-[#17a2b8] hover:bg-[#138496] text-white flex items-center justify-center text-[10px] transition cursor-pointer shadow-xs"
+                              className="w-7 h-7 rounded bg-red-50/70 hover:bg-red-100 text-[#b81d24] flex items-center justify-center text-[10px] transition-colors cursor-pointer border border-red-200/80 hover:border-red-300"
                               title="Cetak ID Card Petani"
                             >
                               <Printer className="w-3.5 h-3.5" />
                             </button>
 
-                            {/* Edit Button */}
+                            {/* Edit Button (Harmonis dengan palet slate, tanpa kotak hitam pekat) */}
                             {canManagePetani && (
                               <button
                                 onClick={() => onEditPetani(petani)}
-                                className="w-6 h-6 rounded-full bg-[#b81d24] hover:bg-[#96141a] text-white flex items-center justify-center text-[10px] transition cursor-pointer shadow-xs"
-                                title="Edit Data"
+                                className="w-7 h-7 rounded bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-900 flex items-center justify-center text-[10px] transition-colors cursor-pointer border border-slate-200 hover:border-slate-300"
+                                title="Edit Data Petani"
                               >
                                 <Edit3 className="w-3.5 h-3.5" />
                               </button>
@@ -473,19 +473,21 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
                             {canManagePetani && (
                               <button
                                 onClick={() => onToggleStatus(petani)}
-                                className={`w-6 h-6 rounded-full text-white flex items-center justify-center text-[10px] transition cursor-pointer shadow-xs ${
-                                  petani.status_aktif ? 'bg-[#c82333] hover:bg-[#bd2130]' : 'bg-[#28a745] hover:bg-[#218838]'
+                                className={`w-7 h-7 rounded flex items-center justify-center text-[10px] transition-colors cursor-pointer border ${
+                                  petani.status_aktif 
+                                    ? 'bg-amber-50/70 hover:bg-amber-100 text-amber-700 border-amber-200/80 hover:border-amber-300' 
+                                    : 'bg-emerald-50/70 hover:bg-emerald-100 text-emerald-700 border-emerald-200/80 hover:border-emerald-300'
                                 }`}
                                 title={petani.status_aktif ? 'Nonaktifkan Petani' : 'Aktifkan Kembali'}
                               >
-                                {petani.status_aktif ? <Ban className="w-3 h-3" /> : <CheckCircle className="w-3 h-3" />}
+                                {petani.status_aktif ? <Ban className="w-3.5 h-3.5" /> : <CheckCircle className="w-3.5 h-3.5" />}
                               </button>
                             )}
                             {/* Delete Petani Button */}
                             {canManagePetani && onDeletePetani && (
                               <button
                                 onClick={() => setDeletingPetaniTarget(petani)}
-                                className="w-6 h-6 rounded-full bg-[#dc3545] hover:bg-[#c82333] text-white flex items-center justify-center text-[10px] transition cursor-pointer shadow-xs"
+                                className="w-7 h-7 rounded bg-red-50/70 hover:bg-red-100 text-red-700 flex items-center justify-center text-[10px] transition-colors cursor-pointer border border-red-200/80 hover:border-red-300"
                                 title="Hapus Data Petani"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />

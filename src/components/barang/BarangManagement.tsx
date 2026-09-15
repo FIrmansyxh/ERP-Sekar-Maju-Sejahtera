@@ -259,26 +259,26 @@ export const BarangManagement: React.FC<BarangManagementProps> = ({
         </div>
 
         {/* Table View */}
-        <div className="overflow-x-auto border-t border-gray-200">
+        <div className="overflow-x-auto border-t border-slate-200">
           <table className="w-full text-left border-collapse">
-            <thead className="bg-[#f8f9fa]">
-              <tr className="border-b border-gray-200 text-[11px] font-bold text-gray-700">
-                <th className="py-2.5 px-3 text-center w-12 border-r border-gray-200">No</th>
-                <th className="py-2.5 px-3 border-r border-gray-200 w-28 font-mono">No Bal</th>
-                <th className="py-2.5 px-3 border-r border-gray-200 text-center w-20">Grade</th>
-                <th className="py-2.5 px-3 border-r border-gray-200 text-right w-28">Berat Netto</th>
-                <th className="py-2.5 px-3 border-r border-gray-200">Petani Pemasok</th>
-                <th className="py-2.5 px-3 border-r border-gray-200 text-center w-28">Tgl Masuk</th>
-                <th className="py-2.5 px-3 border-r border-gray-200 text-center w-28">Status Stok</th>
+            <thead>
+              <tr className="bg-slate-50/90 border-b border-slate-200 text-xs font-semibold text-slate-600">
+                <th className="py-2.5 px-3 text-center w-12">No</th>
+                <th className="py-2.5 px-3 w-28 font-mono">No Bal</th>
+                <th className="py-2.5 px-3 text-center w-20">Grade</th>
+                <th className="py-2.5 px-3 text-right w-28">Berat Netto</th>
+                <th className="py-2.5 px-3">Petani Pemasok</th>
+                <th className="py-2.5 px-3 text-center w-28">Tgl Masuk</th>
+                <th className="py-2.5 px-3 text-center w-28">Status Stok</th>
                 <th className="py-2.5 px-3 text-center w-20">Aksi</th>
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-gray-200 text-xs">
+            <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
               {displayItems.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-8 text-center text-gray-500 bg-white">
-                    <div className="text-sm font-bold text-gray-700">Tidak ada data bal tembakau</div>
+                  <td colSpan={8} className="py-8 text-center text-slate-500 bg-white">
+                    <div className="text-sm font-semibold text-slate-700">Tidak ada data bal tembakau</div>
                     <div className="mt-1">
                       {selectedStatus !== 'all' || searchQuery || selectedGrade !== 'all'
                         ? 'Coba sesuaikan kata kunci pencarian atau reset filter status'
@@ -292,7 +292,7 @@ export const BarangManagement: React.FC<BarangManagementProps> = ({
                           setSearchQuery('');
                           setCurrentPage(1);
                         }}
-                        className="mt-3 px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 text-xs font-medium rounded-sm transition cursor-pointer"
+                        className="mt-3 px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-xs font-medium rounded transition-colors cursor-pointer"
                       >
                         Reset Semua Filter
                       </button>
@@ -303,54 +303,54 @@ export const BarangManagement: React.FC<BarangManagementProps> = ({
                 <>
                   {displayItems.map(({ barang: b, itemNumber }) => {
                     let statusBadge = (
-                      <span className="inline-block px-2 py-0.5 text-[10px] font-bold rounded bg-green-50 text-green-700 border border-green-200">
+                      <span className="inline-block px-2 py-0.5 text-[11px] font-medium rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
                         Di Gudang
                       </span>
                     );
                     if (b.status_stok === 'terkirim_sample') {
                       statusBadge = (
-                        <span className="inline-block px-2 py-0.5 text-[10px] font-bold rounded bg-amber-50 text-amber-700 border border-amber-200">
+                        <span className="inline-block px-2 py-0.5 text-[11px] font-medium rounded bg-amber-50 text-amber-700 border border-amber-200">
                           Sample QC
                         </span>
                       );
                     } else if (b.status_stok === 'keluar') {
                       statusBadge = (
-                        <span className="inline-block px-2 py-0.5 text-[10px] font-bold rounded bg-gray-100 text-gray-600 border border-gray-200">
+                        <span className="inline-block px-2 py-0.5 text-[11px] font-medium rounded bg-slate-100 text-slate-600 border border-slate-200">
                           Terkirim
                         </span>
                       );
                     }
 
                     return (
-                      <tr key={b.barang_id} className="hover:bg-[#f8f9fa] transition-colors">
-                        <td className="py-2.5 px-3 text-center border-r border-gray-200 font-mono text-gray-600">
+                      <tr key={b.barang_id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-2.5 px-3 text-center font-mono text-slate-500">
                           {itemNumber}
                         </td>
-                        <td className="py-2.5 px-3 border-r border-gray-200 font-mono font-bold text-gray-900 w-28">
+                        <td className="py-2.5 px-3 font-mono font-semibold text-slate-900 w-28">
                           {b.no_bal}
-                          <span className="block text-[10px] text-gray-400 font-normal">{b.barang_id}</span>
+                          <span className="block text-[10px] text-slate-400 font-normal">{b.barang_id}</span>
                         </td>
-                        <td className="py-2.5 px-3 border-r border-gray-200 text-center">
-                          <span className="px-2 py-0.5 font-bold font-mono text-xs bg-gray-800 text-white rounded-sm">
+                        <td className="py-2.5 px-3 text-center">
+                          <span className="px-2 py-0.5 font-medium font-mono text-xs bg-slate-800 text-white rounded">
                             {b.kode_grade}
                           </span>
                         </td>
-                        <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono font-bold text-gray-900">
+                        <td className="py-2.5 px-3 text-right font-mono font-semibold text-slate-900">
                           {b.berat_kg} kg
                         </td>
-                        <td className="py-2.5 px-3 border-r border-gray-200 text-gray-800 font-medium">
+                        <td className="py-2.5 px-3 text-slate-800 font-medium">
                           {b.nama_petani || '-'}
-                          <span className="block text-[10px] font-mono text-gray-400">{b.petani_id}</span>
+                          <span className="block text-[10px] font-mono text-slate-400">{b.petani_id}</span>
                         </td>
-                        <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono text-gray-600">
+                        <td className="py-2.5 px-3 text-center font-mono text-slate-600">
                           {b.tanggal_masuk}
                         </td>
-                        <td className="py-2.5 px-3 border-r border-gray-200 text-center">
+                        <td className="py-2.5 px-3 text-center">
                           {statusBadge}
                         </td>
-                        <td className="py-2 px-3 text-center">
+                        <td className="py-2.5 px-3 text-center">
                           {/* Aksi Placeholder */}
-                          <span className="text-gray-400">-</span>
+                          <span className="text-slate-400">-</span>
                         </td>
                       </tr>
                     );

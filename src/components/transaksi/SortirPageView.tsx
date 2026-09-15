@@ -711,60 +711,60 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
               </p>
             </div>
 
-            <div className="border border-slate-200 rounded-sm overflow-x-auto bg-white">
+            <div className="border border-slate-200 rounded-md overflow-x-auto bg-white">
               <table className="w-full text-left border-collapse text-xs min-w-[650px]">
                 <thead>
-                  <tr className="bg-[#f8f9fa] border-b border-gray-200 text-gray-700 font-bold uppercase tracking-wider text-[10px]">
-                    <th className="py-2.5 px-3 w-12 text-center border-r border-gray-200">#</th>
-                    <th className="py-2.5 px-3 border-r border-gray-200">No Bal</th>
-                    <th className="py-2.5 px-3 border-r border-gray-200">Mutu Grade</th>
-                    <th className="py-2.5 px-3 text-right border-r border-gray-200">Harga Satuan</th>
+                  <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
+                    <th className="py-3 px-3.5 w-12 text-center">#</th>
+                    <th className="py-3 px-3.5">No Bal</th>
+                    <th className="py-3 px-3.5">Mutu Grade</th>
+                    <th className="py-3 px-3.5 text-right">Harga Satuan</th>
                     
-                    <th className="py-2.5 px-3 text-center border-r border-gray-200">Status Berat</th>
-                    <th className="py-2.5 px-3 w-20 text-center">Aksi</th>
+                    <th className="py-3 px-3.5 text-center">Status Berat</th>
+                    <th className="py-3 px-3.5 w-20 text-center">Aksi</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-slate-100 text-slate-700">
                   {balItems.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-8 text-center text-gray-400">
-                        <Layers className="w-8 h-8 mx-auto text-gray-300 mb-2" />
-                        <p className="font-semibold text-gray-600 text-xs">Belum ada bal yang ditambahkan pada kupon ini</p>
-                        <p className="text-[11px] text-gray-400 mt-0.5">
+                      <td colSpan={6} className="py-10 text-center text-slate-400">
+                        <Layers className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+                        <p className="font-semibold text-slate-700 text-xs">Belum ada bal yang ditambahkan pada kupon ini</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
                           Scan barcode stiker bal atau masukkan nomor bal di atas lalu simpan.
                         </p>
                       </td>
                     </tr>
                   ) : (
                     balItems.map((item, index) => (
-                      <tr key={item.item_id || index} className="hover:bg-[#f8f9fa] transition-colors border-b border-gray-100 last:border-0">
-                        <td className="py-2 px-3 text-center font-mono font-bold text-gray-500 border-r border-gray-200">
+                      <tr key={item.item_id || index} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-2.5 px-3.5 text-center font-mono text-slate-500">
                           {index + 1}
                         </td>
-                        <td className="py-2 px-3 border-r border-gray-200">
-                          <span className="font-mono font-black text-gray-900 bg-gray-100 px-2 py-0.5 border border-gray-300 rounded text-xs">
+                        <td className="py-2.5 px-3.5">
+                          <span className="font-mono font-semibold text-slate-900 bg-slate-100 px-2 py-0.5 border border-slate-200 rounded text-xs">
                             {item.no_bal}
                           </span>
                         </td>
-                        <td className="py-2 px-3 border-r border-gray-200">
-                          <span className="px-2 py-0.5 bg-red-50 text-[#b81d24] border border-red-200 font-bold rounded-xs text-[11px]">
+                        <td className="py-2.5 px-3.5">
+                          <span className="px-2 py-0.5 bg-slate-100 text-slate-800 border border-slate-200 font-medium rounded text-[11px]">
                             Grade {item.kode_grade}
                           </span>
                         </td>
-                        <td className="py-2 px-3 text-right font-mono font-bold text-gray-800">
+                        <td className="py-2.5 px-3.5 text-right font-mono font-medium text-slate-800">
                           {formatRupiah(item.harga_per_kg)}/kg
                         </td>
                         
-                        <td className="py-2 px-3 text-center border-r border-gray-200">
-                          <span className="px-2 py-0.5 bg-slate-100 text-slate-700 border border-slate-200 rounded-xs text-[10px] font-medium">
+                        <td className="py-2.5 px-3.5 text-center">
+                          <span className="px-2 py-0.5 bg-slate-100 text-slate-600 border border-slate-200 rounded text-[10px] font-medium">
                             Menunggu Timbang
                           </span>
                         </td>
-                        <td className="py-2 px-3 text-center border-r border-gray-200">
+                        <td className="py-2.5 px-3.5 text-center">
                           <button
                             type="button"
                             onClick={() => handleRemoveItem(index)}
-                            className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xs transition cursor-pointer"
+                            className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
                             title="Hapus baris ini"
                           >
                             <Trash2 className="w-3.5 h-3.5" />

@@ -316,7 +316,7 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
     downloadCsvFile('Distribusi_Stok_Kode_Harga_Beli_Tembakau', headers, rows);
   };
 
-  // Custom Tooltip Recharts yang detail, informatif, dan interaktif
+  // Custom Tooltip Recharts yang detail, informatif, dan interaktif (solid, non-transparan)
   const CustomBarTooltip = ({ active, payload }: any) => {
     if (!active || !payload || !payload.length) return null;
     const data = payload[0].payload;
@@ -326,9 +326,9 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
     const activePct = metricMode === 'nilai' ? data.pctNilai : metricMode === 'tonase' ? data.pctKg : data.pctBal;
 
     return (
-      <div className="bg-gray-900/95 text-white p-3.5 rounded-xs shadow-2xl border border-gray-700 text-xs backdrop-blur-md min-w-[260px] max-w-[300px] pointer-events-none">
+      <div className="bg-slate-900 text-white p-3.5 rounded-md shadow-2xl border border-slate-700 text-xs min-w-[260px] max-w-[300px] pointer-events-none opacity-100">
         {/* Header Tooltip */}
-        <div className="flex items-center justify-between pb-2 mb-2 border-b border-gray-700/80">
+        <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-700">
           <div className="flex items-center space-x-2">
             <span
               className="w-3 h-3 rounded-full inline-block shrink-0 border border-white/40"
@@ -336,17 +336,17 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
             />
             <span className="font-bold text-sm text-amber-300">Grade {data.kode_grade}</span>
           </div>
-          <span className="font-mono text-[11px] text-amber-200 bg-gray-800 px-2 py-0.5 rounded-xs font-bold border border-gray-700">
+          <span className="font-mono text-[11px] text-amber-200 bg-slate-800 px-2 py-0.5 rounded-xs font-bold border border-slate-700">
             {formatRupiah(data.harga_per_kg)}/kg
           </span>
         </div>
 
-        <p className="text-[11px] text-gray-300 mb-2 font-medium leading-tight">{data.nama_grade}</p>
+        <p className="text-[11px] text-slate-300 mb-2 font-medium leading-tight">{data.nama_grade}</p>
 
         {/* Highlight Card Sesuai Metrik Aktif */}
-        <div className="bg-gray-800/80 p-2 rounded-xs mb-2.5 border border-gray-700/60">
+        <div className="bg-slate-800 p-2 rounded-xs mb-2.5 border border-slate-700">
           <div className="flex items-center justify-between text-[11px]">
-            <span className="text-gray-400 font-medium">Metrik {currentMetricLabel}:</span>
+            <span className="text-slate-400 font-medium">Metrik {currentMetricLabel}:</span>
             <span className="font-mono font-black text-white text-xs">
               {formatMetricValue(
                 metricMode === 'bal' ? data.bal : metricMode === 'tonase' ? data.tonase : data.nilai,
@@ -355,11 +355,11 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
             </span>
           </div>
           <div className="mt-1.5">
-            <div className="flex justify-between text-[10px] text-gray-400 mb-0.5 font-mono">
+            <div className="flex justify-between text-[10px] text-slate-400 mb-0.5 font-mono">
               <span>Pangsa Stok:</span>
               <span className="font-bold text-amber-300">{activePct}%</span>
             </div>
-            <div className="w-full bg-gray-700 h-1.5 rounded-full overflow-hidden">
+            <div className="w-full bg-slate-700 h-1.5 rounded-full overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-300"
                 style={{
@@ -373,27 +373,27 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
 
         {/* Rincian Angka Lengkap */}
         <div className="space-y-1.5 text-[11px]">
-          <div className="flex justify-between items-center text-gray-300">
+          <div className="flex justify-between items-center text-slate-300">
             <span className="flex items-center space-x-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
               <span>Jumlah Bal:</span>
             </span>
             <span className="font-mono font-bold text-white">
-              {data.balCount.toLocaleString('id-ID')} Bal <span className="text-[10px] text-gray-400 font-normal">({data.pctBal}%)</span>
+              {data.balCount.toLocaleString('id-ID')} Bal <span className="text-[10px] text-slate-400 font-normal">({data.pctBal}%)</span>
             </span>
           </div>
 
-          <div className="flex justify-between items-center text-gray-300">
+          <div className="flex justify-between items-center text-slate-300">
             <span className="flex items-center space-x-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-400 inline-block" />
               <span>Total Tonase:</span>
             </span>
             <span className="font-mono font-bold text-blue-300">
-              {data.totalKg.toLocaleString('id-ID')} kg <span className="text-[10px] text-gray-400 font-normal">({(data.totalKg / 1000).toFixed(2)} Ton)</span>
+              {data.totalKg.toLocaleString('id-ID')} kg <span className="text-[10px] text-slate-400 font-normal">({(data.totalKg / 1000).toFixed(2)} Ton)</span>
             </span>
           </div>
 
-          <div className="flex justify-between items-center text-gray-300">
+          <div className="flex justify-between items-center text-slate-300">
             <span className="flex items-center space-x-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
               <span>Valuasi Modal:</span>
@@ -405,14 +405,14 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
         </div>
 
         {/* Status Lokasi & Rata-rata */}
-        <div className="mt-2.5 pt-2 border-t border-gray-800 grid grid-cols-2 gap-1.5 text-[10px]">
-          <div className="bg-gray-800/70 p-1.5 rounded-xs">
-            <p className="text-gray-400">Rata-rata/Bal</p>
-            <p className="font-mono font-bold text-gray-200 mt-0.5">{avgBeratPerBal} kg/bal</p>
+        <div className="mt-2.5 pt-2 border-t border-slate-800 grid grid-cols-2 gap-1.5 text-[10px]">
+          <div className="bg-slate-800 p-1.5 rounded-xs">
+            <p className="text-slate-400">Rata-rata/Bal</p>
+            <p className="font-mono font-bold text-slate-200 mt-0.5">{avgBeratPerBal} kg/bal</p>
           </div>
-          <div className="bg-gray-800/70 p-1.5 rounded-xs">
-            <p className="text-gray-400">Status Stok</p>
-            <p className="font-mono font-bold text-gray-200 mt-0.5 truncate">
+          <div className="bg-slate-800 p-1.5 rounded-xs">
+            <p className="text-slate-400">Status Stok</p>
+            <p className="font-mono font-bold text-slate-200 mt-0.5 truncate">
               {data.siapKirimCount > 0 ? `${data.siapKirimCount} Siap Kirim` : `${data.diGudangCount} Di Gudang`}
             </p>
           </div>
@@ -731,7 +731,7 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
                               return val;
                             }}
                           />
-                          <Tooltip content={<CustomBarTooltip />} />
+                          <Tooltip content={<CustomBarTooltip />} wrapperStyle={{ zIndex: 100, outline: 'none' }} />
                           <Bar
                             dataKey={currentMetricKey}
                             radius={[3, 3, 0, 0]}
@@ -774,7 +774,7 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
                             <Cell key={`cell-pie-${index}`} fill={entry.color} />
                           ))}
                         </Pie>
-                        <Tooltip content={<CustomBarTooltip />} />
+                        <Tooltip content={<CustomBarTooltip />} wrapperStyle={{ zIndex: 100, outline: 'none' }} />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
@@ -845,7 +845,7 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
                             return val;
                           }}
                         />
-                        <Tooltip content={<CustomBarTooltip />} />
+                        <Tooltip content={<CustomBarTooltip />} wrapperStyle={{ zIndex: 100, outline: 'none' }} />
                         <Bar
                           dataKey={currentMetricKey}
                           radius={[4, 4, 0, 0]}
@@ -882,7 +882,7 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
                           <Cell key={`cell-donut-full-${index}`} fill={entry.color} />
                         ))}
                       </Pie>
-                      <Tooltip content={<CustomBarTooltip />} />
+                      <Tooltip content={<CustomBarTooltip />} wrapperStyle={{ zIndex: 100, outline: 'none' }} />
                     </PieChart>
                   </ResponsiveContainer>
 

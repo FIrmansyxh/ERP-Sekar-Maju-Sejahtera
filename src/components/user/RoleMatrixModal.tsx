@@ -104,39 +104,39 @@ export const RoleMatrixModal: React.FC<RoleMatrixModalProps> = ({
 
           {/* Section 2: Module Access Matrix */}
           <div>
-            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-2.5">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-700 mb-2.5">
               2. Matriks Akses Modul Aplikasi
             </h3>
-            <div className="border border-gray-200 rounded-sm overflow-x-auto shadow-2xs">
-              <table className="w-full text-left border-collapse text-[11px]">
+            <div className="border border-slate-200 rounded-md overflow-x-auto shadow-sm">
+              <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr className="bg-gray-100 border-b border-gray-200 text-gray-700 font-bold">
-                    <th className="py-2 px-3 border-r border-gray-200 bg-gray-100 w-48">
+                  <tr className="bg-slate-50/90 border-b border-slate-200 text-slate-600 font-semibold">
+                    <th className="py-2.5 px-3 w-48">
                       Modul Sistem
                     </th>
                     {ALL_ROLES.map((r) => (
-                      <th key={r} className="py-2 px-2 text-center border-r border-gray-200 min-w-[110px]">
+                      <th key={r} className="py-2.5 px-2 text-center min-w-[110px]">
                         {ROLE_DEFINITIONS[r].label}
                       </th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200 bg-white">
+                <tbody className="divide-y divide-slate-100 bg-white text-slate-700">
                   {modulesList.map((mod) => (
-                    <tr key={mod.id} className="hover:bg-gray-50/80">
-                      <td className="py-2 px-3 font-semibold text-gray-900 border-r border-gray-200 bg-white">
+                    <tr key={mod.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-2.5 px-3 font-medium text-slate-900 bg-white">
                         {mod.name}
                       </td>
                       {ALL_ROLES.map((r) => {
                         const hasAccess = ROLE_DEFINITIONS[r].allowedModules.includes(mod.id);
                         return (
-                          <td key={r} className="py-2 px-2 text-center border-r border-gray-200">
+                          <td key={r} className="py-2.5 px-2 text-center">
                             {hasAccess ? (
-                              <span className="inline-flex items-center justify-center w-5 h-5 bg-emerald-100 text-emerald-700 rounded-full">
-                                <Check className="w-3 h-3 stroke-[3]" />
+                              <span className="inline-flex items-center justify-center w-5 h-5 bg-emerald-50 text-emerald-700 rounded border border-emerald-200">
+                                <Check className="w-3 h-3 stroke-[2.5]" />
                               </span>
                             ) : (
-                              <span className="inline-flex items-center justify-center w-5 h-5 text-gray-300">
+                              <span className="inline-flex items-center justify-center w-5 h-5 text-slate-300">
                                 <Ban className="w-3.5 h-3.5" />
                               </span>
                             )}
@@ -152,39 +152,39 @@ export const RoleMatrixModal: React.FC<RoleMatrixModalProps> = ({
 
           {/* Section 3: Wewenang Khusus */}
           <div>
-            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-2.5">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-700 mb-2.5">
               3. Matriks Wewenang & Kemampuan Tindakan (Capabilities)
             </h3>
-            <div className="border border-gray-200 rounded-sm overflow-x-auto shadow-2xs">
-              <table className="w-full text-left border-collapse text-[11px]">
+            <div className="border border-slate-200 rounded-md overflow-x-auto shadow-sm">
+              <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr className="bg-gray-100 border-b border-gray-200 text-gray-700 font-bold">
-                    <th className="py-2 px-3 border-r border-gray-200 bg-gray-100 w-56">
+                  <tr className="bg-slate-50/90 border-b border-slate-200 text-slate-600 font-semibold">
+                    <th className="py-2.5 px-3 w-56">
                       Kemampuan Wewenang
                     </th>
                     {ALL_ROLES.map((r) => (
-                      <th key={r} className="py-2 px-2 text-center border-r border-gray-200 min-w-[110px]">
+                      <th key={r} className="py-2.5 px-2 text-center min-w-[110px]">
                         {ROLE_DEFINITIONS[r].label}
                       </th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200 bg-white">
+                <tbody className="divide-y divide-slate-100 bg-white text-slate-700">
                   {capabilitiesList.map((cap) => (
-                    <tr key={cap.key} className="hover:bg-gray-50/80">
-                      <td className="py-2 px-3 font-semibold text-gray-900 border-r border-gray-200 bg-white">
+                    <tr key={cap.key} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-2.5 px-3 font-medium text-slate-900 bg-white">
                         {cap.label}
                       </td>
                       {ALL_ROLES.map((r) => {
                         const canDo = ROLE_DEFINITIONS[r].capabilities[cap.key];
                         return (
-                          <td key={r} className="py-2 px-2 text-center border-r border-gray-200">
+                          <td key={r} className="py-2.5 px-2 text-center">
                             {canDo ? (
-                              <span className="inline-flex items-center justify-center w-5 h-5 bg-emerald-100 text-emerald-700 rounded-full">
-                                <Check className="w-3 h-3 stroke-[3]" />
+                              <span className="inline-flex items-center justify-center w-5 h-5 bg-emerald-50 text-emerald-700 rounded border border-emerald-200">
+                                <Check className="w-3 h-3 stroke-[2.5]" />
                               </span>
                             ) : (
-                              <span className="inline-flex items-center justify-center w-5 h-5 text-gray-300">
+                              <span className="inline-flex items-center justify-center w-5 h-5 text-slate-300">
                                 <Ban className="w-3.5 h-3.5" />
                               </span>
                             )}

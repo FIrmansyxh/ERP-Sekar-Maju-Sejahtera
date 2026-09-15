@@ -341,28 +341,28 @@ export const UserManagement: React.FC<UserManagementProps> = ({
         </div>
 
         {/* Table View */}
-        <div className="overflow-x-auto border-t border-gray-200">
+        <div className="overflow-x-auto border-t border-slate-200">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-[#f8f9fa] border-b border-gray-200 text-xs font-bold text-gray-700">
-                <th className="py-2.5 px-3 text-center border-r border-gray-200 w-12">No</th>
-                <th className="py-2.5 px-3 border-r border-gray-200">User ID</th>
-                <th className="py-2.5 px-3 border-r border-gray-200">Username</th>
-                <th className="py-2.5 px-3 border-r border-gray-200">Nama Lengkap</th>
-                <th className="py-2.5 px-3 border-r border-gray-200">Role & Wewenang</th>
-                <th className="py-2.5 px-3 border-r border-gray-200">Unit Penugasan</th>
-                <th className="py-2.5 px-3 border-r border-gray-200">No. Telepon / HP</th>
-                <th className="py-2.5 px-3 border-r border-gray-200">Email</th>
-                <th className="py-2.5 px-3 border-r border-gray-200 text-center">Status</th>
-                <th className="py-2.5 px-3 border-r border-gray-200">Terakhir Login</th>
-                <th className="py-2.5 px-3 text-center w-36">Aksi</th>
+              <tr className="bg-slate-50/90 border-b border-slate-200 text-xs font-semibold text-slate-600">
+                <th className="py-2.5 px-3 text-center w-12">No</th>
+                <th className="py-2.5 px-3">User ID</th>
+                <th className="py-2.5 px-3">Username</th>
+                <th className="py-2.5 px-3">Nama Lengkap</th>
+                <th className="py-2.5 px-3">Role & Wewenang</th>
+                <th className="py-2.5 px-3">Unit Penugasan</th>
+                <th className="py-2.5 px-3">No. Telepon / HP</th>
+                <th className="py-2.5 px-3">Email</th>
+                <th className="py-2.5 px-3 text-center">Status</th>
+                <th className="py-2.5 px-3">Terakhir Login</th>
+                <th className="py-2.5 px-3 text-center w-32">Aksi</th>
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-gray-200 text-xs">
+            <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
               {paginatedUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="py-8 text-center text-gray-500">
+                  <td colSpan={11} className="py-8 text-center text-slate-500">
                     Tidak ada data pengguna yang sesuai dengan kriteria pencarian.
                   </td>
                 </tr>
@@ -375,41 +375,41 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                   return (
                     <tr 
                       key={user.user_id}
-                      className="hover:bg-[#f8f9fa] transition-colors"
+                      className="hover:bg-slate-50/80 transition-colors"
                     >
-                      <td className="py-2.5 px-3 text-center border-r border-gray-200 font-mono text-gray-600">
+                      <td className="py-2.5 px-3 text-center font-mono text-slate-500">
                         {itemNumber}
                       </td>
 
-                      <td className="py-2.5 px-3 border-r border-gray-200 font-mono font-medium text-gray-900">
+                      <td className="py-2.5 px-3 font-mono font-medium text-slate-800">
                         {user.user_id}
                       </td>
 
-                      <td className="py-2.5 px-3 border-r border-gray-200 font-mono font-semibold text-gray-900">
+                      <td className="py-2.5 px-3 font-mono font-semibold text-slate-900">
                         @{user.username}
                       </td>
 
-                      <td className="py-2.5 px-3 border-r border-gray-200 font-medium text-gray-900">
+                      <td className="py-2.5 px-3 font-medium text-slate-900">
                         {user.nama_lengkap}
                       </td>
 
-                      <td className="py-2.5 px-3 border-r border-gray-200 text-gray-800 font-medium">
+                      <td className="py-2.5 px-3 text-slate-700 font-medium">
                         {roleInfo.label}
                       </td>
 
-                      <td className="py-2.5 px-3 border-r border-gray-200 text-gray-700">
+                      <td className="py-2.5 px-3 text-slate-600">
                         {user.unit_penugasan || '-'}
                       </td>
 
-                      <td className="py-2.5 px-3 border-r border-gray-200 font-mono text-gray-700 text-[11px]">
+                      <td className="py-2.5 px-3 font-mono text-slate-600 text-[11px]">
                         {user.no_hp || '-'}
                       </td>
 
-                      <td className="py-2.5 px-3 border-r border-gray-200 text-gray-700 text-[11px]">
+                      <td className="py-2.5 px-3 text-slate-600 text-[11px]">
                         {user.email || '-'}
                       </td>
 
-                      <td className="py-2.5 px-3 border-r border-gray-200 text-center">
+                      <td className="py-2.5 px-3 text-center">
                         <button
                           type="button"
                           onClick={() => {
@@ -419,50 +419,52 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                             }
                             onToggleStatus(user.user_id);
                           }}
-                          className={`cursor-pointer transition hover:underline ${
-                            user.status_aktif
-                              ? 'text-gray-900 font-semibold'
-                              : 'text-gray-400'
-                          }`}
+                          className="cursor-pointer transition hover:opacity-80"
                           title="Klik untuk mengubah status aktif/nonaktif"
                         >
-                          {user.status_aktif ? 'Aktif' : 'Nonaktif'}
+                          <span className={`px-2 py-0.5 rounded text-[11px] font-medium border ${
+                            user.status_aktif
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : 'bg-slate-100 text-slate-600 border-slate-200'
+                          }`}>
+                            {user.status_aktif ? 'Aktif' : 'Nonaktif'}
+                          </span>
                         </button>
                       </td>
 
-                      <td className="py-2.5 px-3 border-r border-gray-200 font-mono text-gray-600 text-[11px]">
+                      <td className="py-2.5 px-3 font-mono text-slate-600 text-[11px]">
                         {user.terakhir_login ? (
                           formatDateTimeIndo(user.terakhir_login)
                         ) : (
-                          <span className="text-gray-400 italic">Belum pernah</span>
+                          <span className="text-slate-400 italic">Belum pernah</span>
                         )}
                       </td>
 
-                      {/* Action Buttons matching Transaksi */}
-                      <td className="py-2 px-3 text-center">
-                        <div className="flex items-center justify-center space-x-1.5">
-                          {/* Edit User (Dark Slate Circle) */}
+                      {/* Action Buttons */}
+                      <td className="py-2.5 px-3 text-center">
+                        <div className="flex items-center justify-center space-x-1">
+                          {/* Edit User */}
                           <button
                             onClick={() => {
                               setEditingUser(user);
                               setIsFormOpen(true);
                             }}
-                            className="w-6 h-6 rounded-full bg-[#545b62] hover:bg-[#464c52] text-white flex items-center justify-center text-[10px] transition cursor-pointer shadow-xs"
+                            className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors cursor-pointer"
                             title="Edit Data Pengguna"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                           </button>
 
-                          {/* Reset Password (Teal Circle) */}
+                          {/* Reset Password */}
                           <button
                             onClick={() => setResettingUser(user)}
-                            className="w-6 h-6 rounded-full bg-[#17a2b8] hover:bg-[#138496] text-white flex items-center justify-center text-[10px] transition cursor-pointer shadow-xs"
+                            className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors cursor-pointer"
                             title="Reset Kata Sandi"
                           >
                             <KeyRound className="w-3.5 h-3.5" />
                           </button>
 
-                          {/* Status Toggle (Green/Red Circle) */}
+                          {/* Status Toggle */}
                           <button
                             onClick={() => {
                               if (isCurrent) {
@@ -472,19 +474,19 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                               onToggleStatus(user.user_id);
                             }}
                             disabled={isCurrent}
-                            className={`w-6 h-6 rounded-full text-white flex items-center justify-center text-[10px] transition cursor-pointer shadow-xs ${
+                            className={`p-1.5 rounded transition-colors cursor-pointer ${
                               isCurrent 
-                                ? 'bg-gray-300 cursor-not-allowed' 
+                                ? 'text-slate-300 cursor-not-allowed' 
                                 : user.status_aktif 
-                                  ? 'bg-[#c82333] hover:bg-[#bd2130]' 
-                                  : 'bg-[#28a745] hover:bg-[#218838]'
+                                  ? 'text-slate-500 hover:text-amber-700 hover:bg-amber-50' 
+                                  : 'text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50'
                             }`}
                             title={isCurrent ? 'Akun Anda aktif' : user.status_aktif ? 'Nonaktifkan Pengguna' : 'Aktifkan Pengguna'}
                           >
-                            {user.status_aktif ? <Ban className="w-3 h-3" /> : <CheckCircle className="w-3 h-3" />}
+                            {user.status_aktif ? <Ban className="w-3.5 h-3.5" /> : <CheckCircle className="w-3.5 h-3.5" />}
                           </button>
 
-                          {/* Delete User (Red Circle) */}
+                          {/* Delete User */}
                           <button
                             onClick={() => {
                               if (isCurrent) {
@@ -494,10 +496,10 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                               setDeletingUserId(user.user_id);
                             }}
                             disabled={isCurrent}
-                            className={`w-6 h-6 rounded-full text-white flex items-center justify-center text-[10px] transition cursor-pointer shadow-xs ${
+                            className={`p-1.5 rounded transition-colors cursor-pointer ${
                               isCurrent 
-                                ? 'bg-gray-300 cursor-not-allowed' 
-                                : 'bg-[#b81d24] hover:bg-[#96141a]'
+                                ? 'text-slate-300 cursor-not-allowed' 
+                                : 'text-slate-400 hover:text-red-700 hover:bg-red-50'
                             }`}
                             title={isCurrent ? 'Tidak bisa menghapus akun sendiri' : 'Hapus Pengguna'}
                           >

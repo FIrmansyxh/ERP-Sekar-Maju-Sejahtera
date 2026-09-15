@@ -754,43 +754,43 @@ Sistem mencegah penyimpanan duplikasi kupon. Silakan ganti ke nomor kupon lain.`
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse text-xs min-w-[800px]">
                   <thead>
-                    <tr className="bg-[#f8f9fa] border-b border-gray-200 text-gray-700 font-bold">
-                      <th className="py-2 px-2.5 text-center border-r border-gray-200 w-10">No</th>
-                      <th className="py-2 px-3 border-r border-gray-200 w-44">
-                        <div className="flex items-center space-x-1">
-                          <BarcodeIcon className="w-3.5 h-3.5 text-rose-700" />
-                          <span>Kode Stiker Barcode / Bal</span>
+                    <tr className="bg-slate-50/90 border-b border-slate-200 text-slate-600 font-semibold text-xs">
+                      <th className="py-2.5 px-3 text-center w-12">No</th>
+                      <th className="py-2.5 px-3 w-48">
+                        <div className="flex items-center space-x-1.5">
+                          <BarcodeIcon className="w-3.5 h-3.5 text-slate-500" />
+                          <span>Kode Barcode / No Bal</span>
                         </div>
                       </th>
-                      <th className="py-2 px-3 border-r border-gray-200 w-36">
+                      <th className="py-2.5 px-3 w-40">
                         Grade Tembakau
                       </th>
-                      <th className="py-2 px-3 border-r border-gray-200 w-36 text-right">
-                        Tarif Acuan / Kg (Rp)
+                      <th className="py-2.5 px-3 w-36 text-right">
+                        Tarif Acuan / Kg
                       </th>
                       
-                      <th className="py-2 px-3 border-r border-gray-200 text-right w-36">
-                        Potongan Biaya Bal
+                      <th className="py-2.5 px-3 text-right w-36">
+                        Potongan Bal
                       </th>
-                      <th className="py-2 px-3 border-r border-gray-200 text-center w-28">
+                      <th className="py-2.5 px-3 text-center w-28">
                         Tara Timbang
                       </th>
-                      <th className="py-2 px-2.5 text-center w-12">Hapus</th>
+                      <th className="py-2.5 px-3 text-center w-14">Aksi</th>
                     </tr>
                   </thead>
 
-                  <tbody className="divide-y divide-gray-200 bg-white">
+                  <tbody className="divide-y divide-slate-100 bg-white text-slate-700">
                     {balItems.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="py-12 text-center text-gray-500 bg-gray-50/50">
+                        <td colSpan={7} className="py-12 text-center text-slate-400 bg-slate-50/30">
                           <div className="max-w-md mx-auto space-y-2">
-                            <div className="w-10 h-10 rounded-full bg-rose-50 border border-rose-200 flex items-center justify-center mx-auto text-[#b81d24]">
+                            <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center mx-auto text-slate-600">
                               <Scan className="w-5 h-5" />
                             </div>
-                            <p className="font-bold text-gray-800 text-xs">
+                            <p className="font-semibold text-slate-700 text-xs">
                               Belum ada bal yang discan.
                             </p>
-                            <p className="text-[11px] text-gray-500">
+                            <p className="text-[11px] text-slate-400">
                               Tembak stiker barcode fisik (misal: <strong>A0001</strong>) dengan scanner gun di atas. Sistem akan otomatis mengisi nomor bal dan membuat baris baru setiap kali scan berikutnya dilakukan.
                             </p>
                           </div>
@@ -806,16 +806,16 @@ Sistem mencegah penyimpanan duplikasi kupon. Silakan ganti ke nomor kupon lain.`
                           <tr 
                             key={item.id} 
                             className={`transition-colors ${
-                              isLatest ? 'bg-rose-50/60 font-semibold' : 'hover:bg-gray-50/80'
+                              isLatest ? 'bg-amber-50/40 font-medium' : 'hover:bg-slate-50/80'
                             }`}
                           >
                             
-                            <td className="py-2 px-2.5 text-center border-r border-gray-200 font-mono text-gray-500">
+                            <td className="py-2.5 px-3 text-center font-mono text-slate-500">
                               {index + 1}
                             </td>
 
                             {/* Barcode & No Bal Input */}
-                            <td className="py-2 px-3 border-r border-gray-200">
+                            <td className="py-2.5 px-3">
                               {(() => {
                                 const code = item.barcode.trim().toUpperCase();
                                 const isDupMaster = code ? barangList.some(b => b.no_bal.toUpperCase() === code) : false;
@@ -836,7 +836,6 @@ Sistem mencegah penyimpanan duplikasi kupon. Silakan ganti ke nomor kupon lain.`
                                       value={item.barcode}
                                       onChange={(e) => {
                                         let val = e.target.value.toUpperCase();
-                                        // Auto-remove hyphens if user types them (optional, but good UX based on user req)
                                         val = val.replace(/-/g, '');
                                         handleUpdateItem(item.id, 'barcode', val);
                                         handleUpdateItem(item.id, 'noBal', val);
@@ -846,12 +845,12 @@ Sistem mencegah penyimpanan duplikasi kupon. Silakan ganti ke nomor kupon lain.`
                                           alert(`Nomor Bal "${item.barcode}" sudah terpakai! Silakan ganti dengan yang lain.`);
                                         }
                                       }}
-                                      className={`w-full bg-white border rounded-sm px-2.5 py-1 font-mono font-bold text-xs focus:outline-none ${hasError ? 'border-red-500 text-red-600 focus:border-red-600 bg-red-50' : 'border-gray-300 text-gray-900 focus:border-[#b81d24]'}`}
+                                      className={`w-full bg-white border rounded px-2.5 py-1 font-mono font-medium text-xs focus:outline-none transition-colors ${hasError ? 'border-rose-400 text-rose-700 bg-rose-50' : 'border-slate-300 text-slate-900 focus:border-slate-500'}`}
                                       placeholder="Contoh: SB0001"
                                       required
                                     />
                                     {hasError && (
-                                      <p className="text-[10px] text-red-600 mt-0.5 leading-tight text-left">
+                                      <p className="text-[10px] text-rose-600 mt-0.5 leading-tight text-left">
                                         Sudah dipakai
                                       </p>
                                     )}
@@ -861,7 +860,7 @@ Sistem mencegah penyimpanan duplikasi kupon. Silakan ganti ke nomor kupon lain.`
                             </td>
 
                             {/* Grade Selection */}
-                            <td className="py-2 px-3 border-r border-gray-200">
+                            <td className="py-2.5 px-3">
                               <SearchableSelect
                                 inputId={`grade-${item.id}`}
                                 value={item.kodeGrade}
@@ -880,47 +879,45 @@ Sistem mencegah penyimpanan duplikasi kupon. Silakan ganti ke nomor kupon lain.`
                             </td>
 
                             {/* Harga / Kg */}
-                            <td className="py-2 px-3 border-r border-gray-200 text-right font-mono">
+                            <td className="py-2.5 px-3 text-right font-mono">
                               <input
                                 id={`harga-${item.id}`}
                                 type="number"
                                 disabled
                                 value={item.hargaPerKg}
                                 onChange={(e) => handleUpdateItem(item.id, 'hargaPerKg', Number(e.target.value) || 0)}
-                                className="w-28 bg-gray-100 border border-gray-300 rounded-sm px-2 py-1 text-right font-mono font-bold text-gray-500 text-xs focus:outline-none cursor-not-allowed"
+                                className="w-28 bg-slate-50 border border-slate-200 rounded px-2.5 py-1 text-right font-mono font-medium text-slate-600 text-xs focus:outline-none cursor-not-allowed"
                               />
                             </td>
 
-                            
-
                             {/* Potongan Biaya Rincian */}
-                            <td className="py-2 px-3 border-r border-gray-200 text-right font-mono">
-                              <div className="font-bold text-red-600">
+                            <td className="py-2.5 px-3 text-right font-mono">
+                              <div className="font-medium text-slate-700">
                                 -{formatRupiah(totalPotonganItem)}
                               </div>
-                              <div className="text-[9px] text-gray-500">
+                              <div className="text-[10px] text-slate-400">
                                 Kuli 7rb + Tali 3rb 
                               </div>
                             </td>
 
                             {/* Tara Timbang */}
-                            <td className="py-2 px-3 border-r border-gray-200 text-center">
-                              <span className={`px-2 py-0.5 rounded-xs font-mono font-bold text-xs ${
-                                item.gantiTikar ? 'bg-amber-100 text-amber-800' : 'bg-rose-50 text-rose-800'
+                            <td className="py-2.5 px-3 text-center">
+                              <span className={`px-2 py-0.5 rounded font-mono text-xs font-medium ${
+                                item.gantiTikar ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-slate-100 text-slate-700 border border-slate-200'
                               }`}>
                                 {taraKg} kg
                               </span>
-                              <div className="text-[9px] text-gray-400 mt-0.5">
-                                'Tara Standar'
+                              <div className="text-[10px] text-slate-400 mt-0.5">
+                                Standar
                               </div>
                             </td>
 
                             {/* Remove row */}
-                            <td className="py-2 px-2.5 text-center">
+                            <td className="py-2.5 px-3 text-center">
                               <button
                                 type="button"
                                 onClick={() => handleRemoveRow(item.id)}
-                                className="text-gray-400 hover:text-red-600 cursor-pointer"
+                                className="p-1 text-slate-400 hover:text-rose-600 rounded transition-colors cursor-pointer"
                                 title="Hapus Baris Ini"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />

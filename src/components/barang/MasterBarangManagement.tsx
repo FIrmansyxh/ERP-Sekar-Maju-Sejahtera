@@ -319,10 +319,10 @@ export const MasterBarangManagement: React.FC<MasterBarangManagementProps> = ({
         </div>
 
         {/* Master Barang Table */}
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto border-t border-slate-200">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="bg-gray-100/80 border-b border-gray-300 text-gray-700 font-bold uppercase text-[10px] tracking-wider">
+              <tr className="bg-slate-50/90 border-b border-slate-200 text-slate-600 font-semibold text-xs">
                 <th className="py-2.5 px-3 whitespace-nowrap">Kode SKU</th>
                 <th className="py-2.5 px-3 whitespace-nowrap text-center">Grade</th>
                 <th className="py-2.5 px-3 min-w-[240px]">Nama Master Barang / Deskripsi Varietas</th>
@@ -331,78 +331,71 @@ export const MasterBarangManagement: React.FC<MasterBarangManagementProps> = ({
                 <th className="py-2.5 px-3 text-right whitespace-nowrap">Harga Ref (Rp/Kg)</th>
                 <th className="py-2.5 px-3 text-center whitespace-nowrap">Stok Di Gudang</th>
                 <th className="py-2.5 px-3 text-center whitespace-nowrap">Status</th>
-                <th className="py-2.5 px-3 text-center whitespace-nowrap">Aksi Terkelola</th>
+                <th className="py-2.5 px-3 text-center whitespace-nowrap">Aksi</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody className="divide-y divide-slate-100 text-slate-700">
               {filteredItems.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-8 text-center text-gray-500">
-                    <Package className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                    <p className="font-semibold">Tidak ada master barang yang sesuai dengan filter.</p>
-                    <p className="text-[11px] text-gray-400 mt-0.5">
+                  <td colSpan={9} className="py-8 text-center text-slate-500">
+                    <Package className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                    <p className="font-semibold text-slate-700">Tidak ada master barang yang sesuai dengan filter.</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
                       Klik "Tambah Master Barang Baru" untuk mendaftarkan SKU tembakau.
                     </p>
                   </td>
                 </tr>
               ) : (
                 paginatedItems.map((item) => {
-                  const gradeBadge: any = GRADE_COLOR_MAP[item.kode_grade] || {
-                    bg: 'bg-gray-100',
-                    text: 'text-gray-800',
-                    border: 'border-gray-300',
-                    badge: 'bg-gray-600 text-white',
-                  };
                   const liveStock = balCountByGrade[item.kode_grade] || { totalBal: 0, totalKg: 0 };
 
                   return (
-                    <tr key={item.master_id} className="hover:bg-gray-50/80 transition">
+                    <tr key={item.master_id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-2.5 px-3 whitespace-nowrap">
-                        <span className="font-mono font-bold text-gray-900 bg-gray-100 px-2 py-0.5 rounded border border-gray-300 inline-block tracking-tight text-xs">
+                        <span className="font-mono font-medium text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 inline-block tracking-tight text-xs">
                           {item.kode_barang}
                         </span>
                       </td>
 
                       <td className="py-2.5 px-3 whitespace-nowrap text-center">
-                        <span className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-1 font-bold font-mono text-xs rounded border whitespace-nowrap shadow-2xs ${gradeBadge.bg} ${gradeBadge.text} ${gradeBadge.border}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${gradeBadge.badge.split(' ')[0]}`}></span>
-                          <span>Grade {item.kode_grade}</span>
+                        <span className="inline-flex items-center justify-center px-2 py-0.5 font-medium font-mono text-xs rounded bg-slate-800 text-white whitespace-nowrap">
+                          Grade {item.kode_grade}
                         </span>
                       </td>
 
                       <td className="py-2.5 px-3">
-                        <div className="font-bold text-gray-900 text-xs">{item.nama_barang}</div>
+                        <div className="font-semibold text-slate-900 text-xs">{item.nama_barang}</div>
                         {item.keterangan && (
-                          <div className="text-[11px] text-gray-500 line-clamp-1 mt-0.5">
+                          <div className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
                             {item.keterangan}
                           </div>
                         )}
                         {item.lokasi_default_gudang && (
-                          <div className="text-[10px] text-gray-400 font-mono mt-0.5">
+                          <div className="text-[10px] text-slate-400 font-mono mt-0.5">
                             Default: {item.lokasi_default_gudang}
                           </div>
                         )}
                       </td>
 
                       <td className="py-2.5 px-3">
-                        <div className="font-semibold text-gray-800">{item.kategori}</div>
-                        <div className="text-[11px] text-gray-500 font-mono">{item.varietas}</div>
+                        <div className="font-medium text-slate-800">{item.kategori}</div>
+                        <div className="text-[11px] text-slate-500 font-mono">{item.varietas}</div>
                       </td>
 
-                      <td className="py-2.5 px-3 text-right font-mono font-bold text-gray-900">
-                        {item.berat_standar_kg} <span className="text-[10px] font-normal text-gray-500">Kg/{item.satuan || 'Bal'}</span>
+                      <td className="py-2.5 px-3 text-right font-mono font-semibold text-slate-900">
+                        {item.berat_standar_kg} <span className="text-[10px] font-normal text-slate-500">Kg/{item.satuan || 'Bal'}</span>
                       </td>
 
-                      <td className="py-2.5 px-3 text-right font-mono font-bold text-gray-900">
-                        {formatRupiah(item.harga_referensi_kg)} <span className="text-[10px] font-normal text-gray-500">/Kg</span>
+                      <td className="py-2.5 px-3 text-right font-mono font-semibold text-slate-900">
+                        {formatRupiah(item.harga_referensi_kg)} <span className="text-[10px] font-normal text-slate-500">/Kg</span>
                       </td>
 
                       <td className="py-2.5 px-3 text-center">
                         <div className="inline-flex flex-col items-center">
-                          <span className="px-2 py-0.5 bg-rose-50 text-rose-800 border border-rose-200 font-mono font-bold rounded-xs text-[11px]">
+                          <span className="px-2 py-0.5 bg-slate-100 text-slate-800 border border-slate-200 font-mono font-medium rounded text-[11px]">
                             {liveStock.totalBal} Bal
                           </span>
-                          <span className="text-[10px] text-gray-400 font-mono mt-0.5">
+                          <span className="text-[10px] text-slate-400 font-mono mt-0.5">
                             {liveStock.totalKg.toFixed(1)} Kg
                           </span>
                         </div>
@@ -411,10 +404,14 @@ export const MasterBarangManagement: React.FC<MasterBarangManagementProps> = ({
                       <td className="py-2.5 px-3 text-center font-medium">
                         <button
                           onClick={() => handleToggleStatus(item)}
-                          className="cursor-pointer transition hover:underline"
+                          className="cursor-pointer transition hover:opacity-80"
                           title="Klik untuk ubah status aktif/nonaktif SKU"
                         >
-                          <span className={item.status_aktif !== false ? 'text-gray-900 font-semibold' : 'text-gray-400'}>
+                          <span className={`px-2 py-0.5 rounded text-[11px] font-medium border ${
+                            item.status_aktif !== false 
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                              : 'bg-slate-100 text-slate-600 border-slate-200'
+                          }`}>
                             {item.status_aktif !== false ? 'Aktif' : 'Nonaktif'}
                           </span>
                         </button>
@@ -424,8 +421,8 @@ export const MasterBarangManagement: React.FC<MasterBarangManagementProps> = ({
                         <div className="flex items-center justify-center space-x-1">
                           <button
                             onClick={() => handleOpenEdit(item)}
-                            title="Edit Master Barang (dengan konfirmasi)"
-                            className="p-1.5 text-gray-600 hover:text-[#b81d24] hover:bg-gray-100 rounded-sm transition cursor-pointer"
+                            title="Edit Master Barang"
+                            className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors cursor-pointer"
                           >
                             <Edit className="w-3.5 h-3.5" />
                           </button>
@@ -433,9 +430,9 @@ export const MasterBarangManagement: React.FC<MasterBarangManagementProps> = ({
                           <button
                             onClick={() => handleToggleStatus(item)}
                             title={item.status_aktif !== false ? 'Nonaktifkan SKU' : 'Aktifkan SKU'}
-                            className={`p-1.5 rounded-sm transition cursor-pointer ${
+                            className={`p-1.5 rounded transition-colors cursor-pointer ${
                               item.status_aktif !== false
-                                ? 'text-amber-600 hover:text-amber-800 hover:bg-amber-50'
+                                ? 'text-slate-500 hover:text-amber-700 hover:bg-amber-50'
                                 : 'text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50'
                             }`}
                           >
@@ -446,7 +443,7 @@ export const MasterBarangManagement: React.FC<MasterBarangManagementProps> = ({
                             <button
                               onClick={() => handleDeleteItem(item)}
                               title="Hapus Master Barang"
-                              className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-sm transition cursor-pointer"
+                              className="p-1.5 text-slate-400 hover:text-red-700 hover:bg-red-50 rounded transition-colors cursor-pointer"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -456,7 +453,7 @@ export const MasterBarangManagement: React.FC<MasterBarangManagementProps> = ({
                             <button
                               onClick={() => onNavigateToStock(item.kode_grade)}
                               title={`Lihat Stok Fisik Grade ${item.kode_grade}`}
-                              className="p-1.5 text-[#b81d24] hover:text-[#9e161c] hover:bg-rose-50 rounded-sm transition cursor-pointer"
+                              className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors cursor-pointer"
                             >
                               <ArrowRight className="w-3.5 h-3.5" />
                             </button>

@@ -97,12 +97,12 @@ export const HomeDashboardView: React.FC<HomeDashboardViewProps> = ({
       )}
       
       {/* Menu Directory Table Card */}
-      <div className="bg-white border border-gray-200 rounded-none shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-        <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-          <h2 className="text-sm font-bold text-gray-800 tracking-tight">
+      <div className="bg-white border border-slate-200 rounded-md shadow-sm">
+        <div className="p-4 border-b border-slate-200 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-slate-800 tracking-tight">
             Menu Akses Anda ({roleInfo?.label})
           </h2>
-          <span className="text-xs text-gray-500 font-medium">
+          <span className="text-xs text-slate-500 font-medium">
             Sistem Data Gudang Tembakau - PR. SEKAR MAJU SEJAHTERA
           </span>
         </div>
@@ -110,28 +110,27 @@ export const HomeDashboardView: React.FC<HomeDashboardViewProps> = ({
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-[#f8f9fa] border-b border-gray-200 text-xs font-bold text-gray-700">
-                <th className="py-2.5 px-4 border-r border-gray-200 w-16 text-center">Nomor</th>
-                <th className="py-2.5 px-4 border-r border-gray-200 w-64">Nama Modul</th>
-                <th className="py-2.5 px-4 border-r border-gray-200">Keterangan & Cakupan Fungsi</th>
+              <tr className="bg-slate-50/90 border-b border-slate-200 text-xs font-semibold text-slate-600">
+                <th className="py-2.5 px-4 w-16 text-center">Nomor</th>
+                <th className="py-2.5 px-4 w-64">Nama Modul</th>
+                <th className="py-2.5 px-4">Keterangan & Cakupan Fungsi</th>
                 <th className="py-2.5 px-4 text-center w-24">Aksi</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200 text-xs">
+            <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
               {menuList.map((item, idx) => (
                 <tr 
                   key={item.no}
                   onClick={() => onNavigate(item.modId)}
-                  className="hover:bg-[#f8f9fa] cursor-pointer transition-colors"
+                  className="hover:bg-slate-50/80 cursor-pointer transition-colors"
                 >
-                  <td className="py-2.5 px-4 border-r border-gray-200 text-center font-mono text-gray-600">
+                  <td className="py-2.5 px-4 text-center font-mono text-slate-500">
                     {idx + 1}
                   </td>
-                  <td className="py-2.5 px-4 border-r border-gray-200 font-medium text-gray-900 flex items-center space-x-1.5">
-                    
+                  <td className="py-2.5 px-4 font-medium text-slate-900 flex items-center space-x-1.5">
                     <span>{item.nama}</span>
                   </td>
-                  <td className="py-2.5 px-4 border-r border-gray-200 text-gray-600">
+                  <td className="py-2.5 px-4 text-slate-600">
                     {item.judul}
                   </td>
                   <td className="py-2.5 px-4 text-center">
@@ -140,7 +139,7 @@ export const HomeDashboardView: React.FC<HomeDashboardViewProps> = ({
                         e.stopPropagation();
                         onNavigate(item.modId);
                       }}
-                      className="px-2.5 py-1 text-[11px] font-semibold text-[#b81d24] hover:bg-red-50 rounded-xs flex items-center justify-center space-x-1 mx-auto cursor-pointer"
+                      className="px-2.5 py-1 text-[11px] font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded flex items-center justify-center space-x-1 mx-auto cursor-pointer transition-colors"
                     >
                       <span>Buka</span>
                       <ChevronRight className="w-3 h-3" />
@@ -152,9 +151,9 @@ export const HomeDashboardView: React.FC<HomeDashboardViewProps> = ({
           </table>
         </div>
 
-        <div className="p-3 bg-[#f8f9fa] border-t border-gray-200 text-xs text-gray-500 flex justify-between items-center">
+        <div className="p-3 bg-slate-50/80 border-t border-slate-200 text-xs text-slate-500 flex justify-between items-center">
           <span>Menampilkan {menuList.length} modul aktif sesuai wewenang peran {roleInfo?.label}</span>
-          <span className="font-semibold text-gray-700">PR. SEKAR MAJU SEJAHTERA</span>
+          <span className="font-medium text-slate-700">PR. SEKAR MAJU SEJAHTERA</span>
         </div>
       </div>
 

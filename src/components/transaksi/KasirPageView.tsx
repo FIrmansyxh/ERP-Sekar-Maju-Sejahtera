@@ -793,18 +793,18 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse min-w-[1000px]">
             <thead>
-              <tr className="bg-[#f8f9fa] text-gray-700 font-bold text-[11px] border-b border-gray-200 select-none">
+              <tr className="bg-slate-50/90 text-slate-600 font-semibold text-xs border-b border-slate-200 select-none">
                 <th 
                   onClick={() => handleHeaderSort('kupon')}
-                  className="py-2.5 px-3 border-r border-gray-200 w-10 text-center cursor-pointer hover:bg-gray-100 transition border-r border-gray-200"
+                  className="py-3 px-3.5 w-10 text-center cursor-pointer hover:bg-slate-100/80 transition-colors"
                 >
-                  <div className="flex items-center justify-center space-x-1">
+                  <div className="flex items-center justify-center">
                     <span>#</span>
                   </div>
                 </th>
                 <th 
                   onClick={() => handleHeaderSort('kupon')}
-                  className="py-2.5 px-3 border-r border-gray-200 cursor-pointer hover:bg-gray-100 transition border-r border-gray-200"
+                  className="py-3 px-3.5 cursor-pointer hover:bg-slate-100/80 transition-colors"
                 >
                   <div className="flex items-center justify-between">
                     <span>Kupon</span>
@@ -813,7 +813,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 </th>
                 <th 
                   onClick={() => handleHeaderSort('tanggal')}
-                  className="py-2.5 px-3 border-r border-gray-200 cursor-pointer hover:bg-gray-100 transition border-r border-gray-200"
+                  className="py-3 px-3.5 cursor-pointer hover:bg-slate-100/80 transition-colors"
                 >
                   <div className="flex items-center justify-between">
                     <span>Tanggal</span>
@@ -822,7 +822,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 </th>
                 <th 
                   onClick={() => handleHeaderSort('petani')}
-                  className="py-2.5 px-3 border-r border-gray-200 cursor-pointer hover:bg-gray-100 transition border-r border-gray-200"
+                  className="py-3 px-3.5 cursor-pointer hover:bg-slate-100/80 transition-colors"
                 >
                   <div className="flex items-center justify-between">
                     <span>Petani</span>
@@ -831,7 +831,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 </th>
                 <th 
                   onClick={() => handleHeaderSort('jumlah')}
-                  className="py-2.5 px-3 border-r border-gray-200 text-center cursor-pointer hover:bg-gray-100 transition border-r border-gray-200"
+                  className="py-3 px-3.5 text-center cursor-pointer hover:bg-slate-100/80 transition-colors"
                 >
                   <div className="flex items-center justify-center space-x-1">
                     <span>Jumlah</span>
@@ -840,7 +840,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 </th>
                 <th 
                   onClick={() => handleHeaderSort('netto')}
-                  className="py-2.5 px-3 border-r border-gray-200 text-right cursor-pointer hover:bg-gray-100 transition border-r border-gray-200"
+                  className="py-3 px-3.5 text-right cursor-pointer hover:bg-slate-100/80 transition-colors"
                 >
                   <div className="flex items-center justify-end space-x-1">
                     <span>Netto</span>
@@ -849,7 +849,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 </th>
                 <th 
                   onClick={() => handleHeaderSort('total_kotor')}
-                  className="py-2.5 px-3 border-r border-gray-200 text-right cursor-pointer hover:bg-gray-100 transition border-r border-gray-200"
+                  className="py-3 px-3.5 text-right cursor-pointer hover:bg-slate-100/80 transition-colors"
                 >
                   <div className="flex items-center justify-end space-x-1">
                     <span>Total Harga Beli</span>
@@ -858,7 +858,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 </th>
                 <th 
                   onClick={() => handleHeaderSort('pajak')}
-                  className="py-2.5 px-3 border-r border-gray-200 text-right cursor-pointer hover:bg-gray-100 transition border-r border-gray-200"
+                  className="py-3 px-3.5 text-right cursor-pointer hover:bg-slate-100/80 transition-colors"
                 >
                   <div className="flex items-center justify-end space-x-1">
                     <span>Pajak</span>
@@ -867,7 +867,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 </th>
                 <th 
                   onClick={() => handleHeaderSort('potongan')}
-                  className="py-2.5 px-3 border-r border-gray-200 text-right cursor-pointer hover:bg-gray-100 transition border-r border-gray-200"
+                  className="py-3 px-3.5 text-right cursor-pointer hover:bg-slate-100/80 transition-colors"
                 >
                   <div className="flex items-center justify-end space-x-1">
                     <span>Potongan</span>
@@ -876,7 +876,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 </th>
                 <th 
                   onClick={() => handleHeaderSort('jumlah_bayar')}
-                  className="py-2.5 px-3 border-r border-gray-200 text-right cursor-pointer hover:bg-gray-100 transition border-r border-gray-200"
+                  className="py-3 px-3.5 text-right cursor-pointer hover:bg-slate-100/80 transition-colors"
                 >
                   <div className="flex items-center justify-end space-x-1">
                     <span>Jumlah Bayar</span>
@@ -885,7 +885,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 </th>
                 <th 
                   onClick={() => handleHeaderSort('cash')}
-                  className="py-2.5 px-3 border-r border-gray-200 text-right cursor-pointer hover:bg-gray-100 transition border-r border-gray-200"
+                  className="py-3 px-3.5 text-right cursor-pointer hover:bg-slate-100/80 transition-colors"
                 >
                   <div className="flex items-center justify-end space-x-1">
                     <span>Cash</span>
@@ -894,7 +894,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 </th>
                 <th 
                   onClick={() => handleHeaderSort('kredit')}
-                  className="py-2.5 px-3 border-r border-gray-200 text-right cursor-pointer hover:bg-gray-100 transition border-r border-gray-200"
+                  className="py-3 px-3.5 text-right cursor-pointer hover:bg-slate-100/80 transition-colors"
                 >
                   <div className="flex items-center justify-end space-x-1">
                     <span>Kredit</span>
@@ -903,19 +903,19 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 </th>
                 <th 
                   onClick={() => handleHeaderSort('avg')}
-                  className="py-2.5 px-3 border-r border-gray-200 text-right cursor-pointer hover:bg-gray-100 transition border-r border-gray-200"
+                  className="py-3 px-3.5 text-right cursor-pointer hover:bg-slate-100/80 transition-colors"
                 >
                   <div className="flex items-center justify-end space-x-1">
                     <span>AVG</span>
                     <ArrowUpDown className="w-3 h-3 text-slate-400" />
                   </div>
                 </th>
-                <th className="py-2.5 px-3 border-r border-gray-200 text-center w-36">
+                <th className="py-3 px-3.5 text-center w-36">
                   <span>Opsi</span>
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200">
+            <tbody className="divide-y divide-slate-100 text-slate-700">
               {paginatedList.length === 0 ? (
                 <tr>
                   <td colSpan={14} className="py-12 text-center text-slate-400 bg-white">
@@ -949,22 +949,22 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                   return (
                     <tr 
                       key={tx.transaksi_id} 
-                      className="hover:bg-slate-50 transition border-b border-slate-100 text-slate-800"
+                      className={`hover:bg-slate-50/80 transition-colors text-slate-700 ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/40'}`}
                     >
                       {/* # */}
-                      <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono text-slate-500">
+                      <td className="py-2.5 px-3.5 text-center font-mono text-slate-500">
                         {seq}
                       </td>
 
                       {/* Kupon */}
-                      <td className="py-2.5 px-3 border-r border-gray-200 border-r border-gray-200">
+                      <td className="py-2.5 px-3.5">
                         <div className="flex flex-col">
-                          <span className="font-mono font-bold text-slate-900 text-xs">
+                          <span className="font-mono font-semibold text-slate-900 text-xs">
                             {tx.no_kupon || '-'}
                           </span>
                           {!isLunas && !isAllWeighed && (
                             <span 
-                              className="inline-flex items-center space-x-0.5 text-[9px] font-semibold text-amber-800 bg-amber-50 border border-amber-300 px-1 py-0.2 rounded-xs mt-0.5 w-fit"
+                              className="inline-flex items-center space-x-0.5 text-[9px] font-medium text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded mt-0.5 w-fit"
                               title={`Masih ada ${unweighedCount} bal belum ditimbang (${unweighedBalList.join(', ')}). Tidak bisa bayar sampai semua ditimbang.`}
                             >
                               <AlertTriangle className="w-2.5 h-2.5 text-amber-600 shrink-0 mr-0.5" />
@@ -972,35 +972,35 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                             </span>
                           )}
                           {!isLunas && isAllWeighed && (
-                            <span className="inline-flex items-center text-[9px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-1 py-0.2 rounded-xs mt-0.5 w-fit">
-                              ✓ Siap Bayar
+                            <span className="inline-flex items-center text-[9px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded mt-0.5 w-fit">
+                              Siap Bayar
                             </span>
                           )}
                         </div>
                       </td>
 
                       {/* Tanggal: e.g. 08 September 2026 */}
-                      <td className="py-2.5 px-3 border-r border-gray-200 text-slate-700 text-xs whitespace-nowrap">
+                      <td className="py-2.5 px-3.5 text-slate-600 text-xs whitespace-nowrap">
                         {formatDateIndo(tx.tanggal_transaksi)}
                       </td>
 
                       {/* Petani */}
-                      <td className="py-2.5 px-3 border-r border-gray-200 border-r border-gray-200">
+                      <td className="py-2.5 px-3.5">
                         <div className="font-medium text-slate-900 text-xs">{tx.nama_petani}</div>
                       </td>
 
                       {/* Jumlah */}
-                      <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono text-slate-800">
+                      <td className="py-2.5 px-3.5 text-center font-mono text-slate-700">
                         {balCount}
                       </td>
 
                       {/* Netto */}
-                      <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono text-slate-900">
+                      <td className="py-2.5 px-3.5 text-right font-mono text-slate-800">
                         <div>
                           <span>{tx.berat_kg ? tx.berat_kg.toLocaleString('id-ID') : 0}</span>
                           {!isAllWeighed && (
                             <span 
-                              className="block text-[9px] font-sans text-amber-700 font-semibold"
+                              className="block text-[9px] font-sans text-amber-700 font-medium"
                               title={`Netto sementara (${weighedCount}/${balCount} bal ditimbang)`}
                             >
                               (Belum Lengkap)
@@ -1010,60 +1010,60 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                       </td>
 
                       {/* Total Harga Beli */}
-                      <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono text-slate-900">
+                      <td className="py-2.5 px-3.5 text-right font-mono text-slate-800">
                         {formatAccounting(totalKotorVal)}
                       </td>
 
                       {/* Pajak */}
-                      <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono text-slate-700">
+                      <td className="py-2.5 px-3.5 text-right font-mono text-slate-600">
                         {formatAccounting(pajakVal)}
                       </td>
 
                       {/* Potongan */}
-                      <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono text-slate-700">
+                      <td className="py-2.5 px-3.5 text-right font-mono text-slate-600">
                         {formatAccounting(potonganVal)}
                       </td>
 
                       {/* Jumlah Bayar */}
-                      <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono font-bold text-slate-900">
+                      <td className="py-2.5 px-3.5 text-right font-mono font-semibold text-slate-900">
                         {formatAccounting(jumlahBayarVal)}
                       </td>
 
                       {/* Cash */}
-                      <td className={`py-2.5 px-3 border-r border-gray-200 text-right font-mono ${isLunas ? 'font-bold text-emerald-700' : 'text-slate-600'}`}>
+                      <td className={`py-2.5 px-3.5 text-right font-mono ${isLunas ? 'font-semibold text-emerald-700' : 'text-slate-600'}`}>
                         {formatAccounting(cashVal)}
                       </td>
 
                       {/* Kredit */}
-                      <td className={`py-2.5 px-3 border-r border-gray-200 text-right font-mono ${!isLunas ? 'font-bold text-amber-700' : 'text-slate-600'}`}>
+                      <td className={`py-2.5 px-3.5 text-right font-mono ${!isLunas ? 'font-semibold text-amber-700' : 'text-slate-600'}`}>
                         {formatAccounting(kreditVal)}
                       </td>
 
                       {/* AVG */}
-                      <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono text-slate-800 font-medium">
+                      <td className="py-2.5 px-3.5 text-right font-mono text-slate-700">
                         {formatAccounting(avgPrice)}
                       </td>
 
                       {/* Opsi Buttons */}
-                      <td className="py-2.5 px-3 border-r border-gray-200 text-center whitespace-nowrap">
+                      <td className="py-2.5 px-3.5 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center space-x-1.5">
                           
-                          {/* Tombol Detail (Hijau) */}
+                          {/* Tombol Detail */}
                           <button
                             type="button"
                             onClick={() => setSelectedTxForDetail(tx)}
-                            className="px-2 py-1 bg-[#28a745] hover:bg-[#218838] text-white font-semibold text-[11px] rounded-xs transition cursor-pointer shadow-2xs inline-flex items-center space-x-1"
+                            className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-[11px] rounded transition-colors cursor-pointer border border-slate-200 inline-flex items-center space-x-1"
                             title="Lihat Detail Transaksi & Tiket"
                           >
-                            <Eye className="w-3 h-3" />
+                            <Eye className="w-3 h-3 text-slate-500" />
                             <span>Detail</span>
                           </button>
 
-                          {/* Tombol Cetak (Sekarang bisa dicetak kapanpun, draft jika belum lunas) */}
+                          {/* Tombol Cetak */}
                           <button
                             type="button"
                             onClick={() => handleCetakClick(tx)}
-                            className={`px-2 py-1 text-white font-semibold text-[11px] rounded-xs transition cursor-pointer shadow-2xs inline-flex items-center space-x-1 ${(!isLunas || !isAllWeighed) ? 'bg-amber-600 hover:bg-amber-700' : 'bg-[#dc3545] hover:bg-[#c82333]'}`}
+                            className={`px-2.5 py-1 font-medium text-[11px] rounded transition-colors cursor-pointer inline-flex items-center space-x-1 ${(!isLunas || !isAllWeighed) ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200' : 'bg-slate-800 hover:bg-slate-900 text-white'}`}
                             title={(!isLunas || !isAllWeighed) ? "Cetak Nota (Draft / Belum Lunas)" : "Cetak Nota Pembelian Resmi (Lunas)"}
                           >
                             <Printer className="w-3 h-3" />
@@ -1076,10 +1076,10 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                               <button
                                 type="button"
                                 onClick={() => handleMarkAsLunas(tx.transaksi_id)}
-                                className="px-2 py-1 bg-[#007bff] hover:bg-[#0069d9] text-white font-semibold text-[11px] rounded-xs transition cursor-pointer shadow-2xs inline-flex items-center space-x-1"
+                                className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-medium text-[11px] rounded transition-colors cursor-pointer inline-flex items-center space-x-1"
                                 title="Proses Pembayaran Tunai (Cash) Loket Kasir"
                               >
-                                <CheckCircle2 className="w-3 h-3 text-emerald-300" />
+                                <CheckCircle2 className="w-3 h-3" />
                                 <span>Bayar</span>
                               </button>
                             ) : (
@@ -1098,7 +1098,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                                     }
                                   });
                                 }}
-                                className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-semibold text-[11px] rounded-xs transition cursor-pointer shadow-2xs inline-flex items-center space-x-1"
+                                className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 font-medium text-[11px] rounded transition-colors cursor-pointer inline-flex items-center space-x-1"
                                 title={`Terkunci: Masih ada ${unweighedCount} bal belum ditimbang (${unweighedBalList.join(', ')}). Seluruh bal harus ditimbang terlebih dahulu.`}
                               >
                                 <Lock className="w-3 h-3 text-amber-700 shrink-0" />
@@ -1112,10 +1112,10 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                             <button
                               type="button"
                               onClick={() => setSelectedTxForEdit(tx)}
-                              className="p-1 text-slate-400 hover:text-amber-700 transition cursor-pointer"
+                              className="p-1 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
                               title="Koreksi Transaksi"
                             >
-                              <Edit3 className="w-3 h-3" />
+                              <Edit3 className="w-3.5 h-3.5" />
                             </button>
                           )}
 
@@ -1127,10 +1127,10 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                                 setAlasanHapus('');
                                 setTxToDelete(tx);
                               }}
-                              className="p-1 text-slate-400 hover:text-rose-600 transition cursor-pointer"
+                              className="p-1 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
                               title="Hapus Transaksi (Memerlukan Konfirmasi)"
                             >
-                              <Trash2 className="w-3 h-3" />
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           )}
 
@@ -1142,40 +1142,40 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
               )}
             </tbody>
 
-            {/* Total Summary Row matching Image 2 */}
+            {/* Total Summary Row */}
             <tfoot>
-              <tr className="bg-[#e9ecef] font-bold text-slate-900 border-t-2 border-slate-300 text-xs">
-                <td colSpan={4} className="py-2.5 px-3 border-r border-gray-200 text-right uppercase tracking-wider font-extrabold text-slate-800">
+              <tr className="bg-slate-100/90 font-semibold text-slate-800 border-t border-slate-300 text-xs">
+                <td colSpan={4} className="py-3 px-3.5 text-right uppercase tracking-wider font-semibold text-slate-700">
                   Total:
                 </td>
-                <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono font-bold text-slate-900">
+                <td className="py-3 px-3.5 text-center font-mono font-semibold text-slate-900">
                   {stats.totalBal}
                 </td>
-                <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono font-bold text-slate-900">
+                <td className="py-3 px-3.5 text-right font-mono font-semibold text-slate-900">
                   {stats.totalNetto.toLocaleString('id-ID')}
                 </td>
-                <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono font-bold text-slate-900">
+                <td className="py-3 px-3.5 text-right font-mono font-semibold text-slate-900">
                   {formatAccounting(stats.totalKotor)}
                 </td>
-                <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono font-bold text-slate-900">
+                <td className="py-3 px-3.5 text-right font-mono font-semibold text-slate-700">
                   {formatAccounting(stats.totalPajak)}
                 </td>
-                <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono font-bold text-slate-900">
+                <td className="py-3 px-3.5 text-right font-mono font-semibold text-slate-700">
                   {formatAccounting(stats.totalPotongan)}
                 </td>
-                <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono font-bold text-slate-900">
+                <td className="py-3 px-3.5 text-right font-mono font-semibold text-slate-900">
                   {formatAccounting(stats.totalBayar)}
                 </td>
-                <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono font-bold text-emerald-800">
+                <td className="py-3 px-3.5 text-right font-mono font-semibold text-emerald-800">
                   {formatAccounting(stats.lunasNominal)}
                 </td>
-                <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono font-bold text-amber-800">
+                <td className="py-3 px-3.5 text-right font-mono font-semibold text-amber-800">
                   {formatAccounting(stats.belumLunasNominal)}
                 </td>
-                <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono font-bold text-slate-900">
+                <td className="py-3 px-3.5 text-right font-mono font-semibold text-slate-900">
                   {formatAccounting(stats.avgHarga)}
                 </td>
-                <td className="py-2.5 px-3 border-r border-gray-200 text-center text-slate-400">
+                <td className="py-3 px-3.5 text-center text-slate-400">
                   -
                 </td>
               </tr>
