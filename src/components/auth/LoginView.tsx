@@ -8,11 +8,10 @@ import {
   AlertCircle,
   Building2,
   CheckCircle2,
-  KeyRound,
   Monitor
 } from 'lucide-react';
-import { User, UserRole } from '../../types';
-import { authenticateUser, loadUserData } from '../../utils/storage';
+import { User } from '../../types';
+import { authenticateUser } from '../../utils/storage';
 
 interface LoginViewProps {
   onLoginSuccess: (user: User) => void;
@@ -30,7 +29,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const usersList = availableUsers || loadUserData();
 
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,28 +55,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
     }, 200);
   };
 
-  const handleFastRoleLogin = (role: UserRole) => {
-    setError(null);
-    const targetUser = usersList.find((u) => u.role === role && u.status_aktif) || usersList.find((u) => u.role === role);
-    if (!targetUser) {
-      setError(`Tidak ditemukan akun untuk role ${role}.`);
-      return;
-    }
-
-    setUsername(targetUser.username);
-    setPassword(targetUser.password || 'admin123');
-    setIsLoading(true);
-
-    setTimeout(async () => {
-      const result = await authenticateUser(targetUser.username, targetUser.password || 'admin123');
-      setIsLoading(false);
-      if (result.success && result.user) {
-        onLoginSuccess(result.user);
-      } else {
-        setError(result.message);
-      }
-    }, 150);
-  };
 
   return (
     <div className="min-h-screen bg-[#eaedf1] flex flex-col justify-between font-sans text-gray-800">
@@ -230,9 +206,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     />
                     <span className="text-[11px] font-medium">Ingat Sesi di Komputer Ini</span>
                   </label>
-                  <span className="text-[11px] text-gray-500 font-mono">
-                    Default pass: <span className="font-bold text-gray-700">admin123</span>
-                  </span>
                 </div>
 
                 {/* Submit Button */}
@@ -255,75 +228,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 </button>
               </form>
 
-              {/* Quick Role Tester (Neutral & Clean Monochrome Style) - DEV ONLY */}
-              {import.meta.env.DEV && (
-                <div className="mt-5 pt-3.5 border-t border-gray-200">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center space-x-1.5 text-[10px] font-bold text-gray-700 uppercase tracking-wider">
-                      <KeyRound className="w-3 h-3 text-[#b81d24]" />
-                      <span>AKSES CEPAT PENGUJIAN ROLE (1-KLIK):</span>
-                    </div>
-                    <span className="text-[10px] font-mono text-gray-400">6 Role</span>
-                  </div>
-
-                {/* 6 RBAC Roles Quick Login Buttons */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => handleFastRoleLogin('superadmin')}
-                    className="p-2 text-left bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300 rounded-xs transition cursor-pointer group shadow-2xs"
-                  >
-                    <div className="font-bold text-gray-800 text-[11px] group-hover:text-[#b81d24]">Super Admin</div>
-                    <div className="text-[10px] text-gray-500 font-mono">@superadmin</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleFastRoleLogin('admin_sortir')}
-                    className="p-2 text-left bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300 rounded-xs transition cursor-pointer group shadow-2xs"
-                  >
-                    <div className="font-bold text-gray-800 text-[11px] group-hover:text-[#b81d24]">Admin Sortir</div>
-                    <div className="text-[10px] text-gray-500 font-mono">@adminsortir</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleFastRoleLogin('admin_timbang')}
-                    className="p-2 text-left bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300 rounded-xs transition cursor-pointer group shadow-2xs"
-                  >
-                    <div className="font-bold text-gray-800 text-[11px] group-hover:text-[#b81d24]">Admin Timbang</div>
-                    <div className="text-[10px] text-gray-500 font-mono">@admintimbang</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleFastRoleLogin('admin_kasir')}
-                    className="p-2 text-left bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300 rounded-xs transition cursor-pointer group shadow-2xs"
-                  >
-                    <div className="font-bold text-gray-800 text-[11px] group-hover:text-[#b81d24]">Admin Kasir</div>
-                    <div className="text-[10px] text-gray-500 font-mono">@adminkasir</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleFastRoleLogin('admin_pengiriman')}
-                    className="p-2 text-left bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300 rounded-xs transition cursor-pointer group shadow-2xs"
-                  >
-                    <div className="font-bold text-gray-800 text-[11px] group-hover:text-[#b81d24]">Admin Pengiriman</div>
-                    <div className="text-[10px] text-gray-500 font-mono">@adminpengiriman</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleFastRoleLogin('kepala_gudang')}
-                    className="p-2 text-left bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300 rounded-xs transition cursor-pointer group shadow-2xs"
-                  >
-                    <div className="font-bold text-gray-800 text-[11px] group-hover:text-[#b81d24]">Kepala Gudang</div>
-                    <div className="text-[10px] text-gray-500 font-mono">@kepalagudang</div>
-                  </button>
-                </div>
-              </div>
-              )}
 
             </div>
           </div>

@@ -1,6 +1,6 @@
 import React from 'react';
 import { TransaksiPembelian } from '../../types';
-import { formatRupiah, formatAccounting, formatDateHariBulanTahun, terbilangRupiah } from '../../utils/formatters';
+import { formatRupiah, formatAccounting, formatDateHariBulanTahun, terbilangRupiah, normalizeKg } from '../../utils/formatters';
 import { loadCurrentUser } from '../../utils/storage';
 
 export interface NotaTimbangContentProps {
@@ -27,7 +27,7 @@ export const NotaTimbangContent: React.FC<NotaTimbangContentProps> = ({ transaks
       ];
 
   const totalBal = items.length;
-  const totalNettoKg = Number(items.reduce((sum, it) => sum + (it.berat_kg || 0), 0).toFixed(1));
+  const totalNettoKg = normalizeKg(items.reduce((sum, it) => sum + (it.berat_kg || 0), 0));
   const totalKotorRp = items.reduce((sum, it) => sum + (it.total_kotor || 0), 0);
   const totalPotonganRp = items.reduce((sum, it) => sum + (it.potongan || 0), 0);
   const grandTotalRp = items.reduce((sum, it) => sum + (it.subtotal_bersih || 0), 0);
