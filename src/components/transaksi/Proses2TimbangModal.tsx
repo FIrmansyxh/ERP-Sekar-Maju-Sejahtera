@@ -26,7 +26,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { TransaksiPembelian, TransaksiItemBal, Barang, User as UserType } from '../../types';
-import { formatRupiah, formatDateHariBulanTahun, hitungPotonganTaraKg } from '../../utils/formatters';
+import { formatRupiah, formatDateHariBulanTahun, hitungPotonganTaraKg, normalizeKg } from '../../utils/formatters';
 import { ConfirmModal } from '../common/ConfirmModal';
 
 interface Proses2TimbangModalProps {
@@ -285,7 +285,7 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
           const bBruto = it.berat_bruto_kg || (typeof beratBrutoInput === 'number' ? beratBrutoInput : parseFloat(String(beratBrutoInput)) || 0);
           const tara = hitungPotonganTaraKg(bBruto, nextGanti, activeBalItem.no_bal);
           const potTikar = nextGanti ? 75000 : 0;
-          const netto = bBruto > 0 ? Math.max(0, Number((bBruto - tara).toFixed(1))) : 0;
+          const netto = bBruto > 0 ? Math.max(0, normalizeKg(bBruto - tara)) : 0;
           const kotor = Math.round(netto * it.harga_per_kg);
           const potTotal = (it.potongan_kuli || 7000) + (it.potongan_tali || 3000) + potTikar;
           const bersih = Math.round(Math.max(0, kotor - potTotal));
@@ -323,7 +323,7 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
 
     const isGanti = Boolean(activeBalItem.ganti_tikar);
     const taraKg = hitungPotonganTaraKg(bruto, isGanti, activeBalItem.no_bal);
-    const nettoKg = Math.max(0, Number((bruto - taraKg).toFixed(1)));
+    const nettoKg = Math.max(0, normalizeKg(bruto - taraKg));
 
     // Validasi Kapasitas Standar Grade SB: Maksimal 50.0 Kg
     const isGradeSB = Boolean(
@@ -451,7 +451,7 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
     const item = workingItems.find((it) => it.item_id === itemId);
     if (!item) return;
 
-    const existingBruto = item.berat_bruto_kg || (item.berat_kg ? Number((item.berat_kg + (item.potongan_tara_kg || 0)).toFixed(1)) : 0);
+    const existingBruto = item.berat_bruto_kg || (item.berat_kg ? normalizeKg(item.berat_kg + (item.potongan_tara_kg || 0)) : 0);
 
     const updatedItems = workingItems.map((it) => {
       if (it.item_id === itemId) {
@@ -493,7 +493,7 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
 
   const totalBeratBruto = workingItems.reduce((acc, curr) => acc + (curr.berat_bruto_kg || 0), 0);
   const totalTaraKg = workingItems.reduce((acc, curr) => acc + (curr.potongan_tara_kg || hitungPotonganTaraKg(curr.berat_bruto_kg || 0, curr.ganti_tikar || false, curr.no_bal)), 0);
-  const totalBeratNetto = Number(workingItems.reduce((acc, curr) => acc + (curr.berat_kg || 0), 0).toFixed(1));
+  const totalBeratNetto = normalizeKg(workingItems.reduce((acc, curr) => acc + (curr.berat_kg || 0), 0));
   const totalKotorAll = Math.round(workingItems.reduce((acc, curr) => acc + (curr.total_kotor || 0), 0));
   const totalPotonganAll = Math.round(workingItems.reduce((acc, curr) => acc + (curr.potongan || 0), 0));
   const totalHargaFinalAll = Math.round(Math.max(0, totalKotorAll - totalPotonganAll));
@@ -917,7 +917,7 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
                     {(() => {
                       const bBruto = typeof beratBrutoInput === 'number' ? beratBrutoInput : parseFloat(String(beratBrutoInput)) || 0;
                       const tara = hitungPotonganTaraKg(bBruto, Boolean(activeBalItem.ganti_tikar), activeBalItem.no_bal);
-                      const netto = Math.max(0, Number((bBruto - tara).toFixed(1)));
+                      const netto = Math.max(0, normalizeKg(bBruto - tara));
                       const kotor = Math.round(netto * activeBalItem.harga_per_kg);
                       const potTikar = activeBalItem.ganti_tikar ? 75000 : 0;
                       const potTotal = (activeBalItem.potongan_kuli || 7000) + (activeBalItem.potongan_tali || 3000) + potTikar;
