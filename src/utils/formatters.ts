@@ -371,7 +371,8 @@ export function generateTransaksiId(
  */
 export function formatNumber(val?: number | null, decimals: number = 0): string {
   if (val === undefined || val === null || isNaN(val)) return '0';
-  return val.toLocaleString('id-ID', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  // Nilai (mis. berat kg) tidak dibulatkan: tampilkan desimal asli hingga 3 digit, minimal sebanyak `decimals`
+  return val.toLocaleString('id-ID', { minimumFractionDigits: decimals, maximumFractionDigits: Math.max(decimals, 3) });
 }
 
 export function generatePetaniId(existingList: any[] = []): string {
@@ -400,4 +401,12 @@ export function formatDateDDMMYY(dateStr?: string | Date | null): string {
 
 export function validateGradeCode(code: string): string {
   return (code || '').trim().toUpperCase();
+}
+
+/**
+ * Menghilangkan noise floating-point pada penjumlahan berat (mis. 12.85000000001 -> 12.85).
+ * Bukan pembulatan nilai timbangan: presisi 3 desimal melebihi ketelitian timbangan (0.01 kg).
+ */
+export function normalizeKg(val: number): number {
+  return Math.round((val || 0) * 1000) / 1000;
 }

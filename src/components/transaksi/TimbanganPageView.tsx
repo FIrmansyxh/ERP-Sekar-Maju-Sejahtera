@@ -27,7 +27,7 @@ import {
   Info
 } from 'lucide-react';
 import { TransaksiPembelian, Petani, TabelHarga, Barang, TransaksiItemBal, UserRole, User as UserType } from '../../types';
-import { formatRupiah, formatNoKupon, formatDateHariBulanTahun, hitungPotonganTaraKg } from '../../utils/formatters';
+import { formatRupiah, formatNoKupon, formatDateHariBulanTahun, hitungPotonganTaraKg, normalizeKg } from '../../utils/formatters';
 import { recordAuditLog } from '../../utils/storage';
 
 interface TimbanganPageViewProps {
@@ -557,11 +557,11 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
   const isGantiTikarActive = Boolean(activeBalItem?.ganti_tikar);
   
   let liveTara = hitungPotonganTaraKg(liveBruto, isGantiTikarActive, activeBalItem?.no_bal);
-  let liveNetto = liveBruto > 0 ? Math.max(0, Number((liveBruto - liveTara).toFixed(1))) : 0;
+  let liveNetto = liveBruto > 0 ? Math.max(0, normalizeKg(liveBruto - liveTara)) : 0;
   
   if (isNettoManual && parsedNettoInput > 0) {
     liveNetto = parsedNettoInput;
-    liveTara = Math.max(0, Number((liveBruto - liveNetto).toFixed(1)));
+    liveTara = Math.max(0, normalizeKg(liveBruto - liveNetto));
   }
 
   const livePotTikar = isGantiTikarActive ? (typeof potTikarInput === 'number' ? potTikarInput : 75000) : 0;
@@ -642,8 +642,8 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
 
     // Save directly to global storage state
     const allItemsWeighed = updatedItems.every((it) => (it.berat_kg || 0) > 0);
-    const totalNettoKg = Number(updatedItems.reduce((acc, it) => acc + (it.berat_kg || 0), 0).toFixed(1));
-    const totalBrutoKg = Number(updatedItems.reduce((acc, it) => acc + (it.berat_bruto_kg || 0), 0).toFixed(1));
+    const totalNettoKg = normalizeKg(updatedItems.reduce((acc, it) => acc + (it.berat_kg || 0), 0));
+    const totalBrutoKg = normalizeKg(updatedItems.reduce((acc, it) => acc + (it.berat_bruto_kg || 0), 0));
     const totalKotorAll = updatedItems.reduce((acc, it) => acc + (it.total_kotor || 0), 0);
     const totalPotonganAll = updatedItems.reduce((acc, it) => acc + (it.potongan || 0), 0);
     const finalHargaTotal = updatedItems.reduce((acc, it) => acc + (it.subtotal_bersih || 0), 0);
@@ -825,7 +825,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     if (!item) return;
 
     // Simpan nilai berat kotor (bruto) sebelumnya agar tidak hilang dan operator bisa langsung mengedit
-    const existingBruto = item.berat_bruto_kg || (item.berat_kg ? Number((item.berat_kg + (item.potongan_tara_kg || 0)).toFixed(1)) : 0);
+    const existingBruto = item.berat_bruto_kg || (item.berat_kg ? item.berat_kg + (item.potongan_tara_kg || 0) : 0);
 
     const updatedItems = workingItems.map((it) => {
       if (it.item_id === itemId) {

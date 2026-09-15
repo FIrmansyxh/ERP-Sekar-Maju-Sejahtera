@@ -101,7 +101,6 @@ import { HargaJualManagement } from './components/harga_jual/HargaJualManagement
 import { DedicatedPrintView } from './components/print/DedicatedPrintView';
 
 import { CheckCircle2 } from 'lucide-react';
-import { seedSamsulAnsori } from './seedSamsulAnsori';
 
 export default function App() {
   // Check URL params for standalone print route (e.g. ?cetak=nota&id=... or ?cetak=surat_jalan&id=...)
@@ -261,6 +260,14 @@ export default function App() {
       // ignore
     }
   }, [activeModuleId]);
+
+  // Jaga RBAC saat modul aktif dipulihkan dari localStorage (refresh / manipulasi manual): kembalikan ke Home bila tidak berwenang
+  useEffect(() => {
+    if (!currentUser) return;
+    if (activeModuleId !== 'modul-home' && !hasModuleAccess(currentUser.role, activeModuleId)) {
+      setActiveModuleId('modul-home');
+    }
+  }, [currentUser, activeModuleId]);
   const [targetKuponNo, setTargetKuponNo] = useState<string | undefined>(undefined);
   const [targetTxId, setTargetTxId] = useState<string | undefined>(undefined);
   const [targetBalNo, setTargetBalNo] = useState<string | undefined>(undefined);
@@ -285,7 +292,6 @@ export default function App() {
 
   // Initial Load from localStorage
   useEffect(() => {
-    seedSamsulAnsori();
     setUserList(loadUserData());
     setPetaniList(loadPetaniData());
     setBarangList(loadBarangData());
@@ -387,13 +393,6 @@ export default function App() {
       });
     };
   }, [currentUser]);
-
-  const handleSwitchUser = (targetUser: User) => {
-    setCurrentUser(targetUser);
-    saveCurrentUser(targetUser);
-    setActiveModuleId('modul-home');
-    showToast(`Beralih akun ke: ${targetUser.nama_lengkap} (${targetUser.role})`);
-  };
 
   // --- User Management Handlers ---
   const handleSaveUser = async (savedUser: User) => {
@@ -1087,6 +1086,16 @@ export default function App() {
 
   const pageInfo = getPageTitleAndBreadcrumb();
 
+  // Wajib login: tidak ada halaman (termasuk rute cetak ?cetak=...) yang dapat diakses sebelum autentikasi
+  if (!currentUser) {
+    return (
+      <LoginView
+        onLoginSuccess={handleLoginSuccess}
+        availableUsers={userList}
+      />
+    );
+  }
+
   // Dedicated Standalone Print View (matches user's reference sekaranomgroup.com/cetak_... tab)
   if (printParam) {
     return (
@@ -1107,16 +1116,6 @@ export default function App() {
     );
   }
 
-  // If user is not authenticated, show Login View
-  if (!currentUser) {
-    return (
-      <LoginView
-        onLoginSuccess={handleLoginSuccess}
-        availableUsers={userList}
-      />
-    );
-  }
-
   return (
     <div className="min-h-screen bg-[#f4f6f9] text-[#212529] font-sans flex flex-col antialiased">
       
@@ -1132,7 +1131,6 @@ export default function App() {
         currentUser={currentUser}
         onLogout={handleLogout}
         onOpenUsers={() => handleSelectModule('modul-users')}
-        onSwitchUser={handleSwitchUser}
         allUsers={userList}
         onToggleSidebar={handleToggleSidebar}
         onMouseEnterToggle={handleMouseEnterToggle}

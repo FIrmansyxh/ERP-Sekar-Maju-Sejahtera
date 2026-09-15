@@ -72,19 +72,19 @@ import { INITIAL_SAMPLE_DATA, INITIAL_BATCH_SAMPLE_DATA } from '../data/initialS
 import { INITIAL_PENGIRIMAN_DATA } from '../data/initialPengirimanData';
 import { INITIAL_USER_DATA } from '../data/initialUserData';
 
-const KEY_PETANI = 'erp_tembakau_petani_v31';
-const KEY_BARANG = 'erp_tembakau_barang_v31';
-const KEY_MASTER_BARANG = 'erp_tembakau_master_barang_v31';
-const KEY_STOCK_OPNAME = 'erp_tembakau_stock_opname_v31';
-const KEY_HARGA = 'erp_tembakau_harga_v31';
-const KEY_HARGA_JUAL = 'erp_tembakau_harga_jual_v31';
-const KEY_TRANSAKSI = 'erp_tembakau_transaksi_v31';
-const KEY_SAMPLE = 'erp_tembakau_sample_v31';
-const KEY_BATCH_SAMPLE = 'erp_tembakau_batch_sample_v31';
-const KEY_PENGIRIMAN = 'erp_tembakau_pengiriman_v31';
-const KEY_USERS = 'erp_tembakau_users_v31';
-const KEY_CURRENT_USER = 'erp_tembakau_current_user_v31';
-const KEY_AUDIT_LOG = 'erp_tembakau_audit_log_v31';
+const KEY_PETANI = 'erp_tembakau_petani_v32';
+const KEY_BARANG = 'erp_tembakau_barang_v32';
+const KEY_MASTER_BARANG = 'erp_tembakau_master_barang_v32';
+const KEY_STOCK_OPNAME = 'erp_tembakau_stock_opname_v32';
+const KEY_HARGA = 'erp_tembakau_harga_v32';
+const KEY_HARGA_JUAL = 'erp_tembakau_harga_jual_v32';
+const KEY_TRANSAKSI = 'erp_tembakau_transaksi_v32';
+const KEY_SAMPLE = 'erp_tembakau_sample_v32';
+const KEY_BATCH_SAMPLE = 'erp_tembakau_batch_sample_v32';
+const KEY_PENGIRIMAN = 'erp_tembakau_pengiriman_v32';
+const KEY_USERS = 'erp_tembakau_users_v32';
+const KEY_CURRENT_USER = 'erp_tembakau_current_user_v32';
+const KEY_AUDIT_LOG = 'erp_tembakau_audit_log_v32';
 
 // Clean up old version demo caches
 (function purgeLegacyDemoCaches() {
@@ -93,7 +93,7 @@ const KEY_AUDIT_LOG = 'erp_tembakau_audit_log_v31';
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (k && (k.startsWith('erp_tembakau_') && !k.endsWith('_v31') && !k.endsWith('_date') && !k.endsWith('_snapshots_v1'))) {
+        if (k && (k.startsWith('erp_tembakau_') && !k.endsWith('_v32') && !k.endsWith('_date') && !k.endsWith('_snapshots_v1'))) {
           keysToRemove.push(k);
         }
       }
@@ -167,8 +167,9 @@ export function loadCurrentUser(): User | null {
       if (parsed && typeof parsed === 'object' && parsed.user_id) {
         const allUsers = loadUserData();
         const found = allUsers.find((u) => u.user_id === parsed.user_id && u.status_aktif);
+        // Sesi hanya valid jika user_id tersimpan masih terdaftar & aktif; selain itu wajib login ulang
         if (found) return found;
-        return parsed;
+        return null;
       }
     }
   } catch (err) {
@@ -295,21 +296,7 @@ export function loadPetaniData(): Petani[] {
     const saved = safeGetItem(KEY_PETANI);
     if (saved !== null) {
       const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length >= 34) return parsed;
-      if (Array.isArray(parsed) && parsed.length > 0 && parsed.length < 34) {
-        const existingIds = new Set(parsed.map((p: Petani) => p.petani_id));
-        const combined = [...parsed];
-        for (const item of INITIAL_PETANI_DATA) {
-          if (!existingIds.has(item.petani_id) && combined.length < 34) {
-            combined.push(item);
-            existingIds.add(item.petani_id);
-          }
-        }
-        if (combined.length === 34) {
-          savePetaniData(combined);
-          return combined;
-        }
-      }
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch (err) {
     console.error('Failed to load petani data:', err);
