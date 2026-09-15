@@ -1,5 +1,5 @@
 import { SearchableSelect } from '../common/SearchableSelect';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Scan, 
   Plus, 
@@ -9,12 +9,13 @@ import {
   Tag, 
   AlertCircle, 
   Layers, 
-  Barcode as BarcodeIcon,
-  Sparkles,
-  Info,
-  Calendar,
-  Check,
-  AlertTriangle
+  Barcode as BarcodeIcon, 
+  Sparkles, 
+  Info, 
+  Calendar, 
+  Check, 
+  AlertTriangle,
+  RotateCcw
 } from 'lucide-react';
 import { Petani, TabelHarga, TransaksiPembelian, TransaksiItemBal, User as UserType, Barang } from '../../types';
 import { formatRupiah, formatNoKupon, generateTransaksiId, hitungPotonganTaraKg } from '../../utils/formatters';
@@ -68,6 +69,37 @@ export const Proses1SortirModal: React.FC<Proses1SortirModalProps> = ({
       return 'KUP0001';
     }
   });
+
+  // Real-time validasi pencegahan duplikasi nomor kupon
+  const duplicateKuponTx = useMemo(() => {
+    try {
+      const clean = (noKupon || '').trim().toLowerCase();
+      if (!clean) return null;
+      const existingTx = loadTransaksiData();
+      return existingTx.find((tx) => (tx.no_kupon || '').trim().toLowerCase() === clean);
+    } catch {
+      return null;
+    }
+  }, [noKupon]);
+  const isDuplicateKupon = Boolean(duplicateKuponTx);
+
+  const handleGenerateNextKupon = () => {
+    try {
+      const existingTx = loadTransaksiData();
+      let maxNum = 0;
+      existingTx.forEach((tx) => {
+        const m = (tx.no_kupon || '').match(/\d+/);
+        if (m) {
+          const n = parseInt(m[0], 10);
+          if (n > maxNum) maxNum = n;
+        }
+      });
+      setNoKupon(`KUP${String(maxNum + 1).padStart(4, '0')}`);
+    } catch {
+      setNoKupon('KUP0001');
+    }
+  };
+
   const [selectedPetaniId, setSelectedPetaniId] = useState('');
   const [tanggal, setTanggal] = useState(new Date().toISOString().split('T')[0]);
   const [adminSortirNama, setAdminSortirNama] = useState('Admin 1 & 2 (Meja Sortir Intake)');
@@ -333,6 +365,15 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
       return;
     }
 
+    // Pengecekan duplikasi nomor kupon
+    if (isDuplicateKupon && duplicateKuponTx) {
+      alert(`Pencegahan Duplikasi Kupon:
+Nomor kupon "${noKupon}" sudah terdaftar di transaksi ${duplicateKuponTx.transaksi_id} milik Petani ${duplicateKuponTx.nama_petani}.
+
+Sistem mencegah penyimpanan duplikasi kupon. Silakan ganti ke nomor kupon lain.`);
+      return;
+    }
+
     setIsConfirmOpen(true);
   };
 
@@ -484,20 +525,47 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
               
               {/* No Kupon Input */}
               <div>
-                <label className="block text-gray-700 font-bold mb-1">
-                  1. No. Kupon Antrian <span className="text-red-500">*</span>
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-gray-700 font-bold">
+                    1. No. Kupon Antrian <span className="text-red-500">*</span>
+                  </label>
+                  {isDuplicateKupon && (
+                    <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.2 border border-rose-300 rounded-2xs">
+                      Duplikat!
+                    </span>
+                  )}
+                </div>
                 <input
                   type="text"
                   value={noKupon}
                   onChange={(e) => setNoKupon(formatNoKupon(e.target.value))}
-                  className="w-full bg-white border-2 border-red-500 rounded-sm px-2.5 py-1.5 text-xs text-gray-900 font-mono font-bold focus:outline-none focus:border-[#b81d24]"
+                  className={`w-full bg-white rounded-sm px-2.5 py-1.5 text-xs text-gray-900 font-mono font-bold focus:outline-none transition ${isDuplicateKupon ? 'border-2 border-rose-500 bg-rose-50/40 focus:border-rose-600 ring-1 ring-rose-200' : 'border-2 border-slate-300 focus:border-[#b81d24]'}`}
                   placeholder="Contoh: KUP0001"
                   required
                 />
-                <p className="text-[10px] text-gray-500 mt-1">
-                  Sesuai kupon antrian fisik petani
-                </p>
+                {isDuplicateKupon && duplicateKuponTx ? (
+                  <div className="mt-1.5 p-2 bg-rose-50 border border-rose-300 rounded-xs text-[11px] text-rose-950 space-y-1 shadow-2xs">
+                    <div className="flex items-center space-x-1.5 font-bold text-rose-700">
+                      <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                      <span>Kupon Sudah Terdaftar!</span>
+                    </div>
+                    <p className="text-[10px] text-rose-900 leading-tight">
+                      Kupon <strong className="font-mono">{noKupon}</strong> telah terpakai di <strong>{duplicateKuponTx.transaksi_id}</strong> (Petani: <strong>{duplicateKuponTx.nama_petani}</strong>).
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleGenerateNextKupon}
+                      className="inline-flex items-center space-x-1 text-[10px] font-bold text-white bg-[#b81d24] hover:bg-rose-800 px-2 py-0.5 rounded-xs transition cursor-pointer"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>Gunakan Kupon Bebas Berikutnya</span>
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-gray-500 mt-1">
+                    Sesuai kupon antrian fisik petani
+                  </p>
+                )}
               </div>
 
               {/* Petani Dropdown */}
@@ -684,7 +752,7 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
+                <table className="w-full text-left border-collapse text-xs min-w-[800px]">
                   <thead>
                     <tr className="bg-[#f8f9fa] border-b border-gray-200 text-gray-700 font-bold">
                       <th className="py-2 px-2.5 text-center border-r border-gray-200 w-10">No</th>
@@ -920,9 +988,10 @@ Silakan ganti nomor bal tersebut sebelum melanjutkan!`);
 
                 <button
                   type="submit"
-                  disabled={balItems.length === 0}
+                  disabled={balItems.length === 0 || isDuplicateKupon}
+                  title={isDuplicateKupon ? 'Nomor kupon sudah digunakan oleh transaksi lain' : undefined}
                   className={`px-5 py-2 text-xs font-bold text-white rounded-sm transition flex items-center space-x-1.5 shadow-sm ${
-                    balItems.length > 0 
+                    balItems.length > 0 && !isDuplicateKupon
                       ? 'bg-[#b81d24] hover:bg-[#a0181e] cursor-pointer' 
                       : 'bg-gray-400 cursor-not-allowed opacity-60'
                   }`}

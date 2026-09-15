@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { 
   PackageSearch,
   Download,
@@ -10,7 +10,7 @@ import {
   X
 } from 'lucide-react';
 import { Barang } from '../../types';
-import { formatNumber, formatRupiah } from '../../utils/formatters';
+import { formatNumber, formatRupiah, extractKodeBalPrefix } from '../../utils/formatters';
 import { downloadCsvFile } from '../../utils/printDownload';
 
 interface LaporanKodeBalViewProps {
@@ -33,6 +33,82 @@ export const LaporanKodeBalView: React.FC<LaporanKodeBalViewProps> = ({
   const [sortField, setSortField] = useState<keyof KodeBalRow>('kode_bal');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
+  // Ref for table scrolling container
+  const tableContainerRef = React.useRef<HTMLDivElement>(null);
+
+  // Scroll Position State for Scroll-To-Top and Scroll-To-Bottom buttons (sama persis seperti pada Laporan Pembelian)
+  const [showScrollButtons, setShowScrollButtons] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const mainEl = document.querySelector('main');
+      const tableEl = tableContainerRef.current;
+
+      const scrollY = window.scrollY || document.documentElement.scrollTop || mainEl?.scrollTop || tableEl?.scrollTop || 0;
+      const windowHeight = window.innerHeight || mainEl?.clientHeight || tableEl?.clientHeight || document.documentElement.clientHeight;
+      const docHeight = Math.max(
+        document.documentElement.scrollHeight,
+        document.body.scrollHeight,
+        mainEl?.scrollHeight || 0,
+        tableEl?.scrollHeight || 0
+      );
+
+      // Sembunyikan ketika di paling atas (<= 100px) ATAU ketika sudah di paling bawah (>= docHeight - 80px)
+      // Muncul kembali ketika di-scroll ke atas dari bawah atau di-scroll ke bawah dari atas
+      const isAtTop = scrollY <= 100;
+      const isAtBottom = scrollY + windowHeight >= docHeight - 80;
+
+      setShowScrollButtons(!isAtTop && !isAtBottom);
+    };
+
+    const mainEl = document.querySelector('main');
+    const tableEl = tableContainerRef.current;
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', handleScroll, { passive: true });
+    if (mainEl) mainEl.addEventListener('scroll', handleScroll, { passive: true });
+    if (tableEl) tableEl.addEventListener('scroll', handleScroll, { passive: true });
+
+    handleScroll();
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleScroll);
+      if (mainEl) mainEl.removeEventListener('scroll', handleScroll);
+      if (tableEl) tableEl.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
+  const scrollToTop = () => {
+    if (tableContainerRef.current) {
+      tableContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    const mainEl = document.querySelector('main');
+    if (mainEl) {
+      mainEl.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const scrollToBottom = () => {
+    if (tableContainerRef.current) {
+      tableContainerRef.current.scrollTo({
+        top: tableContainerRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
+    }
+    const mainEl = document.querySelector('main');
+    if (mainEl) {
+      mainEl.scrollTo({
+        top: mainEl.scrollHeight,
+        behavior: 'smooth',
+      });
+    }
+    window.scrollTo({
+      top: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight),
+      behavior: 'smooth',
+    });
+  };
+
   const kodeBalData = useMemo(() => {
     const map = new Map<string, {
       jumlah_bal: number;
@@ -43,9 +119,9 @@ export const LaporanKodeBalView: React.FC<LaporanKodeBalViewProps> = ({
 
     barangList.forEach((b) => {
       if (!b.no_bal) return;
-      // Extract the letters before numbers
-      const match = b.no_bal.match(/^([A-Za-z]+)/);
-      const kode = match ? match[1].toUpperCase() : 'TANPA KODE';
+      // Ekstrak huruf di depannya saja sebagai kode bal (misal: SB-01 -> SB, HF-02 -> HF, GT-01 -> GT)
+      const extracted = extractKodeBalPrefix(b.no_bal);
+      const kode = extracted || 'TANPA KODE';
 
       if (!map.has(kode)) {
         map.set(kode, {
@@ -204,7 +280,7 @@ export const LaporanKodeBalView: React.FC<LaporanKodeBalViewProps> = ({
             )}
           </div>
 
-          <div className="w-full sm:w-80 md:w-96">
+          <div className="w-full sm:w-72 md:w-80">
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-gray-400">
                 <Search className="w-4 h-4" />
@@ -232,12 +308,12 @@ export const LaporanKodeBalView: React.FC<LaporanKodeBalViewProps> = ({
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div ref={tableContainerRef} className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-210px)] min-h-[350px]">
           <table className="w-full text-left border-collapse">
-            <thead className="bg-[#f8f9fa] border-b border-gray-200">
+            <thead className="bg-[#f8f9fa] border-b border-gray-300 sticky top-0 z-20 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
               <tr className="text-xs font-bold text-gray-700">
                 <th 
-                  className="py-3 px-4 border-r border-gray-200 cursor-pointer hover:bg-gray-100 select-none w-32"
+                  className="sticky top-0 z-20 bg-[#f8f9fa] py-3 px-4 border-r border-gray-200 cursor-pointer hover:bg-gray-200/80 select-none w-32 transition-colors"
                   onClick={() => handleSort('kode_bal')}
                 >
                   <div className="flex items-center justify-between">
@@ -246,7 +322,7 @@ export const LaporanKodeBalView: React.FC<LaporanKodeBalViewProps> = ({
                   </div>
                 </th>
                 <th 
-                  className="py-3 px-4 border-r border-gray-200 text-right cursor-pointer hover:bg-gray-100 select-none w-32"
+                  className="sticky top-0 z-20 bg-[#f8f9fa] py-3 px-4 border-r border-gray-200 text-right cursor-pointer hover:bg-gray-200/80 select-none w-32 transition-colors"
                   onClick={() => handleSort('jumlah_bal')}
                 >
                   <div className="flex items-center justify-end">
@@ -255,7 +331,7 @@ export const LaporanKodeBalView: React.FC<LaporanKodeBalViewProps> = ({
                   </div>
                 </th>
                 <th 
-                  className="py-3 px-4 border-r border-gray-200 text-right cursor-pointer hover:bg-gray-100 select-none w-40"
+                  className="sticky top-0 z-20 bg-[#f8f9fa] py-3 px-4 border-r border-gray-200 text-right cursor-pointer hover:bg-gray-200/80 select-none w-40 transition-colors"
                   onClick={() => handleSort('berat_bruto')}
                 >
                   <div className="flex items-center justify-end">
@@ -264,7 +340,7 @@ export const LaporanKodeBalView: React.FC<LaporanKodeBalViewProps> = ({
                   </div>
                 </th>
                 <th 
-                  className="py-3 px-4 border-r border-gray-200 text-right cursor-pointer hover:bg-gray-100 select-none w-40"
+                  className="sticky top-0 z-20 bg-[#f8f9fa] py-3 px-4 border-r border-gray-200 text-right cursor-pointer hover:bg-gray-200/80 select-none w-40 transition-colors"
                   onClick={() => handleSort('berat_netto')}
                 >
                   <div className="flex items-center justify-end">
@@ -273,7 +349,7 @@ export const LaporanKodeBalView: React.FC<LaporanKodeBalViewProps> = ({
                   </div>
                 </th>
                 <th 
-                  className="py-3 px-4 border-r border-gray-200 text-right cursor-pointer hover:bg-gray-100 select-none"
+                  className="sticky top-0 z-20 bg-[#f8f9fa] py-3 px-4 border-r border-gray-200 text-right cursor-pointer hover:bg-gray-200/80 select-none transition-colors"
                   onClick={() => handleSort('avg_harga')}
                 >
                   <div className="flex items-center justify-end">
@@ -282,7 +358,7 @@ export const LaporanKodeBalView: React.FC<LaporanKodeBalViewProps> = ({
                   </div>
                 </th>
                 <th 
-                  className="py-3 px-4 text-right cursor-pointer hover:bg-gray-100 select-none"
+                  className="sticky top-0 z-20 bg-[#f8f9fa] py-3 px-4 text-right cursor-pointer hover:bg-gray-200/80 select-none transition-colors"
                   onClick={() => handleSort('total_nilai')}
                 >
                   <div className="flex items-center justify-end">
@@ -338,6 +414,32 @@ export const LaporanKodeBalView: React.FC<LaporanKodeBalViewProps> = ({
             )}
           </table>
         </div>
+      </div>
+
+      {/* Floating Scroll Controls (Sama persis seperti pada Laporan Pembelian) */}
+      <div 
+        className={`fixed bottom-6 right-6 z-40 flex flex-col items-center space-y-2 transition-all duration-300 ${
+          showScrollButtons ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-4 pointer-events-none'
+        }`}
+      >
+        <button
+          type="button"
+          onClick={scrollToTop}
+          className="p-2.5 bg-white/90 hover:bg-white text-gray-600 hover:text-[#b81d24] rounded-full shadow-[0_4px_10px_rgba(0,0,0,0.1)] border border-gray-200 hover:border-red-200 backdrop-blur-sm transition-all cursor-pointer group flex items-center justify-center hover:scale-110 active:scale-95"
+          title="Geser ke Paling Atas"
+        >
+          <ArrowUp className="w-4 h-4 group-hover:-translate-y-0.5 transition-transform" />
+          <span className="sr-only">Geser ke Paling Atas</span>
+        </button>
+        <button
+          type="button"
+          onClick={scrollToBottom}
+          className="p-2.5 bg-white/90 hover:bg-white text-gray-600 hover:text-[#b81d24] rounded-full shadow-[0_4px_10px_rgba(0,0,0,0.1)] border border-gray-200 hover:border-red-200 backdrop-blur-sm transition-all cursor-pointer group flex items-center justify-center hover:scale-110 active:scale-95"
+          title="Geser ke Paling Bawah"
+        >
+          <ArrowDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
+          <span className="sr-only">Geser ke Paling Bawah</span>
+        </button>
       </div>
     </div>
   );

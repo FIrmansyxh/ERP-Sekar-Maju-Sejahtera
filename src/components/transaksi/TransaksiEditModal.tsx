@@ -281,6 +281,16 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
       setValidationError('Ada Grade yang tidak valid / tidak terdaftar di Master Harga Beli.');
       return;
     }
+    // Validasi Kapasitas Standar Grade SB: Maksimal 50.0 Kg
+    const invalidSbRow = balRows.find(
+      (r) =>
+        (r.kode_grade.toUpperCase().includes('SB') || r.no_bal.toUpperCase().startsWith('SB')) &&
+        (r.berat_kg > 50 || (r.berat_bruto_kg && r.berat_bruto_kg > 50))
+    );
+    if (invalidSbRow) {
+      setValidationError(`Batas bobot terlampaui: Bal "${invalidSbRow.no_bal}" Grade ${invalidSbRow.kode_grade} (${invalidSbRow.berat_kg} kg) melebihi batas standar maksimal 50,0 kg. Silakan sesuaikan bobot bal.`);
+      return;
+    }
     if (!alasanEdit.trim()) {
       setValidationError('Harap isi alasan pengubahan data untuk catatan Audit Trail Admin.');
       return;

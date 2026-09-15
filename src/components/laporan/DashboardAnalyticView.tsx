@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { 
   DollarSign, 
   Scale, 
@@ -14,7 +14,9 @@ import {
   Layers,
   Users,
   Tag,
-  Activity
+  Activity,
+  Calendar,
+  Filter
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { 
@@ -52,6 +54,14 @@ interface DashboardAnalyticViewProps {
   onNavigateToModule?: (moduleId: string) => void;
 }
 
+// Helper pemotongan teks (truncate) untuk label pada sumbu X agar tidak saling bertumpuk
+const truncateLabel = (value: string | undefined | null, maxLength: number = 10): string => {
+  if (!value) return '';
+  const str = String(value).trim();
+  if (str.length <= maxLength) return str;
+  return `${str.slice(0, maxLength)}…`;
+};
+
 export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
   transaksiList = [],
   barangList = [],
@@ -63,6 +73,14 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
   onNavigateToModule,
 }) => {
   const isQCOnly = userRole === 'qc_mutu';
+
+  // State Filter Rentang Waktu & Metrik Analisis Tren
+  type PeriodeWaktu = 'mingguan' | 'bulanan' | 'kuartalan' | 'tahunan';
+  type MetricTren = 'bal' | 'tonase' | 'nilai';
+
+  const [periodeWaktu, setPeriodeWaktu] = useState<PeriodeWaktu>('bulanan');
+  const [selectedTahun, setSelectedTahun] = useState<string>('semua');
+  const [trendMetric, setTrendMetric] = useState<MetricTren>('bal');
 
   // 1. Total Pembelian (Modal Murni: Netto × Harga Beli, abaikan potongan tali/kuli/tikar)
   const totalPembelianRupiah = useMemo(() => {
@@ -264,33 +282,251 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
     };
   }, [shippedBalMetrics]);
 
-  const trendPembelianBulanan = useMemo(() => {
-    const monthlyData: Record<string, number> = {};
-
+  // Daftar tahun unik dari data transaksi untuk filter tahun
+  const availableYears = useMemo(() => {
+    const years = new Set<string>();
     transaksiList.forEach((trx) => {
       if (trx.tanggal_transaksi) {
-        const month = trx.tanggal_transaksi.substring(0, 7); 
-        const balCount = trx.total_bal || (trx.items ? trx.items.length : (trx.barang_ids ? trx.barang_ids.length : 1));
-        if (monthlyData[month]) {
-          monthlyData[month] += balCount;
-        } else {
-          monthlyData[month] = balCount;
+        const yr = trx.tanggal_transaksi.substring(0, 4);
+        if (yr && !isNaN(Number(yr))) {
+          years.add(yr);
         }
       }
     });
-
-    return Object.entries(monthlyData)
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([month, totalBal]) => {
-        const date = new Date(`${month}-01`);
-        const monthName = date.toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
-        return {
-          month: monthName,
-          totalBal: Math.round(totalBal),
-          rawMonth: month,
-        };
-      });
+    return Array.from(years).sort((a, b) => b.localeCompare(a));
   }, [transaksiList]);
+
+  // Agregasi Fleksibel: Mingguan, Bulanan, Kuartalan, Tahunan
+  const trendPembelianData = useMemo(() => {
+    // Filter transaksi berdasarkan selectedTahun jika bukan 'semua'
+    const filteredTrx = transaksiList.filter((trx) => {
+      if (!trx.tanggal_transaksi) return false;
+      if (selectedTahun !== 'semua') {
+        return trx.tanggal_transaksi.startsWith(selectedTahun);
+      }
+      return true;
+    });
+
+    const periodMap = new Map<string, {
+      key: string;
+      label: string;
+      fullLabel: string;
+      totalBal: number;
+      totalKg: number;
+      totalNilai: number;
+      countTrx: number;
+    }>();
+
+    filteredTrx.forEach((trx) => {
+      if (!trx.tanggal_transaksi) return;
+      const dateStr = trx.tanggal_transaksi.split('T')[0];
+      const parts = dateStr.split('-');
+      if (parts.length < 3) return;
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10); // 1-12
+      const day = parseInt(parts[2], 10);
+
+      if (!year || isNaN(year) || !month || isNaN(month)) return;
+
+      let periodKey = '';
+      let label = '';
+      let fullLabel = '';
+
+      if (periodeWaktu === 'tahunan') {
+        periodKey = `${year}`;
+        label = `${year}`;
+        fullLabel = `Tahun ${year}`;
+      } else if (periodeWaktu === 'kuartalan') {
+        const q = Math.ceil(month / 3);
+        periodKey = `${year}-Q${q}`;
+        label = `Q${q} '${String(year).slice(2)}`;
+        const qMonths = q === 1 ? 'Jan-Mar' : q === 2 ? 'Apr-Jun' : q === 3 ? 'Jul-Sep' : 'Okt-Des';
+        fullLabel = `Kuartal ${q} ${year} (${qMonths})`;
+      } else if (periodeWaktu === 'mingguan') {
+        const weekOfMonth = Math.min(4, Math.ceil(day / 7));
+        const monthShort = new Date(year, month - 1, 1).toLocaleDateString('id-ID', { month: 'short' });
+        periodKey = `${year}-${String(month).padStart(2, '0')}-W${weekOfMonth}`;
+        label = `M${weekOfMonth} ${monthShort} '${String(year).slice(2)}`;
+        fullLabel = `Minggu ke-${weekOfMonth} ${monthShort} ${year}`;
+      } else {
+        // 'bulanan' default
+        periodKey = `${year}-${String(month).padStart(2, '0')}`;
+        const d = new Date(year, month - 1, 1);
+        label = d.toLocaleDateString('id-ID', { month: 'short', year: '2-digit' });
+        fullLabel = d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+      }
+
+      const balCount = trx.total_bal || (trx.items && trx.items.length > 0 ? trx.items.length : (trx.barang_ids ? trx.barang_ids.length : 1));
+      const kgCount = trx.berat_kg || 0;
+      const nilaiCount = hitungModalTransaksi(trx);
+
+      if (periodMap.has(periodKey)) {
+        const existing = periodMap.get(periodKey)!;
+        existing.totalBal += balCount;
+        existing.totalKg += kgCount;
+        existing.totalNilai += nilaiCount;
+        existing.countTrx += 1;
+      } else {
+        periodMap.set(periodKey, {
+          key: periodKey,
+          label,
+          fullLabel,
+          totalBal: balCount,
+          totalKg: kgCount,
+          totalNilai: nilaiCount,
+          countTrx: 1,
+        });
+      }
+    });
+
+    return Array.from(periodMap.values())
+      .sort((a, b) => a.key.localeCompare(b.key))
+      .map((item) => ({
+        ...item,
+        totalBal: Math.round(item.totalBal),
+        totalKg: Number(item.totalKg.toFixed(1)),
+        totalNilai: Math.round(item.totalNilai),
+        tonaseTon: Number((item.totalKg / 1000).toFixed(2)),
+        nilaiJuta: Number((item.totalNilai / 1_000_000).toFixed(2)),
+      }));
+  }, [transaksiList, periodeWaktu, selectedTahun]);
+
+  const grandTotalTrend = useMemo(() => {
+    return trendPembelianData.reduce(
+      (acc, item) => ({
+        bal: acc.bal + item.totalBal,
+        kg: acc.kg + item.totalKg,
+        nilai: acc.nilai + item.totalNilai,
+      }),
+      { bal: 0, kg: 0, nilai: 0 }
+    );
+  }, [trendPembelianData]);
+
+  // Custom Interactive Tooltip untuk Tren Pembelian
+  const CustomTrendTooltip = ({ active, payload }: any) => {
+    if (!active || !payload || !payload.length) return null;
+    const data = payload[0].payload;
+    if (!data) return null;
+
+    const pctBal = grandTotalTrend.bal > 0 ? ((data.totalBal / grandTotalTrend.bal) * 100).toFixed(1) : '0';
+    const pctKg = grandTotalTrend.kg > 0 ? ((data.totalKg / grandTotalTrend.kg) * 100).toFixed(1) : '0';
+    const pctNilai = grandTotalTrend.nilai > 0 ? ((data.totalNilai / grandTotalTrend.nilai) * 100).toFixed(1) : '0';
+
+    const avgBeratPerBal = data.totalBal > 0 ? (data.totalKg / data.totalBal).toFixed(1) : '0';
+    const avgHargaPerKg = data.totalKg > 0 ? Math.round(data.totalNilai / data.totalKg) : 0;
+    const avgNilaiPerTrx = data.countTrx > 0 ? Math.round(data.totalNilai / data.countTrx) : 0;
+
+    return (
+      <div className="bg-gray-900/95 text-white p-3.5 rounded-xs shadow-2xl border border-gray-700 text-xs backdrop-blur-md min-w-[260px] max-w-[320px] pointer-events-none">
+        {/* Header Tooltip */}
+        <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-gray-700/80">
+          <div className="flex items-center space-x-2">
+            <span className="p-1 bg-red-950/80 text-red-400 rounded-xs border border-red-800/60">
+              <Calendar className="w-3.5 h-3.5" />
+            </span>
+            <div>
+              <p className="font-bold text-sm text-gray-100 tracking-tight leading-tight">
+                {data.fullLabel || data.label}
+              </p>
+              <span className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">
+                Periode {periodeWaktu}
+              </span>
+            </div>
+          </div>
+          <span className="font-mono text-[10px] bg-gray-800 text-amber-300 font-bold px-2 py-0.5 rounded-xs border border-gray-700">
+            {data.countTrx} Transaksi
+          </span>
+        </div>
+
+        {/* Primary Metric Highlight Box */}
+        <div
+          className={`p-2.5 rounded-xs mb-2.5 border ${
+            trendMetric === 'nilai'
+              ? 'bg-blue-950/60 border-blue-800/80'
+              : trendMetric === 'tonase'
+              ? 'bg-emerald-950/60 border-emerald-800/80'
+              : 'bg-red-950/60 border-red-800/80'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-gray-300">
+              {trendMetric === 'nilai'
+                ? 'Total Modal Pembelian:'
+                : trendMetric === 'tonase'
+                ? 'Total Tonase Tembakau:'
+                : 'Volume Bal Masuk:'}
+            </span>
+            <span
+              className={`font-mono text-sm font-black ${
+                trendMetric === 'nilai'
+                  ? 'text-blue-300'
+                  : trendMetric === 'tonase'
+                  ? 'text-emerald-300'
+                  : 'text-red-300'
+              }`}
+            >
+              {trendMetric === 'nilai'
+                ? formatRupiah(data.totalNilai)
+                : trendMetric === 'tonase'
+                ? `${data.totalKg.toLocaleString('id-ID')} kg`
+                : `${data.totalBal.toLocaleString('id-ID')} Bal`}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-[10px] text-gray-400 mt-1">
+            <span>Kontribusi thd Total:</span>
+            <span className="font-mono font-bold text-gray-200">
+              {trendMetric === 'nilai' ? pctNilai : trendMetric === 'tonase' ? pctKg : pctBal}%
+            </span>
+          </div>
+        </div>
+
+        {/* Rincian Angka Lengkap */}
+        <div className="space-y-1.5 text-[11px]">
+          <div className="flex justify-between items-center text-gray-300">
+            <span className="flex items-center space-x-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />
+              <span>Fisik Bal:</span>
+            </span>
+            <span className="font-mono font-bold text-white">
+              {data.totalBal.toLocaleString('id-ID')} Bal <span className="text-[10px] text-gray-400 font-normal">({pctBal}%)</span>
+            </span>
+          </div>
+
+          <div className="flex justify-between items-center text-gray-300">
+            <span className="flex items-center space-x-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+              <span>Tonase Bersih:</span>
+            </span>
+            <span className="font-mono font-bold text-emerald-300">
+              {data.totalKg.toLocaleString('id-ID')} kg <span className="text-[10px] text-gray-400 font-normal">({(data.totalKg / 1000).toFixed(2)} Ton)</span>
+            </span>
+          </div>
+
+          <div className="flex justify-between items-center text-gray-300">
+            <span className="flex items-center space-x-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 inline-block" />
+              <span>Nilai Modal:</span>
+            </span>
+            <span className="font-mono font-bold text-blue-300">
+              {formatRupiah(data.totalNilai)}
+            </span>
+          </div>
+        </div>
+
+        {/* Rata-Rata Statistik Sekunder */}
+        <div className="mt-2.5 pt-2 border-t border-gray-800 grid grid-cols-2 gap-1.5 text-[10px]">
+          <div className="bg-gray-800/70 p-1.5 rounded-xs">
+            <p className="text-gray-400">Rata-rata/Bal</p>
+            <p className="font-mono font-bold text-gray-200 mt-0.5">{avgBeratPerBal} kg/bal</p>
+          </div>
+          <div className="bg-gray-800/70 p-1.5 rounded-xs">
+            <p className="text-gray-400">Tarif Rata-rata</p>
+            <p className="font-mono font-bold text-amber-300 mt-0.5">{formatRupiah(avgHargaPerKg)}/kg</p>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   // Export functions 
   const exportBukuKasPembelian = () => {
@@ -553,57 +789,221 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
 
       
 
-      {/* Visualisasi Recharts: Tren Pembelian Bulanan */}
+      {/* Visualisasi Recharts: Tren Pembelian dengan Filter Rentang Waktu */}
       {!isQCOnly && (
         <div className="bg-white p-4 border border-gray-200 shadow-xs">
-          <div className="flex items-center justify-between pb-3 mb-4 border-b border-gray-100">
+          {/* Header & Controls Toolbar */}
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 pb-3 mb-4 border-b border-gray-100">
             <div>
-              <h3 className="text-sm font-bold text-gray-900 tracking-tight">
-                Tren Total Bal Pembelian Bulanan
-              </h3>
+              <div className="flex items-center space-x-2">
+                <Activity className="w-5 h-5 text-[#b81d24]" />
+                <h3 className="text-sm font-bold text-gray-900 tracking-tight">
+                  Tren Pembelian Tembakau
+                </h3>
+                {trendPembelianData.length > 8 && (
+                  <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-xs font-medium">
+                    ↔ Geser horizontal ({trendPembelianData.length} data)
+                  </span>
+                )}
+              </div>
               <p className="text-[11px] text-gray-500 mt-0.5">
-                Jumlah bal masuk per bulan berdasarkan transaksi
+                Analisis tren {trendMetric === 'bal' ? 'volume bal' : trendMetric === 'tonase' ? 'tonase (kg)' : 'nilai modal (Rp)'} berdasarkan periode {periodeWaktu}
               </p>
             </div>
-            <Activity className="w-5 h-5 text-[#b81d24]" />
+
+            {/* Filter Tools: Periode, Metrik, dan Tahun */}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Filter Pilihan Periode Waktu */}
+              <div className="inline-flex bg-gray-100 p-0.5 rounded-xs border border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setPeriodeWaktu('mingguan')}
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-xs transition-colors ${
+                    periodeWaktu === 'mingguan'
+                      ? 'bg-white text-gray-900 shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="Tampilkan per Minggu"
+                >
+                  Mingguan
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPeriodeWaktu('bulanan')}
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-xs transition-colors ${
+                    periodeWaktu === 'bulanan'
+                      ? 'bg-white text-gray-900 shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="Tampilkan per Bulan"
+                >
+                  Bulanan
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPeriodeWaktu('kuartalan')}
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-xs transition-colors ${
+                    periodeWaktu === 'kuartalan'
+                      ? 'bg-white text-gray-900 shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="Tampilkan per Kuartal (Q1-Q4)"
+                >
+                  Kuartalan
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPeriodeWaktu('tahunan')}
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-xs transition-colors ${
+                    periodeWaktu === 'tahunan'
+                      ? 'bg-white text-gray-900 shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="Tampilkan per Tahun"
+                >
+                  Tahunan
+                </button>
+              </div>
+
+              {/* Filter Tahun */}
+              {availableYears.length > 0 && (
+                <div className="flex items-center">
+                  <select
+                    value={selectedTahun}
+                    onChange={(e) => setSelectedTahun(e.target.value)}
+                    className="text-xs bg-gray-50 border border-gray-200 text-gray-700 font-medium px-2 py-1 rounded-xs focus:ring-1 focus:ring-red-600 focus:outline-none"
+                    aria-label="Pilih Filter Tahun"
+                  >
+                    <option value="semua">Semua Tahun</option>
+                    {availableYears.map((yr) => (
+                      <option key={yr} value={yr}>
+                        Tahun {yr}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Metrik Pilihan Toggle */}
+              <div className="inline-flex bg-gray-100 p-0.5 rounded-xs border border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setTrendMetric('bal')}
+                  className={`px-2 py-1 text-[11px] font-semibold rounded-xs transition-colors ${
+                    trendMetric === 'bal'
+                      ? 'bg-red-700 text-white shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Bal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTrendMetric('tonase')}
+                  className={`px-2 py-1 text-[11px] font-semibold rounded-xs transition-colors ${
+                    trendMetric === 'tonase'
+                      ? 'bg-emerald-800 text-white shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Kg
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTrendMetric('nilai')}
+                  className={`px-2 py-1 text-[11px] font-semibold rounded-xs transition-colors ${
+                    trendMetric === 'nilai'
+                      ? 'bg-blue-800 text-white shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Rp
+                </button>
+              </div>
+            </div>
           </div>
-          {trendPembelianBulanan.length > 0 ? (
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={trendPembelianBulanan} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                  <XAxis 
-                    dataKey="month" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fontSize: 11, fill: '#6B7280' }} 
-                    dy={10}
-                  />
-                  <YAxis 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fontSize: 11, fill: '#6B7280' }}
-                    tickFormatter={(value) => `${value.toLocaleString('id-ID')}`}
-                    width={80}
-                  />
-                  <Tooltip
-                    cursor={{ fill: '#F3F4F6' }}
-                    contentStyle={{ borderRadius: '4px', border: '1px solid #E5E7EB', fontSize: '12px', fontWeight: 'bold' }}
-                    formatter={(value: number) => [`${value.toLocaleString('id-ID')} Bal`, 'Total Bal']}
-                  />
-                  <Bar 
-                    dataKey="totalBal" 
-                    fill="#b81d24" 
-                    radius={[4, 4, 0, 0]} 
-                    maxBarSize={60}
-                    animationDuration={1500}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+
+          {/* Sub-bar Total Ringkasan Periode Terpilih */}
+          <div className="flex flex-wrap items-center justify-between bg-gray-50/80 px-3 py-1.5 rounded-xs mb-3 text-xs border border-gray-100">
+            <span className="text-gray-600">
+              Periode Aktif: <strong className="text-gray-900 capitalize">{periodeWaktu}</strong> {selectedTahun !== 'semua' ? `(${selectedTahun})` : '(Semua Tahun)'} &bull; {trendPembelianData.length} rentang data
+            </span>
+            <div className="flex items-center space-x-3 font-mono text-[11px]">
+              <span className="text-gray-700">
+                Total Bal: <strong className="text-gray-900">{grandTotalTrend.bal.toLocaleString('id-ID')}</strong>
+              </span>
+              <span className="text-gray-300">|</span>
+              <span className="text-gray-700">
+                Tonase: <strong className="text-emerald-800">{grandTotalTrend.kg.toLocaleString('id-ID')} kg</strong>
+              </span>
+              <span className="text-gray-300">|</span>
+              <span className="text-gray-700">
+                Modal: <strong className="text-blue-800">{formatRupiah(grandTotalTrend.nilai)}</strong>
+              </span>
+            </div>
+          </div>
+
+          {trendPembelianData.length > 0 ? (
+            <div className="w-full overflow-x-auto overflow-y-hidden">
+              <div
+                className="h-64"
+                style={{
+                  minWidth: trendPembelianData.length > 8 ? `${Math.max(500, trendPembelianData.length * 52)}px` : '100%',
+                }}
+              >
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={trendPembelianData} margin={{ top: 10, right: 15, left: 10, bottom: trendPembelianData.length > 6 ? 28 : 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                    <XAxis 
+                      dataKey="label" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fontSize: 11, fill: '#6B7280' }} 
+                      interval={0}
+                      angle={trendPembelianData.length > 6 ? -25 : 0}
+                      textAnchor={trendPembelianData.length > 6 ? 'end' : 'middle'}
+                      height={trendPembelianData.length > 6 ? 40 : 25}
+                      tickFormatter={(val) => {
+                        const maxLen = trendPembelianData.length > 12 ? 7 : trendPembelianData.length > 8 ? 9 : 14;
+                        return truncateLabel(val, maxLen);
+                      }}
+                      dy={trendPembelianData.length > 6 ? 5 : 8}
+                    />
+                    <YAxis 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fontSize: 11, fill: '#6B7280' }}
+                      tickFormatter={(value) => {
+                        if (trendMetric === 'nilai') {
+                          if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}M`;
+                          return `${(value / 1_000_000).toFixed(0)}Jt`;
+                        }
+                        if (trendMetric === 'tonase') {
+                          if (value >= 1000) return `${(value / 1000).toFixed(1)}t`;
+                          return `${value}kg`;
+                        }
+                        return `${value.toLocaleString('id-ID')}`;
+                      }}
+                      width={80}
+                    />
+                    <Tooltip
+                      content={<CustomTrendTooltip />}
+                      cursor={{ fill: 'rgba(243, 244, 246, 0.7)' }}
+                    />
+                    <Bar 
+                      dataKey={trendMetric === 'nilai' ? 'totalNilai' : trendMetric === 'tonase' ? 'totalKg' : 'totalBal'} 
+                      fill={trendMetric === 'nilai' ? '#1d4ed8' : trendMetric === 'tonase' ? '#047857' : '#b81d24'} 
+                      radius={[4, 4, 0, 0]} 
+                      maxBarSize={56}
+                      animationDuration={1500}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           ) : (
             <div className="h-64 w-full flex items-center justify-center bg-gray-50 border border-dashed border-gray-200">
-              <span className="text-sm text-gray-500 font-medium">Belum ada data transaksi</span>
+              <span className="text-sm text-gray-500 font-medium">Belum ada data transaksi pada periode ini</span>
             </div>
           )}
         </div>

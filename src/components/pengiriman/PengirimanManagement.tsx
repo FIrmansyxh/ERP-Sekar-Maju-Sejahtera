@@ -10,6 +10,7 @@ import {
   X, 
   Info, 
   ArrowLeft, 
+  ArrowRight,
   CheckCircle2, 
   Filter, 
   CheckSquare, 
@@ -28,7 +29,8 @@ import {
   DollarSign,
   Trash2,
   Package,
-  Edit3
+  Edit3,
+  Layers
 } from 'lucide-react';
 import { 
   PengirimanBarang, 
@@ -45,7 +47,6 @@ import {
 import { loadHargaJualData, loadBatchSampleData } from '../../utils/storage';
 import { SuratJalanPrintModal } from './SuratJalanPrintModal';
 import { ConfirmModal } from '../common/ConfirmModal';
-import { Pagination } from '../common/Pagination';
 import { openPrintDocument } from '../../utils/openDedicatedPrint';
 import { formatNumber, formatRupiah, generateNoSuratJalanSimple } from '../../utils/formatters';
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
@@ -64,6 +65,7 @@ interface PengirimanManagementProps {
   onSaveNewPengiriman: (pengiriman: PengirimanBarang, updatedBarangIds: string[]) => void;
   onUpdatePengiriman?: (pengiriman: PengirimanBarang) => void;
   onDeletePengiriman?: (pengirimanId: string, revertedBarangs?: Barang[]) => void;
+  onNavigateToStatusBatch?: () => void;
 }
 
 export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
@@ -80,13 +82,11 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   onSaveNewPengiriman,
   onUpdatePengiriman,
   onDeletePengiriman,
+  onNavigateToStatusBatch,
 }) => {
   const activeHargaJualList = (hargaJualList && hargaJualList.length > 0) ? hargaJualList : loadHargaJualData();
 
-  // Page mode: default to 'create' (In-page Delivery Order Creation) as requested by user
-  const [viewMode, setViewMode] = useState<'list' | 'create'>('create');
   const [editingPengirimanId, setEditingPengirimanId] = useState<string | null>(null);
-  const [pengirimanToDelete, setPengirimanToDelete] = useState<string | null>(null);
   
   const [isBatchDropdownOpen, setIsBatchDropdownOpen] = useState(false);
   const [highlightedBatchIndex, setHighlightedBatchIndex] = useState(0);
@@ -105,12 +105,14 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-
-  // List View State
-  const [searchQuery, setSearchQuery] = useState('');
-  const [itemsPerPage, setItemsPerPage] = useState<number>(10);
-  const [currentPage, setCurrentPage] = useState<number>(1);
+  // Print & success notification state
   const [printingSuratJalan, setPrintingSuratJalan] = useState<PengirimanBarang | null>(null);
+  const [successNotification, setSuccessNotification] = useState<{
+    noSuratJalan: string;
+    totalBal: number;
+    totalBerat: number;
+    tujuan: string;
+  } | null>(null);
 
   // In-Page Create Delivery Order State
   const [sourceMode, setSourceMode] = useState<'sample_batch' | 'gudang_reguler'>('sample_batch');
@@ -314,7 +316,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   useEffect(() => {
     if (selectedBatchId) {
       handleSelectBatchForShipment(selectedBatchId);
-      setViewMode('create');
     }
   }, [selectedBatchId]);
 
@@ -616,9 +617,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
 
   // Barcode Scanner Listener
   useBarcodeScanner((scanned) => {
-    if (viewMode === 'create') {
-      handleProcessScan(scanned);
-    }
+    handleProcessScan(scanned);
   });
 
   // Available bal in warehouse (strictly status_stok === 'di_gudang' only)
@@ -922,30 +921,13 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   }, [sourceMode, isAllEligibleChecked, regulerManifestBalIds, selectedBalIds, tujuanBuyer]);
 
 
-  // List View Filtering
-  const filteredPengiriman = useMemo(() => {
-    return pengirimanList.filter((krm) => {
-      if (searchQuery.trim() === '') return true;
-      const q = searchQuery.toLowerCase().trim();
-      const matchNo = (krm.no_surat_jalan || '').toLowerCase().includes(q);
-      const matchTujuan = (krm.tujuan || '').toLowerCase().includes(q);
-      const matchDriver = (krm.driver_nama || '').toLowerCase().includes(q);
-      const matchPlat = (krm.plat_nomor || '').toLowerCase().includes(q);
-      const matchBatch = (krm.batch_sample_id_ref || '').toLowerCase().includes(q);
-      return matchNo || matchTujuan || matchDriver || matchPlat || matchBatch;
-    });
-  }, [pengirimanList, searchQuery]);
-
-  const paginatedPengiriman = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
-    return filteredPengiriman.slice(start, start + itemsPerPage);
-  }, [filteredPengiriman, currentPage, itemsPerPage]);
-
-  const handleOpenCreatePage = () => {
+  const handleResetForm = () => {
     const nextSeq = pengirimanList.length + 1;
     setNoSuratJalan(generateNoSuratJalanSimple(nextSeq));
     setTanggalKirim(new Date().toISOString().split('T')[0]);
     setTujuanBuyer('');
+    setDriverNama('');
+    setPlatNomor('');
     setSelectedBalIds([]);
     setRegulerManifestBalIds([]);
     setCustomKodeHargaMap({});
@@ -954,13 +936,10 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     setFilterPetani('all');
     setFilterSearchBal('');
     setErrorMessage('');
-
-    // Do not auto-populate batch code, leave blank initially
     setSelectedBatchSampleId('');
     setScanBatchId('');
     setSourceMode('sample_batch');
-
-    setViewMode('create');
+    setEditingPengirimanId(null);
   };
 
   
@@ -1074,45 +1053,78 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     
     setEditingPengirimanId(null);
     setIsConfirmOpen(false);
-    setTujuanBuyer('');
-    setViewMode('list');
     setPrintingSuratJalan(newPengiriman);
+    setSuccessNotification({
+      noSuratJalan: newPengiriman.no_surat_jalan,
+      totalBal: totalSelectedBal,
+      totalBerat: totalSelectedBerat,
+      tujuan: finalTujuan,
+    });
+    handleResetForm();
   };
 
   return (
     <div className="space-y-4 font-sans text-gray-800">
       
-      {/* ========================================================================= */}
-      {/* 1. VIEW MODE: CREATE DELIVERY ORDER IN-PAGE                                */}
-      {/* ========================================================================= */}
-      {viewMode === 'create' && (
-        <div className="space-y-4">
-          
-          {/* Header Bar */}
-          <div className="bg-white p-4 sm:p-5 border border-gray-300 rounded-sm shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-sm bg-[#b81d24] text-white flex items-center justify-center shadow-xs">
-                <Truck className="w-5 h-5" />
-              </div>
-              <div>
-                <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">
-                  Buat Surat Jalan & Pengiriman Muatan (Delivery Order)
-                </h1>
-                
-              </div>
-            </div>
+      {/* Header Bar */}
+      <div className="bg-white p-4 sm:p-5 border border-gray-300 rounded-sm shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 rounded-sm bg-[#b81d24] text-white flex items-center justify-center shadow-xs">
+            <Truck className="w-5 h-5" />
+          </div>
+          <div>
+            <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">
+              Pengiriman Reguler (Input No. Bal Muatan)
+            </h1>
+            <p className="text-xs text-gray-500">
+              Input nomor bal yang akan dikirimkan baik dari list sample yang disetujui maupun pengiriman langsung tanpa sample
+            </p>
+          </div>
+        </div>
 
-            <div className="flex items-center space-x-2">
-              <button
-                type="button"
-                onClick={() => setViewMode('list')}
-                className="px-3.5 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span>Kembali ke Daftar</span>
-              </button>
+        <div className="flex items-center space-x-2">
+        </div>
+      </div>
+
+      {/* Success Notification Banner */}
+      {successNotification && (
+        <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-sm shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-start space-x-3">
+            <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-emerald-900">
+                Surat Jalan {successNotification.noSuratJalan} Berhasil Diterbitkan!
+              </h4>
+              <p className="text-xs text-emerald-800">
+                Total <strong>{successNotification.totalBal} Bal</strong> ({formatNumber(successNotification.totalBerat, 1)} Kg) siap dikirim ke <strong>{successNotification.tujuan}</strong>.
+                Informasi status pengiriman & riwayat dapat dipantau langsung di menu <strong>Status & Detail Batch Pengiriman</strong>.
+              </p>
             </div>
           </div>
+          <div className="flex items-center space-x-2 shrink-0">
+            {onNavigateToStatusBatch && (
+              <button
+                type="button"
+                onClick={onNavigateToStatusBatch}
+                className="px-3 py-1.5 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-xs transition flex items-center space-x-1 cursor-pointer shadow-xs"
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Buka Status Batch →</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setSuccessNotification(null)}
+              className="p-1 text-emerald-700 hover:text-emerald-900 cursor-pointer"
+              title="Tutup pesan"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
           {/* Source Mode Toggle Banner */}
           <div className="bg-white p-4 border border-gray-300 rounded-sm shadow-xs space-y-3">
@@ -2147,14 +2159,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
 
               <button
                 type="button"
-                onClick={() => setViewMode('list')}
-                className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-sm transition cursor-pointer"
-              >
-                Lihat Riwayat DO
-              </button>
-
-              <button
-                type="button"
                 disabled={!canSubmitShipment}
                 onClick={handleSubmitShipment}
                 className="px-5 py-2 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#a0181e] disabled:opacity-40 disabled:cursor-not-allowed rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-md"
@@ -2165,291 +2169,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
               </button>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* ========================================================================= */}
-      {/* 2. VIEW MODE: DELIVERY ORDER LIST & PRINT HISTORY                          */}
-      {/* ========================================================================= */}
-      {viewMode === 'list' && (
-        <div className="space-y-4">
-          
-          {/* Header Banner */}
-          <div className="bg-white p-4 sm:p-5 border border-gray-300 rounded-sm shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center space-x-2.5">
-                <div className="w-9 h-9 rounded-sm bg-[#b81d24] text-white flex items-center justify-center shadow-xs">
-                  <Truck className="w-5 h-5" />
-                </div>
-                <div>
-                  <h1 className="text-lg font-bold text-gray-900 tracking-tight">
-                    Surat Jalan & Pengiriman Tembakau (Delivery Order)
-                  </h1>
-                  
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={handleOpenCreatePage}
-                className="px-4 py-2 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#a0181e] rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Buat Pengiriman & Surat Jalan Baru</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Quick Metrics */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="bg-white p-3.5 border border-gray-300 rounded-sm shadow-xs">
-              <div className="text-[11px] font-medium text-gray-500">Total Pengiriman (DO)</div>
-              <div className="text-xl font-bold text-gray-900 mt-0.5">{pengirimanList.length} Surat Jalan</div>
-              <div className="text-[10px] text-gray-400">Terdokumentasi</div>
-            </div>
-
-            <div className="bg-white p-3.5 border border-gray-300 rounded-sm shadow-xs">
-              <div className="text-[11px] font-medium text-gray-500">Total Bal Terdistribusi</div>
-              <div className="text-xl font-bold text-gray-900 mt-0.5">
-                {pengirimanList.reduce((sum, p) => sum + (p.total_bal || 0), 0)} Bal
-              </div>
-              <div className="text-[10px] text-gray-400">Keluar Gudang</div>
-            </div>
-
-            <div className="bg-white p-3.5 border border-gray-300 rounded-sm shadow-xs">
-              <div className="text-[11px] font-medium text-gray-500">Total Tonase Terkirim</div>
-              <div className="text-xl font-bold text-gray-900 mt-0.5">
-                {formatNumber(pengirimanList.reduce((sum, p) => sum + (p.total_berat_kg || 0), 0) / 1000, 2)} Ton
-              </div>
-              <div className="text-[10px] text-gray-400">
-                {formatNumber(pengirimanList.reduce((sum, p) => sum + (p.total_berat_kg || 0), 0), 1)} Kg
-              </div>
-            </div>
-
-            <div className="bg-[#b81d24] text-white p-3.5 border border-[#b81d24] rounded-sm shadow-xs">
-              <div className="text-[11px] font-medium text-gray-300">Estimasi Nilai DO</div>
-              <div className="text-base font-bold text-emerald-400 mt-0.5 truncate font-mono">
-                {formatRupiah(pengirimanList.reduce((sum, p) => sum + (p.total_nilai_deal || (p.total_berat_kg * 125000)), 0))}
-              </div>
-              <div className="text-[10px] text-gray-400">Transaksi Terbit</div>
-            </div>
-          </div>
-
-          {/* Table Container */}
-          <div className="bg-white border border-gray-300 rounded-sm shadow-xs p-4 sm:p-5 space-y-4">
-            
-            {/* Filter Toolbar */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-200 pb-3">
-              <div className="w-full sm:w-80 md:w-96">
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-gray-400">
-                    <Search className="w-4 h-4" />
-                  </div>
-                  <input
-                    id="search-pengiriman-do-input"
-                    type="text"
-                    placeholder="Cari No. Surat Jalan / Tujuan / Driver / Batch..."
-                    value={searchQuery}
-                    onChange={(e) => {
-                      setSearchQuery(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-300 rounded-sm pl-8 pr-8 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-[#b81d24] focus:ring-1 focus:ring-[#b81d24] transition shadow-2xs"
-                  />
-                  {searchQuery && (
-                    <button
-                      type="button"
-                      id="btn-clear-search-pengiriman"
-                      onClick={() => {
-                        setSearchQuery('');
-                        setCurrentPage(1);
-                      }}
-                      className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
-                      title="Hapus pencarian"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="text-xs text-gray-500 font-medium">
-                Menampilkan <strong className="text-gray-900">{paginatedPengiriman.length}</strong> dari <strong className="text-gray-900">{filteredPengiriman.length}</strong> Surat Jalan
-              </div>
-            </div>
-
-            {/* Table */}
-            <div className="border border-gray-300 rounded-xs overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead className="bg-gray-100 border-b border-gray-300 text-gray-700 font-bold">
-                  <tr>
-                    <th className="p-2.5">No. Surat Jalan & Kontrak</th>
-                    <th className="p-2.5">Tujuan Pabrik / Buyer</th>
-                    <th className="p-2.5 text-center w-20">Total Bal</th>
-                    <th className="p-2.5 text-right w-24">Tonase (Kg)</th>
-                    <th className="p-2.5 text-right w-32">Nilai Transaksi</th>
-                    <th className="p-2.5">Driver & Truk</th>
-                    <th className="p-2.5 text-center w-28">Status</th>
-                    <th className="p-2.5 text-center w-28">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {paginatedPengiriman.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="p-8 text-center text-gray-500">
-                        Tidak ada catatan pengiriman surat jalan yang cocok dengan pencarian.
-                      </td>
-                    </tr>
-                  ) : (
-                    paginatedPengiriman.map((krm) => {
-                      const nilaiDeal = krm.total_nilai_deal || (krm.total_berat_kg * 125000);
-
-                      return (
-                        <tr key={krm.pengiriman_id} className="hover:bg-gray-50 transition">
-                          <td className="p-2.5">
-                            <div className="font-mono font-bold text-gray-900">{krm.no_surat_jalan}</div>
-                            <div className="text-[10px] text-gray-500 font-mono">
-                              {krm.nomor_kontrak || '-'} • Kirim: {krm.tanggal_kirim}
-                            </div>
-                            {krm.batch_sample_id_ref && (
-                              <span className="inline-block mt-0.5 px-1.5 py-0.2 text-[9px] font-bold bg-slate-100 text-slate-800 border border-slate-200 rounded-xs font-mono">
-                                Ref Sample: {krm.batch_sample_id_ref}
-                              </span>
-                            )}
-                          </td>
-                          <td className="p-2.5">
-                            <div className="font-bold text-gray-800">{krm.tujuan}</div>
-                            <div className="text-[10px] text-gray-400">Petugas: {krm.petugas || '-'}</div>
-                          </td>
-                          <td className="p-2.5 text-center font-bold font-mono text-gray-900">
-                            {krm.total_bal} Bal
-                          </td>
-                          <td className="p-2.5 text-right font-mono font-semibold">
-                            {formatNumber(krm.total_berat_kg, 1)} Kg
-                          </td>
-                          <td className="p-2.5 text-right font-mono font-bold text-emerald-800">
-                            {formatRupiah(nilaiDeal)}
-                          </td>
-                          <td className="p-2.5 text-gray-600 text-[11px]">
-                            <div><strong>{krm.driver_nama || '-'}</strong></div>
-                            <div className="text-gray-400 font-mono">{krm.plat_nomor || '-'}</div>
-                          </td>
-                          <td className="p-2.5 text-center">
-                            {(() => {
-                              const status = krm.status || 'dikirim';
-                              const statusConfig: Record<string, { label: string; bg: string; text: string }> = {
-                                dimuat: { label: 'Dimuat', bg: 'bg-amber-100', text: 'text-amber-800' },
-                                dalam_perjalanan: { label: 'Perjalanan', bg: 'bg-blue-100', text: 'text-blue-800' },
-                                diterima: { label: 'Diterima', bg: 'bg-indigo-100', text: 'text-indigo-800' },
-                                dikirim: { label: 'Terkirim DO', bg: 'bg-emerald-100', text: 'text-emerald-800' },
-                                selesai: { label: 'Selesai', bg: 'bg-emerald-200', text: 'text-emerald-900' },
-                              };
-                              const cfg = statusConfig[status] || { label: status, bg: 'bg-slate-100', text: 'text-slate-800' };
-                              return (
-                                <div className="inline-flex flex-col items-center gap-1">
-                                  <span className={`px-2 py-0.5 text-[10px] font-bold rounded-xs ${cfg.bg} ${cfg.text}`}>
-                                    {cfg.label}
-                                  </span>
-                                  {onUpdatePengiriman && (
-                                    <select
-                                      value={status}
-                                      onChange={(e) => onUpdatePengiriman({ ...krm, status: e.target.value as any })}
-                                      className="text-[9px] bg-white border border-slate-200 rounded px-1 py-0.5 text-slate-700 cursor-pointer focus:outline-none"
-                                      title="Perbarui Status Logistik DO"
-                                    >
-                                      <option value="dimuat">Dimuat</option>
-                                      <option value="dikirim">Terkirim DO</option>
-                                      <option value="dalam_perjalanan">Perjalanan</option>
-                                      <option value="diterima">Diterima</option>
-                                      <option value="selesai">Selesai</option>
-                                    </select>
-                                  )}
-                                </div>
-                              );
-                            })()}
-                          </td>
-                          <td className="p-2.5 text-center">
-                            <div className="flex items-center justify-center space-x-1.5">
-                              <button
-                                type="button"
-                                onClick={() => openPrintDocument('surat_jalan', krm.pengiriman_id)}
-                                className="px-2.5 py-1 text-[11px] font-bold text-white bg-[#b81d24] hover:bg-[#9e161c] rounded-xs flex items-center space-x-1 cursor-pointer shadow-2xs"
-                                title="Buka Halaman Cetak Surat Jalan Resmi (Download PDF / Cetak ke Printer)"
-                              >
-                                <Printer className="w-3.5 h-3.5" />
-                                <span>Cetak DO</span>
-                              </button>
-                              
-                              {(userRole === 'superadmin' || userRole === 'admin_pengiriman' || userRole === 'kepala_gudang') && (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setEditingPengirimanId(krm.pengiriman_id);
-                                      setNoSuratJalan(krm.no_surat_jalan);
-                                      setTujuanBuyer(krm.tujuan);
-                                      setTanggalKirim(krm.tanggal_kirim);
-                                      setDriverNama(krm.driver_nama || '');
-                                      setPlatNomor(krm.plat_nomor || '');
-                                      setNoKontrak(krm.nomor_kontrak || '');
-                                      setSourceMode(krm.batch_sample_id_ref ? 'sample_batch' : 'gudang_reguler');
-                                      if (krm.batch_sample_id_ref) {
-                                        setSelectedBatchSampleId(krm.batch_sample_id_ref);
-                                      }
-                                      // Note: To fully edit items, we must load krm.barang_ids into selectedBalIds
-                                      // and their respective objects into selectedBalObjects.
-                                      const relatedBarangs = barangList.filter(b => krm.barang_ids.includes(b.barang_id));
-                                      setSelectedBalIds(relatedBarangs.map(b => b.barang_id));
-                                      setRegulerManifestBalIds(relatedBarangs.map(b => b.barang_id));
-                                      
-                                      if (krm.kode_harga_jual_map) setCustomKodeHargaMap(krm.kode_harga_jual_map);
-                                      
-                                      setViewMode('create');
-                                    }}
-                                    className="p-1 text-gray-500 hover:text-[#b81d24] hover:bg-rose-50 rounded-xs transition cursor-pointer"
-                                    title="Edit Pengiriman DO"
-                                  >
-                                    <Edit3 className="w-4 h-4" />
-                                  </button>
-                                  
-                                  <button
-                                    type="button"
-                                    onClick={() => setPengirimanToDelete(krm.pengiriman_id)}
-                                    className="p-1 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xs transition cursor-pointer"
-                                    title="Hapus Pengiriman DO"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Pagination */}
-            {filteredPengiriman.length > itemsPerPage && (
-              <Pagination
-                currentPage={currentPage}
-                totalItems={filteredPengiriman.length}
-                itemsPerPage={itemsPerPage}
-                onPageChange={(p) => setCurrentPage(p)}
-                onItemsPerPageChange={(limit) => {
-                  setItemsPerPage(limit);
-                  setCurrentPage(1);
-                }}
-              />
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Surat Jalan Printable PDF Document Modal */}
       <SuratJalanPrintModal
@@ -2459,32 +2179,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
         barangList={barangList}
         tabelHarga={tabelHarga}
         transaksiList={transaksiList}
-      />
-
-      {/* Confirm Delete DO Modal */}
-      <ConfirmModal
-        isOpen={!!pengirimanToDelete}
-        title="Konfirmasi Hapus Pengiriman DO"
-        message="Apakah Anda yakin ingin menghapus surat jalan pengiriman ini? Bal tembakau yang terikat akan dikembalikan ke status Gudang."
-        confirmText="Ya, Hapus"
-        cancelText="Batal"
-        variant="danger"
-        onConfirm={() => {
-          if (pengirimanToDelete && onDeletePengiriman) {
-            const pToDel = pengirimanList.find(p => p.pengiriman_id === pengirimanToDelete);
-            if (pToDel) {
-              const revertedBarangs = barangList
-                .filter(b => pToDel.barang_ids.includes(b.barang_id))
-                .map(b => ({ ...b, status_stok: 'di_gudang' as const }));
-              onDeletePengiriman(pengirimanToDelete, revertedBarangs);
-            } else {
-              onDeletePengiriman(pengirimanToDelete);
-            }
-          }
-          setPengirimanToDelete(null);
-        }}
-        onClose={() => setPengirimanToDelete(null)}
-        onCancel={() => setPengirimanToDelete(null)}
       />
 
       {/* Confirm Save Modal */}

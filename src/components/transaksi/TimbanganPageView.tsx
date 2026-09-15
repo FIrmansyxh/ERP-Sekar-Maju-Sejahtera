@@ -20,7 +20,11 @@ import {
   Lock,
   Package,
   ChevronDown,
-  Save
+  Save,
+  Search,
+  Scan,
+  X,
+  Info
 } from 'lucide-react';
 import { TransaksiPembelian, Petani, TabelHarga, Barang, TransaksiItemBal, UserRole, User as UserType } from '../../types';
 import { formatRupiah, formatNoKupon, formatDateHariBulanTahun, hitungPotonganTaraKg } from '../../utils/formatters';
@@ -195,9 +199,8 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     setLokasiBlok(foundItem.lokasi_simpan || 'Blok A (Utara)');
     
     const isAlreadyWeighed = (foundItem.berat_kg || 0) > 0;
-    const sourceLabel = source === 'scanner' ? '[SCAN BARCODE]' : '[PILIH BAL]';
     setScanFeedback({
-      text: `✓ ${sourceLabel} Bal "${foundItem.no_bal}" (Grade ${foundItem.kode_grade}) terbuka! Kupon "${foundTx.no_kupon}" (${foundTx.nama_petani})${isAlreadyWeighed ? ` • [Netto: ${foundItem.berat_kg} Kg - TERKUNCI]` : ' • [Langkah 2: Masukkan Berat Manual]'}`,
+      text: `Bal "${foundItem.no_bal}" (Grade ${foundItem.kode_grade}) dipilih pada Kupon ${foundTx.no_kupon} • ${foundTx.nama_petani}.${isAlreadyWeighed ? ` Bobot terkunci: ${foundItem.berat_kg} kg.` : ' Silakan masukkan nilai berat timbangan.'}`,
       isError: false,
     });
 
@@ -296,7 +299,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
         // They typed a Kupon. Just change Kupon!
         handleManualChangeKupon(matchedKupon.transaksi_id);
         setScannedBarcode(''); // Clear it because it was a Kupon
-        setScanFeedback({ text: `Memilih Kupon ${matchedKupon.no_kupon}...`, isError: false });
+        setScanFeedback({ text: `Kupon ${matchedKupon.no_kupon} aktif. Menampilkan daftar bal antrian.`, isError: false });
         return; // Done!
       }
     }
@@ -307,7 +310,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
       // TIDAK ADA / TIDAK SESUAI: Form tetap terisi dengan nomor yang di-scan, dropdown ditutup, beri info jelas
       setIsDropdownOpen(false);
       setScanFeedback({
-        text: `⚠️ No Bal "${q}" Tidak Ditemukan! Nomor bal ini belum diinput di Meja Sortir atau tidak terdaftar dalam antrian transaksi manapun.`,
+        text: `Nomor bal "${q}" tidak ditemukan dalam antrian timbang aktif. Pastikan nomor bal sudah melalui proses sortir.`,
         isError: true,
       });
       barcodeScannerRef.current?.focus();
@@ -373,7 +376,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     }
     const isWeighed = (item.berat_kg || 0) > 0;
     setScanFeedback({ 
-      text: `Memilih Bal "${item.no_bal}" (Grade ${item.kode_grade})${isWeighed ? ` • [Netto: ${item.berat_kg} Kg - TERKUNCI]` : ' • [Langkah 2: Masukkan Berat Manual]'}`, 
+      text: `Bal "${item.no_bal}" (Grade ${item.kode_grade}) dipilih.${isWeighed ? ` Bobot tersimpan: ${item.berat_kg} kg.` : ' Siap untuk input bobot.'}`, 
       isError: false 
     });
     setTimeout(() => {
@@ -386,17 +389,22 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
 
   // Toggle Ganti Tikar for active bal
   const handleToggleGantiTikar = (itemId: string) => {
+    let nextGanti = false;
     setWorkingItems((prev) =>
       prev.map((it) => {
         if (it.item_id === itemId) {
+          nextGanti = !it.ganti_tikar;
           return {
             ...it,
-            ganti_tikar: !it.ganti_tikar,
+            ganti_tikar: nextGanti,
           };
         }
         return it;
       })
     );
+    if (itemId === activeItemId) {
+      setPotTikarInput(nextGanti ? 75000 : '');
+    }
   };
 
   // Matching bals across all transactions for dynamic autocomplete dropdown
@@ -556,12 +564,32 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     liveTara = Math.max(0, Number((liveBruto - liveNetto).toFixed(1)));
   }
 
-  const livePotTikar = isGantiTikarActive ? (typeof potTikarInput === 'number' ? potTikarInput : 0) : 0;
+  const livePotTikar = isGantiTikarActive ? (typeof potTikarInput === 'number' ? potTikarInput : 75000) : 0;
   const livePotKuli = 7000;
   const livePotTali = 3000;
   const livePotTotal = livePotKuli + livePotTali + livePotTikar;
   const liveTotalKotor = Math.round(liveNetto * (activeBalItem?.harga_per_kg || 0));
   const liveSubtotalBersih = Math.round(Math.max(0, liveTotalKotor - livePotTotal));
+
+  // Validasi Kapasitas Standar Grade SB: Maksimal 50.0 Kg
+  const isGradeSB = Boolean(
+    (activeBalItem?.kode_grade && activeBalItem.kode_grade.toUpperCase().includes('SB')) ||
+    (activeBalItem?.no_bal && activeBalItem.no_bal.toUpperCase().startsWith('SB'))
+  );
+  const isOverCapacitySB = isGradeSB && (liveBruto > 50 || liveNetto > 50);
+
+  const handleCancelWeightDueToSB = () => {
+    setBeratBrutoInput('');
+    setBeratNettoInput('');
+    setIsNettoManual(false);
+    setScanFeedback({
+      text: 'Nilai timbangan di-reset. Silakan sesuaikan kuantitas tembakau fisik bal (maksimal 50,0 kg) sebelum menimbang ulang.',
+      isError: false,
+    });
+    setTimeout(() => {
+      beratBrutoInputRef.current?.focus();
+    }, 100);
+  };
 
   // Save weighing for active bal
   const handleApplyWeightForActiveBal = () => {
@@ -575,6 +603,16 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     if (liveBruto <= 0) {
       setScanFeedback({ text: 'Masukkan berat bruto (kotor) lebih dari 0 kg!', isError: true });
       beratBrutoInputRef.current?.focus();
+      return;
+    }
+
+    // Jika melebihi kapasitas standar Grade SB (> 50kg), batalkan penimbangan
+    if (isOverCapacitySB) {
+      const measuredWeight = Math.max(liveBruto, liveNetto);
+      setScanFeedback({
+        text: `Penimbangan ditolak: Bobot bal Grade SB (${measuredWeight} kg) melebihi batas kapasitas standar 50,0 kg. Kurangi isi tembakau fisik sebelum melanjutkan.`,
+        isError: true,
+      });
       return;
     }
 
@@ -678,12 +716,12 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
 
     if (allItemsWeighed) {
       setScanFeedback({
-        text: `🎉 Semua ${updatedItems.length} bal pada Kupon "${currentTx.no_kupon}" tuntas ditimbang (${totalNettoKg} Kg Netto)! Bal "${activeBalItem.no_bal}" tersimpan & TERKUNCI. Siap scan kupon/bal berikutnya.`,
+        text: `Seluruh bal (${updatedItems.length} bal) pada Kupon ${currentTx.no_kupon} selesai ditimbang (${totalNettoKg} kg Netto). Bal "${activeBalItem.no_bal}" tersimpan.`,
         isError: false,
       });
     } else {
       setScanFeedback({
-        text: `✓ Bal "${activeBalItem.no_bal}" (${liveNetto} Kg Netto) berhasil disimpan & TERKUNCI. Siap scan bal berikutnya.`,
+        text: `Bal "${activeBalItem.no_bal}" berhasil disimpan (${liveNetto} kg Netto). Siap memindai bal berikutnya.`,
         isError: false,
       });
     }
@@ -753,6 +791,15 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
       }
 
       // Input manual manusia yang sah
+      if (isOverCapacitySB) {
+        const measuredWeight = Math.max(liveBruto, liveNetto);
+        setScanFeedback({
+          text: `Penimbangan ditolak: Bobot bal Grade SB (${measuredWeight} kg) melebihi batas kapasitas standar 50,0 kg. Kurangi isi tembakau fisik sebelum melanjutkan.`,
+          isError: true,
+        });
+        return;
+      }
+
       weightKeyBufferRef.current = { chars: '', lastTime: 0, isBurst: false };
       handleApplyWeightForActiveBal();
     }
@@ -823,7 +870,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
       onSaveTransaksi(updatedTx, []);
     }
     setScanFeedback({
-      text: `🔓 Kunci Bal "${item.no_bal}" dibuka. Berat bruto ${existingBruto > 0 ? `(${existingBruto} Kg) ` : ''}siap diedit atau ditimpa, lalu tekan Enter / Simpan.`,
+      text: `Kunci bal "${item.no_bal}" berhasil dibuka. Bobot bruto ${existingBruto > 0 ? `(${existingBruto} kg) ` : ''}siap diedit atau diperbarui pada form.`,
       isError: false,
     });
     setSaveSuccessMsg(null);
@@ -903,82 +950,96 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
           {/* Scanner Box */}
           <div className="bg-white border border-gray-200 p-4 shadow-2xs rounded-sm space-y-3">
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2 text-gray-800">
-                <Layers className="w-4 h-4 text-gray-700" />
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-700">
-                  Scan / Cari No Bal / No. Kupon
+              <div className="flex items-center space-x-2">
+                <Scan className="w-4 h-4 text-gray-700" />
+                <h3 className="text-xs font-bold text-gray-900 tracking-tight">
+                  Pencarian Bal & Kupon
                 </h3>
               </div>
-              <span className="text-[10px] text-slate-400 font-mono">
-                Auto-Buka
+              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-xs font-mono">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                Scanner Siap
               </span>
             </div>
 
-            <form onSubmit={handleScanBarcode} className="space-y-2 relative">
-              <div className="relative">
-                <input
-                  ref={barcodeScannerRef}
-                  type="text"
-                  value={scannedBarcode}
-                  onChange={(e) => {
-                    setScannedBarcode(e.target.value);
-                    setIsDropdownOpen(true);
-                    setHighlightedIndex(-1);
-                  }}
-                  onFocus={() => {
-                    if (scannedBarcode.trim().length >= 1) {
+            <form onSubmit={handleScanBarcode} className="relative">
+              <div className="flex rounded-sm shadow-2xs">
+                <div className="relative flex-1">
+                  <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-gray-400">
+                    <Search className="w-3.5 h-3.5" />
+                  </div>
+                  <input
+                    ref={barcodeScannerRef}
+                    type="text"
+                    value={scannedBarcode}
+                    onChange={(e) => {
+                      setScannedBarcode(e.target.value);
                       setIsDropdownOpen(true);
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'ArrowDown') {
-                      e.preventDefault();
-                      if (balSuggestions.length > 0) {
-                        setIsDropdownOpen(true);
-                        setHighlightedIndex((prev) => (prev + 1) % balSuggestions.length);
-                      }
-                    } else if (e.key === 'ArrowUp') {
-                      e.preventDefault();
-                      if (balSuggestions.length > 0) {
-                        setIsDropdownOpen(true);
-                        setHighlightedIndex((prev) => (prev <= 0 ? balSuggestions.length - 1 : prev - 1));
-                      }
-                    } else if (e.key === 'Enter') {
-                      if (isDropdownOpen && highlightedIndex >= 0 && highlightedIndex < balSuggestions.length) {
-                        e.preventDefault();
-                        const chosen = balSuggestions[highlightedIndex];
-                        selectBalAndOpen(chosen.tx, chosen.item, 'manual');
-                      } else if (isDropdownOpen && balSuggestions.length > 0) {
-                        e.preventDefault();
-                        const chosen = balSuggestions[0];
-                        selectBalAndOpen(chosen.tx, chosen.item, 'manual');
-                      }
-                    } else if (e.key === 'Escape') {
-                      setIsDropdownOpen(false);
-                    }
-                  }}
-                  placeholder="Ketik No Bal / No. Kupon, atau Scan Barcode..."
-                  className={`w-full bg-white border rounded-sm pl-3 pr-8 py-2 text-xs font-mono font-semibold text-gray-900 focus:outline-none focus:ring-1 transition ${
-                    scanFeedback?.isError
-                      ? 'border-rose-300 focus:border-rose-600 focus:ring-rose-600 bg-rose-50/20'
-                      : 'border-gray-300 focus:border-slate-800 focus:ring-slate-800'
-                  } placeholder:font-sans placeholder:font-normal placeholder:text-slate-400`}
-                />
-                {scannedBarcode && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setScannedBarcode('');
-                      setIsDropdownOpen(false);
-                      setScanFeedback(null);
-                      barcodeScannerRef.current?.focus();
+                      setHighlightedIndex(-1);
                     }}
-                    className="absolute right-2 top-2 text-slate-400 hover:text-gray-600 cursor-pointer text-xs"
-                    title="Hapus input"
-                  >
-                    ✕
-                  </button>
-                )}
+                    onFocus={() => {
+                      if (scannedBarcode.trim().length >= 1) {
+                        setIsDropdownOpen(true);
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        if (balSuggestions.length > 0) {
+                          setIsDropdownOpen(true);
+                          setHighlightedIndex((prev) => (prev + 1) % balSuggestions.length);
+                        }
+                      } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        if (balSuggestions.length > 0) {
+                          setIsDropdownOpen(true);
+                          setHighlightedIndex((prev) => (prev <= 0 ? balSuggestions.length - 1 : prev - 1));
+                        }
+                      } else if (e.key === 'Enter') {
+                        if (isDropdownOpen && highlightedIndex >= 0 && highlightedIndex < balSuggestions.length) {
+                          e.preventDefault();
+                          const chosen = balSuggestions[highlightedIndex];
+                          selectBalAndOpen(chosen.tx, chosen.item, 'manual');
+                        } else if (isDropdownOpen && balSuggestions.length > 0) {
+                          e.preventDefault();
+                          const chosen = balSuggestions[0];
+                          selectBalAndOpen(chosen.tx, chosen.item, 'manual');
+                        }
+                      } else if (e.key === 'Escape') {
+                        setIsDropdownOpen(false);
+                      }
+                    }}
+                    placeholder="Ketik nomor bal, kupon, atau scan barcode..."
+                    className={`w-full bg-white border border-r-0 rounded-l-sm pl-8 pr-7 py-2 text-xs font-mono font-semibold text-gray-900 focus:outline-none focus:ring-1 transition ${
+                      scanFeedback?.isError
+                        ? 'border-red-300 focus:border-red-500 focus:ring-red-500 bg-red-50/20'
+                        : 'border-gray-300 focus:border-gray-800 focus:ring-gray-800'
+                    } placeholder:font-sans placeholder:font-normal placeholder:text-gray-400`}
+                  />
+                  {scannedBarcode && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setScannedBarcode('');
+                        setIsDropdownOpen(false);
+                        setScanFeedback(null);
+                        barcodeScannerRef.current?.focus();
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer p-0.5"
+                      title="Hapus input"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+                <button
+                  type="submit"
+                  className="px-3.5 py-2 bg-[#b81d24] hover:bg-[#9e161c] text-white text-xs font-semibold rounded-r-sm transition-colors cursor-pointer shrink-0 inline-flex items-center space-x-1.5 shadow-2xs"
+                  title="Cari atau Buka Data"
+                >
+                  <Search className="w-3.5 h-3.5" />
+                  <span>Cari</span>
+                </button>
               </div>
 
               {/* Autocomplete Dropdown List for Cross-Kupon Instant Match */}
@@ -1066,29 +1127,49 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
               {isDropdownOpen && scannedBarcode.trim().length >= 2 && balSuggestions.length === 0 && (
                 <div
                   ref={dropdownRef}
-                  className="absolute left-0 right-0 top-full mt-1 z-30 bg-white border border-rose-200 p-2.5 text-xs text-rose-700 rounded-sm shadow-md"
+                  className="absolute left-0 right-0 top-full mt-1 z-30 bg-white border border-red-200 p-2.5 text-xs text-red-700 rounded-sm shadow-md"
                 >
                   <p className="font-medium text-[11px]">
                     Tidak ada nomor bal yang cocok dengan <span className="font-mono font-bold">"{scannedBarcode}"</span>.
                   </p>
                 </div>
               )}
-
-              <button
-                type="submit"
-                className="w-full py-2 bg-[#b81d24] hover:bg-[#b81d24] text-white font-medium text-xs rounded-sm transition cursor-pointer shadow-2xs"
-              >
-                Cari / Buka Data
-              </button>
             </form>
 
-            {scanFeedback && (
-              <div className={`p-2.5 rounded-sm text-xs font-medium ${
-                scanFeedback.isError ? 'bg-rose-50 text-rose-800 border border-rose-200' : 'bg-[#f8f9fa] text-gray-800 border border-gray-200'
-              }`}>
-                {scanFeedback.text}
-              </div>
-            )}
+            {scanFeedback && (() => {
+              const isError = scanFeedback.isError;
+              const cleanText = scanFeedback.text.replace(/^[🔓🎉✓⚠️⛔]\s*/, '');
+              const lower = cleanText.toLowerCase();
+              const isUnlock = lower.includes('dibuka') || lower.includes('buka kunci');
+              const isSuccess = lower.includes('selesai') || lower.includes('tersimpan') || lower.includes('berhasil');
+
+              let containerClass = 'bg-slate-50 border-gray-200 text-gray-800';
+              let Icon = Info;
+              let iconClass = 'text-gray-500';
+
+              if (isError) {
+                containerClass = 'bg-red-50/70 border-red-200 text-red-900';
+                Icon = AlertCircle;
+                iconClass = 'text-red-600';
+              } else if (isUnlock) {
+                containerClass = 'bg-amber-50/70 border-amber-200 text-amber-950';
+                Icon = Unlock;
+                iconClass = 'text-amber-600';
+              } else if (isSuccess) {
+                containerClass = 'bg-emerald-50/70 border-emerald-200 text-emerald-950';
+                Icon = CheckCircle2;
+                iconClass = 'text-emerald-600';
+              }
+
+              return (
+                <div className={`p-2.5 rounded-xs border text-xs flex items-start space-x-2 animate-in fade-in transition-all ${containerClass}`}>
+                  <Icon className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${iconClass}`} />
+                  <div className="flex-1 text-[11px] leading-relaxed font-normal">
+                    {cleanText}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Kupon Batch Selector */}
@@ -1288,6 +1369,66 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
 
               {/* Main Workspace - Compact, Structured, Matching System Theme */}
               <div className="p-4 sm:p-5 space-y-4">
+
+                {/* Real-time Warning: Kapasitas Standar Grade SB */}
+                {isOverCapacitySB && (
+                  <div className="bg-white border-l-4 border-l-red-600 border-y border-r border-gray-200 rounded-r-xs p-4 shadow-2xs animate-in fade-in">
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                      <div className="flex items-start space-x-3">
+                        <div className="p-1.5 bg-red-50 text-red-700 rounded-xs shrink-0 mt-0.5 border border-red-100">
+                          <AlertTriangle className="w-4 h-4" />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h4 className="text-xs font-bold text-gray-900 tracking-tight">
+                              Batas Kapasitas Standar Terlampaui
+                            </h4>
+                            <span className="text-[10px] font-mono font-semibold px-2 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded-xs">
+                              Grade SB Maks. 50,0 kg
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-600 leading-relaxed">
+                            Bobot terukur sebesar{' '}
+                            <span className="font-semibold text-gray-900 font-mono">{liveBruto} kg Bruto</span>{' '}
+                            (<span className="font-mono text-gray-700">{liveNetto} kg Netto</span>) melebihi batas standar maksimal untuk Grade SB.
+                          </p>
+                          <p className="text-[11px] text-gray-500">
+                            Kurangi muatan fisik tembakau pada bal ini hingga bobot ≤ 50 kg sebelum menyimpan hasil timbangan.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleCancelWeightDueToSB}
+                        className="self-start sm:self-center px-3 py-1.5 bg-white hover:bg-red-50 text-red-700 hover:text-red-800 border border-red-200 hover:border-red-300 rounded-xs text-xs font-semibold transition-colors cursor-pointer shadow-2xs inline-flex items-center space-x-1.5 shrink-0"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Reset Timbangan</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Status Sesuai Standar Grade SB */}
+                {isGradeSB && !isOverCapacitySB && liveBruto > 0 && (
+                  <div className="bg-white border-l-4 border-l-emerald-600 border-y border-r border-gray-200 rounded-r-xs p-3 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 animate-in fade-in">
+                    <div className="flex items-center space-x-2.5">
+                      <div className="p-1 bg-emerald-50 text-emerald-700 rounded-xs shrink-0 border border-emerald-100">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                      </div>
+                      <p className="text-xs text-gray-700">
+                        <span className="font-bold text-gray-900">Kapasitas Sesuai Standar:</span>{' '}
+                        Bal Grade SB berbobot{' '}
+                        <span className="font-mono font-semibold text-gray-900">{liveBruto} kg Bruto</span>{' '}
+                        (<span className="font-mono text-gray-700">{liveNetto} kg Netto</span>) memenuhi toleransi operasional.
+                      </p>
+                    </div>
+                    <span className="self-start sm:self-auto text-[10px] font-mono font-semibold px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xs shrink-0">
+                      Standar Terpenuhi (≤ 50 kg)
+                    </span>
+                  </div>
+                )}
+
                 <div className="p-4 bg-[#f8f9fa] border border-gray-200 rounded-sm space-y-4">
                   {/* Grid Inputs: Bruto & Netto side-by-side */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1425,12 +1566,25 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                 <div className="flex space-x-2">
                   <button
                     type="button"
-                    disabled={isActiveBalWeighed || !liveBruto || liveBruto <= 0}
+                    disabled={isActiveBalWeighed || !liveBruto || liveBruto <= 0 || isOverCapacitySB}
                     onClick={handleApplyWeightForActiveBal}
-                    className="bg-[#b81d24] hover:bg-[#9e161c] text-white px-5 py-2 rounded-xs text-xs font-semibold shadow-2xs flex items-center transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    className={`px-5 py-2 rounded-xs text-xs font-semibold shadow-2xs flex items-center transition ${
+                      isOverCapacitySB 
+                        ? 'bg-gray-100 text-gray-500 border border-gray-300 cursor-not-allowed' 
+                        : 'bg-[#b81d24] hover:bg-[#9e161c] text-white disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer'
+                    }`}
                   >
-                    <Save className="w-3.5 h-3.5 mr-1.5" />
-                    Simpan Timbangan
+                    {isOverCapacitySB ? (
+                      <>
+                        <AlertTriangle className="w-3.5 h-3.5 mr-1.5 text-amber-600" />
+                        <span>Bobot Melebihi Toleransi (Maks. 50 kg)</span>
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-3.5 h-3.5 mr-1.5" />
+                        <span>Simpan Timbangan</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>

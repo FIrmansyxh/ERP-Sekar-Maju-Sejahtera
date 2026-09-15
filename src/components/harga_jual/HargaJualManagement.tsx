@@ -195,8 +195,8 @@ return (
                 className="w-full bg-white border border-gray-300 rounded-sm px-2.5 py-1.5 text-xs text-gray-800 focus:outline-none focus:border-[#b81d24]"
               >
                 <option value="all">Semua Status ({hargaJualList.length})</option>
-                <option value="active">✓ Hanya Aktif ({activeEntries})</option>
-                <option value="inactive">✕ Nonaktif ({inactiveEntries})</option>
+                <option value="active">Aktif ({activeEntries})</option>
+                <option value="inactive">Nonaktif ({inactiveEntries})</option>
               </select>
             </div>
             <div className="flex items-end">

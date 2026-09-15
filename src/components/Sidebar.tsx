@@ -151,7 +151,7 @@ export const MODULES_CONFIG = [
   {
     id: 'modul-5-pengiriman',
     title: 'Pengiriman Reguler (DO)',
-    subtitle: 'Surat Jalan ke Pabrik',
+    subtitle: 'Input No. Bal Muatan',
     icon: 'Truck',
     moduleKey: 'pengiriman',
   },

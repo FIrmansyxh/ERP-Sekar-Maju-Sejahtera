@@ -7,6 +7,7 @@ import {
   TabelHarga, 
   MasterHargaJual,
   TransaksiPembelian, 
+  TransaksiItemBal,
   PengirimanSample, 
   BatchPengirimanSample,
   PengirimanBarang,
@@ -352,6 +353,17 @@ export function loadBarangData(): Barang[] {
             hasChanges = true;
             return null;
           }
+          // SB and HF are bal codes, not price codes. Convert to Master Harga Beli code and keep bal code in no_bal
+          if (b.kode_grade && (b.kode_grade.toUpperCase() === 'SB' || b.kode_grade.toUpperCase() === 'HF')) {
+            const isSB = b.kode_grade.toUpperCase() === 'SB';
+            const balPrefix = isSB ? 'SB' : 'HF';
+            if (b.no_bal && !b.no_bal.toUpperCase().includes(balPrefix)) {
+              b.no_bal = `${balPrefix}-${b.no_bal}`;
+            }
+            const price = b.harga_per_kg || (isSB ? 55000 : 45000);
+            b.kode_grade = String(Math.round(price / 1000));
+            hasChanges = true;
+          }
           return b;
         }).filter(Boolean) as Barang[];
         
@@ -532,6 +544,29 @@ export function loadTransaksiData(): TransaksiPembelian[] {
             clean.transaksi_id = newId;
             idMap.set(oldId, newId);
             hasChanges = true;
+          }
+
+          // SB and HF are bal codes, not price codes. Ensure items have correct Master Harga Beli code and keep bal code in no_bal
+          if (clean.items && Array.isArray(clean.items)) {
+            clean.items = clean.items.map((it: TransaksiItemBal) => {
+              if (it.kode_grade && (it.kode_grade.toUpperCase() === 'SB' || it.kode_grade.toUpperCase() === 'HF')) {
+                const isSB = it.kode_grade.toUpperCase() === 'SB';
+                const balPrefix = isSB ? 'SB' : 'HF';
+                let noBal = it.no_bal || '';
+                if (!noBal.toUpperCase().includes(balPrefix)) {
+                  noBal = `${balPrefix}-${noBal}`;
+                }
+                const price = it.harga_per_kg || (isSB ? 55000 : 45000);
+                const gradeCode = String(Math.round(price / 1000));
+                hasChanges = true;
+                return {
+                  ...it,
+                  no_bal: noBal,
+                  kode_grade: gradeCode,
+                };
+              }
+              return it;
+            });
           }
 
           return clean;

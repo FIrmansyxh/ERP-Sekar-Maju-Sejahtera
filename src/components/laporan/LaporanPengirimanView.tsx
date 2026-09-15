@@ -1,5 +1,6 @@
 import { formatDateHariBulanTahun } from '../../utils/formatters';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Truck, 
   Search, 
@@ -478,8 +479,16 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
       </div>
 
       {/* 2. Executive KPI Cards */}
-      {showSummaryCards && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+      <AnimatePresence initial={false}>
+        {showSummaryCards && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+            className="overflow-hidden"
+          >
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
           <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
             <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
               Total Surat Jalan
@@ -564,7 +573,9 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
             </div>
           </div>
         </div>
+        </motion.div>
       )}
+      </AnimatePresence>
 
       {/* 3. Filter Controls Panel */}
       <form onSubmit={handleApplyFilter} className="bg-white p-3.5 border border-gray-200 shadow-2xs space-y-3">

@@ -61,11 +61,10 @@ export async function downloadElementAsPdf(
     (!options.orientation && element.scrollWidth > 820);
   const orientation = isLandscape ? 'landscape' : 'portrait';
 
-  // Target page width & height in CSS pixels
-  // A4 Portrait: 210mm x 297mm (printable ~ 194mm x 281mm => ~760px x 1050px)
-  // A4 Landscape: 297mm x 210mm (printable ~ 281mm x 194mm => ~1080px x 710px)
+  // Target page width in CSS pixels
+  // A4 Portrait: 210mm x 297mm (printable width with 8mm margins: 194mm => ~760px)
+  // A4 Landscape: 297mm x 210mm (printable width with 8mm margins: 281mm => ~1080px)
   const targetWidth = isLandscape ? 1080 : 760;
-  const maxPageHeight = isLandscape ? 700 : 1020;
 
   // Create isolated off-screen sandbox
   const sandbox = document.createElement('div');
@@ -89,8 +88,8 @@ export async function downloadElementAsPdf(
     clone.style.overflow = 'visible';
     clone.style.border = 'none';
     clone.style.boxShadow = 'none';
-    clone.style.padding = '0';
     clone.style.margin = '0';
+    clone.style.padding = '0';
 
     // Remove any inner scrollbars or max heights
     const allDescendants = clone.querySelectorAll('*');
@@ -103,10 +102,28 @@ export async function downloadElementAsPdf(
     });
 
     sandbox.appendChild(clone);
-    // Allow layout to compute
-    await new Promise((r) => setTimeout(r, 40));
 
-    const totalHeight = clone.scrollHeight || clone.offsetHeight;
+    // Ensure fonts and styles are fully loaded and computed
+    if (document.fonts) {
+      await document.fonts.ready;
+    }
+    await new Promise((r) => setTimeout(r, 60));
+
+    // Capture the complete element with native visual fidelity
+    const pixelRatio = 2.5;
+    const imgData = await toPng(clone, {
+      quality: 1,
+      pixelRatio: pixelRatio,
+      backgroundColor: '#ffffff',
+      cacheBust: true,
+    });
+
+    const img = new Image();
+    img.src = imgData;
+    await new Promise((resolve, reject) => {
+      img.onload = () => resolve(true);
+      img.onerror = (e) => reject(e);
+    });
 
     // Initialize jsPDF instance
     const pdf = new jsPDF({
@@ -119,208 +136,170 @@ export async function downloadElementAsPdf(
     const pdfWidth = pdf.internal.pageSize.getWidth();
     const pdfHeight = pdf.internal.pageSize.getHeight();
     const margin = 8; // 8mm margin
-    const imgWidth = pdfWidth - margin * 2;
+    const imgWidthMm = pdfWidth - margin * 2;
+    const pageAvailableHeightMm = pdfHeight - margin * 2;
 
-    // CASE 1: Single page document (e.g. Nota Timbang, Surat Jalan, Kartu, Label)
-    if (totalHeight <= maxPageHeight + 60) {
-      const imgData = await toPng(clone, {
-        quality: 1,
-        pixelRatio: 2.5,
-        backgroundColor: '#ffffff',
-        cacheBust: true,
-      });
+    const imgWidthPx = img.naturalWidth || img.width;
+    const imgHeightPx = img.naturalHeight || img.height;
 
-      const img = new Image();
-      img.src = imgData;
-      await new Promise((resolve, reject) => {
-        img.onload = () => resolve(true);
-        img.onerror = (e) => reject(e);
-      });
+    const totalHeightMm = (imgHeightPx * imgWidthMm) / imgWidthPx;
 
-      const singlePageImgHeight = (img.height * imgWidth) / img.width;
-      const finalHeight = Math.min(singlePageImgHeight, pdfHeight - margin * 2);
-      pdf.addImage(imgData, 'PNG', margin, margin, imgWidth, finalHeight, undefined, 'FAST');
+    // CASE 1: Single page document (fits on 1 page with slight tolerance)
+    if (totalHeightMm <= pageAvailableHeightMm + 8) {
+      const finalHeightMm = Math.min(totalHeightMm, pageAvailableHeightMm);
+      pdf.addImage(imgData, 'PNG', margin, margin, imgWidthMm, finalHeightMm, undefined, 'FAST');
       pdf.save(cleanFilename);
       return;
     }
 
-    // CASE 2: Multi-Page Document (Laporan Pembelian, Laporan Gudang, Large Tables)
-    // We build discrete DOM pages chunked cleanly by table rows & sections
-    sandbox.removeChild(clone);
+    // CASE 2: Multi-Page Document
+    // Uses smart row-boundary slicing so NO row or text is cut in half,
+    // preserves 100% of Kop, metadata, tables, deductions, totals, terbilang, and signatures,
+    // and cleanly repeats table header on continuation pages.
+    const cloneRect = clone.getBoundingClientRect();
+    const domHeight = clone.scrollHeight || clone.offsetHeight || 1;
+    const scale = imgHeightPx / domHeight;
 
-    const pagesContainer: HTMLElement[] = [];
-    const docTitle = cleanFilename.replace(/_/g, ' ').replace(/\.pdf$/i, '');
+    // Detect primary table and its thead for continuation repeating
+    const primaryTable = clone.querySelector('table');
+    let theadSlice: { yStart: number; height: number } | null = null;
+    let tableBottomPx = 0;
 
-    const makeNewPage = (pageNum: number): HTMLElement => {
-      const pageEl = document.createElement('div');
-      pageEl.style.width = `${targetWidth}px`;
-      pageEl.style.minHeight = `${maxPageHeight}px`;
-      pageEl.style.padding = '24px 28px';
-      pageEl.style.background = '#ffffff';
-      pageEl.style.boxSizing = 'border-box';
-      pageEl.style.display = 'flex';
-      pageEl.style.flexDirection = 'column';
-      pageEl.style.justifyContent = 'space-between';
-      pageEl.style.position = 'relative';
-
-      // Header on Page 2 and later
-      if (pageNum > 1) {
-        const headerEl = document.createElement('div');
-        headerEl.className = 'border-b border-gray-400 pb-2 mb-3 flex items-center justify-between text-[10px] text-gray-600 font-semibold';
-        headerEl.innerHTML = `
-          <span>PR. SEKAR MAJU SEJAHTERA • ${docTitle}</span>
-          <span class="font-mono">Halaman ${pageNum}</span>
-        `;
-        pageEl.appendChild(headerEl);
+    if (primaryTable) {
+      const thead = primaryTable.querySelector('thead');
+      if (thead) {
+        const theadRect = thead.getBoundingClientRect();
+        const yStart = Math.round((theadRect.top - cloneRect.top) * scale);
+        const yEnd = Math.round((theadRect.bottom - cloneRect.top) * scale);
+        theadSlice = { yStart, height: yEnd - yStart };
       }
-
-      const bodyEl = document.createElement('div');
-      bodyEl.className = 'flex-1 space-y-4 page-body';
-      pageEl.appendChild(bodyEl);
-
-      // Running page footer
-      const footerEl = document.createElement('div');
-      footerEl.className = 'border-t border-gray-200 pt-2 mt-4 flex items-center justify-between text-[9px] text-gray-500 font-medium';
-      footerEl.innerHTML = `
-        <span>Dicetak melalui Sistem Gudang & Pengadaan PR. SEKAR MAJU SEJAHTERA</span>
-        <span class="font-mono">Halaman ${pageNum}</span>
-      `;
-      pageEl.appendChild(footerEl);
-
-      sandbox.appendChild(pageEl);
-      return pageEl;
-    };
-
-    let currentPageNum = 1;
-    let currentPage = makeNewPage(currentPageNum);
-    pagesContainer.push(currentPage);
-
-    const getPageBody = (p: HTMLElement): HTMLElement => {
-      return (p.querySelector('.page-body') as HTMLElement) || p;
-    };
-
-    // Iterate through top level child nodes of clone
-    const childNodes = Array.from(clone.children) as HTMLElement[];
-
-    for (const child of childNodes) {
-      // Check if this child contains a large table
-      const table = child.tagName === 'TABLE' ? child : child.querySelector('table');
-
-      if (table && table.querySelector('tbody') && (table.querySelector('tbody')?.children.length || 0) > 8) {
-        // Handle big table pagination
-        const thead = table.querySelector('thead');
-        const tbody = table.querySelector('tbody');
-        const tfoot = table.querySelector('tfoot');
-        const heading = child.tagName === 'TABLE' ? null : child.querySelector('h1, h2, h3, h4, h5, p, span');
-
-        // Append heading to current page if exists
-        if (heading) {
-          const headingClone = heading.cloneNode(true) as HTMLElement;
-          getPageBody(currentPage).appendChild(headingClone);
-        }
-
-        // Start table on current page
-        let currentTable = document.createElement('table');
-        currentTable.className = table.className || 'w-full text-left border-collapse border border-gray-300 text-[10px]';
-        if (thead) {
-          currentTable.appendChild(thead.cloneNode(true));
-        }
-        let currentTbody = document.createElement('tbody');
-        currentTbody.className = tbody?.className || 'divide-y divide-gray-300';
-        currentTable.appendChild(currentTbody);
-        getPageBody(currentPage).appendChild(currentTable);
-
-        const rows = Array.from(tbody ? tbody.children : []) as HTMLElement[];
-
-        for (const row of rows) {
-          currentTbody.appendChild(row.cloneNode(true));
-
-          // Check if page height exceeded
-          if (currentPage.offsetHeight > maxPageHeight + 40) {
-            // Remove row from current page
-            currentTbody.removeChild(currentTbody.lastChild as Node);
-
-            // Start new page
-            currentPageNum++;
-            currentPage = makeNewPage(currentPageNum);
-            pagesContainer.push(currentPage);
-
-            // Re-create table on new page with cloned thead
-            currentTable = document.createElement('table');
-            currentTable.className = table.className || 'w-full text-left border-collapse border border-gray-300 text-[10px]';
-            if (thead) {
-              currentTable.appendChild(thead.cloneNode(true));
-            }
-            currentTbody = document.createElement('tbody');
-            currentTbody.className = tbody?.className || 'divide-y divide-gray-300';
-            currentTable.appendChild(currentTbody);
-            getPageBody(currentPage).appendChild(currentTable);
-
-            // Append row to new page
-            currentTbody.appendChild(row.cloneNode(true));
-          }
-        }
-
-        // Append tfoot if present
-        if (tfoot) {
-          const tfootClone = tfoot.cloneNode(true) as HTMLElement;
-          currentTable.appendChild(tfootClone);
-          if (currentPage.offsetHeight > maxPageHeight + 40) {
-            currentTable.removeChild(tfootClone);
-            currentPageNum++;
-            currentPage = makeNewPage(currentPageNum);
-            pagesContainer.push(currentPage);
-
-            const newTable = document.createElement('table');
-            newTable.className = table.className || 'w-full text-left border-collapse border border-gray-300 text-[10px]';
-            newTable.appendChild(tfootClone);
-            getPageBody(currentPage).appendChild(newTable);
-          }
-        }
-      } else {
-        // Normal non-table block or small block (Kop surat, metadata, signature)
-        const blockClone = child.cloneNode(true) as HTMLElement;
-        getPageBody(currentPage).appendChild(blockClone);
-
-        if (currentPage.offsetHeight > maxPageHeight + 40 && getPageBody(currentPage).children.length > 1) {
-          // Move to next page
-          getPageBody(currentPage).removeChild(blockClone);
-          currentPageNum++;
-          currentPage = makeNewPage(currentPageNum);
-          pagesContainer.push(currentPage);
-          getPageBody(currentPage).appendChild(blockClone);
-        }
-      }
+      const tRect = primaryTable.getBoundingClientRect();
+      tableBottomPx = Math.round((tRect.bottom - cloneRect.top) * scale);
     }
 
-    // Render each constructed page cleanly to high-DPI canvas & add to jsPDF
-    for (let i = 0; i < pagesContainer.length; i++) {
-      const pageEl = pagesContainer[i];
-      const pageImgData = await toPng(pageEl, {
-        quality: 1,
-        pixelRatio: 2.5,
-        backgroundColor: '#ffffff',
-        cacheBust: true,
-      });
+    // Gather safe horizontal break points (bottoms of table rows and sections)
+    const safeBreaksDom: number[] = [];
 
-      const img = new Image();
-      img.src = pageImgData;
-      await new Promise((resolve, reject) => {
-        img.onload = () => resolve(true);
-        img.onerror = (e) => reject(e);
-      });
+    clone.querySelectorAll('tr').forEach((tr) => {
+      const rect = tr.getBoundingClientRect();
+      const bottom = rect.bottom - cloneRect.top;
+      if (bottom > 0 && bottom < domHeight) {
+        safeBreaksDom.push(bottom);
+      }
+    });
 
-      const pageImgHeight = (img.height * imgWidth) / img.width;
-      const adjustedHeight = Math.min(pageImgHeight, pdfHeight - margin * 2);
+    clone.querySelectorAll('div, table, section, form, h1, h2, h3, p').forEach((el) => {
+      const rect = el.getBoundingClientRect();
+      const bottom = rect.bottom - cloneRect.top;
+      if (bottom > 0 && bottom < domHeight) {
+        safeBreaksDom.push(bottom);
+      }
+    });
 
+    const safeBreaksImg = Array.from(new Set(safeBreaksDom))
+      .map((y) => Math.round(y * scale))
+      .filter((y) => y > 0 && y < imgHeightPx)
+      .sort((a, b) => a - b);
+
+    const maxSliceHeightPx = Math.floor(pageAvailableHeightMm * (imgWidthPx / imgWidthMm));
+
+    let currentY = 0;
+    const pageCanvases: HTMLCanvasElement[] = [];
+
+    while (currentY < imgHeightPx) {
+      // Check if this page starts inside the primary table body
+      const isInsideTable =
+        Boolean(theadSlice) &&
+        currentY > ((theadSlice?.yStart || 0) + (theadSlice?.height || 0)) &&
+        currentY < tableBottomPx - 20;
+
+      const theadRepeatHeight = isInsideTable && theadSlice ? theadSlice.height : 0;
+      const availableHeightPx = maxSliceHeightPx - theadRepeatHeight;
+      const targetBottom = currentY + availableHeightPx;
+
+      let cutY = targetBottom;
+      if (targetBottom >= imgHeightPx) {
+        cutY = imgHeightPx;
+      } else {
+        // Find best break point between 60% and 100% of available page height
+        const candidates = safeBreaksImg.filter(
+          (b) => b <= targetBottom && b >= currentY + availableHeightPx * 0.60
+        );
+        if (candidates.length > 0) {
+          cutY = candidates[candidates.length - 1];
+        } else {
+          // Fallback: any safe break <= targetBottom
+          const fallbackCandidates = safeBreaksImg.filter(
+            (b) => b <= targetBottom && b > currentY + 40
+          );
+          if (fallbackCandidates.length > 0) {
+            cutY = fallbackCandidates[fallbackCandidates.length - 1];
+          }
+        }
+      }
+
+      const sliceHeight = cutY - currentY;
+      if (sliceHeight <= 0) break;
+
+      // Construct canvas slice for this page
+      const pageCanvas = document.createElement('canvas');
+      pageCanvas.width = imgWidthPx;
+      pageCanvas.height = sliceHeight + theadRepeatHeight;
+
+      const ctx = pageCanvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+
+        let drawOffsetY = 0;
+        // Repeat table header cleanly at the top of continued table pages
+        if (theadRepeatHeight > 0 && theadSlice) {
+          ctx.drawImage(
+            img,
+            0, theadSlice.yStart, imgWidthPx, theadSlice.height,
+            0, 0, imgWidthPx, theadSlice.height
+          );
+          drawOffsetY = theadSlice.height;
+        }
+
+        // Draw the slice content
+        ctx.drawImage(
+          img,
+          0, currentY, imgWidthPx, sliceHeight,
+          0, drawOffsetY, imgWidthPx, sliceHeight
+        );
+      }
+
+      pageCanvases.push(pageCanvas);
+      currentY = cutY;
+    }
+
+    const totalPages = pageCanvases.length;
+
+    for (let i = 0; i < totalPages; i++) {
       if (i > 0) {
         pdf.addPage();
       }
 
-      pdf.addImage(pageImgData, 'PNG', margin, margin, imgWidth, adjustedHeight, undefined, 'FAST');
+      const pCanvas = pageCanvases[i];
+      const pImgData = pCanvas.toDataURL('image/png');
+      const sliceHeightMm = (pCanvas.height * imgWidthMm) / imgWidthPx;
+
+      pdf.addImage(pImgData, 'PNG', margin, margin, imgWidthMm, sliceHeightMm, undefined, 'FAST');
+
+      // Add subtle footer page number for multi-page documents
+      if (totalPages > 1) {
+        pdf.setFontSize(8);
+        pdf.setTextColor(140, 140, 140);
+        pdf.text(
+          `Halaman ${i + 1} dari ${totalPages}`,
+          pdfWidth - margin,
+          pdfHeight - 4,
+          { align: 'right' }
+        );
+      }
     }
 
-    // Save final clean PDF
     pdf.save(cleanFilename);
   } catch (err) {
     console.error('Failed to generate high-fidelity PDF:', err);

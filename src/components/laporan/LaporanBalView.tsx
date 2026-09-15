@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Package, 
   Search, 
@@ -789,8 +790,16 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
         </div>
 
         {/* Collapsible Content */}
-        {showSummaryCards && (
-          <div className="p-4 space-y-4">
+        <AnimatePresence initial={false}>
+          {showSummaryCards && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.3, ease: "easeInOut" }}
+              className="overflow-hidden"
+            >
+              <div className="p-4 space-y-4">
             {/* Key Metrics Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
               {/* Card 1: Total Bal */}
@@ -964,12 +973,22 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
               </div>
             )}
           </div>
+          </motion.div>
         )}
-      </div>
+      </AnimatePresence>
+    </div>
 
       {/* 3. Collapsible Filter Control Section */}
-      {isFilterPanelOpen && (
-        <div className="bg-white p-4 border border-gray-200 shadow-xs space-y-4">
+      <AnimatePresence initial={false}>
+        {isFilterPanelOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+            className="overflow-hidden"
+          >
+            <div className="bg-white p-4 border border-gray-200 shadow-xs space-y-4">
           <div className="flex items-center justify-between pb-2 border-b border-gray-200">
             <div className="flex items-center space-x-2">
               <SlidersHorizontal className="w-4 h-4 text-slate-700" />
@@ -1032,7 +1051,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                   onChange={(e) => setFilterGrade(e.target.value)}
                   className="w-full px-2 py-1.5 bg-white border border-[#ced4da] rounded-none text-xs focus:outline-none focus:border-slate-800"
                 >
-                  <option value="ALL">-- Semua Grade --</option>
+                  <option value="ALL">Semua Grade</option>
                   {uniqueGrades.map((g) => (
                     <option key={g} value={g}>
                       Grade {g}
@@ -1051,7 +1070,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                   onChange={(e) => setFilterStatusStok(e.target.value)}
                   className="w-full px-2 py-1.5 bg-white border border-[#ced4da] rounded-none text-xs focus:outline-none focus:border-slate-800"
                 >
-                  <option value="ALL">-- Semua Status --</option>
+                  <option value="ALL">Semua Status</option>
                   <option value="di_gudang">Di Gudang (Tersedia)</option>
                   <option value="siap_kirim">Siap Kirim DO</option>
                   <option value="keluar">Keluar (Terkirim Pabrik)</option>
@@ -1129,7 +1148,9 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
             </div>
           </form>
         </div>
-      )}
+        </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* 4. Main Table: Detail Setiap Bal */}
       <div className="bg-white border border-gray-200 rounded-sm shadow-xs overflow-hidden">

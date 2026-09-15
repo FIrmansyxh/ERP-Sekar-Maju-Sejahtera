@@ -267,6 +267,32 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     });
   }, [transaksiList, startDate, endDate, filterKupon, filterPetaniId, filterStatusBayar]);
 
+  // Status summary counts for the filter dropdown
+  const statusCounts = useMemo(() => {
+    let siapBayar = 0;
+    let belumLengkap = 0;
+    let lunas = 0;
+    let belumLunas = 0;
+
+    transaksiList.forEach((t) => {
+      const isLunas = t.status_pembayaran === 'lunas' || t.metode_pembayaran === 'cash';
+      const isAllWeighed = getKuponWeighStatus(t).isAllWeighed;
+      if (isLunas) {
+        lunas++;
+      } else {
+        belumLunas++;
+        if (isAllWeighed) {
+          siapBayar++;
+        }
+      }
+      if (!isAllWeighed) {
+        belumLengkap++;
+      }
+    });
+
+    return { siapBayar, belumLengkap, lunas, belumLunas };
+  }, [transaksiList]);
+
   // Overall stats for the filtered list
   const stats = useMemo(() => {
     const totalTx = filteredList.length;
@@ -486,7 +512,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-7 gap-3 items-end">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 md:grid-cols-3 gap-3 items-end">
           
           {/* Tanggal Mulai */}
           <div>
@@ -550,7 +576,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
               }}
               className="w-full bg-white border border-slate-300 rounded-sm px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800"
             >
-              <option value="">-- Semua Petani --</option>
+              <option value="">Semua Petani</option>
               {petaniList.map((p) => (
                 <option key={p.petani_id} value={p.petani_id}>
                   {p.nama_petani} ({p.petani_id})
@@ -562,7 +588,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
           {/* Status Bayar */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Status Kas & Kesiapan
+              Status Pembayaran
             </label>
             <select
               value={filterStatusBayar}
@@ -572,19 +598,11 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
               }}
               className="w-full bg-white border border-slate-300 rounded-sm px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800 font-medium"
             >
-              <option value="all">-- Semua Status Kas --</option>
-              <option value="siap_bayar">
-                ✓ Siap Bayar ({transaksiList.filter((t) => (t.status_pembayaran !== 'lunas' && t.metode_pembayaran !== 'cash') && getKuponWeighStatus(t).isAllWeighed).length})
-              </option>
-              <option value="belum_lengkap">
-                ⚠️ Belum Lengkap Timbang ({transaksiList.filter((t) => !getKuponWeighStatus(t).isAllWeighed).length})
-              </option>
-              <option value="cash">
-                Cash / Lunas ({transaksiList.filter((t) => t.status_pembayaran === 'lunas' || t.metode_pembayaran === 'cash').length})
-              </option>
-              <option value="kredit">
-                Kredit / Pending ({transaksiList.filter((t) => t.status_pembayaran !== 'lunas' && t.metode_pembayaran !== 'cash').length})
-              </option>
+              <option value="all">Semua Status</option>
+              <option value="siap_bayar">Siap Bayar ({statusCounts.siapBayar})</option>
+              <option value="belum_lengkap">Belum Lengkap Timbang ({statusCounts.belumLengkap})</option>
+              <option value="cash">Lunas ({statusCounts.lunas})</option>
+              <option value="kredit">Belum Lunas ({statusCounts.belumLunas})</option>
             </select>
           </div>
 
@@ -601,8 +619,8 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
               }}
               className="w-full bg-white border border-slate-300 rounded-sm px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800 font-medium"
             >
-              <option value="desc">Kupon: Tertinggi ➔ Terendah</option>
-              <option value="asc">Kupon: Terendah ➔ Tertinggi</option>
+              <option value="desc">Kupon: Terbesar ke Terkecil</option>
+              <option value="asc">Kupon: Terkecil ke Terbesar</option>
             </select>
           </div>
 
@@ -773,7 +791,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
 
         {/* The Table */}
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
+          <table className="w-full text-left text-xs border-collapse min-w-[1000px]">
             <thead>
               <tr className="bg-[#f8f9fa] text-gray-700 font-bold text-[11px] border-b border-gray-200 select-none">
                 <th 
@@ -1278,16 +1296,25 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
             </div>
 
             {/* Warning Box Dampak Penghapusan */}
-            <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-none text-xs text-rose-950 space-y-1">
-              <div className="flex items-center space-x-1.5 font-bold text-rose-800">
+            <div className="p-3 bg-rose-50/90 border border-rose-200 text-xs text-rose-950 space-y-2">
+              <div className="flex items-center space-x-2 font-bold text-rose-800">
                 <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                <span>Peringatan Dampak Penghapusan:</span>
+                <span className="text-xs font-semibold">Peringatan Dampak Penghapusan:</span>
               </div>
-              <ul className="text-[11px] text-rose-800 space-y-0.5 list-disc list-inside pl-1">
-                <li>Seluruh bal inventaris yang terbit dari transaksi ini akan otomatis ikut dihapus/dibatalkan.</li>
-                <li>Akumulasi setoran total bal dan berat petani terkait akan otomatis disinkronkan kembali.</li>
-                <li>Tindakan ini akan dicatat ke dalam audit trail keamanan sistem.</li>
-              </ul>
+              <div className="space-y-1.5 text-xs text-rose-900 leading-relaxed">
+                <div className="flex items-start space-x-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 mt-1.5 shrink-0" />
+                  <span>Seluruh bal inventaris dari transaksi ini otomatis ikut dihapus/dibatalkan.</span>
+                </div>
+                <div className="flex items-start space-x-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 mt-1.5 shrink-0" />
+                  <span>Akumulasi setoran total bal dan berat petani terkait otomatis disinkronkan kembali.</span>
+                </div>
+                <div className="flex items-start space-x-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 mt-1.5 shrink-0" />
+                  <span>Tindakan ini akan dicatat ke dalam audit trail keamanan sistem.</span>
+                </div>
+              </div>
             </div>
 
             {/* Form Input Alasan */}

@@ -1,9 +1,6 @@
 import React from 'react';
 import { 
   Users, 
-  BarChart3, 
-  ShieldCheck,
-  FileSpreadsheet,
   ChevronRight
 } from 'lucide-react';
 import { Petani, Barang, TransaksiPembelian, PengirimanSample, PengirimanBarang, User } from '../../types';
@@ -22,11 +19,6 @@ interface HomeDashboardViewProps {
 
 export const HomeDashboardView: React.FC<HomeDashboardViewProps> = ({
   onNavigate,
-  petaniList,
-  barangList,
-  transaksiList,
-  sampleList,
-  pengirimanList,
   currentUser,
   userCount = 0,
 }) => {

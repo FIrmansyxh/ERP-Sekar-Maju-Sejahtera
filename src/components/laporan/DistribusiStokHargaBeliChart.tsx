@@ -70,6 +70,14 @@ const FALLBACK_PALETTE = [
   '#6366f1',
 ];
 
+// Helper pemotongan teks (truncate) untuk label pada sumbu X agar tidak saling bertumpuk
+const truncateLabel = (value: string | undefined | null, maxLength: number = 12): string => {
+  if (!value) return '';
+  const str = String(value).trim();
+  if (str.length <= maxLength) return str;
+  return `${str.slice(0, maxLength)}…`;
+};
+
 export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChartProps> = ({
   barangList = [],
   hargaList = [],
@@ -79,6 +87,7 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
   const [metricMode, setMetricMode] = useState<MetricMode>('bal');
   const [viewMode, setViewMode] = useState<ViewMode>('dual');
   const [stockScope, setStockScope] = useState<StockScope>('aktif');
+  const [filterEmptyStock, setFilterEmptyStock] = useState<boolean>(true);
 
   // Map harga standar dari master harga
   const masterHargaMap = useMemo(() => {
@@ -207,6 +216,8 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
           ...item,
           displayName: `Grade ${item.kode_grade}`,
           labelWithPrice: `Grade ${item.kode_grade} (${formatRupiah(item.harga_per_kg)}/kg)`,
+          shortPriceLabel: item.harga_per_kg > 0 ? `Grade ${item.kode_grade} (${(item.harga_per_kg / 1000).toLocaleString('id-ID')}k)` : `Grade ${item.kode_grade}`,
+          codeLabel: `G.${item.kode_grade}`,
           shortPrice: `${(item.harga_per_kg / 1000).toFixed(0)}k/kg`,
           // Nilai metrik numerik untuk Recharts
           bal: item.balCount,
@@ -230,6 +241,15 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
       weightedAvgPrice: grandTotalKg > 0 ? grandTotalNilai / grandTotalKg : 0,
     };
   }, [filteredBarang, hargaList, masterHargaMap]);
+
+  // Data yang dikirim ke grafik: otomatis menyembunyikan grade berstok 0 agar sumbu X rapi dan tidak tumpang tindih
+  const chartItems = useMemo(() => {
+    if (filterEmptyStock) {
+      const activeOnly = aggregatedData.items.filter((item) => item.balCount > 0 || item.totalKg > 0);
+      return activeOnly.length > 0 ? activeOnly : aggregatedData.items;
+    }
+    return aggregatedData.items;
+  }, [aggregatedData.items, filterEmptyStock]);
 
   // Ringkasan metrik utama
   const dominantGrade = useMemo(() => {
@@ -296,55 +316,107 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
     downloadCsvFile('Distribusi_Stok_Kode_Harga_Beli_Tembakau', headers, rows);
   };
 
-  // Custom Tooltip Recharts yang detail dan elegan
+  // Custom Tooltip Recharts yang detail, informatif, dan interaktif
   const CustomBarTooltip = ({ active, payload }: any) => {
     if (!active || !payload || !payload.length) return null;
     const data = payload[0].payload;
+    if (!data) return null;
+
+    const avgBeratPerBal = data.balCount > 0 ? (data.totalKg / data.balCount).toFixed(1) : '0';
+    const activePct = metricMode === 'nilai' ? data.pctNilai : metricMode === 'tonase' ? data.pctKg : data.pctBal;
 
     return (
-      <div className="bg-gray-900/95 text-white p-3 rounded-xs shadow-xl border border-gray-700 text-xs backdrop-blur-sm min-w-[220px]">
-        <div className="flex items-center justify-between pb-2 mb-2 border-b border-gray-700">
-          <div className="flex items-center space-x-1.5">
+      <div className="bg-gray-900/95 text-white p-3.5 rounded-xs shadow-2xl border border-gray-700 text-xs backdrop-blur-md min-w-[260px] max-w-[300px] pointer-events-none">
+        {/* Header Tooltip */}
+        <div className="flex items-center justify-between pb-2 mb-2 border-b border-gray-700/80">
+          <div className="flex items-center space-x-2">
             <span
-              className="w-2.5 h-2.5 rounded-full inline-block"
+              className="w-3 h-3 rounded-full inline-block shrink-0 border border-white/40"
               style={{ backgroundColor: data.color }}
             />
             <span className="font-bold text-sm text-amber-300">Grade {data.kode_grade}</span>
           </div>
-          <span className="font-mono text-[11px] text-gray-300 bg-gray-800 px-1.5 py-0.5 rounded-xs">
+          <span className="font-mono text-[11px] text-amber-200 bg-gray-800 px-2 py-0.5 rounded-xs font-bold border border-gray-700">
             {formatRupiah(data.harga_per_kg)}/kg
           </span>
         </div>
 
-        <p className="text-[11px] text-gray-300 mb-2.5 font-medium">{data.nama_grade}</p>
+        <p className="text-[11px] text-gray-300 mb-2 font-medium leading-tight">{data.nama_grade}</p>
 
+        {/* Highlight Card Sesuai Metrik Aktif */}
+        <div className="bg-gray-800/80 p-2 rounded-xs mb-2.5 border border-gray-700/60">
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="text-gray-400 font-medium">Metrik {currentMetricLabel}:</span>
+            <span className="font-mono font-black text-white text-xs">
+              {formatMetricValue(
+                metricMode === 'bal' ? data.bal : metricMode === 'tonase' ? data.tonase : data.nilai,
+                metricMode
+              )}
+            </span>
+          </div>
+          <div className="mt-1.5">
+            <div className="flex justify-between text-[10px] text-gray-400 mb-0.5 font-mono">
+              <span>Pangsa Stok:</span>
+              <span className="font-bold text-amber-300">{activePct}%</span>
+            </div>
+            <div className="w-full bg-gray-700 h-1.5 rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-300"
+                style={{
+                  width: `${Math.min(100, Math.max(2, activePct))}%`,
+                  backgroundColor: data.color,
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Rincian Angka Lengkap */}
         <div className="space-y-1.5 text-[11px]">
           <div className="flex justify-between items-center text-gray-300">
-            <span>Fisik Tersimpan:</span>
+            <span className="flex items-center space-x-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+              <span>Jumlah Bal:</span>
+            </span>
             <span className="font-mono font-bold text-white">
-              {data.balCount.toLocaleString('id-ID')} Bal ({data.pctBal}%)
+              {data.balCount.toLocaleString('id-ID')} Bal <span className="text-[10px] text-gray-400 font-normal">({data.pctBal}%)</span>
             </span>
           </div>
+
           <div className="flex justify-between items-center text-gray-300">
-            <span>Total Tonase:</span>
+            <span className="flex items-center space-x-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 inline-block" />
+              <span>Total Tonase:</span>
+            </span>
             <span className="font-mono font-bold text-blue-300">
-              {data.totalKg.toLocaleString('id-ID')} kg ({(data.totalKg / 1000).toFixed(2)} Ton)
+              {data.totalKg.toLocaleString('id-ID')} kg <span className="text-[10px] text-gray-400 font-normal">({(data.totalKg / 1000).toFixed(2)} Ton)</span>
             </span>
           </div>
+
           <div className="flex justify-between items-center text-gray-300">
-            <span>Valuasi Modal Beli:</span>
+            <span className="flex items-center space-x-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+              <span>Valuasi Modal:</span>
+            </span>
             <span className="font-mono font-bold text-emerald-400">
-              Rp {data.totalNilai.toLocaleString('id-ID')}
+              {formatRupiah(data.totalNilai)}
             </span>
           </div>
         </div>
 
-        {data.siapKirimCount > 0 && (
-          <div className="mt-2 pt-2 border-t border-gray-800 flex justify-between text-[10px] text-gray-400">
-            <span>Siap Kirim: {data.siapKirimCount} Bal</span>
-            <span>Di Gudang: {data.diGudangCount} Bal</span>
+        {/* Status Lokasi & Rata-rata */}
+        <div className="mt-2.5 pt-2 border-t border-gray-800 grid grid-cols-2 gap-1.5 text-[10px]">
+          <div className="bg-gray-800/70 p-1.5 rounded-xs">
+            <p className="text-gray-400">Rata-rata/Bal</p>
+            <p className="font-mono font-bold text-gray-200 mt-0.5">{avgBeratPerBal} kg/bal</p>
           </div>
-        )}
+          <div className="bg-gray-800/70 p-1.5 rounded-xs">
+            <p className="text-gray-400">Status Stok</p>
+            <p className="font-mono font-bold text-gray-200 mt-0.5 truncate">
+              {data.siapKirimCount > 0 ? `${data.siapKirimCount} Siap Kirim` : `${data.diGudangCount} Di Gudang`}
+            </p>
+          </div>
+        </div>
       </div>
     );
   };
@@ -373,6 +445,34 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
 
           {/* Quick Toolbar */}
           <div className="flex flex-wrap items-center gap-2 text-xs">
+            {/* Filter Ada Stok vs Semua Grade Master */}
+            <div className="flex items-center space-x-1 bg-gray-100 p-0.5 rounded-xs">
+              <button
+                type="button"
+                onClick={() => setFilterEmptyStock(true)}
+                className={`px-2.5 py-1 text-[11px] font-semibold rounded-xs transition cursor-pointer ${
+                  filterEmptyStock
+                    ? 'bg-white text-gray-900 shadow-2xs font-bold'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+                title="Hanya menampilkan grade yang memiliki stok fisik di gudang agar grafik rapi"
+              >
+                Ada Stok ({aggregatedData.items.filter((i) => i.balCount > 0).length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterEmptyStock(false)}
+                className={`px-2.5 py-1 text-[11px] font-semibold rounded-xs transition cursor-pointer ${
+                  !filterEmptyStock
+                    ? 'bg-white text-gray-900 shadow-2xs font-bold'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+                title="Tampilkan semua grade termasuk yang stoknya 0"
+              >
+                Semua Grade ({aggregatedData.items.length})
+              </button>
+            </div>
+
             {/* Filter Scope Stok */}
             <div className="flex items-center space-x-1 bg-gray-100 p-0.5 rounded-xs">
               <button
@@ -579,52 +679,71 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
                 {/* Bar Chart (7 Cols) */}
                 <div className="lg:col-span-7">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-gray-800">
-                      Grafik Perbandingan: {currentMetricLabel} per Kode Harga
-                    </span>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xs font-bold text-gray-800">
+                        Grafik Perbandingan: {currentMetricLabel} per Kode Harga
+                      </span>
+                      {chartItems.length > 8 && (
+                        <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-xs font-medium">
+                          ↔ Geser grafik
+                        </span>
+                      )}
+                    </div>
                     <span className="text-[11px] text-gray-500">
                       Urutan: Tarif Tertinggi → Terendah
                     </span>
                   </div>
-                  <div className="w-full h-72">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        data={aggregatedData.items}
-                        margin={{ top: 15, right: 15, left: 0, bottom: 25 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                        <XAxis
-                          dataKey="displayName"
-                          tick={{ fontSize: 11, fill: '#374151', fontWeight: 600 }}
-                          axisLine={{ stroke: '#e5e7eb' }}
-                          tickLine={false}
-                        />
-                        <YAxis
-                          tick={{ fontSize: 10, fill: '#6b7280' }}
-                          axisLine={{ stroke: '#e5e7eb' }}
-                          tickLine={false}
-                          tickFormatter={(val) => {
-                            if (metricMode === 'nilai') {
-                              return `${(val / 1_000_000).toFixed(0)}Jt`;
-                            }
-                            if (val >= 1000) {
-                              return `${(val / 1000).toFixed(1)}k`;
-                            }
-                            return val;
-                          }}
-                        />
-                        <Tooltip content={<CustomBarTooltip />} />
-                        <Bar
-                          dataKey={currentMetricKey}
-                          radius={[3, 3, 0, 0]}
-                          maxBarSize={48}
+                  <div className="w-full h-72 overflow-x-auto overflow-y-hidden">
+                    <div
+                      className="h-full"
+                      style={{
+                        minWidth: chartItems.length > 8 ? `${Math.max(480, chartItems.length * 40)}px` : '100%',
+                      }}
+                    >
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={chartItems}
+                          margin={{ top: 15, right: 15, left: 0, bottom: chartItems.length > 7 ? 40 : 25 }}
                         >
-                          {aggregatedData.items.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                          <XAxis
+                            dataKey={chartItems.length > 16 ? 'codeLabel' : 'displayName'}
+                            tick={{ fontSize: 11, fill: '#374151', fontWeight: 600 }}
+                            axisLine={{ stroke: '#e5e7eb' }}
+                            tickLine={false}
+                            interval={0}
+                            angle={chartItems.length > 6 ? -35 : 0}
+                            textAnchor={chartItems.length > 6 ? 'end' : 'middle'}
+                            height={chartItems.length > 6 ? 45 : 30}
+                            tickFormatter={(val) => truncateLabel(val, chartItems.length > 16 ? 8 : 12)}
+                          />
+                          <YAxis
+                            tick={{ fontSize: 10, fill: '#6b7280' }}
+                            axisLine={{ stroke: '#e5e7eb' }}
+                            tickLine={false}
+                            tickFormatter={(val) => {
+                              if (metricMode === 'nilai') {
+                                return `${(val / 1_000_000).toFixed(0)}Jt`;
+                              }
+                              if (val >= 1000) {
+                                return `${(val / 1000).toFixed(1)}k`;
+                              }
+                              return val;
+                            }}
+                          />
+                          <Tooltip content={<CustomBarTooltip />} />
+                          <Bar
+                            dataKey={currentMetricKey}
+                            radius={[3, 3, 0, 0]}
+                            maxBarSize={48}
+                          >
+                            {chartItems.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
                   </div>
                 </div>
 
@@ -642,7 +761,7 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
-                          data={aggregatedData.items}
+                          data={chartItems}
                           dataKey={currentMetricKey}
                           nameKey="displayName"
                           cx="50%"
@@ -651,27 +770,13 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
                           outerRadius={95}
                           paddingAngle={2}
                         >
-                          {aggregatedData.items.map((entry, index) => (
+                          {chartItems.map((entry, index) => (
                             <Cell key={`cell-pie-${index}`} fill={entry.color} />
                           ))}
                         </Pie>
                         <Tooltip content={<CustomBarTooltip />} />
                       </PieChart>
                     </ResponsiveContainer>
-
-                    {/* Donut Center Summary */}
-                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                      <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
-                        Total
-                      </span>
-                      <span className="text-sm font-extrabold text-gray-900">
-                        {metricMode === 'bal'
-                          ? `${aggregatedData.grandTotalBal} Bal`
-                          : metricMode === 'tonase'
-                          ? `${(aggregatedData.grandTotalKg / 1000).toFixed(1)} Ton`
-                          : `Rp ${(aggregatedData.grandTotalNilai / 1_000_000).toFixed(0)} Jt`}
-                      </span>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -681,10 +786,15 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
             {viewMode === 'bar' && (
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <div>
+                  <div className="flex items-center space-x-2">
                     <span className="text-xs font-bold text-gray-900">
                       Grafik Batang: Distribusi {currentMetricLabel} Berdasarkan Kode Harga Beli
                     </span>
+                    {chartItems.length > 12 && (
+                      <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-xs font-medium">
+                        ↔ Geser horizontal untuk melihat seluruh {chartItems.length} grade
+                      </span>
+                    )}
                   </div>
                   <span className="text-xs font-mono font-semibold text-gray-600">
                     Total: {formatMetricValue(
@@ -697,48 +807,57 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
                     )}
                   </span>
                 </div>
-                <div className="w-full h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={aggregatedData.items}
-                      margin={{ top: 15, right: 20, left: 10, bottom: 30 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                      <XAxis
-                        dataKey="labelWithPrice"
-                        tick={{ fontSize: 11, fill: '#374151', fontWeight: 600 }}
-                        axisLine={{ stroke: '#e5e7eb' }}
-                        tickLine={false}
-                        interval={0}
-                        angle={-10}
-                        textAnchor="end"
-                      />
-                      <YAxis
-                        tick={{ fontSize: 10, fill: '#6b7280' }}
-                        axisLine={{ stroke: '#e5e7eb' }}
-                        tickLine={false}
-                        tickFormatter={(val) => {
-                          if (metricMode === 'nilai') {
-                            return `Rp ${(val / 1_000_000).toFixed(0)}Jt`;
-                          }
-                          if (val >= 1000) {
-                            return `${(val / 1000).toFixed(1)}k`;
-                          }
-                          return val;
-                        }}
-                      />
-                      <Tooltip content={<CustomBarTooltip />} />
-                      <Bar
-                        dataKey={currentMetricKey}
-                        radius={[4, 4, 0, 0]}
-                        maxBarSize={56}
+                <div className="w-full h-80 overflow-x-auto overflow-y-hidden">
+                  <div
+                    className="h-full"
+                    style={{
+                      minWidth: chartItems.length > 12 ? `${Math.max(680, chartItems.length * 48)}px` : '100%',
+                    }}
+                  >
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={chartItems}
+                        margin={{ top: 15, right: 20, left: 10, bottom: chartItems.length > 5 ? 50 : 35 }}
                       >
-                        {aggregatedData.items.map((entry, index) => (
-                          <Cell key={`cell-bar-${index}`} fill={entry.color} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                        <XAxis
+                          dataKey={chartItems.length > 25 ? 'codeLabel' : chartItems.length > 10 ? 'displayName' : 'shortPriceLabel'}
+                          tick={{ fontSize: 11, fill: '#374151', fontWeight: 600 }}
+                          axisLine={{ stroke: '#e5e7eb' }}
+                          tickLine={false}
+                          interval={0}
+                          angle={chartItems.length > 5 ? -30 : 0}
+                          textAnchor={chartItems.length > 5 ? 'end' : 'middle'}
+                          height={chartItems.length > 5 ? 50 : 35}
+                          tickFormatter={(val) => truncateLabel(val, chartItems.length > 20 ? 8 : 14)}
+                        />
+                        <YAxis
+                          tick={{ fontSize: 10, fill: '#6b7280' }}
+                          axisLine={{ stroke: '#e5e7eb' }}
+                          tickLine={false}
+                          tickFormatter={(val) => {
+                            if (metricMode === 'nilai') {
+                              return `Rp ${(val / 1_000_000).toFixed(0)}Jt`;
+                            }
+                            if (val >= 1000) {
+                              return `${(val / 1000).toFixed(1)}k`;
+                            }
+                            return val;
+                          }}
+                        />
+                        <Tooltip content={<CustomBarTooltip />} />
+                        <Bar
+                          dataKey={currentMetricKey}
+                          radius={[4, 4, 0, 0]}
+                          maxBarSize={56}
+                        >
+                          {chartItems.map((entry, index) => (
+                            <Cell key={`cell-bar-${index}`} fill={entry.color} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
               </div>
             )}
@@ -750,7 +869,7 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={aggregatedData.items}
+                        data={chartItems}
                         dataKey={currentMetricKey}
                         nameKey="displayName"
                         cx="50%"
@@ -759,7 +878,7 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
                         outerRadius={120}
                         paddingAngle={2}
                       >
-                        {aggregatedData.items.map((entry, index) => (
+                        {chartItems.map((entry, index) => (
                           <Cell key={`cell-donut-full-${index}`} fill={entry.color} />
                         ))}
                       </Pie>
@@ -779,7 +898,7 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
                         : `Rp ${(aggregatedData.grandTotalNilai / 1_000_000).toFixed(0)} Jt`}
                     </span>
                     <span className="text-[10px] text-gray-500 font-medium">
-                      {aggregatedData.items.length} Kode Harga
+                      {chartItems.length} Kode Harga
                     </span>
                   </div>
                 </div>
@@ -787,7 +906,7 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
                 {/* Legend Cards List */}
                 <div className="md:col-span-5 space-y-1.5 max-h-80 overflow-y-auto pr-1">
                   <div className="text-xs font-bold text-gray-800 mb-2">Rincian Komposisi:</div>
-                  {aggregatedData.items.map((item, idx) => (
+                  {chartItems.map((item, idx) => (
                     <div
                       key={`${item.kode_grade}-${idx}`}
                       className="p-2 bg-gray-50 hover:bg-gray-100 rounded-xs border border-gray-200 flex items-center justify-between text-xs transition"

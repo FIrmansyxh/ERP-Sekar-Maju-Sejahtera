@@ -101,6 +101,7 @@ import { HargaJualManagement } from './components/harga_jual/HargaJualManagement
 import { DedicatedPrintView } from './components/print/DedicatedPrintView';
 
 import { CheckCircle2 } from 'lucide-react';
+import { seedSamsulAnsori } from './seedSamsulAnsori';
 
 export default function App() {
   // Check URL params for standalone print route (e.g. ?cetak=nota&id=... or ?cetak=surat_jalan&id=...)
@@ -284,6 +285,7 @@ export default function App() {
 
   // Initial Load from localStorage
   useEffect(() => {
+    seedSamsulAnsori();
     setUserList(loadUserData());
     setPetaniList(loadPetaniData());
     setBarangList(loadBarangData());
@@ -1457,6 +1459,7 @@ export default function App() {
                 onSaveNewPengiriman={handleSaveNewPengiriman}
                 onUpdatePengiriman={handleUpdatePengiriman}
                 onDeletePengiriman={handleDeletePengiriman}
+                onNavigateToStatusBatch={() => handleSelectModule('modul-status-batch')}
               />
             )}
 
@@ -1492,6 +1495,7 @@ export default function App() {
                 onUpdateBatchSample={handleUpdateBatchSample}
                 onDeleteBatchSample={handleDeleteBatchSample}
                 onUpdatePengirimanStatus={handleUpdatePengirimanStatus}
+                onDeletePengiriman={handleDeletePengiriman}
                 onNavigateToPengirimanWithBatch={(batchId) => {
                   setSelectedBatchIdForShipment(batchId);
                   handleSelectModule('modul-5-pengiriman');

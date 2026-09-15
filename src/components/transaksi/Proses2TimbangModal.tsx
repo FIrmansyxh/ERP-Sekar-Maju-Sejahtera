@@ -22,7 +22,8 @@ import {
   ShieldCheck,
   ShieldAlert,
   Unlock,
-  Lock
+  Lock,
+  RotateCcw
 } from 'lucide-react';
 import { TransaksiPembelian, TransaksiItemBal, Barang, User as UserType } from '../../types';
 import { formatRupiah, formatDateHariBulanTahun, hitungPotonganTaraKg } from '../../utils/formatters';
@@ -323,6 +324,21 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
     const isGanti = Boolean(activeBalItem.ganti_tikar);
     const taraKg = hitungPotonganTaraKg(bruto, isGanti, activeBalItem.no_bal);
     const nettoKg = Math.max(0, Number((bruto - taraKg).toFixed(1)));
+
+    // Validasi Kapasitas Standar Grade SB: Maksimal 50.0 Kg
+    const isGradeSB = Boolean(
+      (activeBalItem.kode_grade && activeBalItem.kode_grade.toUpperCase().includes('SB')) ||
+      (activeBalItem.no_bal && activeBalItem.no_bal.toUpperCase().startsWith('SB'))
+    );
+    if (isGradeSB && (bruto > 50 || nettoKg > 50)) {
+      setBeratBrutoInput('');
+      setScannerFeedback({
+        text: `Penimbangan bal "${activeBalItem.no_bal}" Grade SB ditolak karena melebihi toleransi maksimal 50,0 kg (${bruto} kg). Kurangi muatan tembakau fisik bal sebelum melanjutkan.`,
+        isError: true,
+      });
+      if (beratInputRef.current) beratInputRef.current.focus();
+      return;
+    }
     const totalKotor = Math.round(nettoKg * activeBalItem.harga_per_kg);
     const potonganTikar = isGanti ? 75000 : 0;
     const totalPotonganBal = (activeBalItem.potongan_kuli || 7000) + (activeBalItem.potongan_tali || 3000) + potonganTikar;
@@ -455,7 +471,7 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
     setWorkingItems(updatedItems);
     setBeratBrutoInput(existingBruto > 0 ? existingBruto : '');
     setScannerFeedback({
-      text: `🔓 Kunci Bal "${item.no_bal}" dibuka. Berat bruto ${existingBruto > 0 ? `(${existingBruto} Kg) ` : ''}siap diedit atau ditimpa, lalu tekan Enter / Simpan.`,
+      text: `Kunci bal "${item.no_bal}" berhasil dibuka. Bobot bruto ${existingBruto > 0 ? `(${existingBruto} kg) ` : ''}siap diedit atau diperbarui pada form timbangan.`,
       isError: false,
     });
 
@@ -704,20 +720,33 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
             </div>
 
             {/* Scanner Live Feedback Toast */}
-            {scannerFeedback && (
-              <div className={`px-3.5 py-2 rounded-xs text-xs font-bold flex items-center space-x-2 transition-all ${
-                scannerFeedback.isError 
-                  ? 'bg-red-100 text-red-900 border border-red-300' 
-                  : 'bg-emerald-100 text-emerald-900 border border-emerald-300 shadow-xs animate-in fade-in'
-              }`}>
-                {scannerFeedback.isError ? (
-                  <AlertTriangle className="w-4 h-4 text-red-700 shrink-0" />
-                ) : (
-                  <Check className="w-4 h-4 text-emerald-700 shrink-0" />
-                )}
-                <span>{scannerFeedback.text}</span>
-              </div>
-            )}
+            {scannerFeedback && (() => {
+              const isError = scannerFeedback.isError;
+              const cleanText = scannerFeedback.text.replace(/^[🔓🎉✓⚠️⛔]\s*/, '');
+              const lower = cleanText.toLowerCase();
+              const isUnlock = lower.includes('dibuka') || lower.includes('buka kunci');
+
+              let containerClass = 'bg-emerald-50 border-emerald-200 text-emerald-900';
+              let Icon = Check;
+              let iconColor = 'text-emerald-700';
+
+              if (isError) {
+                containerClass = 'bg-red-50 border-red-200 text-red-900';
+                Icon = AlertTriangle;
+                iconColor = 'text-red-600';
+              } else if (isUnlock) {
+                containerClass = 'bg-amber-50 border-amber-200 text-amber-950';
+                Icon = Unlock;
+                iconColor = 'text-amber-600';
+              }
+
+              return (
+                <div className={`px-3 py-2 rounded-xs text-xs font-medium border flex items-center space-x-2 transition-all ${containerClass}`}>
+                  <Icon className={`w-3.5 h-3.5 shrink-0 ${iconColor}`} />
+                  <span>{cleanText}</span>
+                </div>
+              );
+            })()}
 
             {/* Anti-Scan Safety Guard Alert Toast */}
             {antiScanAlert && (
@@ -895,6 +924,13 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
                       const bersih = Math.round(Math.max(0, kotor - potTotal));
                       const isWeighed = (activeBalItem.berat_kg || 0) > 0;
 
+                      // Validasi Kapasitas Standar Grade SB: Maksimal 50.0 Kg
+                      const isGradeSB = Boolean(
+                        (activeBalItem.kode_grade && activeBalItem.kode_grade.toUpperCase().includes('SB')) ||
+                        (activeBalItem.no_bal && activeBalItem.no_bal.toUpperCase().startsWith('SB'))
+                      );
+                      const isOverCapacitySB = isGradeSB && (bBruto > 50 || netto > 50);
+
                       return (
                         <>
                           <div className="space-y-1 text-[11px]">
@@ -916,6 +952,47 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
                             </div>
                           </div>
 
+                          {/* Peringatan Real-time Kapasitas SB */}
+                          {isOverCapacitySB && (
+                            <div className="mt-2 p-2.5 bg-white border-l-4 border-l-red-600 border-y border-r border-gray-200 rounded-r-2xs text-[11px] text-gray-800 space-y-1.5 shadow-2xs animate-in fade-in">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-1.5 font-bold text-gray-900">
+                                  <AlertTriangle className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                                  <span>Batas Bobot Terlampaui</span>
+                                </div>
+                                <span className="text-[10px] font-mono font-medium px-1.5 py-0.2 bg-red-50 text-red-700 border border-red-200 rounded-2xs">
+                                  Grade SB Maks. 50 kg
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-gray-600 leading-relaxed">
+                                Bobot terukur ({bBruto} kg Bruto / {netto} kg Netto) melebihi batas standar. Kurangi muatan fisik tembakau sebelum melanjutkan.
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setBeratBrutoInput('');
+                                  if (beratInputRef.current) beratInputRef.current.focus();
+                                }}
+                                className="w-full py-1 bg-white hover:bg-red-50 text-red-700 font-semibold rounded-2xs text-[10px] border border-red-200 hover:border-red-300 transition cursor-pointer flex items-center justify-center space-x-1 shadow-2xs"
+                              >
+                                <RotateCcw className="w-3 h-3" />
+                                <span>Reset Nilai Berat</span>
+                              </button>
+                            </div>
+                          )}
+
+                          {isGradeSB && !isOverCapacitySB && bBruto > 0 && (
+                            <div className="mt-1.5 p-2 bg-white border-l-4 border-l-emerald-600 border-y border-r border-gray-200 rounded-r-2xs text-[10px] text-gray-700 font-medium flex items-center justify-between shadow-2xs">
+                              <div className="flex items-center space-x-1.5">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                                <span>Sesuai Standar Grade SB</span>
+                              </div>
+                              <span className="font-mono text-emerald-700 text-[9px] bg-emerald-50 px-1 py-0.2 border border-emerald-200 rounded-2xs">
+                                ≤ 50 kg
+                              </span>
+                            </div>
+                          )}
+
                           {isWeighed ? (
                             <button
                               type="button"
@@ -924,6 +1001,15 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
                             >
                               <Unlock className="w-3.5 h-3.5 text-slate-700" />
                               <span>Buka Kunci / Timbang Ulang</span>
+                            </button>
+                          ) : isOverCapacitySB ? (
+                            <button
+                              type="button"
+                              disabled
+                              className="mt-2 w-full py-2 bg-gray-100 text-gray-400 font-bold rounded-sm border border-gray-200 flex items-center justify-center space-x-1.5 cursor-not-allowed text-xs shadow-2xs"
+                            >
+                              <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                              <span>Bobot Melebihi Batas SB (Maks. 50 kg)</span>
                             </button>
                           ) : (
                             <button
@@ -971,7 +1057,7 @@ export const Proses2TimbangModal: React.FC<Proses2TimbangModalProps> = ({
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
+                <table className="w-full text-left border-collapse text-xs min-w-[800px]">
                   <thead>
                     <tr className="bg-[#f8f9fa] border-b border-gray-200 text-gray-700 font-bold">
                       <th className="py-2 px-2.5 text-center border-r border-gray-200 w-10">No</th>

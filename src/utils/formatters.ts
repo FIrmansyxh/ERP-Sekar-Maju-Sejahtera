@@ -147,9 +147,31 @@ export function generateSuggestedCardNumber(regionCode: string = 'WRA', sequence
   return `KRT-${regionCode.toUpperCase()}-${paddedNum}`;
 }
 
+/**
+ * Ekstrak kode bal (huruf di bagian depan, misal: "SB-01" -> "SB", "HF-02" -> "HF", "GT-15" -> "GT", "ST01" -> "ST").
+ * Huruf di depan adalah murni kode bal tanpa diartikan.
+ */
+export function extractKodeBalPrefix(noBal?: string): string {
+  if (!noBal) return '';
+  const trimmed = noBal.trim();
+  const match = trimmed.match(/^([A-Za-z]+)/);
+  return match ? match[1].toUpperCase() : '';
+}
+
+/**
+ * Ekstrak nomor / ID bal (angka di bagian belakang agar tidak kembar, misal: "SB-01" -> "01", "HF-12" -> "12").
+ */
+export function extractNomorBalId(noBal?: string): string {
+  if (!noBal) return '';
+  const trimmed = noBal.trim();
+  const match = trimmed.match(/(\d+)$/);
+  return match ? match[1] : trimmed;
+}
+
 export function hitungPotonganTaraKg(beratBruto: number, gantiTikar?: boolean, noBal?: string): number {
   // Kode bal berawalan SB (insensitive) = 2kg rata
-  if (noBal && noBal.toUpperCase().startsWith('SB')) {
+  const prefix = extractKodeBalPrefix(noBal);
+  if (prefix === 'SB' || (noBal && noBal.toUpperCase().startsWith('SB'))) {
     return 2.0;
   }
 

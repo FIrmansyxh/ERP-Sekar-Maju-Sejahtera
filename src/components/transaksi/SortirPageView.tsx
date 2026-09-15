@@ -16,7 +16,8 @@ import {
   Clock,
   Printer,
   ChevronRight,
-  RotateCcw
+  RotateCcw,
+  AlertTriangle
 } from 'lucide-react';
 import { TransaksiPembelian, Petani, TabelHarga, Barang, TransaksiItemBal, UserRole, User as UserType } from '../../types';
 import { formatRupiah, formatNoKupon, formatDateHariBulanTahun, generateTransaksiId, hitungPotonganTaraKg } from '../../utils/formatters';
@@ -64,8 +65,28 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
 
   // Bal Adder Input Fields
   const [inputNoBal, setInputNoBal] = useState('');
-  const isKuponExists = transaksiList.some(tx => tx.no_kupon.toLowerCase() === noKupon.toLowerCase());
-        const [selectedGrade, setSelectedGrade] = useState('');
+  
+  // Real-time Check Duplikasi Kupon
+  const duplicateKuponTx = useMemo(() => {
+    const clean = (noKupon || '').trim().toLowerCase();
+    if (!clean) return null;
+    return transaksiList.find(tx => (tx.no_kupon || '').trim().toLowerCase() === clean);
+  }, [noKupon, transaksiList]);
+  const isKuponExists = Boolean(duplicateKuponTx);
+
+  const handleGenerateNextKupon = () => {
+    let maxNum = 0;
+    transaksiList.forEach(tx => {
+      const match = (tx.no_kupon || '').match(/\d+/);
+      if (match) {
+        const num = parseInt(match[0], 10);
+        if (num > maxNum) maxNum = num;
+      }
+    });
+    setNoKupon(`KUP${String(maxNum + 1).padStart(4, '0')}`);
+  };
+
+  const [selectedGrade, setSelectedGrade] = useState('');
   const [hargaSatuan, setHargaSatuan] = useState<number>(0);
   const [isGantiTikar, setIsGantiTikar] = useState(false);
   const [scanFeedback, setScanFeedback] = useState<{ text: string; isError: boolean } | null>(null);
@@ -464,25 +485,48 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
         <div className="p-4 sm:p-5 space-y-5">
           
           {/* Top Parameters Grid */}
-          <div className="p-4 bg-slate-50 border border-slate-200 rounded-sm grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3.5">
+          <div className="p-4 bg-slate-50 border border-slate-200 rounded-sm grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 md:grid-cols-3 gap-3.5">
             
             {/* 1. Nomor Kupon */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                1. No. Kupon Antrian <span className="text-rose-500">*</span>
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-700">
+                  1. No. Kupon Antrian <span className="text-rose-500">*</span>
+                </label>
+                {isKuponExists && (
+                  <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.2 border border-rose-200 rounded-2xs">
+                    Duplikat!
+                  </span>
+                )}
+              </div>
               <input
                 type="text"
                 value={noKupon}
                 onChange={(e) => setNoKupon(formatNoKupon(e.target.value))}
-                className={`w-full bg-white border rounded-sm px-3 py-1.5 text-xs text-slate-900 font-mono font-semibold focus:outline-none focus:ring-1 ${isKuponExists ? 'border-rose-400 focus:border-rose-600 focus:ring-rose-600' : 'border-slate-300 focus:border-slate-800 focus:ring-slate-800'}`}
+                className={`w-full bg-white border rounded-sm px-3 py-1.5 text-xs text-slate-900 font-mono font-semibold focus:outline-none focus:ring-1 ${isKuponExists ? 'border-rose-500 focus:border-rose-600 focus:ring-rose-600 ring-1 ring-rose-200 bg-rose-50/40' : 'border-slate-300 focus:border-slate-800 focus:ring-slate-800'}`}
                 placeholder="Contoh: KUP0001"
                 required
               />
-              {isKuponExists ? (
-                <p className="text-[10px] text-rose-600 font-semibold mt-1">⚠️ Kupon sudah digunakan</p>
+              {isKuponExists && duplicateKuponTx ? (
+                <div className="mt-1 p-2 bg-rose-50 border border-rose-300 rounded-xs text-[11px] text-rose-950 space-y-1.5 shadow-2xs">
+                  <div className="flex items-center space-x-1.5 font-bold text-rose-700">
+                    <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                    <span>Kupon Sudah Terdaftar!</span>
+                  </div>
+                  <p className="leading-tight text-[10px] text-rose-900">
+                    Kupon <strong className="font-mono">{noKupon}</strong> telah digunakan transaksi <strong>{duplicateKuponTx.transaksi_id}</strong> (Petani: <strong>{duplicateKuponTx.nama_petani}</strong>).
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleGenerateNextKupon}
+                    className="inline-flex items-center space-x-1 text-[10px] font-bold text-white bg-[#b81d24] hover:bg-rose-800 px-2 py-0.5 rounded-xs transition cursor-pointer"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Gunakan Kupon Bebas Berikutnya</span>
+                  </button>
+                </div>
               ) : (
-                <p className="text-[10px] text-slate-400 mt-1">Sesuai kupon antrian fisik</p>
+                <p className="text-[10px] text-slate-400 mt-1">Sesuai nomor kupon antrian fisik petani</p>
               )}
             </div>
 
@@ -548,10 +592,10 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-3 items-end">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 md:grid-cols-2 gap-3 items-end">
               
               {/* No Bal Input */}
-              <div className="md:col-span-3 relative">
+              <div className="lg:col-span-3 relative">
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   No Bal <span className="text-rose-500">*</span>
                 </label>
@@ -588,7 +632,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                   )}
                 </div>
               </div>
-              <div className="md:col-span-3">
+              <div className="lg:col-span-3">
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Mutu Barang <span className="text-rose-500">*</span>
                 </label>
@@ -612,7 +656,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
               </div>
 
               {/* Harga Satuan */}
-              <div className="md:col-span-3">
+              <div className="lg:col-span-3">
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Harga Satuan (Rp/Kg)
                 </label>
@@ -628,7 +672,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
               </div>
 
               {/* Button Tambah Bal */}
-              <div className="md:col-span-3">
+              <div className="lg:col-span-3">
                 <button
                   type="button"
                   id="btn-tambah-bal"
@@ -667,8 +711,8 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
               </p>
             </div>
 
-            <div className="border border-slate-200 rounded-sm overflow-hidden bg-white">
-              <table className="w-full text-left border-collapse text-xs">
+            <div className="border border-slate-200 rounded-sm overflow-x-auto bg-white">
+              <table className="w-full text-left border-collapse text-xs min-w-[650px]">
                 <thead>
                   <tr className="bg-[#f8f9fa] border-b border-gray-200 text-gray-700 font-bold uppercase tracking-wider text-[10px]">
                     <th className="py-2.5 px-3 w-12 text-center border-r border-gray-200">#</th>
