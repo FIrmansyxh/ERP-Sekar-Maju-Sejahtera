@@ -230,6 +230,14 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
     return Array.from(kupons).sort();
   }, [transaksiList]);
 
+  const uniqueGrades = useMemo(() => {
+    const grades = new Set<string>();
+    transaksiList.forEach(t => {
+      getTransactionUniqueGrades(t).forEach(g => grades.add(g));
+    });
+    return Array.from(grades).sort();
+  }, [transaksiList]);
+
   const uniqueSuppliers = useMemo(() => {
     const map = new Map<string, string>();
     transaksiList.forEach(t => {
@@ -764,12 +772,9 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
             />
             <datalist id="grade-list">
               <option value="ALL">Semua Kode Beli</option>
-              <option value="A">Kode Beli A (Super)</option>
-              <option value="B">Kode Beli B (Premium)</option>
-              <option value="C">Kode Beli C (Standar)</option>
-              <option value="D">Kode Beli D (Medium)</option>
-              <option value="E">Kode Beli E (Ekonomis)</option>
-              <option value="F">Kode Beli F (Campuran)</option>
+              {uniqueGrades.map(g => (
+                <option key={g} value={g}>Kode Beli {g}</option>
+              ))}
             </datalist>
           </div>
 

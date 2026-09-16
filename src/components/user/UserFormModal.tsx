@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, UserPlus, UserCheck, Shield, Building2, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { X, UserPlus, UserCheck, Shield, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { SearchableSelect } from '../common/SearchableSelect';
 import { User, UserRole } from '../../types';
 import { ALL_ROLES, ROLE_DEFINITIONS } from '../../utils/rbac';
@@ -10,6 +10,32 @@ interface UserFormModalProps {
   onSave: (user: User) => void;
   editingUser?: User | null;
   existingUsers: User[];
+}
+
+// Nomor pengguna melanjutkan urutan yang sudah terdaftar: Super Admin memakai
+// USR-001, sehingga akun berikutnya menjadi USR-002, USR-003, dan seterusnya.
+function generateNextUserId(existingUsers: User[]): string {
+  let maxSeq = 0;
+
+  existingUsers.forEach((u) => {
+    const match = (u.user_id || '').match(/^USR-([0-9]+)$/i);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (!isNaN(num) && num > maxSeq) maxSeq = num;
+    }
+  });
+
+  const isTaken = (val: string) =>
+    existingUsers.some((u) => (u.user_id || '').toUpperCase().trim() === val);
+
+  let nextSeq = maxSeq + 1;
+  let candidate = `USR-${String(nextSeq).padStart(3, '0')}`;
+  while (isTaken(candidate)) {
+    nextSeq++;
+    candidate = `USR-${String(nextSeq).padStart(3, '0')}`;
+  }
+
+  return candidate;
 }
 
 export const UserFormModal: React.FC<UserFormModalProps> = ({
@@ -28,7 +54,6 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
   const [role, setRole] = useState<UserRole>('admin_sortir');
   const [email, setEmail] = useState('');
   const [noHp, setNoHp] = useState('');
-  const [unitPenugasan, setUnitPenugasan] = useState('');
   const [statusAktif, setStatusAktif] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,7 +65,6 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
       setRole(editingUser.role);
       setEmail(editingUser.email || '');
       setNoHp(editingUser.no_hp || '');
-      setUnitPenugasan(editingUser.unit_penugasan || '');
       setStatusAktif(editingUser.status_aktif);
       setError(null);
     } else {
@@ -52,7 +76,6 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
       setRole('admin_sortir');
       setEmail('');
       setNoHp('');
-      setUnitPenugasan('Gudang Utama Pamekasan');
       setStatusAktif(true);
       setError(null);
     }
@@ -99,14 +122,14 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
     }
 
     const userData: User = {
-      user_id: editingUser ? editingUser.user_id : `USR-${String(Date.now()).slice(-6)}`,
+      user_id: editingUser ? editingUser.user_id : generateNextUserId(existingUsers),
       username: cleanUsername,
       password: finalPassword,
       nama_lengkap: namaLengkap.trim(),
       role,
       email: email.trim() || undefined,
       no_hp: noHp.trim() || undefined,
-      unit_penugasan: 'Gudang Utama Pamekasan',
+      unit_penugasan: editingUser?.unit_penugasan || 'Gudang Utama Pamekasan',
       status_aktif: statusAktif,
       dibuat_pada: editingUser?.dibuat_pada || new Date().toISOString(),
       terakhir_login: editingUser?.terakhir_login,
@@ -245,21 +268,6 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                   </p>
                 </div>
               )}
-            </div>
-
-            {/* Unit Penugasan */}
-            <div className="sm:col-span-2">
-              <label className="block font-semibold text-gray-700 mb-1">
-                Unit Fasilitas / Penugasan Gudang
-              </label>
-              <input
-                type="text"
-                value="Gudang Utama Pamekasan"
-                readOnly
-                disabled
-                className="w-full px-3 py-2 border border-gray-200 bg-gray-50 text-gray-600 rounded-sm text-xs cursor-not-allowed"
-              />
-              <p className="text-[10px] text-gray-500 mt-0.5">Sistem terkonfigurasi tunggal pada Gudang Utama Pamekasan.</p>
             </div>
 
             {/* Email */}

@@ -956,10 +956,6 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                   Pencarian Bal & Kupon
                 </h3>
               </div>
-              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-xs font-mono">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                Scanner Siap
-              </span>
             </div>
 
             <form onSubmit={handleScanBarcode} className="relative">
