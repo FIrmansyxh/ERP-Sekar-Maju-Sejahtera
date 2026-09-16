@@ -4,7 +4,8 @@ export interface Petani {
   no_hp: string; // numeric phone number
   alamat: string; // required address/area
   status_aktif: boolean; // default true
-    desa_kecamatan?: string; // optional area
+  alasan_nonaktif?: string;
+  desa_kecamatan?: string; // optional area
   tanggal_daftar?: string; // YYYY-MM-DD
   catatan?: string;
   statistik?: {
