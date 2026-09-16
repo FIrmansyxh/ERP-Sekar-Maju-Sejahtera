@@ -3,12 +3,23 @@
  * Mendukung autentikasi Sanctum Bearer Token dan deteksi status koneksi.
  */
 
-const DEFAULT_API_URL = 'http://localhost:8000/api/v1';
+function resolveDefaultApiUrl(): string {
+  if (typeof window !== 'undefined' && window.location) {
+    const hostname = window.location.hostname;
+    // Jika dibuka di komputer lokal saat development
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return 'http://localhost:8000/api/v1';
+    }
+    // Jika dibuka di server VPS / domain produksi, gunakan origin server yang sedang dibuka
+    return `${window.location.origin}/api/v1`;
+  }
+  return 'http://localhost:8000/api/v1';
+}
 
 export const API_BASE_URL = 
   (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE_URL) 
     ? import.meta.env.VITE_API_BASE_URL 
-    : DEFAULT_API_URL;
+    : resolveDefaultApiUrl();
 
 const TOKEN_KEY = 'erp_sanctum_token';
 
