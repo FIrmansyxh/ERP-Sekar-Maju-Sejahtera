@@ -367,11 +367,31 @@ export function generateTransaksiId(
 }
 
 /**
- * Formats a number with optional decimal places, e.g. 1000.5 -> "1.000,5"
+ * Memformat angka dengan pemisah ribuan gaya Indonesia, mis. 1000.5 -> "1.000,5".
+ *
+ * Desimal yang benar-benar ada tetap ditampilkan sampai tiga angka di belakang
+ * koma, sehingga berat timbangan tidak pernah terlihat dibulatkan.
  */
 export function formatNumber(val?: number | null, decimals: number = 0): string {
   if (val === undefined || val === null || isNaN(val)) return '0';
-  return val.toLocaleString('id-ID', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  return val.toLocaleString('id-ID', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: Math.max(decimals, 3),
+  });
+}
+
+/**
+ * Membersihkan galat pembulatan floating point tanpa mengubah nilai berat.
+ *
+ * Contoh: 15.75 - 3 menghasilkan 12.749999999999998 di JavaScript; fungsi ini
+ * mengembalikannya menjadi 12.75. Presisi tiga angka di belakang koma dipilih
+ * karena timbangan gudang mencatat sampai satuan gram, jadi tidak ada angka
+ * berat sah yang hilang. Fungsi ini BUKAN pembulatan berat: nilai seperti
+ * 12.756 tetap tersimpan apa adanya.
+ */
+export function normalizeKg(val?: number | null): number {
+  if (val === undefined || val === null || isNaN(val)) return 0;
+  return Math.round(val * 1000) / 1000;
 }
 
 export function generatePetaniId(existingList: any[] = []): string {

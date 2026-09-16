@@ -1,25 +1,20 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  Menu, 
-  User as UserIcon,
+import {
   ShieldCheck,
   LogOut,
   ChevronDown,
   Users,
   Building2,
-  CheckCircle2,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
 } from 'lucide-react';
-import { User, UserRole } from '../types';
+import { User } from '../types';
 import { getRoleInfo, canUserPerform } from '../utils/rbac';
 
 interface HeaderProps {
   totalPetani: number;
   totalAktif: number;
   totalNonaktif: number;
-  onResetData: () => void;
-  onOpenRoadmap: () => void;
   pageTitle?: string;
   pageBreadcrumb?: string;
   onToggleSidebar?: () => void;
@@ -29,16 +24,12 @@ interface HeaderProps {
   currentUser?: User | null;
   onLogout?: () => void;
   onOpenUsers?: () => void;
-  onSwitchUser?: (user: User) => void;
-  allUsers?: User[];
 }
 
 export const Header: React.FC<HeaderProps> = ({
   totalPetani,
   totalAktif,
   totalNonaktif,
-  onResetData,
-  onOpenRoadmap,
   pageTitle = 'Sistem Data Gudang',
   pageBreadcrumb = 'PR. SEKAR MAJU SEJAHTERA / Sistem Data Gudang',
   onToggleSidebar,
@@ -48,11 +39,8 @@ export const Header: React.FC<HeaderProps> = ({
   currentUser,
   onLogout,
   onOpenUsers,
-  onSwitchUser,
-  allUsers = [],
 }) => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [isSwitchOpen, setIsSwitchOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown on click outside
@@ -60,7 +48,6 @@ export const Header: React.FC<HeaderProps> = ({
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsProfileOpen(false);
-        setIsSwitchOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -114,10 +101,7 @@ export const Header: React.FC<HeaderProps> = ({
               <div className="relative" ref={dropdownRef}>
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsProfileOpen(!isProfileOpen);
-                    setIsSwitchOpen(false);
-                  }}
+                  onClick={() => setIsProfileOpen(!isProfileOpen)}
                   className="flex items-center space-x-2.5 py-1.5 px-2.5 hover:bg-slate-50 border border-slate-200 rounded-md text-xs cursor-pointer transition-colors select-none group"
                   title="Informasi Akun Staf & Hak Akses"
                 >
@@ -175,54 +159,6 @@ export const Header: React.FC<HeaderProps> = ({
                           <Users className="w-4 h-4 text-slate-500" />
                           <span>Kelola Pengguna (RBAC)</span>
                         </button>
-                      )}
-
-                      {/* Quick Switch User toggle */}
-                      {onSwitchUser && allUsers.length > 1 && (
-                        <div>
-                          <button
-                            type="button"
-                            onClick={() => setIsSwitchOpen(!isSwitchOpen)}
-                            className="w-full text-left px-3.5 py-2 text-slate-700 hover:text-slate-900 hover:bg-slate-50 flex items-center justify-between cursor-pointer font-medium transition-colors"
-                          >
-                            <div className="flex items-center space-x-2.5">
-                              <UserIcon className="w-4 h-4 text-slate-500" />
-                              <span>Ganti Akun Cepat</span>
-                            </div>
-                            <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isSwitchOpen ? 'rotate-180' : ''}`} />
-                          </button>
-
-                          {isSwitchOpen && (
-                            <div className="bg-slate-50/70 border-y border-slate-100 py-1.5 px-2.5 space-y-1 max-h-48 overflow-y-auto">
-                              {allUsers.map((u) => {
-                                const uRole = getRoleInfo(u.role);
-                                const isCurrent = u.user_id === currentUser.user_id;
-                                return (
-                                  <button
-                                    key={u.user_id}
-                                    type="button"
-                                    onClick={() => {
-                                      setIsProfileOpen(false);
-                                      setIsSwitchOpen(false);
-                                      onSwitchUser(u);
-                                    }}
-                                    className={`w-full text-left p-2 rounded flex items-center justify-between text-[11px] transition-colors cursor-pointer ${
-                                      isCurrent
-                                        ? 'bg-slate-900 text-white font-medium'
-                                        : 'text-slate-700 hover:bg-slate-200/60'
-                                    }`}
-                                  >
-                                    <div className="truncate">
-                                      <div className="font-medium">{u.nama_lengkap}</div>
-                                      <div className={`text-[10px] ${isCurrent ? 'text-slate-300' : 'text-slate-500'}`}>@{u.username} • {uRole.label.split('(')[0]}</div>
-                                    </div>
-                                    {isCurrent && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
                       )}
                     </div>
 

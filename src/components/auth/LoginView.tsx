@@ -1,28 +1,26 @@
 import React, { useState } from 'react';
-import { 
-  Lock, 
-  User as UserIcon, 
-  Eye, 
-  EyeOff, 
-  ArrowRight, 
+import {
+  Lock,
+  User as UserIcon,
+  Eye,
+  EyeOff,
+  ArrowRight,
   AlertCircle,
   Building2,
   CheckCircle2,
-  KeyRound,
+  ShieldCheck,
   Monitor
 } from 'lucide-react';
-import { User, UserRole } from '../../types';
-import { loadUserData } from '../../utils/storage';
+import { User } from '../../types';
 import { ErpApiService } from '../../services/erpApi';
+import { APP_BUILD, APP_EDITION, APP_VERSION } from '../../config/appInfo';
 
 interface LoginViewProps {
   onLoginSuccess: (user: User) => void;
-  availableUsers?: User[];
 }
 
 export const LoginView: React.FC<LoginViewProps> = ({
   onLoginSuccess,
-  availableUsers,
 }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -30,8 +28,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-
-  const usersList = availableUsers || loadUserData();
 
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,31 +53,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
       }
     }, 200);
   };
-
-  const handleFastRoleLogin = (role: UserRole) => {
-    setError(null);
-    const targetUser = usersList.find((u) => u.role === role && u.status_aktif) || usersList.find((u) => u.role === role);
-    if (!targetUser) {
-      setError(`Tidak ditemukan akun untuk role ${role}.`);
-      return;
-    }
-
-    const defaultPwd = targetUser.password || 'admin123';
-    setUsername(targetUser.username);
-    setPassword(defaultPwd);
-    setIsLoading(true);
-
-    setTimeout(async () => {
-      const result = await ErpApiService.login(targetUser.username, defaultPwd);
-      setIsLoading(false);
-      if (result.success && result.user) {
-        onLoginSuccess(result.user);
-      } else {
-        setError(result.message);
-      }
-    }, 150);
-  };
-
   return (
     <div className="min-h-screen bg-[#eaedf1] flex flex-col justify-between font-sans text-gray-800">
       
@@ -100,7 +71,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
         <div className="flex items-center space-x-1.5 px-2.5 py-1 bg-gray-50 border border-gray-200 rounded-xs text-[11px] text-gray-600">
           <Monitor className="w-3 h-3 text-gray-400" />
-          <span>Desktop Standalone v2.4</span>
+          <span>{APP_EDITION} v{APP_VERSION}</span>
         </div>
       </header>
 
@@ -145,7 +116,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
             {/* Bottom Left Info */}
             <div className="pt-6 mt-8 border-t border-white/15 text-[11px] text-red-200/90 leading-relaxed font-sans">
               <div>Pamekasan, Madura - Jawa Timur</div>
-              <div className="font-mono text-red-200/70 mt-1">Build: 2026-08-REV3</div>
+              <div className="font-mono text-red-200/70 mt-1">Build {APP_BUILD}</div>
             </div>
           </div>
 
@@ -184,7 +155,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                         setUsername(e.target.value);
                         setError(null);
                       }}
-                      placeholder="misal: admin atau operator"
+                      placeholder="Masukkan username terdaftar"
                       className="w-full pl-9 pr-3 py-2 bg-white border border-gray-300 rounded-xs focus:outline-none focus:border-[#b81d24] text-xs text-gray-900"
                       required
                       autoFocus
@@ -232,9 +203,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     />
                     <span className="text-[11px] font-medium">Ingat Sesi di Komputer Ini</span>
                   </label>
-                  <span className="text-[11px] text-gray-500 font-mono">
-                    Default pass: <span className="font-bold text-gray-700">admin123</span>
-                  </span>
                 </div>
 
                 {/* Submit Button */}
@@ -257,75 +225,14 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 </button>
               </form>
 
-              {/* Quick Role Tester (Neutral & Clean Monochrome Style) - DEV ONLY */}
-              {import.meta.env.DEV && (
-                <div className="mt-5 pt-3.5 border-t border-gray-200">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center space-x-1.5 text-[10px] font-bold text-gray-700 uppercase tracking-wider">
-                      <KeyRound className="w-3 h-3 text-[#b81d24]" />
-                      <span>AKSES CEPAT PENGUJIAN ROLE (1-KLIK):</span>
-                    </div>
-                    <span className="text-[10px] font-mono text-gray-400">6 Role</span>
-                  </div>
-
-                {/* 6 RBAC Roles Quick Login Buttons */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => handleFastRoleLogin('superadmin')}
-                    className="p-2 text-left bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300 rounded-xs transition cursor-pointer group shadow-2xs"
-                  >
-                    <div className="font-bold text-gray-800 text-[11px] group-hover:text-[#b81d24]">Super Admin</div>
-                    <div className="text-[10px] text-gray-500 font-mono">@superadmin</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleFastRoleLogin('admin_sortir')}
-                    className="p-2 text-left bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300 rounded-xs transition cursor-pointer group shadow-2xs"
-                  >
-                    <div className="font-bold text-gray-800 text-[11px] group-hover:text-[#b81d24]">Admin Sortir</div>
-                    <div className="text-[10px] text-gray-500 font-mono">@adminsortir</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleFastRoleLogin('admin_timbang')}
-                    className="p-2 text-left bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300 rounded-xs transition cursor-pointer group shadow-2xs"
-                  >
-                    <div className="font-bold text-gray-800 text-[11px] group-hover:text-[#b81d24]">Admin Timbang</div>
-                    <div className="text-[10px] text-gray-500 font-mono">@admintimbang</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleFastRoleLogin('admin_kasir')}
-                    className="p-2 text-left bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300 rounded-xs transition cursor-pointer group shadow-2xs"
-                  >
-                    <div className="font-bold text-gray-800 text-[11px] group-hover:text-[#b81d24]">Admin Kasir</div>
-                    <div className="text-[10px] text-gray-500 font-mono">@adminkasir</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleFastRoleLogin('admin_pengiriman')}
-                    className="p-2 text-left bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300 rounded-xs transition cursor-pointer group shadow-2xs"
-                  >
-                    <div className="font-bold text-gray-800 text-[11px] group-hover:text-[#b81d24]">Admin Pengiriman</div>
-                    <div className="text-[10px] text-gray-500 font-mono">@adminpengiriman</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleFastRoleLogin('kepala_gudang')}
-                    className="p-2 text-left bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300 rounded-xs transition cursor-pointer group shadow-2xs"
-                  >
-                    <div className="font-bold text-gray-800 text-[11px] group-hover:text-[#b81d24]">Kepala Gudang</div>
-                    <div className="text-[10px] text-gray-500 font-mono">@kepalagudang</div>
-                  </button>
-                </div>
+              {/* Security Notice */}
+              <div className="mt-5 pt-3.5 border-t border-gray-200 flex items-start space-x-2 text-[11px] text-gray-500 leading-relaxed">
+                <ShieldCheck className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-0.5" />
+                <span>
+                  Akses sistem dibatasi untuk staf terdaftar PR. Sekar Maju Sejahtera. Seluruh aktivitas
+                  akun tercatat pada log audit. Hubungi Administrator Gudang bila kredensial Anda bermasalah.
+                </span>
               </div>
-              )}
 
             </div>
           </div>

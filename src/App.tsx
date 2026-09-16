@@ -32,10 +32,10 @@ import {
   saveUserData,
   loadCurrentUser, 
   saveCurrentUser,
-  resetToDemoData,
   recordAuditLog
 } from './utils/storage';
 import { hasModuleAccess } from './utils/rbac';
+import { normalizeKg } from './utils/formatters';
 import { hashPassword } from './utils/crypto';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
@@ -102,7 +102,6 @@ import { HargaJualManagement } from './components/harga_jual/HargaJualManagement
 import { DedicatedPrintView } from './components/print/DedicatedPrintView';
 
 import { CheckCircle2 } from 'lucide-react';
-import { seedSamsulAnsori } from './seedSamsulAnsori';
 
 export default function App() {
   // Check URL params for standalone print route (e.g. ?cetak=nota&id=... or ?cetak=surat_jalan&id=...)
@@ -288,6 +287,17 @@ export default function App() {
       });
     }
   }, [currentUser]);
+
+  // Modul terakhir yang dibuka disimpan di peramban. Saat halaman dimuat ulang
+  // hak aksesnya diperiksa ulang agar pengguna tidak masuk ke modul terlarang.
+  useEffect(() => {
+    if (!currentUser) return;
+    const isBlocked =
+      currentUser.status_aktif === false || !hasModuleAccess(currentUser.role, activeModuleId);
+    if (isBlocked && activeModuleId !== 'modul-home') {
+      setActiveModuleId('modul-home');
+    }
+  }, [currentUser, activeModuleId]);
   const [targetKuponNo, setTargetKuponNo] = useState<string | undefined>(undefined);
   const [targetTxId, setTargetTxId] = useState<string | undefined>(undefined);
   const [targetBalNo, setTargetBalNo] = useState<string | undefined>(undefined);
@@ -312,7 +322,6 @@ export default function App() {
 
   // Initial Load from localStorage
   useEffect(() => {
-    seedSamsulAnsori();
     setUserList(loadUserData());
     setPetaniList(loadPetaniData());
     setBarangList(loadBarangData());
@@ -415,13 +424,6 @@ export default function App() {
     };
   }, [currentUser]);
 
-  const handleSwitchUser = (targetUser: User) => {
-    setCurrentUser(targetUser);
-    saveCurrentUser(targetUser);
-    setActiveModuleId('modul-home');
-    showToast(`Beralih akun ke: ${targetUser.nama_lengkap} (${targetUser.role})`);
-  };
-
   // --- User Management Handlers ---
   const handleSaveUser = async (savedUser: User) => {
     const existingUser = userList.find((u) => u.user_id === savedUser.user_id);
@@ -509,34 +511,51 @@ export default function App() {
 
   const handleConfirmStatusToggle = async (petaniId: string, reason: string) => {
     const target = petaniList.find((p) => p.petani_id === petaniId);
-    if (!target) return;
-    const newStatus = !target.status_aktif;
+    if (!target) {
+      setDeactivatingPetani(null);
+      showToast('Data petani tidak ditemukan. Muat ulang halaman lalu coba lagi.', 'info');
+      return;
+    }
+
+    const isNowActive = !target.status_aktif;
 
     try {
       await ErpApiService.savePetani({
         petani_id: petaniId,
-        status_aktif: newStatus,
-        alasan_nonaktif: newStatus ? undefined : reason,
+        status_aktif: isNowActive,
+        alasan_nonaktif: isNowActive ? undefined : reason,
       }, true);
     } catch (err) {
       console.warn('Gagal sync status petani ke PostgreSQL:', err);
     }
 
-    const updated = petaniList.map((p) => {
-      if (p.petani_id === petaniId) {
-        return {
-          ...p,
-          status_aktif: newStatus,
-          alasan_nonaktif: newStatus ? undefined : reason,
-        };
-      }
-      return p;
-    });
+    const updated = petaniList.map((p) =>
+      p.petani_id === petaniId
+        ? { ...p, status_aktif: isNowActive, alasan_nonaktif: isNowActive ? undefined : reason }
+        : p,
+    );
 
     setPetaniList(updated);
     savePetaniData(updated);
     setDeactivatingPetani(null);
-    showToast('Status keaktifan petani berhasil diperbarui.');
+
+    recordAuditLog({
+      user_nama: currentUser?.nama_lengkap || 'Sistem',
+      user_role: currentRole,
+      modul: 'Master Petani',
+      aksi: isNowActive ? 'AKTIFKAN_PETANI' : 'NONAKTIFKAN_PETANI',
+      target_id: petaniId,
+      deskripsi: isNowActive
+        ? `Mengaktifkan kembali petani ${target.nama_petani} (${petaniId})`
+        : `Menonaktifkan petani ${target.nama_petani} (${petaniId})`,
+      rincian_perubahan: reason ? [`Alasan: ${reason}`] : undefined,
+    });
+
+    showToast(
+      isNowActive
+        ? `Petani "${target.nama_petani}" kembali aktif dan dapat dipilih di loket sortir.`
+        : `Petani "${target.nama_petani}" dinonaktifkan dan tidak lagi muncul di pilihan sortir.`,
+    );
   };
 
   const handleConfirmResetCardNumber = (petaniId: string, newCardNumber: string) => {
@@ -792,7 +811,7 @@ export default function App() {
           diffSummary.push(`Grade: ${oldTx.kode_grade} -> ${newTx.kode_grade}`);
         }
         if (oldTx.berat_kg !== newTx.berat_kg) {
-          diffSummary.push(`Netto: ${oldTx.berat_kg} Kg -> ${newTx.berat_kg} Kg (Δ ${(newTx.berat_kg - oldTx.berat_kg).toFixed(1)} Kg)`);
+          diffSummary.push(`Netto: ${oldTx.berat_kg} Kg -> ${newTx.berat_kg} Kg (Δ ${normalizeKg(newTx.berat_kg - oldTx.berat_kg)} Kg)`);
         }
         if ((oldTx.harga_final || oldTx.total_harga_beli) !== (newTx.harga_final || newTx.total_harga_beli)) {
           diffSummary.push(`Nilai: Rp ${(oldTx.harga_final || oldTx.total_harga_beli).toLocaleString('id-ID')} -> Rp ${(newTx.harga_final || newTx.total_harga_beli).toLocaleString('id-ID')}`);
@@ -1066,21 +1085,6 @@ export default function App() {
     showToast(`Status pengiriman ${pengirimanId} menjadi ${newStatus}.`);
   };
 
-  const handleResetToDemo = () => {
-    resetToDemoData();
-    setPetaniList(loadPetaniData());
-    setBarangList(loadBarangData());
-    setHargaList(loadHargaData());
-    setTransaksiList(loadTransaksiData());
-    setSampleList(loadSampleData());
-    setPengirimanList(loadPengirimanData());
-    setUserList(loadUserData());
-    setHargaJualList(loadHargaJualData());
-    setBatchSampleList(loadBatchSampleData());
-    
-    showToast('Data sistem ERP berhasil direset ke dataset demo default.');
-  };
-
   const totalPetani = petaniList.length;
   const totalAktif = petaniList.filter((p) => p.status_aktif).length;
   const totalNonaktif = totalPetani - totalAktif;
@@ -1134,7 +1138,12 @@ export default function App() {
 
   const pageInfo = getPageTitleAndBreadcrumb();
 
-  // Dedicated Standalone Print View (matches user's reference sekaranomgroup.com/cetak_... tab)
+  // Seluruh halaman berada di balik autentikasi, termasuk rute cetak mandiri.
+  if (!currentUser) {
+    return <LoginView onLoginSuccess={handleLoginSuccess} />;
+  }
+
+  // Halaman cetak mandiri (?cetak=nota&id=...)
   if (printParam) {
     return (
       <DedicatedPrintView
@@ -1154,16 +1163,6 @@ export default function App() {
     );
   }
 
-  // If user is not authenticated, show Login View
-  if (!currentUser) {
-    return (
-      <LoginView
-        onLoginSuccess={handleLoginSuccess}
-        availableUsers={userList}
-      />
-    );
-  }
-
   return (
     <div className="min-h-screen bg-[#f4f6f9] text-[#212529] font-sans flex flex-col antialiased">
       
@@ -1172,14 +1171,11 @@ export default function App() {
         totalPetani={totalPetani}
         totalAktif={totalAktif}
         totalNonaktif={totalNonaktif}
-        onResetData={handleResetToDemo}
-        onOpenRoadmap={() => {}}
         pageTitle={pageInfo.title}
         pageBreadcrumb={pageInfo.breadcrumb}
         currentUser={currentUser}
         onLogout={handleLogout}
         onOpenUsers={() => handleSelectModule('modul-users')}
-        onSwitchUser={handleSwitchUser}
         allUsers={userList}
         onToggleSidebar={handleToggleSidebar}
         onMouseEnterToggle={handleMouseEnterToggle}

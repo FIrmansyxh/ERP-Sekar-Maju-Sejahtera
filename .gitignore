@@ -1,8 +1,19 @@
+# Dependencies
 node_modules/
-build/
+
+# Build output
 dist/
-coverage/
-.DS_Store
+build/
+
+# Log & cache
 *.log
+.vite/
+coverage/
+
+# Variabel lingkungan (jangan pernah di-commit)
 .env*
 !.env.example
+
+# Berkas sementara sistem operasi
+.DS_Store
+Thumbs.db

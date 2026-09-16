@@ -47,7 +47,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
       // Auto-generate next user ID
       const nextNum = existingUsers.length + 1;
       setUsername(`staf_${nextNum}`);
-      setPassword('password123');
+      setPassword('');
       setNamaLengkap('');
       setRole('admin_sortir');
       setEmail('');
@@ -87,10 +87,21 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
       return;
     }
 
+    if (isEdit && password.trim() && password.trim().length < 6) {
+      setError('Kata sandi baru minimal 6 karakter.');
+      return;
+    }
+
+    const finalPassword = password.trim() || editingUser?.password || '';
+    if (!finalPassword) {
+      setError('Akun ini belum memiliki kata sandi. Isi kata sandi baru minimal 6 karakter.');
+      return;
+    }
+
     const userData: User = {
       user_id: editingUser ? editingUser.user_id : `USR-${String(Date.now()).slice(-6)}`,
       username: cleanUsername,
-      password: password.trim() ? password.trim() : (editingUser?.password || 'admin123'),
+      password: finalPassword,
       nama_lengkap: namaLengkap.trim(),
       role,
       email: email.trim() || undefined,
@@ -178,7 +189,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                     setPassword(e.target.value);
                     setError(null);
                   }}
-                  placeholder={isEdit ? 'Kosongkan jika tidak diubah' : 'Minimal 5 karakter'}
+                  placeholder={isEdit ? 'Kosongkan jika tidak diubah' : 'Minimal 6 karakter'}
                   className="w-full px-3 py-2 pr-9 border border-gray-300 rounded-sm focus:ring-1 focus:ring-red-500 focus:border-red-500 text-xs"
                   required={!isEdit}
                 />

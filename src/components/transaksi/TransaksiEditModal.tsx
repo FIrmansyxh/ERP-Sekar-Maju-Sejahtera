@@ -28,7 +28,7 @@ import {
   User as UserType 
 } from '../../types';
 import { recordAuditLog } from '../../utils/storage';
-import { formatRupiah, generateBalId, generateNextUniqueNoBal } from '../../utils/formatters';
+import { formatRupiah, generateBalId, generateNextUniqueNoBal, normalizeKg } from '../../utils/formatters';
 
 interface TransaksiEditModalProps {
   isOpen: boolean;
@@ -239,7 +239,7 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
   };
 
   // Computed Totals for Updated Data
-  const totalNettoBaru = Number(balRows.reduce((acc, r) => acc + (Number(r.berat_kg) || 0), 0).toFixed(1));
+  const totalNettoBaru = normalizeKg(balRows.reduce((acc, r) => acc + (Number(r.berat_kg) || 0), 0));
   const totalKotorBaru = balRows.reduce((acc, r) => acc + r.total_kotor, 0);
   const totalPotonganBaru = balRows.reduce((acc, r) => acc + r.potongan, 0);
   const totalHargaFinalBaru = balRows.reduce((acc, r) => acc + r.subtotal_bersih, 0);
@@ -728,7 +728,7 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
                   {isBeratChanged ? (
                     <div className="space-y-0.5">
                       <span className="text-rose-700 line-through text-[11px] block">{transaksi.berat_kg} Kg</span>
-                      <span className="text-emerald-700 font-bold block">→ {totalNettoBaru} Kg (Selisih: {(totalNettoBaru - transaksi.berat_kg).toFixed(1)} Kg)</span>
+                      <span className="text-emerald-700 font-bold block">→ {totalNettoBaru} Kg (Selisih: {normalizeKg(totalNettoBaru - transaksi.berat_kg)} Kg)</span>
                     </div>
                   ) : (
                     <span className="text-slate-700">{transaksi.berat_kg} Kg (Tetap)</span>

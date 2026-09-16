@@ -12,7 +12,7 @@ import { Petani } from '../../types';
 interface PetaniDeactivateModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (petani: Petani, reason?: string) => void;
+  onConfirm: (petaniId: string, reason: string) => void;
   petani: Petani | null;
 }
 
@@ -29,7 +29,7 @@ export const PetaniDeactivateModal: React.FC<PetaniDeactivateModalProps> = ({
   const isDeactivating = petani.status_aktif;
 
   const handleConfirm = () => {
-    onConfirm(petani, reason);
+    onConfirm(petani.petani_id, reason.trim());
     setReason('');
   };
 

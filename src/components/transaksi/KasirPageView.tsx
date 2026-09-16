@@ -19,7 +19,7 @@ import {
   Lock
 } from 'lucide-react';
 import { TransaksiPembelian, Petani, TabelHarga, Barang, UserRole, User as UserType } from '../../types';
-import { formatRupiah, formatAccounting, formatDateIndo, formatNoKupon } from '../../utils/formatters';
+import { formatRupiah, formatAccounting, formatDateIndo, formatNoKupon, normalizeKg } from '../../utils/formatters';
 import { TransaksiDetailModal } from './TransaksiDetailModal';
 import { PembayaranKasirModal } from './PembayaranKasirModal';
 import { TransaksiEditModal } from './TransaksiEditModal';
@@ -297,7 +297,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
   const stats = useMemo(() => {
     const totalTx = filteredList.length;
     const totalBal = filteredList.reduce((acc, t) => acc + (t.total_bal || (t.items ? t.items.length : 1)), 0);
-    const totalNetto = Number(filteredList.reduce((acc, t) => acc + (t.berat_kg || 0), 0).toFixed(1));
+    const totalNetto = normalizeKg(filteredList.reduce((acc, t) => acc + (t.berat_kg || 0), 0));
     const totalKotor = filteredList.reduce((acc, t) => acc + (t.total_kotor || t.total_harga_beli || 0), 0);
     const totalPajak = filteredList.reduce((acc, t) => acc + (t.pajak || 0), 0);
     const totalPotongan = filteredList.reduce((acc, t) => acc + (t.total_potongan || 0), 0);
