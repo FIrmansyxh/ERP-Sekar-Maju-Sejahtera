@@ -6,11 +6,15 @@
 function resolveDefaultApiUrl(): string {
   if (typeof window !== 'undefined' && window.location) {
     const hostname = window.location.hostname;
-    // Jika dibuka di komputer lokal saat development
+    // 1. Jika dibuka di komputer lokal saat development
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
       return 'http://localhost:8000/api/v1';
     }
-    // Jika dibuka di server VPS / domain produksi, gunakan origin server yang sedang dibuka
+    // 2. Jika di-deploy di Vercel (demo standalone tanpa backend server)
+    if (hostname.endsWith('.vercel.app')) {
+      return ''; // Langsung mode lokal tanpa delay request API
+    }
+    // 3. Jika dibuka di server VPS / domain produksi, gunakan origin server yang sedang dibuka
     return `${window.location.origin}/api/v1`;
   }
   return 'http://localhost:8000/api/v1';
@@ -53,6 +57,9 @@ export interface ApiResponse<T = any> {
  * Cek apakah backend Laravel sedang aktif dan dapat dihubungi
  */
 export async function checkBackendHealth(): Promise<boolean> {
+  if (!API_BASE_URL) {
+    return false;
+  }
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 detik timeout
