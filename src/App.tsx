@@ -42,6 +42,7 @@ import { Sidebar } from './components/Sidebar';
 
 // Auth Login View
 import { LoginView } from './components/auth/LoginView';
+import { ErpApiService } from './services/erpApi';
 
 // User Management 
 import { UserManagement } from './components/user/UserManagement';
@@ -261,6 +262,32 @@ export default function App() {
     }
   }, [activeModuleId]);
 
+  // Sinkronisasi data riil dari backend PostgreSQL saat user terautentikasi
+  useEffect(() => {
+    if (currentUser) {
+      ErpApiService.getPetaniList().then((res) => {
+        if (res.fromBackend) {
+          setPetaniList(res.data);
+        }
+      });
+      ErpApiService.getBarangList().then((res) => {
+        if (res.fromBackend) {
+          setBarangList(res.data);
+        }
+      });
+      ErpApiService.getTransaksiList().then((res) => {
+        if (res.fromBackend) {
+          setTransaksiList(res.data);
+        }
+      });
+      ErpApiService.getHargaList().then((res) => {
+        if (res.fromBackend) {
+          setHargaList(res.data);
+        }
+      });
+    }
+  }, [currentUser]);
+
   // Modul terakhir yang dibuka disimpan di peramban. Saat halaman dimuat ulang
   // hak aksesnya diperiksa ulang agar pengguna tidak masuk ke modul terlarang.
   useEffect(() => {
@@ -456,27 +483,33 @@ export default function App() {
   };
 
   // --- PRD 4.1: Petani Handlers ---
-  const handleSavePetani = (petaniData: Petani) => {
-    let updated: Petani[];
-    const exists = petaniList.some((p) => p.petani_id === petaniData.petani_id);
+  const handleSavePetani = async (petaniData: Petani) => {
+    const exists = Boolean(editingPetani);
 
-    if (exists) {
-      updated = petaniList.map((p) =>
-        p.petani_id === petaniData.petani_id ? { ...p, ...petaniData } : p
-      );
-      showToast(`Data petani "${petaniData.nama_petani}" berhasil diperbarui.`);
-    } else {
-      updated = [petaniData, ...petaniList];
-      showToast(`Petani baru "${petaniData.nama_petani}" (${petaniData.petani_id}) berhasil didaftarkan!`);
+    try {
+      const saved = await ErpApiService.savePetani(petaniData, exists);
+
+      let updated: Petani[];
+      if (exists) {
+        updated = petaniList.map((p) =>
+          p.petani_id === saved.petani_id ? saved : p
+        );
+        showToast(`Data petani "${saved.nama_petani}" berhasil diperbarui.`);
+      } else {
+        updated = [saved, ...petaniList.filter((p) => p.petani_id !== saved.petani_id)];
+        showToast(`Petani baru "${saved.nama_petani}" (${saved.petani_id}) berhasil disimpan ke PostgreSQL!`);
+      }
+
+      setPetaniList(updated);
+      savePetaniData(updated);
+      setIsFormModalOpen(false);
+      setEditingPetani(null);
+    } catch (err: any) {
+      showToast(err?.message || 'Gagal menyimpan data petani ke PostgreSQL.', 'info');
     }
-
-    setPetaniList(updated);
-    savePetaniData(updated);
-    setIsFormModalOpen(false);
-    setEditingPetani(null);
   };
 
-  const handleConfirmStatusToggle = (petaniId: string, reason: string) => {
+  const handleConfirmStatusToggle = async (petaniId: string, reason: string) => {
     const target = petaniList.find((p) => p.petani_id === petaniId);
     if (!target) {
       setDeactivatingPetani(null);
@@ -485,6 +518,17 @@ export default function App() {
     }
 
     const isNowActive = !target.status_aktif;
+
+    try {
+      await ErpApiService.savePetani({
+        petani_id: petaniId,
+        status_aktif: isNowActive,
+        alasan_nonaktif: isNowActive ? undefined : reason,
+      }, true);
+    } catch (err) {
+      console.warn('Gagal sync status petani ke PostgreSQL:', err);
+    }
+
     const updated = petaniList.map((p) =>
       p.petani_id === petaniId
         ? { ...p, status_aktif: isNowActive, alasan_nonaktif: isNowActive ? undefined : reason }

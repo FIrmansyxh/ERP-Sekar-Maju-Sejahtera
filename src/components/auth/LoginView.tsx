@@ -12,7 +12,7 @@ import {
   Monitor
 } from 'lucide-react';
 import { User } from '../../types';
-import { authenticateUser } from '../../utils/storage';
+import { ErpApiService } from '../../services/erpApi';
 import { APP_BUILD, APP_EDITION, APP_VERSION } from '../../config/appInfo';
 
 interface LoginViewProps {
@@ -44,7 +44,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
     setError(null);
 
     setTimeout(async () => {
-      const result = await authenticateUser(username, password);
+      const result = await ErpApiService.login(username, password);
       setIsLoading(false);
       if (result.success && result.user) {
         onLoginSuccess(result.user);
@@ -53,7 +53,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
       }
     }, 200);
   };
-
   return (
     <div className="min-h-screen bg-[#eaedf1] flex flex-col justify-between font-sans text-gray-800">
       

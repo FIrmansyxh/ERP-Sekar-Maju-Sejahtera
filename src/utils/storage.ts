@@ -290,7 +290,7 @@ export function saveStockOpnameData(data: StockOpnameSession[]): void {
 
 // --- MASTER PETANI ---
 export function loadPetaniData(): Petani[] {
-  return readList<Petani>(KEY_PETANI) ?? INITIAL_PETANI_DATA;
+  return readList<Petani>(KEY_PETANI) ?? [];
 }
 
 export function savePetaniData(data: Petani[]): void {
