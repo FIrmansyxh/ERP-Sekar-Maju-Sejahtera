@@ -8,7 +8,6 @@ import {
   Tag, 
   History, 
   Edit, 
-  Trash2,
   CheckCircle2,
   Scale
 } from 'lucide-react';
@@ -27,7 +26,6 @@ export const GradePriceCard: React.FC<GradePriceCardProps> = ({
   harga,
   onEditHarga,
   onViewHistory,
-  onDeleteHarga,
 }) => {
   const simulasi = hitungSimulasiHarga(harga.harga_per_kg, 45, 'bruto', false);
 
@@ -118,16 +116,6 @@ export const GradePriceCard: React.FC<GradePriceCardProps> = ({
             <Edit className="w-3 h-3" />
             <span>Ubah Tarif</span>
           </button>
-
-          {onDeleteHarga && (
-            <button
-              onClick={() => onDeleteHarga(harga)}
-              className="p-1 bg-[#dc3545] hover:bg-[#c82333] text-white rounded-sm font-semibold text-[11px] flex items-center justify-center cursor-pointer shadow-xs"
-              title="Hapus Tarif Grade"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          )}
         </div>
       </div>
 

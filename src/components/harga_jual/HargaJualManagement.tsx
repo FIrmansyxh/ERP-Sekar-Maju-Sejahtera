@@ -4,7 +4,6 @@ import { ChevronDown, ChevronUp,
   Plus, 
   Search, 
   Edit3, 
-  Trash2, 
   Calendar, 
   Tag, 
   CheckCircle2, 
@@ -18,19 +17,17 @@ import { ChevronDown, ChevronUp,
  } from 'lucide-react';
 import { MasterHargaJual } from '../../types';
 import { formatRupiah, formatNumber } from '../../utils/formatters';
-import { ConfirmModal } from '../common/ConfirmModal';
 import { Pagination } from '../common/Pagination';
 
 interface HargaJualManagementProps {
   hargaJualList: MasterHargaJual[];
   onSaveHargaJual: (item: MasterHargaJual) => void;
-  onDeleteHargaJual: (id: string) => void;
+  onDeleteHargaJual?: (id: string) => void;
 }
 
 export const HargaJualManagement: React.FC<HargaJualManagementProps> = ({
   hargaJualList,
   onSaveHargaJual,
-  onDeleteHargaJual,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
@@ -47,9 +44,6 @@ export const HargaJualManagement: React.FC<HargaJualManagementProps> = ({
   const [formStatusAktif, setFormStatusAktif] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [successToast, setSuccessToast] = useState('');
-
-  // Delete modal state
-  const [itemToDelete, setItemToDelete] = useState<MasterHargaJual | null>(null);
 
   // Filtered List
   const filteredList = useMemo(() => {
@@ -145,15 +139,6 @@ export const HargaJualManagement: React.FC<HargaJualManagementProps> = ({
     setIsModalOpen(false);
     setSuccessToast(editingItem ? 'Data Master Harga Jual berhasil diperbarui' : 'Master Harga Jual baru berhasil ditambahkan');
     setTimeout(() => setSuccessToast(''), 3500);
-  };
-
-  const handleConfirmDelete = () => {
-    if (itemToDelete) {
-      onDeleteHargaJual(itemToDelete.harga_jual_id);
-      setItemToDelete(null);
-      setSuccessToast(`Kode "${itemToDelete.kode}" berhasil dihapus`);
-      setTimeout(() => setSuccessToast(''), 3500);
-    }
   };
 
 return (
@@ -387,14 +372,6 @@ return (
                         >
                           <Edit3 className="w-3.5 h-3.5" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setItemToDelete(item)}
-                          className="p-1.5 text-slate-400 hover:text-red-700 hover:bg-red-50 rounded transition-colors cursor-pointer"
-                          title="Hapus Master Harga Jual"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
                       </div>
                     </td>
                   </tr>
@@ -539,19 +516,6 @@ return (
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
-      {itemToDelete && (
-        <ConfirmModal
-          isOpen={true}
-          title="Hapus Master Harga Jual"
-          message={`Apakah Anda yakin ingin menghapus kode harga jual "${itemToDelete.kode}" (${formatRupiah(itemToDelete.harga_jual)}/kg)? Tindakan ini tidak dapat dibatalkan.`}
-          confirmLabel="Hapus Data"
-          cancelLabel="Batal"
-          onConfirm={handleConfirmDelete}
-          onCancel={() => setItemToDelete(null)}
-          isDanger={true}
-        />
-      )}
     </div>
   );
 };

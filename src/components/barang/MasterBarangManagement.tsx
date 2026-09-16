@@ -5,7 +5,6 @@ import {
   Plus, 
   Search, 
   Edit, 
-  Trash2, 
   Power,
   Boxes, 
   ArrowRight,
@@ -22,7 +21,6 @@ interface MasterBarangManagementProps {
   masterBarangList: MasterBarang[];
   barangList: Barang[];
   onSaveMasterBarang: (item: MasterBarang) => void;
-  onDeleteMasterBarang?: (masterId: string) => void;
   userRole: UserRole;
   onNavigateToStock?: (gradeFilter?: string) => void;
 }
@@ -31,7 +29,6 @@ export const MasterBarangManagement: React.FC<MasterBarangManagementProps> = ({
   masterBarangList,
   barangList,
   onSaveMasterBarang,
-  onDeleteMasterBarang,
   userRole,
   onNavigateToStock,
 }) => {
@@ -157,23 +154,6 @@ export const MasterBarangManagement: React.FC<MasterBarangManagementProps> = ({
           status_aktif: isActivating,
         };
         onSaveMasterBarang(updated);
-        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
-      },
-    });
-  };
-
-  const handleDeleteItem = (item: MasterBarang) => {
-    setConfirmDialog({
-      isOpen: true,
-      title: 'Konfirmasi Hapus Master Data Barang',
-      message: `Apakah Anda yakin ingin menghapus permanen SKU "${item.kode_barang}" (${item.nama_barang}) dari master katalog?`,
-      detail: `Perhatian: Tindakan ini tidak dapat dibatalkan. Pastikan tidak ada transaksi aktif yang bergantung pada SKU ini.`,
-      variant: 'danger',
-      confirmText: 'Hapus Permanen',
-      onConfirm: () => {
-        if (onDeleteMasterBarang) {
-          onDeleteMasterBarang(item.master_id);
-        }
         setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
       },
     });
@@ -438,16 +418,6 @@ export const MasterBarangManagement: React.FC<MasterBarangManagementProps> = ({
                           >
                             <Power className="w-3.5 h-3.5" />
                           </button>
-
-                          {onDeleteMasterBarang && (
-                            <button
-                              onClick={() => handleDeleteItem(item)}
-                              title="Hapus Master Barang"
-                              className="p-1.5 text-slate-400 hover:text-red-700 hover:bg-red-50 rounded transition-colors cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
 
                           {onNavigateToStock && (
                             <button

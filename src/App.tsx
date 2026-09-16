@@ -1403,7 +1403,6 @@ export default function App() {
                 hargaList={hargaList}
                 userRole={currentRole}
                 onSaveNewPrice={handleSaveNewPrice}
-                onDeleteHarga={handleDeleteHarga}
               />
             )}
 
@@ -1564,7 +1563,6 @@ export default function App() {
               <HargaJualManagement
                 hargaJualList={hargaJualList}
                 onSaveHargaJual={handleSaveHargaJual}
-                onDeleteHargaJual={handleDeleteHargaJual}
               />
             )}
 

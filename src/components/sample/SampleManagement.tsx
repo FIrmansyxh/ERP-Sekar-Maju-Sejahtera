@@ -1155,17 +1155,19 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                                 <Printer className="w-3 h-3 text-gray-600" />
                                 <span>Cetak</span>
                               </button>
-                              <button
-                                type="button"
-                                title="Hapus Batch"
-                                onClick={() => {
-                                  setBatchToDelete(batch.batch_id);
-                                }}
-                                className="px-2 py-1 text-[11px] font-semibold bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-xs transition cursor-pointer flex items-center space-x-1"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                                <span>Hapus</span>
-                              </button>
+                              {batch.status !== 'selesai' && (
+                                <button
+                                  type="button"
+                                  title="Batalkan Draft Batch (Kembalikan Bal ke Gudang)"
+                                  onClick={() => {
+                                    setBatchToDelete(batch.batch_id);
+                                  }}
+                                  className="px-2 py-1 text-[11px] font-semibold bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-xs transition cursor-pointer flex items-center space-x-1"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                  <span>Batal</span>
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -1695,14 +1697,14 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
         }}
       />
 
-      {/* Confirm Create Modal */}
+      {/* Confirm Delete/Cancel Batch Modal */}
       <ConfirmModal
         isOpen={!!batchToDelete}
-        title="Konfirmasi Hapus Batch"
-        message="Apakah Anda yakin ingin menghapus batch sample ini? Data yang sudah dihapus tidak dapat dikembalikan."
-        confirmText="Ya, Hapus"
-        cancelText="Batal"
-        variant="danger"
+        title="Konfirmasi Pembatalan Draft Batch Sample"
+        message="Apakah Anda yakin ingin membatalkan draft batch sample ini? Seluruh bal yang dipinjam akan otomatis dikembalikan ke status stok gudang."
+        confirmText="Ya, Batalkan Draft"
+        cancelText="Kembali"
+        variant="warning"
         onConfirm={() => {
           if (batchToDelete && onDeleteBatchSample) {
             const batchToDel = batchSampleList.find((b) => b.batch_id === batchToDelete);
