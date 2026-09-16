@@ -286,6 +286,16 @@ export default function App() {
           setHargaList(res.data);
         }
       });
+      ErpApiService.getUserList().then((res) => {
+        if (res.fromBackend) {
+          setUserList(res.data);
+        }
+      });
+      ErpApiService.getHargaJualList().then((res) => {
+        if (res.fromBackend) {
+          setHargaJualList(res.data);
+        }
+      });
     }
   }, [currentUser]);
 
@@ -459,29 +469,27 @@ export default function App() {
   // --- User Management Handlers ---
   const handleSaveUser = async (savedUser: User) => {
     const existingUser = userList.find((u) => u.user_id === savedUser.user_id);
-    let finalPassword = savedUser.password;
-    
-    if (finalPassword && (!existingUser || existingUser.password !== finalPassword)) {
-      finalPassword = await hashPassword(finalPassword);
-    }
-    
-    const processedUser = { ...savedUser, password: finalPassword };
     const exists = Boolean(existingUser);
     
-    let updated: User[];
-    if (exists) {
-      updated = userList.map((u) => u.user_id === processedUser.user_id ? processedUser : u);
-      showToast(`Data akun pengguna "${processedUser.nama_lengkap}" berhasil diperbarui.`);
-      if (currentUser?.user_id === processedUser.user_id) {
-        setCurrentUser(processedUser);
-        saveCurrentUser(processedUser);
+    try {
+      const saved = await ErpApiService.saveUser(savedUser, exists);
+      let updated: User[];
+      if (exists) {
+        updated = userList.map((u) => u.user_id === saved.user_id ? saved : u);
+        showToast(`Data akun pengguna "${saved.nama_lengkap}" berhasil diperbarui.`);
+        if (currentUser?.user_id === saved.user_id) {
+          setCurrentUser(saved);
+          saveCurrentUser(saved);
+        }
+      } else {
+        updated = [saved, ...userList.filter(u => u.user_id !== saved.user_id)];
+        showToast(`Pengguna baru "${saved.nama_lengkap}" (${saved.username}) berhasil didaftarkan ke PostgreSQL!`);
       }
-    } else {
-      updated = [processedUser, ...userList];
-      showToast(`Pengguna baru "${processedUser.nama_lengkap}" (${processedUser.username}) berhasil didaftarkan!`);
+      setUserList(updated);
+      saveUserData(updated);
+    } catch (err: any) {
+      showToast(err?.message || 'Gagal menyimpan data pengguna ke sistem.', 'info');
     }
-    setUserList(updated);
-    saveUserData(updated);
   };
 
   const handleDeleteUser = (userId: string) => {
@@ -492,20 +500,34 @@ export default function App() {
     showToast(`Akun pengguna "${target?.nama_lengkap || userId}" berhasil dihapus dari sistem.`);
   };
 
-  const handleToggleUserStatus = (userId: string) => {
+  const handleToggleUserStatus = async (userId: string) => {
+    const target = userList.find((u) => u.user_id === userId);
+    if (!target) return;
+    const nextStatus = !target.status_aktif;
+
+    try {
+      await ErpApiService.toggleUserStatus(userId, nextStatus);
+    } catch (err: any) {
+      console.warn('Gagal mengubah status pengguna di backend:', err);
+    }
+
     const updated = userList.map((u) => {
       if (u.user_id === userId) {
-        const nextStatus = !u.status_aktif;
-        showToast(`Akun "${u.nama_lengkap}" sekarang ${nextStatus ? 'AKTIF' : 'NONAKTIF'}.`);
         return { ...u, status_aktif: nextStatus };
       }
       return u;
     });
     setUserList(updated);
     saveUserData(updated);
+    showToast(`Akun "${target.nama_lengkap}" sekarang ${nextStatus ? 'AKTIF' : 'NONAKTIF'}.`);
   };
 
   const handleResetUserPassword = async (userId: string, newPass: string) => {
+    try {
+      await ErpApiService.resetUserPassword(userId, newPass);
+    } catch (err: any) {
+      console.warn('Gagal mereset kata sandi di backend:', err);
+    }
     const hashedPass = await hashPassword(newPass);
     const updated = userList.map((u) => u.user_id === userId ? { ...u, password: hashedPass } : u);
     setUserList(updated);
@@ -1033,14 +1055,19 @@ export default function App() {
     showToast(`Surat Jalan ${newPengiriman.no_surat_jalan} diterbitkan (${newPengiriman.total_bal} bal keluar)!`);
   };
 
-  const handleSaveHargaJual = (item: MasterHargaJual) => {
-    const exists = hargaJualList.some((h) => h.harga_jual_id === item.harga_jual_id);
-    const updated = exists 
-      ? hargaJualList.map((h) => h.harga_jual_id === item.harga_jual_id ? item : h)
-      : [item, ...hargaJualList];
-    setHargaJualList(updated);
-    saveHargaJualData(updated);
-    showToast(`Harga jual "${item.kode}" berhasil disimpan.`);
+  const handleSaveHargaJual = async (item: MasterHargaJual) => {
+    try {
+      const saved = await ErpApiService.saveHargaJual(item);
+      const exists = hargaJualList.some((h) => h.harga_jual_id === saved.harga_jual_id);
+      const updated = exists 
+        ? hargaJualList.map((h) => h.harga_jual_id === saved.harga_jual_id ? saved : h)
+        : [saved, ...hargaJualList];
+      setHargaJualList(updated);
+      saveHargaJualData(updated);
+      showToast(`Harga jual "${saved.kode}" berhasil disimpan ke PostgreSQL.`);
+    } catch (err: any) {
+      showToast(err?.message || 'Gagal menyimpan harga jual ke sistem.', 'info');
+    }
   };
 
   const handleDeleteHargaJual = (id: string) => {
