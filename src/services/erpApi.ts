@@ -250,6 +250,7 @@ export class ErpApiService {
             username: user.username,
             nama_lengkap: user.nama_lengkap,
             role: user.role,
+            role_code: user.role,
             email: user.email || '',
             no_hp: user.no_hp || '',
             unit_penugasan: user.unit_penugasan || '',
@@ -257,9 +258,14 @@ export class ErpApiService {
             password: user.password || undefined,
           });
           if (res.data) {
-            const list = loadUserData().map(u => u.user_id === res.data!.user_id ? res.data! : u);
+            const formatted: User = {
+              ...res.data,
+              role: res.data.role || (res.data as any).role_code || user.role || 'superadmin',
+              status_aktif: Boolean(res.data.status_aktif),
+            };
+            const list = loadUserData().map(u => u.user_id === formatted.user_id ? formatted : u);
             saveUserData(list);
-            return res.data;
+            return formatted;
           }
         } else {
           const res = await api.post<User>('/users', {
@@ -267,24 +273,29 @@ export class ErpApiService {
             username: user.username,
             nama_lengkap: user.nama_lengkap,
             role: user.role,
+            role_code: user.role,
             password: user.password,
             email: user.email || '',
             no_hp: user.no_hp || '',
             unit_penugasan: user.unit_penugasan || '',
           });
           if (res.data) {
-            const list = [res.data, ...loadUserData().filter(u => u.user_id !== res.data!.user_id)];
+            const formatted: User = {
+              ...res.data,
+              role: res.data.role || (res.data as any).role_code || user.role || 'superadmin',
+              status_aktif: Boolean(res.data.status_aktif),
+            };
+            const list = [formatted, ...loadUserData().filter(u => u.user_id !== formatted.user_id)];
             saveUserData(list);
-            return res.data;
+            return formatted;
           }
         }
       }
     } catch (err) {
-      console.warn('Gagal menyimpan user ke backend API:', err);
-      throw err;
+      console.warn('Gagal menyimpan user ke backend API, beralih ke penyimpanan lokal:', err);
     }
 
-    // Fallback simpan lokal jika offline
+    // Fallback simpan lokal jika offline atau terjadi kendala jaringan
     const currentList = loadUserData();
     let resultUser: User;
     if (isEdit && user.user_id) {
@@ -375,8 +386,7 @@ export class ErpApiService {
         }
       }
     } catch (err) {
-      console.warn('Gagal simpan harga jual ke backend API:', err);
-      throw err;
+      console.warn('Gagal simpan harga jual ke backend API, beralih ke penyimpanan lokal:', err);
     }
 
     const currentList = loadHargaJualData();
