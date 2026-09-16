@@ -1554,7 +1554,6 @@ export default function App() {
                 currentUser={currentUser}
                 
                 onSaveUser={handleSaveUser}
-                onDeleteUser={handleDeleteUser}
                 onToggleStatus={handleToggleUserStatus}
                 onResetPassword={handleResetUserPassword}
               />
