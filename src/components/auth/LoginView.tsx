@@ -12,7 +12,8 @@ import {
   Monitor
 } from 'lucide-react';
 import { User, UserRole } from '../../types';
-import { authenticateUser, loadUserData } from '../../utils/storage';
+import { loadUserData } from '../../utils/storage';
+import { ErpApiService } from '../../services/erpApi';
 
 interface LoginViewProps {
   onLoginSuccess: (user: User) => void;
@@ -47,7 +48,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
     setError(null);
 
     setTimeout(async () => {
-      const result = await authenticateUser(username, password);
+      const result = await ErpApiService.login(username, password);
       setIsLoading(false);
       if (result.success && result.user) {
         onLoginSuccess(result.user);
@@ -65,12 +66,13 @@ export const LoginView: React.FC<LoginViewProps> = ({
       return;
     }
 
+    const defaultPwd = targetUser.password || 'admin123';
     setUsername(targetUser.username);
-    setPassword(targetUser.password || 'admin123');
+    setPassword(defaultPwd);
     setIsLoading(true);
 
     setTimeout(async () => {
-      const result = await authenticateUser(targetUser.username, targetUser.password || 'admin123');
+      const result = await ErpApiService.login(targetUser.username, defaultPwd);
       setIsLoading(false);
       if (result.success && result.user) {
         onLoginSuccess(result.user);

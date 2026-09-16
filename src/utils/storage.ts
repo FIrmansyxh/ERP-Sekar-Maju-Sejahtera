@@ -295,27 +295,12 @@ export function loadPetaniData(): Petani[] {
     const saved = safeGetItem(KEY_PETANI);
     if (saved !== null) {
       const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length >= 34) return parsed;
-      if (Array.isArray(parsed) && parsed.length > 0 && parsed.length < 34) {
-        const existingIds = new Set(parsed.map((p: Petani) => p.petani_id));
-        const combined = [...parsed];
-        for (const item of INITIAL_PETANI_DATA) {
-          if (!existingIds.has(item.petani_id) && combined.length < 34) {
-            combined.push(item);
-            existingIds.add(item.petani_id);
-          }
-        }
-        if (combined.length === 34) {
-          savePetaniData(combined);
-          return combined;
-        }
-      }
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch (err) {
     console.error('Failed to load petani data:', err);
   }
-  savePetaniData(INITIAL_PETANI_DATA);
-  return INITIAL_PETANI_DATA;
+  return [];
 }
 
 export function savePetaniData(data: Petani[]): void {
