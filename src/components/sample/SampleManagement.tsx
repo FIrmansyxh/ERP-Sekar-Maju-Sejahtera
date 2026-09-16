@@ -52,6 +52,9 @@ import { ConfirmModal } from '../common/ConfirmModal';
 import { Pagination } from '../common/Pagination';
 import { generateBatchSampleId, generateSampleId, formatRupiah, formatNumber } from '../../utils/formatters';
 
+import { useSessionDraft } from '../../hooks/useSessionDraft';
+import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
+
 interface SampleManagementProps {
   sampleList: PengirimanSample[];
   batchSampleList?: BatchPengirimanSample[];
@@ -193,7 +196,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
   }, []);
 
   // Selected Bales in Form with customizable offer price per bal
-  const [selectedBalItems, setSelectedBalItems] = useState<
+  const [selectedBalItems, setSelectedBalItems, resetDraftSampleItems] = useSessionDraft<
     { 
       barangId: string; 
       noBal: string; 
@@ -206,7 +209,9 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
       kodeHargaJual: string; 
       hargaTawaranKg: number; 
     }[]
-  >([]);
+  >('sample_bal_items', undefined, []);
+
+  useUnsavedChangesWarning(selectedBalItems.length > 0);
 
   const availableBalList = useMemo(() => {
     return barangList.filter((b) => b.status_stok === 'di_gudang');
@@ -367,7 +372,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
   const [deletingBatchId, setDeletingBatchId] = useState<string | null>(null);
 
   // Create Batch Form State
-  const [tujuanBuyer, setTujuanBuyer] = useState('');
+  const [tujuanBuyer, setTujuanBuyer] = useSessionDraft<string>('sample_tujuan_buyer', undefined, '');
   const [permintaanBuyer, setPermintaanBuyer] = useState('');
   const [sumberGudang, setSumberGudang] = useState('Gudang Utama Pamekasan');
   const [tanggalKirim, setTanggalKirim] = useState(new Date().toISOString().split('T')[0]);
@@ -654,7 +659,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
 
   // Deselect all
   const handleDeselectAll = () => {
-    setSelectedBalItems([]);
+    resetDraftSampleItems();
   };
 
   // Submit Create Batch Form
@@ -790,7 +795,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
     }
 
     setIsConfirmCreateOpen(false);
-    setSelectedBalItems([]);
+    resetDraftSampleItems();
     setTujuanBuyer('');
     setViewMode('list');
   };
@@ -866,7 +871,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
             type="button"
             onClick={() => {
               setTujuanBuyer('');
-              setSelectedBalItems([]);
+              resetDraftSampleItems();
               setErrorMessage('');
               setViewMode('create');
             }}

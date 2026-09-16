@@ -51,6 +51,9 @@ import { openPrintDocument } from '../../utils/openDedicatedPrint';
 import { formatNumber, formatRupiah, generateNoSuratJalanSimple } from '../../utils/formatters';
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
 
+import { useSessionDraft } from '../../hooks/useSessionDraft';
+import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
+
 interface PengirimanManagementProps {
   pengirimanList: PengirimanBarang[];
   barangList: Barang[];
@@ -115,12 +118,12 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   } | null>(null);
 
   // In-Page Create Delivery Order State
-  const [sourceMode, setSourceMode] = useState<'sample_batch' | 'gudang_reguler'>('sample_batch');
-  const [selectedBatchSampleId, setSelectedBatchSampleId] = useState<string>('');
+  const [sourceMode, setSourceMode] = useSessionDraft<'sample_batch' | 'gudang_reguler'>('kirim_source_mode', undefined, 'sample_batch');
+  const [selectedBatchSampleId, setSelectedBatchSampleId] = useSessionDraft<string>('kirim_batch_sample_id', undefined, '');
   
   const [noSuratJalan, setNoSuratJalan] = useState('');
   const [tanggalKirim, setTanggalKirim] = useState(new Date().toISOString().split('T')[0]);
-  const [tujuanBuyer, setTujuanBuyer] = useState('');
+  const [tujuanBuyer, setTujuanBuyer] = useSessionDraft<string>('kirim_tujuan_buyer', undefined, '');
   const [driverNama, setDriverNama] = useState('');
   const [platNomor, setPlatNomor] = useState('');
   const [noKontrak, setNoKontrak] = useState(`PO-DJA-${new Date().getFullYear()}-089`);
@@ -132,9 +135,9 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
 
   // Selected Bal IDs for shipment (centang pada kolom kirim / bal yang dikeluarkan & di-scan)
   // By default: statusnya TIDAK DICENTANG DULU sesuai permintaan user
-  const [selectedBalIds, setSelectedBalIds] = useState<string[]>([]);
+  const [selectedBalIds, setSelectedBalIds] = useSessionDraft<string[]>('kirim_selected_bal_ids', undefined, []);
   // Bal IDs yang dimuat ke dalam tabel muatan pengiriman reguler
-  const [regulerManifestBalIds, setRegulerManifestBalIds] = useState<string[]>([]);
+  const [regulerManifestBalIds, setRegulerManifestBalIds] = useSessionDraft<string[]>('kirim_manifest_bal_ids', undefined, []);
   const [scanInputText, setScanInputText] = useState('');
   const [scanAlert, setScanAlert] = useState<{ type: 'success' | 'error' | 'warning'; message: string } | null>(null);
 
@@ -144,7 +147,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   const scanDropdownRef = useRef<HTMLDivElement>(null);
 
   // Custom prices & price codes editable directly in the shipment table
-    const [customKodeHargaMap, setCustomKodeHargaMap] = useState<Record<string, string>>({});
+  const [customKodeHargaMap, setCustomKodeHargaMap] = useSessionDraft<Record<string, string>>('kirim_kode_harga', undefined, {});
   const [bulkKodeHarga, setBulkKodeHarga] = useState<string>('');
 
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
@@ -155,6 +158,8 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   const [stokModalSearch, setStokModalSearch] = useState('');
   const [stokModalGrade, setStokModalGrade] = useState('all');
   const [stokModalSelectedIds, setStokModalSelectedIds] = useState<string[]>([]);
+
+  useUnsavedChangesWarning(selectedBalIds.length > 0 || regulerManifestBalIds.length > 0);
 
   const scannerInputRef = useRef<HTMLInputElement>(null);
 

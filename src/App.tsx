@@ -34,6 +34,7 @@ import {
   saveCurrentUser,
   recordAuditLog
 } from './utils/storage';
+import { clearAllDrafts, getDraftRecovery, markDraftCleanExit, touchDraftAlive } from './utils/draftStorage';
 import { hasModuleAccess } from './utils/rbac';
 import { normalizeKg } from './utils/formatters';
 import { hashPassword } from './utils/crypto';
@@ -376,12 +377,43 @@ export default function App() {
   const handleLogout = (autoLogout: boolean = false) => {
     setCurrentUser(null);
     saveCurrentUser(null);
+    clearAllDrafts();
     if (autoLogout === true) {
       showToast('Sesi berakhir otomatis karena tidak ada aktivitas selama 30 menit demi keamanan.', 'info');
     } else {
       showToast('Anda telah berhasil keluar dari sistem.', 'info');
     }
   };
+
+  // --- Penjaga Draf: Denyut Hidup & Penanda Penutupan ---
+  // Selama aplikasi terbuka, denyut ini memperbarui waktu 'masih hidup' dan
+  // membatalkan penanda penutupan yang mungkin ditinggalkan tab lain. Saat
+  // halaman ditinggalkan secara wajar, penandanya ditulis sehingga draf
+  // cadangan tidak ikut dipulihkan pada pembukaan berikutnya.
+  useEffect(() => {
+    if (!currentUser) return;
+
+    touchDraftAlive();
+    const heartbeat = setInterval(touchDraftAlive, 15 * 1000);
+    const handlePageHide = () => markDraftCleanExit();
+    window.addEventListener('pagehide', handlePageHide);
+
+    return () => {
+      clearInterval(heartbeat);
+      window.removeEventListener('pagehide', handlePageHide);
+    };
+  }, [currentUser]);
+
+  // Beri tahu operator bila isian yang belum sempat disimpan berhasil kembali.
+  const recoveryNotified = useRef(false);
+  useEffect(() => {
+    if (!currentUser || recoveryNotified.current) return;
+    const { restored } = getDraftRecovery();
+    if (restored > 0) {
+      recoveryNotified.current = true;
+      showToast('Isian yang belum sempat disimpan berhasil dipulihkan setelah sesi sebelumnya terputus.', 'info');
+    }
+  }, [currentUser]);
 
   // --- Auto Logout (Idle Timer) ---
   useEffect(() => {

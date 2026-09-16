@@ -21,6 +21,8 @@ import {
 } from 'lucide-react';
 import { TransaksiPembelian, Petani, TabelHarga, Barang, TransaksiItemBal, UserRole, User as UserType } from '../../types';
 import { formatRupiah, formatNoKupon, formatDateHariBulanTahun, generateTransaksiId, hitungPotonganTaraKg } from '../../utils/formatters';
+import { useSessionDraft } from '../../hooks/useSessionDraft';
+import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
 
 interface SortirPageViewProps {
   petaniList: Petani[];
@@ -44,7 +46,8 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
   onNavigateToTimbangan,
 }) => {
   // Form Header State
-  const [noKupon, setNoKupon] = useState(() => {
+  const draftUserId = currentUser?.user_id;
+  const [noKupon, setNoKupon] = useSessionDraft<string>('sortir_no_kupon', draftUserId, () => {
     let maxNum = 0;
     transaksiList.forEach(tx => {
       const match = tx.no_kupon.match(/\d+/);
@@ -56,15 +59,18 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
     const nextNum = maxNum + 1;
     return `KUP${String(nextNum).padStart(4, '0')}`;
   });
-  const [selectedPetaniId, setSelectedPetaniId] = useState('');
-  const [tanggal, setTanggal] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedPetaniId, setSelectedPetaniId, resetDraftPetani] = useSessionDraft<string>('sortir_petani', draftUserId, '');
+  const [tanggal, setTanggal] = useSessionDraft<string>('sortir_tanggal', draftUserId, () => new Date().toISOString().split('T')[0]);
   const [petugasSortirNama, setPetugasSortirNama] = useState(currentUser?.nama_lengkap || 'Sistem');
 
-  // Active bal items state for current batch
-  const [balItems, setBalItems] = useState<TransaksiItemBal[]>([]);
+  // Daftar bal yang sedang dikerjakan. Dipulihkan otomatis bila operator
+  // berpindah modul atau halaman ter-refresh sebelum sempat disimpan.
+  const [balItems, setBalItems, resetDraftBalItems] = useSessionDraft<TransaksiItemBal[]>('sortir_bal_items', draftUserId, []);
 
   // Bal Adder Input Fields
   const [inputNoBal, setInputNoBal] = useState('');
+
+  useUnsavedChangesWarning(balItems.length > 0);
   
   // Real-time Check Duplikasi Kupon
   const duplicateKuponTx = useMemo(() => {
@@ -355,7 +361,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
     const seqPart = txId.split('-')[2] || '001';
     const kuponFinal = noKupon.trim() || `KUP${seqPart.padStart(4, '0')}`;
 
-    const uniqueGrades: string[] = Array.from(new Set(balItems.map((i) => i.kodeGrade || i.kode_grade)));
+    const uniqueGrades: string[] = Array.from(new Set(balItems.map((i) => i.kode_grade)));
     const gradeSummary = uniqueGrades.length === 1 ? uniqueGrades[0] : `Multi (${uniqueGrades.join(', ')})`;
     const avgHarga = Math.round(
       balItems.reduce((acc, i) => acc + (i.harga_per_kg || 0), 0) / (balItems.length || 1)
@@ -417,8 +423,10 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
     onSaveTransaksi(finalTx, generatedBarangList);
     setSaveSuccessMsg(`Data Sortir Kupon ${kuponFinal} (${balItems.length} Bal) berhasil disimpan!`);
 
-    // Reset Form for next kupon
-    setBalItems([]);
+    // Reset Form for next kupon. Draf sesi ikut dibuang karena datanya
+    // sudah masuk ke penyimpanan permanen.
+    resetDraftBalItems();
+    resetDraftPetani();
     
       let maxNum = 0;
       transaksiList.forEach(tx => {
@@ -792,7 +800,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
             <div className="flex items-center space-x-2 w-full sm:w-auto">
               <button
                 type="button"
-                onClick={() => setBalItems([])}
+                onClick={resetDraftBalItems}
                 disabled={balItems.length === 0}
                 className="px-3 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 font-medium text-xs rounded-sm transition cursor-pointer disabled:opacity-50"
               >
