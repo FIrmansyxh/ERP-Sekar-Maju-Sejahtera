@@ -158,6 +158,20 @@ export class ErpApiService {
     return resultPetani;
   }
 
+  public static async deletePetani(petaniId: string, alasan?: string): Promise<boolean> {
+    try {
+      const isOnline = await this.isBackendOnline();
+      if (isOnline) {
+        await api.delete(`/petani/${petaniId}`);
+        return true;
+      }
+    } catch (err) {
+      console.warn('Gagal menonaktifkan petani di backend API:', err);
+      throw err;
+    }
+    return false;
+  }
+
   // --- TRANSAKSI ---
   public static async getTransaksiList(): Promise<{ data: TransaksiPembelian[]; fromBackend: boolean }> {
     try {

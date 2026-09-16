@@ -6,7 +6,6 @@ import {
   Upload, 
   Printer, 
   Edit3, 
-  Trash2,
   Info, 
   Ban, 
   CheckCircle, 
@@ -27,7 +26,6 @@ import { Petani, UserRole, TransaksiPembelian } from '../../types';
 import { formatNumber } from '../../utils/formatters';
 import { canUserPerform } from '../../utils/rbac';
 import { Pagination } from '../common/Pagination';
-import { ConfirmModal } from '../common/ConfirmModal';
 
 interface PetaniTableProps {
   data: Petani[];
@@ -39,7 +37,6 @@ interface PetaniTableProps {
   onPrintCard: (petani: Petani) => void;
   onToggleStatus: (petani: Petani) => void;
   onResetCardNumber?: (petani: Petani) => void;
-  onDeletePetani?: (petani: Petani) => void;
   onOpenImportExport: () => void;
 }
 
@@ -53,7 +50,6 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
   onPrintCard,
   onToggleStatus,
   onResetCardNumber,
-  onDeletePetani,
   onOpenImportExport,
 }) => {
   const [isFilterOpen, setIsFilterOpen] = useState(true);
@@ -63,7 +59,6 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [sortBy, setSortBy] = useState<string>('petani_id');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [deletingPetaniTarget, setDeletingPetaniTarget] = useState<Petani | null>(null);
 
   const countActive = useMemo(() => data.filter((p) => p.status_aktif).length, [data]);
   const countInactive = useMemo(() => data.filter((p) => !p.status_aktif).length, [data]);
@@ -136,11 +131,6 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
   };
 
   const canManagePetani = canUserPerform(userRole, 'canCreatePetani');
-
-  const deletingPetaniTxCount = useMemo(() => {
-    if (!deletingPetaniTarget) return 0;
-    return (transaksiList || []).filter((t) => t.petani_id === deletingPetaniTarget.petani_id).length;
-  }, [deletingPetaniTarget, transaksiList]);
 
   return (
     <div className="space-y-4 font-sans text-gray-800">
@@ -483,16 +473,6 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
                                 {petani.status_aktif ? <Ban className="w-3.5 h-3.5" /> : <CheckCircle className="w-3.5 h-3.5" />}
                               </button>
                             )}
-                            {/* Delete Petani Button */}
-                            {canManagePetani && onDeletePetani && (
-                              <button
-                                onClick={() => setDeletingPetaniTarget(petani)}
-                                className="w-7 h-7 rounded bg-red-50/70 hover:bg-red-100 text-red-700 flex items-center justify-center text-[10px] transition-colors cursor-pointer border border-red-200/80 hover:border-red-300"
-                                title="Hapus Data Petani"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
                           </div>
                         </td>
                       </tr>
@@ -518,29 +498,6 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
         </div>
 
       </div>
-
-      {/* Confirmation Modal Delete Petani */}
-      <ConfirmModal
-        isOpen={Boolean(deletingPetaniTarget)}
-        title="Konfirmasi Hapus Data Petani"
-        message={`Apakah Anda yakin ingin menghapus data petani "${deletingPetaniTarget?.nama_petani}" (ID: ${deletingPetaniTarget?.petani_id})?`}
-        detail={
-          deletingPetaniTxCount > 0
-            ? `⚠️ PERINGATAN KRITIS: Petani ini memiliki ${deletingPetaniTxCount} transaksi pembelian tercatat. Menghapus data petani ini dapat mempengaruhi integritas data dan riwayat laporan pembelian!`
-            : `Perhatian: Tindakan ini tidak dapat dibatalkan dan akan menghapus seluruh data registrasi petani "${deletingPetaniTarget?.nama_petani}" (${deletingPetaniTarget?.alamat || 'Tanpa Alamat'}) dari sistem master data.`
-        }
-        variant="danger"
-        isDanger={true}
-        confirmText="Ya, Hapus Permanen"
-        cancelText="Batal"
-        onConfirm={() => {
-          if (deletingPetaniTarget && onDeletePetani) {
-            onDeletePetani(deletingPetaniTarget);
-          }
-          setDeletingPetaniTarget(null);
-        }}
-        onCancel={() => setDeletingPetaniTarget(null)}
-      />
 
     </div>
   );

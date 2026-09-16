@@ -690,13 +690,23 @@ export default function App() {
     }
   };
 
-  const handleDeletePetani = (petaniId: string) => {
+  const handleDeletePetani = async (petaniId: string) => {
     const target = petaniList.find((p) => p.petani_id === petaniId);
-    const updated = petaniList.filter((p) => p.petani_id !== petaniId);
+    try {
+      await ErpApiService.deletePetani(petaniId);
+    } catch (err: any) {
+      console.warn('Gagal menonaktifkan petani di backend API:', err);
+    }
+
+    const updated = petaniList.map((p) =>
+      p.petani_id === petaniId
+        ? { ...p, status_aktif: false, alasan_nonaktif: 'Dinonaktifkan oleh pengguna' }
+        : p
+    );
     setPetaniList(updated);
     savePetaniData(updated);
     setViewingPetani(null);
-    showToast(`Data petani "${target?.nama_petani || petaniId}" (${target?.petani_id || ''}) berhasil dihapus.`);
+    showToast(`Data petani "${target?.nama_petani || petaniId}" (${target?.petani_id || ''}) berhasil dinonaktifkan.`);
   };
 
   // --- PRD 4.2: Harga Handlers ---
@@ -1383,7 +1393,6 @@ export default function App() {
                 onPrintCard={(p) => setPrintingPetani(p)}
                 onToggleStatus={(p) => setDeactivatingPetani(p)}
                 onResetCardNumber={(p) => setResettingCardPetani(p)}
-                onDeletePetani={(p) => handleDeletePetani(p.petani_id)}
                 onOpenImportExport={() => setIsImportExportOpen(true)}
               />
             )}
@@ -1618,7 +1627,6 @@ export default function App() {
         onPrintCard={(p) => setPrintingPetani(p)}
         onToggleStatus={(p) => setDeactivatingPetani(p)}
         onResetCard={(p) => setResettingCardPetani(p)}
-        onDeletePetani={(p) => handleDeletePetani(p.petani_id)}
       />
 
       <PetaniDeactivateModal
