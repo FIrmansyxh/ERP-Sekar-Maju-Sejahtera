@@ -1,0 +1,34 @@
+name: Auto Deploy Frontend to VPS
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    name: Build & Deploy React Frontend
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: SSH to VPS and Build
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USER }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        port: ${{ secrets.VPS_PORT || 22 }}
+        script: |
+          echo "=== 1. Masuk ke folder frontend ==="
+          cd /var/www/erp-fe/ERP-Sekar-Maju-Sejahtera
+
+          echo "=== 2. Tarik update terbaru dari GitHub ==="
+          git pull origin main
+
+          echo "=== 3. Install Paket & Build Vite ==="
+          npm install
+          npm run build
+
+          echo "=== 4. Reload Nginx ==="
+          sudo systemctl reload nginx
+
+          echo "=== DEPLOY FRONTEND SUKSES! ==="
