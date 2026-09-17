@@ -12,7 +12,17 @@ import {
 , AlertTriangle } from 'lucide-react';
 import { Petani } from '../../types';
 import { generatePetaniId } from '../../utils/formatters';
-import { downloadCsvFile } from '../../utils/printDownload';
+import { downloadExcelReport, todayStamp } from '../../utils/excelExport';
+
+// Judul kolom dari file Excel ekspor dipetakan ke nama kolom impor
+const HEADER_ALIAS: Record<string, string> = {
+  'id petani': 'petani_id',
+  'nama petani': 'nama_petani',
+  'no hp': 'no_hp',
+  'desa / kecamatan': 'desa_kecamatan',
+  'desa': 'desa_kecamatan',
+  'tanggal daftar': 'tanggal_daftar',
+};
 
 interface PetaniImportExportModalProps {
   isOpen: boolean;
@@ -35,32 +45,36 @@ export const PetaniImportExportModal: React.FC<PetaniImportExportModalProps> = (
 
   if (!isOpen) return null;
 
-  const handleExportCSV = () => {
-    const headers = [
-      'petani_id',
-      'nama_petani',
-      'no_hp',
-      'alamat',
-      'status_aktif',
-      'tanggal_daftar',
-      'catatan',
-    ];
-
-    const rows = petaniList.map((p) => [
-      p.petani_id,
-      p.nama_petani || '',
-      p.no_hp || '',
-      p.alamat || p.desa_kecamatan || '',
-      p.status_aktif ? 'TRUE' : 'FALSE',
-      p.tanggal_daftar,
-      p.catatan || '',
+  const handleExportExcel = () => {
+    downloadExcelReport(`Master_Petani_Tembakau_${todayStamp()}`, [
+      {
+        name: 'Master Petani',
+        title: 'Master Data Petani Tembakau',
+        info: [`${petaniList.length} petani terdaftar`],
+        columns: [
+          { header: 'No', type: 'integer', align: 'center' },
+          { header: 'ID Petani', align: 'center' },
+          { header: 'Nama Petani' },
+          { header: 'No HP', align: 'center' },
+          { header: 'Alamat' },
+          { header: 'Desa / Kecamatan' },
+          { header: 'Status', align: 'center' },
+          { header: 'Tanggal Daftar', type: 'date' },
+          { header: 'Catatan' },
+        ],
+        rows: petaniList.map((p, idx) => [
+          idx + 1,
+          p.petani_id,
+          p.nama_petani || '-',
+          p.no_hp || '-',
+          p.alamat || '-',
+          p.desa_kecamatan || '-',
+          p.status_aktif ? 'Aktif' : 'Nonaktif',
+          p.tanggal_daftar,
+          p.catatan || '-',
+        ]),
+      },
     ]);
-
-    downloadCsvFile(
-      `Master_Petani_Tembakau_${new Date().toISOString().split('T')[0]}.csv`,
-      headers,
-      rows
-    );
   };
 
   const handleProcessImport = () => {
@@ -68,27 +82,40 @@ export const PetaniImportExportModal: React.FC<PetaniImportExportModalProps> = (
     setSuccessCount(null);
 
     if (!csvText.trim()) {
-      setImportErrors(['Teks CSV tidak boleh kosong.']);
+      setImportErrors(['Data yang ditempel tidak boleh kosong.']);
       return;
     }
 
-    const lines = csvText.trim().split('\n');
+    const lines = csvText.trim().split(/\r?\n/);
     if (lines.length < 2) {
-      setImportErrors(['Format CSV membutuhkan baris header dan minimal 1 baris data.']);
+      setImportErrors(['Data membutuhkan baris judul kolom dan minimal 1 baris data.']);
       return;
     }
 
-    const headers = lines[0].split(',').map((h) => h.trim().toLowerCase());
+    // Salinan dari Excel dipisah tab, teks CSV dipisah koma
+    const delimiter = lines[0].includes('\t') ? '\t' : ',';
+    const headers = lines[0].split(delimiter).map((h) => {
+      const key = h.replace(/^"|"$/g, '').trim().toLowerCase();
+      return HEADER_ALIAS[key] || key;
+    });
     const cardIdx = headers.indexOf('petani_id');
     const nameIdx = headers.indexOf('nama_petani');
     const desaIdx = headers.indexOf('desa_kecamatan');
+    const hpIdx = headers.indexOf('no_hp');
+    const alamatIdx = headers.indexOf('alamat');
 
     if (cardIdx === -1 || nameIdx === -1) {
       setImportErrors([
-        'Kolom wajib "petani_id" dan "nama_petani" tidak ditemukan pada baris header CSV.',
+        'Kolom wajib "ID Petani" (petani_id) dan "Nama Petani" (nama_petani) tidak ditemukan pada baris judul kolom.',
       ]);
       return;
     }
+
+    // Nilai "-" dari file ekspor dianggap kosong
+    const cell = (cols: string[], idx: number) => {
+      const val = idx !== -1 ? (cols[idx] || '').trim() : '';
+      return val === '-' ? '' : val;
+    };
 
     const importedPetani: Petani[] = [];
     const errors: string[] = [];
@@ -98,10 +125,10 @@ export const PetaniImportExportModal: React.FC<PetaniImportExportModalProps> = (
       const line = lines[i].trim();
       if (!line) continue;
 
-      const cols = line.split(',').map((c) => c.replace(/^"|"$/g, '').trim());
-      const cardNumber = cols[cardIdx]?.toUpperCase();
-      const nama = cols[nameIdx];
-      const desa = desaIdx !== -1 ? cols[desaIdx] : 'Desa Tembakau';
+      const cols = line.split(delimiter).map((c) => c.replace(/^"|"$/g, '').trim());
+      const cardNumber = cell(cols, cardIdx).toUpperCase();
+      const nama = cell(cols, nameIdx);
+      const desa = cell(cols, desaIdx);
 
       if (!cardNumber || !nama) {
         errors.push(`Baris ${i + 1}: ID Petani dan nama tidak boleh kosong.`);
@@ -119,9 +146,9 @@ export const PetaniImportExportModal: React.FC<PetaniImportExportModalProps> = (
         petani_id: generatePetaniId([...petaniList, ...importedPetani]),
 
         nama_petani: nama,
-        no_hp: '0812-3456-7890',
-        alamat: desa || 'Ds. Wringin Anom, Pamekasan',
-        desa_kecamatan: desa || 'Ds. Wringin Anom',
+        no_hp: cell(cols, hpIdx),
+        alamat: cell(cols, alamatIdx),
+        desa_kecamatan: desa || undefined,
         status_aktif: true,
         tanggal_daftar: new Date().toISOString().split('T')[0],
       };
@@ -175,7 +202,7 @@ export const PetaniImportExportModal: React.FC<PetaniImportExportModalProps> = (
                 : 'border-transparent text-gray-500 hover:text-gray-800'
             }`}
           >
-            Export CSV
+            Export Excel
           </button>
           <button
             onClick={() => setTab('import')}
@@ -185,7 +212,7 @@ export const PetaniImportExportModal: React.FC<PetaniImportExportModalProps> = (
                 : 'border-transparent text-gray-500 hover:text-gray-800'
             }`}
           >
-            Import CSV
+            Import Data
           </button>
         </div>
 
@@ -194,13 +221,13 @@ export const PetaniImportExportModal: React.FC<PetaniImportExportModalProps> = (
           {tab === 'export' ? (
             <div className="space-y-4">
               <p className="text-xs text-gray-600 leading-relaxed">
-                Unduh seluruh data registrasi master petani ({petaniList.length} petani aktif/terdaftar) ke dalam format file spreadsheet CSV standar.
+                Unduh seluruh data registrasi master petani ({petaniList.length} petani aktif/terdaftar) ke dalam file Excel (.xlsx) yang sudah rapi dan siap cetak.
               </p>
 
               <div className="bg-[#f8f9fa] p-3 border border-gray-200 space-y-2">
                 <span className="font-bold text-gray-800 block text-xs">Kolom yang disertakan:</span>
-                <p className="text-[11px] font-mono text-gray-600 leading-relaxed">
-                  petani_id, nama_petani, no_hp, alamat, status_aktif, tanggal_daftar, catatan
+                <p className="text-[11px] text-gray-600 leading-relaxed">
+                  No, ID Petani, Nama Petani, No HP, Alamat, Desa / Kecamatan, Status, Tanggal Daftar, Catatan
                 </p>
               </div>
 
@@ -211,14 +238,14 @@ export const PetaniImportExportModal: React.FC<PetaniImportExportModalProps> = (
                   className="px-4 py-2 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#a0181e] rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
                 >
                   <Download className="w-3.5 h-3.5" />
-                  <span>Download File CSV Master Petani</span>
+                  <span>Download File Excel Master Petani</span>
                 </button>
               </div>
             </div>
           ) : (
             <div className="space-y-3.5">
               <p className="text-xs text-gray-600 leading-relaxed">
-                Tempel teks CSV dari Excel / Google Sheets di bawah ini. Pastikan baris pertama memuat kolom header.
+                Salin baris dari Excel / Google Sheets (mulai dari baris judul kolom) lalu tempel di bawah ini. Minimal memuat kolom ID Petani dan Nama Petani; No HP, Alamat, dan Desa / Kecamatan boleh dikosongkan.
               </p>
 
               <textarea
@@ -286,7 +313,7 @@ export const PetaniImportExportModal: React.FC<PetaniImportExportModalProps> = (
                 <button
                   type="button"
                   onClick={() => {
-                    handleExportCSV();
+                    handleExportExcel();
                     setShowExportConfirm(false);
                   }}
                   className="px-3 py-1.5 bg-[#b81d24] hover:bg-[#a0181e] text-white rounded-sm text-xs font-bold transition cursor-pointer shadow-xs flex items-center space-x-1.5"

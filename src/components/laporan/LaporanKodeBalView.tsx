@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { 
   PackageSearch,
   Download,
+  FileSpreadsheet,
   Filter,
   Search,
   ArrowUpDown,
@@ -11,7 +12,7 @@ import {
 } from 'lucide-react';
 import { Barang } from '../../types';
 import { formatNumber, formatRupiah, extractKodeBalPrefix } from '../../utils/formatters';
-import { downloadCsvFile } from '../../utils/printDownload';
+import { downloadExcelReport, todayStamp } from '../../utils/excelExport';
 
 interface LaporanKodeBalViewProps {
   barangList: Barang[];
@@ -212,28 +213,33 @@ export const LaporanKodeBalView: React.FC<LaporanKodeBalViewProps> = ({
       : <ArrowDown className="w-3 h-3 text-[#b81d24] ml-1" />;
   };
 
-  const handleExportCsv = () => {
-    const headers = ['Kode Bal', 'Jumlah Bal', 'Berat Bruto (Kg)', 'Berat Netto (Kg)', 'AVG Harga (Rp)', 'Total Nilai (Rp)'];
-    const rows = filteredAndSortedData.map(item => [
-      item.kode_bal,
-      item.jumlah_bal.toString(),
-      item.berat_bruto.toString(),
-      item.berat_netto.toString(),
-      item.avg_harga.toFixed(2),
-      item.total_nilai.toString()
+  const handleExportExcel = () => {
+    downloadExcelReport(`Laporan_Kode_Bal_${todayStamp()}`, [
+      {
+        name: 'Kode Bal',
+        title: 'Laporan Kode Bal',
+        info: [searchQuery.trim() ? `Pencarian kode: ${searchQuery.trim()}` : 'Seluruh kode bal'],
+        columns: [
+          { header: 'No', type: 'integer', align: 'center' },
+          { header: 'Kode Bal', align: 'center' },
+          { header: 'Jumlah Bal', type: 'integer' },
+          { header: 'Berat Bruto (Kg)', type: 'kg' },
+          { header: 'Berat Netto (Kg)', type: 'kg' },
+          { header: 'Rata-rata Harga (Rp/Kg)', type: 'rupiah' },
+          { header: 'Total Nilai (Rp)', type: 'rupiah' },
+        ],
+        rows: filteredAndSortedData.map((item, idx) => [
+          idx + 1,
+          item.kode_bal,
+          item.jumlah_bal,
+          item.berat_bruto,
+          item.berat_netto,
+          item.avg_harga,
+          item.total_nilai,
+        ]),
+        totalRow: ['TOTAL', '', totals.jumlah_bal, totals.berat_bruto, totals.berat_netto, avgHargaTotal, totals.total_nilai],
+      },
     ]);
-    
-    // Add total row
-    rows.push([
-      'TOTAL',
-      totals.jumlah_bal.toString(),
-      totals.berat_bruto.toString(),
-      totals.berat_netto.toString(),
-      avgHargaTotal.toFixed(2),
-      totals.total_nilai.toString()
-    ]);
-
-    downloadCsvFile(`Laporan_Kode_Bal_${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
   };
 
   return (
@@ -260,11 +266,11 @@ export const LaporanKodeBalView: React.FC<LaporanKodeBalViewProps> = ({
         
         <div className="flex space-x-2">
           <button
-            onClick={handleExportCsv}
+            onClick={handleExportExcel}
             className="flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-sm hover:bg-gray-50 transition text-xs font-semibold shadow-2xs cursor-pointer"
           >
-            <Download className="w-3.5 h-3.5" />
-            <span>Ekspor CSV</span>
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+            <span>Ekspor Excel</span>
           </button>
         </div>
       </div>

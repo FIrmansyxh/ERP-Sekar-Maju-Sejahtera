@@ -23,7 +23,7 @@ export function useBarcodeScanner(onNoBalScanned?: (noBal: string) => void) {
       // If user is actively typing in a standard textarea or unrelated input, ignore unless it's a dedicated scanner receiver
       const isTypingInOtherInput =
         target &&
-        target.tagName === 'TEXTAREA';
+        (target.tagName === 'TEXTAREA' || Boolean(target.closest('[data-scanner-ignore]')));
 
       if (isTypingInOtherInput) return;
 

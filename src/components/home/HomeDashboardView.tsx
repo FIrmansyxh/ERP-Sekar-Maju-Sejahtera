@@ -37,14 +37,13 @@ export const HomeDashboardView: React.FC<HomeDashboardViewProps> = ({
     { no: 9, nama: 'Master Petani', judul: 'Data Petani Tembakau & Kartu Scan Setoran', modId: 'modul-1-petani' },
     { no: 10, nama: 'Master Harga Beli', judul: 'Tarif Acuan Grade A-F Tembakau Masuk', modId: 'modul-3-harga' },
     { no: 11, nama: 'Master Harga Jual Pabrik', judul: 'Daftar Kode & Master Harga Jual Tembakau ke Pabrik Rekanan', modId: 'modul-3-harga-jual' },
-    { no: 12, nama: 'Inventaris Bal Gudang', judul: 'Stok Fisik Bal & Blok Penyimpanan', modId: 'modul-2-barang' },
-    { no: 13, nama: 'Sortir', judul: 'Proses 1: Kupon Petani, Sortir Mutu Grade Bal & Penentuan No Bal', modId: 'modul-0-sortir' },
-    { no: 14, nama: 'Timbangan', judul: 'Proses 2: Standby Scan No Bal, Input Berat Bruto/Netto & Blok Simpan', modId: 'modul-0-timbangan' },
-    { no: 15, nama: 'Kasir', judul: 'Proses 3: Data Pembelian Barang, Rekap Pembayaran & Cetak Nota Resmi', modId: 'modul-0-kasir' },
-    { no: 16, nama: 'Pengiriman Reguler (DO Luar)', judul: 'Surat Jalan Pengiriman Bal ke Buyer Pabrik Rokok', modId: 'modul-5-pengiriman' },
-    { no: 17, nama: 'Pengiriman Sample', judul: 'Uji Laboratorium Mutu & Approval Grade Sample Internal/Eksternal', modId: 'modul-4-sample' },
-    { no: 18, nama: 'Status & Detail Batch', judul: 'Detail Evaluasi QC Sortir Buyer & Monitoring Distribusi Ekspedisi', modId: 'modul-status-batch' },
-    { no: 19, nama: 'Manajemen Pengguna (RBAC)', judul: 'Otorisasi Staf & Hak Akses Role Kerja', modId: 'modul-users' },
+    { no: 12, nama: 'Sortir', judul: 'Proses 1: Kupon Petani, Sortir Mutu Grade Bal & Penentuan No Bal', modId: 'modul-0-sortir' },
+    { no: 13, nama: 'Timbangan', judul: 'Proses 2: Standby Scan No Bal, Input Berat Bruto/Netto & Blok Simpan', modId: 'modul-0-timbangan' },
+    { no: 14, nama: 'Kasir', judul: 'Proses 3: Data Pembelian Barang, Rekap Pembayaran & Cetak Nota Resmi', modId: 'modul-0-kasir' },
+    { no: 15, nama: 'Pengiriman Reguler (DO Luar)', judul: 'Surat Jalan Pengiriman Bal ke Buyer Pabrik Rokok', modId: 'modul-5-pengiriman' },
+    { no: 16, nama: 'Pengiriman Sample', judul: 'Uji Laboratorium Mutu & Approval Grade Sample Internal/Eksternal', modId: 'modul-4-sample' },
+    { no: 17, nama: 'Status & Detail Batch', judul: 'Detail Evaluasi QC Sortir Buyer & Monitoring Distribusi Ekspedisi', modId: 'modul-status-batch' },
+    { no: 18, nama: 'Manajemen Pengguna (RBAC)', judul: 'Otorisasi Staf & Hak Akses Role Kerja', modId: 'modul-users' },
   ];
 
   // Filter menu list based on RBAC permissions

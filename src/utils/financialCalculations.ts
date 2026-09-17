@@ -170,7 +170,9 @@ export function hitungProfitPengiriman(
       if (bal) doBals.push(bal);
     });
 
-    const doTotalBeratKg = doBals.reduce((sum, b) => sum + (b.berat_kg || 0), 0);
+    // Berat saat dikirim (bisa sudah susut) untuk sisi penjualan; modal tetap memakai berat saat dibeli
+    const beratKirimBal = (b: Barang) => Number(p.berat_kirim_map?.[b.barang_id] ?? b.berat_kg ?? 0);
+    const doTotalBeratKg = doBals.reduce((sum, b) => sum + beratKirimBal(b), 0);
 
     // Cek apakah ada total_nilai_deal langsung di DO
     const hasDoTotalDeal = p.total_nilai_deal !== undefined && p.total_nilai_deal > 0;
@@ -180,17 +182,18 @@ export function hitungProfitPengiriman(
 
     doBals.forEach((bal) => {
       const netto = Number(bal.berat_kg || 0);
+      const nettoKirim = beratKirimBal(bal);
       const gradeBuyPrice = hargaBeliMap.get((bal.kode_grade || '').toUpperCase()) || 0;
       const hargaBeli = bal.harga_per_kg !== undefined && bal.harga_per_kg > 0 ? bal.harga_per_kg : gradeBuyPrice;
       const modalBal = netto * hargaBeli;
 
       doModalBeli += modalBal;
       totalBalTerkirim += 1;
-      totalBeratTerkirimKg += netto;
+      totalBeratTerkirimKg += nettoKirim;
 
       if (hasDoTotalDeal) {
         // Jika ada nilai deal total pada DO, distribusikan secara proporsional sesuai berat netto bal
-        const proporsiBerat = doTotalBeratKg > 0 ? netto / doTotalBeratKg : 1 / doBals.length;
+        const proporsiBerat = doTotalBeratKg > 0 ? nettoKirim / doTotalBeratKg : 1 / doBals.length;
         doPenjualan += (p.total_nilai_deal || 0) * proporsiBerat;
       } else {
         // Cari harga jual per bal
@@ -208,7 +211,7 @@ export function hitungProfitPengiriman(
           hargaJualBal = hjMatch ? hjMatch.harga_jual : 0;
         }
 
-        doPenjualan += netto * hargaJualBal;
+        doPenjualan += nettoKirim * hargaJualBal;
       }
     });
 

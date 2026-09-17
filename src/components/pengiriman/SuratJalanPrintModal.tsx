@@ -103,7 +103,7 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
     const found = barangList.find((b) => b.barang_id === id);
     const barcodeVal = barcodeList[index] || (found ? found.barcode || found.barang_id : id);
     const grade = found?.kode_grade || 'A';
-    const berat = found?.berat_kg || (pengiriman.total_berat_kg ? pengiriman.total_berat_kg / (pengiriman.total_bal || 1) : 45);
+    const berat = pengiriman.berat_kirim_map?.[id] ?? (found?.berat_kg || (pengiriman.total_berat_kg ? pengiriman.total_berat_kg / (pengiriman.total_bal || 1) : 45));
     
     // Priority 1: Agreed deal price from Sample Batch negotiation
     let pricePerKg = pengiriman.harga_deal_map?.[id];

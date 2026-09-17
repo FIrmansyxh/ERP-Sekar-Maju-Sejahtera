@@ -29,7 +29,8 @@ import {
   ArrowDown
 } from 'lucide-react';
 import { PengirimanBarang, PengirimanSample, Barang, UserRole } from '../../types';
-import { downloadCsvFile, downloadElementAsPdf } from '../../utils/printDownload';
+import { downloadElementAsPdf } from '../../utils/printDownload';
+import { downloadExcelReport, periodeInfo, todayStamp } from '../../utils/excelExport';
 import { Pagination } from '../common/Pagination';
 
 interface LaporanPengirimanViewProps {
@@ -38,7 +39,6 @@ interface LaporanPengirimanViewProps {
   barangList?: Barang[];
   userRole?: UserRole;
   onNavigateToSample?: () => void;
-  onNavigateToBarang?: () => void;
 }
 
 export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
@@ -47,7 +47,6 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
   barangList = [],
   userRole = 'superadmin',
   onNavigateToSample,
-  onNavigateToBarang,
 }) => {
   // Tabs: 'surat-jalan' | 'rekap-pabrik' | 'sample-qc' | 'log-bal'
   const [activeTab, setActiveTab] = useState<'surat-jalan' | 'rekap-pabrik' | 'sample-qc' | 'log-bal'>('surat-jalan');
@@ -288,39 +287,167 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
     setCurrentPage(1);
   };
 
-  // Download CSV
-  const handleDownloadCsv = () => {
-    const headers = [
-      'No',
-      'No Surat Jalan',
-      'Tanggal Kirim',
-      'Pabrik Tujuan',
-      'Nama Sopir',
-      'Plat Kendaraan',
-      'Total Bal',
-      'Total Berat Netto (Kg)',
-      'Status Pengiriman',
-      'Nomor Kontrak',
-      'Tanggal Diterima',
-      'Petugas Logistik',
+  // Download Excel
+  const handleDownloadExcel = () => {
+    const f = appliedFilters;
+    const labelSortir: Record<string, string> = {
+      tanggal_desc: 'Tanggal terbaru',
+      tanggal_asc: 'Tanggal terlama',
+      bal_desc: 'Bal terbanyak',
+      kg_desc: 'Tonase terbesar',
+    };
+    const info = [
+      periodeInfo(f.startDate, f.endDate),
+      [
+        `Pabrik: ${f.pabrik && f.pabrik !== 'ALL' ? f.pabrik : 'Semua'}`,
+        `Status: ${f.status !== 'ALL' ? labelStatusDO(f.status) : 'Semua'}`,
+        f.search ? `Pencarian: ${f.search}` : '',
+        `Urutan: ${labelSortir[f.sortBy] || '-'}`,
+      ].filter(Boolean).join(' · '),
     ];
 
-    const rows = filteredPengirimanList.map((p, idx) => [
-      idx + 1,
-      p.no_surat_jalan,
-      p.tanggal_kirim ? p.tanggal_kirim.split('T')[0] : '-',
-      p.tujuan,
-      p.driver_nama,
-      p.plat_nomor,
-      p.total_bal,
-      p.total_berat_kg,
-      p.status,
-      p.nomor_kontrak || '-',
-      p.tanggal_diterima || '-',
-      p.petugas || p.dibuat_oleh || '-',
-    ]);
+    const barangMap = new Map(barangList.map((b) => [b.barang_id, b]));
+    const totalNilaiDO = filteredPengirimanList.reduce((sum, p) => sum + (p.total_nilai_deal || 0), 0);
 
-    downloadCsvFile(`Laporan_Pengiriman_DO_${new Date().toISOString().slice(0, 10)}`, headers, rows);
+    const rincianBal = filteredPengirimanList.flatMap((p) =>
+      (p.barang_ids || []).map((id) => {
+        const bal = barangMap.get(id);
+        const beratGudang = bal?.berat_kg || 0;
+        const beratKirim = p.berat_kirim_map?.[id] ?? beratGudang;
+        const harga = p.harga_deal_map?.[id] || 0;
+        return { p, id, bal, beratGudang, beratKirim, harga };
+      })
+    );
+
+    downloadExcelReport(`Laporan_Pengiriman_DO_${todayStamp()}`, [
+      {
+        name: 'Surat Jalan DO',
+        title: 'Laporan Pengiriman Barang (Surat Jalan DO)',
+        info,
+        columns: [
+          { header: 'No', type: 'integer', align: 'center' },
+          { header: 'No Surat Jalan', align: 'center' },
+          { header: 'Tanggal Kirim', type: 'date' },
+          { header: 'Pabrik Tujuan' },
+          { header: 'Nama Sopir' },
+          { header: 'No Kendaraan', align: 'center' },
+          { header: 'Total Bal', type: 'integer' },
+          { header: 'Total Netto (Kg)', type: 'kg' },
+          { header: 'Nilai DO (Rp)', type: 'rupiah' },
+          { header: 'Status', align: 'center' },
+          { header: 'Nomor Kontrak', align: 'center' },
+          { header: 'Tanggal Diterima', type: 'date' },
+          { header: 'Petugas' },
+        ],
+        rows: filteredPengirimanList.map((p, idx) => [
+          idx + 1,
+          p.no_surat_jalan,
+          p.tanggal_kirim,
+          p.tujuan,
+          p.driver_nama || '-',
+          p.plat_nomor || '-',
+          p.total_bal,
+          p.total_berat_kg,
+          p.total_nilai_deal || 0,
+          labelStatusDO(p.status),
+          p.nomor_kontrak || '-',
+          p.tanggal_diterima || '-',
+          p.petugas || p.dibuat_oleh || '-',
+        ]),
+        totalRow: [
+          `TOTAL (${filteredPengirimanList.length} DO)`, '', '', '', '', '',
+          overallKPIs.totalBalKirim,
+          overallKPIs.totalKgKirim,
+          totalNilaiDO,
+          '', '', '', '',
+        ],
+      },
+      {
+        name: 'Rincian Bal per DO',
+        title: 'Rincian Bal per Surat Jalan',
+        info,
+        columns: [
+          { header: 'No', type: 'integer', align: 'center' },
+          { header: 'No Surat Jalan', align: 'center' },
+          { header: 'Tanggal Kirim', type: 'date' },
+          { header: 'Pabrik Tujuan' },
+          { header: 'No Bal', align: 'center' },
+          { header: 'Grade', align: 'center' },
+          { header: 'Netto Gudang (Kg)', type: 'kg' },
+          { header: 'Berat Kirim (Kg)', type: 'kg' },
+          { header: 'Selisih / Susut (Kg)', type: 'kg' },
+          { header: 'Harga Jual (Rp/Kg)', type: 'rupiah' },
+          { header: 'Nilai (Rp)', type: 'rupiah' },
+        ],
+        rows: rincianBal.map((r, idx) => [
+          idx + 1,
+          r.p.no_surat_jalan,
+          r.p.tanggal_kirim,
+          r.p.tujuan,
+          r.bal?.no_bal || r.id,
+          r.bal?.kode_grade || '-',
+          r.beratGudang,
+          r.beratKirim,
+          Math.round((r.beratKirim - r.beratGudang) * 1000) / 1000,
+          r.harga,
+          Math.round(r.beratKirim * r.harga),
+        ]),
+        totalRow: [
+          `TOTAL (${rincianBal.length} bal)`, '', '', '', '', '',
+          rincianBal.reduce((sum, r) => sum + r.beratGudang, 0),
+          rincianBal.reduce((sum, r) => sum + r.beratKirim, 0),
+          Math.round(rincianBal.reduce((sum, r) => sum + (r.beratKirim - r.beratGudang), 0) * 1000) / 1000,
+          '',
+          rincianBal.reduce((sum, r) => sum + Math.round(r.beratKirim * r.harga), 0),
+        ],
+      },
+      {
+        name: 'Rekap per Pabrik',
+        title: 'Rekapitulasi Pengiriman per Pabrik Tujuan',
+        info,
+        columns: [
+          { header: 'No', type: 'integer', align: 'center' },
+          { header: 'Pabrik Tujuan' },
+          { header: 'Frekuensi DO', type: 'integer' },
+          { header: 'Total Bal', type: 'integer' },
+          { header: 'Total Netto (Kg)', type: 'kg' },
+          { header: 'Rata-rata Netto / Trip (Kg)', type: 'kg' },
+          { header: 'DO Diterima', type: 'integer' },
+          { header: 'DO Belum Diterima', type: 'integer' },
+          { header: 'Porsi Tonase', type: 'percent' },
+        ],
+        rows: pabrikAggregates.map((item, idx) => [
+          idx + 1,
+          item.pabrik,
+          item.countDO,
+          item.totalBal,
+          item.totalKg,
+          item.countDO > 0 ? item.totalKg / item.countDO : 0,
+          item.diterimaCount,
+          item.pendingCount,
+          overallKPIs.totalKgKirim > 0 ? (item.totalKg / overallKPIs.totalKgKirim) * 100 : 0,
+        ]),
+        totalRow: [
+          'TOTAL', '',
+          filteredPengirimanList.length,
+          overallKPIs.totalBalKirim,
+          overallKPIs.totalKgKirim,
+          filteredPengirimanList.length > 0 ? overallKPIs.totalKgKirim / filteredPengirimanList.length : 0,
+          pabrikAggregates.reduce((sum, item) => sum + item.diterimaCount, 0),
+          pabrikAggregates.reduce((sum, item) => sum + item.pendingCount, 0),
+          overallKPIs.totalKgKirim > 0 ? 100 : 0,
+        ],
+      },
+    ]);
+  };
+
+  // 'dikirim' belum dihitung diterima pada rekap per pabrik, jadi labelnya dibedakan
+  const labelStatusDO = (status: string) => {
+    if (status === 'diterima') return 'Diterima Pabrik';
+    if (status === 'dikirim') return 'Dikirim';
+    if (status === 'dalam_perjalanan') return 'Dalam Perjalanan';
+    if (status === 'selesai') return 'Selesai';
+    return 'Sedang Dimuat';
   };
 
   // Download PDF (Direct Download)
@@ -436,7 +563,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
           
         </div>
 
-        {/* Action Controls: Unduh CSV & Unduh PDF */}
+        {/* Action Controls: Unduh Excel & Unduh PDF */}
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -458,12 +585,12 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
           </button>
 
           <button
-            onClick={handleDownloadCsv}
+            onClick={handleDownloadExcel}
             className="px-3 py-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-bold rounded-xs transition flex items-center space-x-1.5 cursor-pointer shadow-2xs"
-            title="Download Spreadsheet CSV/Excel"
+            title="Download laporan dalam format Excel"
           >
-            <Download className="w-3.5 h-3.5 text-gray-600" />
-            <span>Unduh CSV</span>
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+            <span>Unduh Excel</span>
           </button>
 
           <button

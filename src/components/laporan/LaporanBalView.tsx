@@ -32,7 +32,8 @@ import {
 import { Barang, Petani, TransaksiPembelian, TabelHarga, UserRole } from '../../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell } from 'recharts';
 import { formatRupiah, formatNumber, formatDateHariBulanTahun } from '../../utils/formatters';
-import { downloadCsvFile, downloadElementAsPdf } from '../../utils/printDownload';
+import { downloadElementAsPdf } from '../../utils/printDownload';
+import { downloadExcelReport, labelStatusStok, periodeInfo, todayStamp } from '../../utils/excelExport';
 import { hitungNilaiBal } from '../../utils/finance';
 import { Pagination } from '../common/Pagination';
 
@@ -42,7 +43,6 @@ interface LaporanBalViewProps {
   transaksiList?: TransaksiPembelian[];
   hargaList?: TabelHarga[];
   userRole?: UserRole;
-  onNavigateToBarang?: () => void;
   onNavigateToTransaksi?: () => void;
 }
 
@@ -66,7 +66,6 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
   transaksiList = [],
   hargaList = [],
   userRole = 'superadmin',
-  onNavigateToBarang,
   onNavigateToTransaksi,
 }) => {
   // Filter States
@@ -74,6 +73,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
   const [filterEndDate, setFilterEndDate] = useState<string>('');
   const [filterGrade, setFilterGrade] = useState<string>('ALL');
   const [filterStatusStok, setFilterStatusStok] = useState<string>('ALL');
+  const [filterStatusBayar, setFilterStatusBayar] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [tableSearch, setTableSearch] = useState<string>('');
   const [filterMinBerat, setFilterMinBerat] = useState<string>('');
@@ -87,6 +87,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
     endDate: '',
     grade: 'ALL',
     statusStok: 'ALL',
+    statusBayar: 'ALL',
     search: '',
     minBerat: '',
     maxBerat: '',
@@ -164,6 +165,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
       endDate: filterEndDate,
       grade: filterGrade,
       statusStok: filterStatusStok,
+      statusBayar: filterStatusBayar,
       search: searchQuery.trim(),
       minBerat: filterMinBerat,
       maxBerat: filterMaxBerat,
@@ -179,6 +181,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
     setFilterEndDate('');
     setFilterGrade('ALL');
     setFilterStatusStok('ALL');
+    setFilterStatusBayar('ALL');
     setSearchQuery('');
     setFilterMinBerat('');
     setFilterMaxBerat('');
@@ -189,6 +192,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
       endDate: '',
       grade: 'ALL',
       statusStok: 'ALL',
+      statusBayar: 'ALL',
       search: '',
       minBerat: '',
       maxBerat: '',
@@ -279,16 +283,14 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
           potongan: txInfo?.potongan || 0,
           status_pembayaran: txInfo?.status_pembayaran || 'belum_lunas',
           metode_pembayaran: txInfo?.metode_pembayaran || '',
+          // Semua bal ditampilkan; status bayar dipakai untuk kolom dan filter
+          status_bayar: !txInfo
+            ? 'tanpa_transaksi'
+            : txInfo.status_pembayaran === 'lunas' || txInfo.metode_pembayaran === 'cash'
+            ? 'lunas'
+            : 'belum_lunas',
           has_tx: !!txInfo,
         };
-      })
-      .filter((bal) => {
-        // Hapus aset dari laporan jika dari transaksi pembelian tapi belum dibayar (LUNAS/CASH)
-        if (bal.has_tx) {
-          const isLunas = bal.status_pembayaran === 'lunas' || bal.metode_pembayaran === 'cash';
-          return isLunas;
-        }
-        return true; // Jika tidak terkait transaksi, tetap tampilkan
       });
   }, [barangList, transaksiList]);
 
@@ -316,6 +318,10 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
         if (item.status_stok !== appliedFilters.statusStok) {
           return false;
         }
+      }
+      // Status Bayar
+      if (appliedFilters.statusBayar !== 'ALL' && item.status_bayar !== appliedFilters.statusBayar) {
+        return false;
       }
       // Min & Max Berat
       if (appliedFilters.minBerat) {
@@ -423,6 +429,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
   // Aggregation & KPI Totals
   const totals = useMemo(() => {
     let totalBal = sortedData.length;
+    let totalBalDitimbang = 0;
     let totalNetto = 0;
     let totalBruto = 0;
     let totalTara = 0;
@@ -434,6 +441,9 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
 
     sortedData.forEach((b) => {
       const netto = b.berat_kg || 0;
+      // Berat dan nilai hanya dihitung dari bal yang sudah ditimbang
+      if (netto <= 0) return;
+      totalBalDitimbang += 1;
       const bruto = b.berat_bruto_kg || 0;
       const tara = b.potongan_tara_kg || 0;
       const subtotal = hitungNilaiBal(b);
@@ -453,11 +463,12 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
     if (minBerat === Number.MAX_VALUE) minBerat = 0;
     if (minHarga === Number.MAX_VALUE) minHarga = 0;
 
-    const avgNetto = totalBal > 0 ? totalNetto / totalBal : 0;
+    const avgNetto = totalBalDitimbang > 0 ? totalNetto / totalBalDitimbang : 0;
     const avgHargaKg = totalNetto > 0 ? totalNilai / totalNetto : 0;
 
     return {
       totalBal,
+      totalBalDitimbang,
       totalNetto,
       totalBruto,
       totalTara,
@@ -473,13 +484,14 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
 
   // Sub-Ringkasan per Grade
   const gradeBreakdown = useMemo(() => {
-    const map: Record<string, { grade: string; balCount: number; totalNetto: number; totalNilai: number }> = {};
+    const map: Record<string, { grade: string; balCount: number; balDitimbang: number; totalNetto: number; totalNilai: number }> = {};
     sortedData.forEach((b) => {
       const g = (b.kode_grade || 'LAINNYA').trim().toUpperCase();
       if (!map[g]) {
-        map[g] = { grade: g, balCount: 0, totalNetto: 0, totalNilai: 0 };
+        map[g] = { grade: g, balCount: 0, balDitimbang: 0, totalNetto: 0, totalNilai: 0 };
       }
       map[g].balCount += 1;
+      if ((b.berat_kg || 0) > 0) map[g].balDitimbang += 1;
       map[g].totalNetto += b.berat_kg || 0;
       map[g].totalNilai += hitungNilaiBal(b);
     });
@@ -524,13 +536,37 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
     return 'bg-red-100 text-red-900 font-bold';
   };
 
+  const getStatusBayarBadge = (statusBayar: string) => {
+    if (statusBayar === 'lunas') {
+      return (
+        <span className="inline-flex items-center px-2 py-0.5 rounded-xs text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+          Lunas
+        </span>
+      );
+    }
+    if (statusBayar === 'belum_lunas') {
+      return (
+        <span className="inline-flex items-center px-2 py-0.5 rounded-xs text-[10px] font-bold bg-rose-50 text-rose-800 border border-rose-200">
+          Belum Lunas
+        </span>
+      );
+    }
+    return <span className="text-[10px] text-gray-400">-</span>;
+  };
+
   // Helper Badge Color for Status
   const getStatusBadge = (status: string) => {
     switch (status) {
+      case 'proses_sortir':
+        return (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-xs text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+            Proses Sortir
+          </span>
+        );
       case 'di_gudang':
         return (
           <span className="inline-flex items-center px-2 py-0.5 rounded-xs text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-            Di Gudang (Tersedia)
+            Di Gudang
           </span>
         );
       case 'siap_kirim':
@@ -542,13 +578,13 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
       case 'keluar':
         return (
           <span className="inline-flex items-center px-2 py-0.5 rounded-xs text-[10px] font-bold bg-gray-100 text-gray-800 border border-gray-300">
-            Keluar (Terkirim Pabrik)
+            Dikirim
           </span>
         );
       case 'terkirim_sample':
         return (
           <span className="inline-flex items-center px-2 py-0.5 rounded-xs text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-300">
-            Terkirim Sample QC
+            Sample
           </span>
         );
       default:
@@ -593,84 +629,104 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
     );
   };
 
-  // Export CSV
-  const handleExportCSV = () => {
+  // Export Excel
+  const handleExportExcel = () => {
     if (sortedData.length === 0) return;
 
-    const headers = [
-      'NO',
-      'TANGGAL',
-      'NO BAL',
-      'PETANI',
-      'BERAT',
-      'HARGA',
-      'STATUS',
-      'POTONGAN',
-      'STATUS (DIGUDANG/TERKIRIM)'
+    const f = appliedFilters;
+    const rentang = (label: string, min: string, max: string, satuan: string) =>
+      min || max ? `${label}: ${min || '0'} s.d. ${max || '∞'} ${satuan}` : '';
+    const info = [
+      periodeInfo(f.startDate, f.endDate),
+      [
+        `Grade: ${f.grade !== 'ALL' ? f.grade : 'Semua'}`,
+        `Status Stok: ${f.statusStok !== 'ALL' ? labelStatusStok(f.statusStok) : 'Semua'}`,
+        `Status Bayar: ${f.statusBayar === 'lunas' ? 'Lunas' : f.statusBayar === 'belum_lunas' ? 'Belum Lunas' : 'Semua'}`,
+        rentang('Berat', f.minBerat, f.maxBerat, 'kg'),
+        rentang('Harga', f.minHarga, f.maxHarga, 'Rp/kg'),
+        f.search ? `Pencarian: ${f.search}` : '',
+      ].filter(Boolean).join(' · '),
     ];
 
-    const rows = sortedData.map((b, idx) => [
-      idx + 1,
-      b.tanggal_masuk ? b.tanggal_masuk.split('T')[0] : '-',
-      b.no_bal || '-',
-      b.nama_petani || '-',
-      (b.berat_kg || 0).toFixed(1),
-      b.total_harga || 0,
-      b.status_pembayaran === 'lunas' ? 'LUNAS' : 'KASBON / BELUM LUNAS',
-      b.potongan || 0,
-      b.status_stok === 'di_gudang' ? 'DIGUDANG' : b.status_stok === 'keluar' ? 'TERKIRIM' : (b.status_stok || '').toUpperCase()
+    const totalPotongan = sortedData.reduce((sum, b) => sum + (b.potongan || 0), 0);
+
+    downloadExcelReport(`Laporan_Detail_Bal_${todayStamp()}`, [
+      {
+        name: 'Detail Bal',
+        title: 'Laporan Detail Bal Tembakau',
+        info,
+        columns: [
+          { header: 'No', type: 'integer', align: 'center' },
+          { header: 'Tanggal Masuk', type: 'date' },
+          { header: 'No Bal', align: 'center' },
+          { header: 'Grade', align: 'center' },
+          { header: 'Petani' },
+          { header: 'Kupon', align: 'center' },
+          { header: 'Bruto (Kg)', type: 'kg' },
+          { header: 'Tara (Kg)', type: 'kg' },
+          { header: 'Netto (Kg)', type: 'kg' },
+          { header: 'Harga Beli (Rp/Kg)', type: 'rupiah' },
+          { header: 'Total Harga Beli (Rp)', type: 'rupiah' },
+          { header: 'Potongan (Rp)', type: 'rupiah' },
+          { header: 'Status Bayar', align: 'center' },
+          { header: 'Status Stok', align: 'center' },
+        ],
+        rows: sortedData.map((b, idx) => {
+          // Bal proses sortir belum punya berat dan nilai
+          const ditimbang = (b.berat_kg || 0) > 0;
+          return [
+            idx + 1,
+            b.tanggal_masuk,
+            b.no_bal || '-',
+            b.kode_grade || '-',
+            b.nama_petani || '-',
+            b.no_kupon || '-',
+            ditimbang ? b.berat_bruto_kg || 0 : '-',
+            ditimbang ? b.potongan_tara_kg || 0 : '-',
+            ditimbang ? b.berat_kg : '-',
+            b.harga_per_kg || 0,
+            ditimbang ? b.total_harga || 0 : '-',
+            b.potongan || 0,
+            b.status_bayar === 'lunas' ? 'Lunas' : b.status_bayar === 'belum_lunas' ? 'Belum Lunas' : '-',
+            labelStatusStok(b.status_stok),
+          ];
+        }),
+        totalRow: [
+          `TOTAL (${totals.totalBal} bal, ${totals.totalBalDitimbang} ditimbang)`, '', '', '', '', '',
+          totals.totalBruto,
+          totals.totalTara,
+          totals.totalNetto,
+          totals.avgHargaKg,
+          totals.totalNilai,
+          totalPotongan,
+          '', '',
+        ],
+      },
+      {
+        name: 'Ringkasan per Grade',
+        title: 'Sub-Ringkasan Berat & Nilai per Grade',
+        info,
+        columns: [
+          { header: 'No', type: 'integer', align: 'center' },
+          { header: 'Kode Grade', align: 'center' },
+          { header: 'Jumlah Bal', type: 'integer' },
+          { header: 'Total Netto (Kg)', type: 'kg' },
+          { header: 'Rata-rata (Kg/Bal)', type: 'kg' },
+          { header: 'Kontribusi Netto', type: 'percent' },
+          { header: 'Total Nilai Pembelian (Rp)', type: 'rupiah' },
+        ],
+        rows: gradeBreakdown.map((gb, idx) => [
+          idx + 1,
+          gb.grade,
+          gb.balCount,
+          gb.totalNetto,
+          gb.balDitimbang > 0 ? gb.totalNetto / gb.balDitimbang : 0,
+          totals.totalNetto > 0 ? (gb.totalNetto / totals.totalNetto) * 100 : 0,
+          gb.totalNilai,
+        ]),
+        totalRow: ['TOTAL', '', totals.totalBal, totals.totalNetto, totals.avgNetto, totals.totalNetto > 0 ? 100 : 0, totals.totalNilai],
+      },
     ]);
-
-    // Sub-summary section in CSV
-    rows.push(['', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
-    rows.push(['--- SUB-RINGKASAN PER GRADE ---', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
-    rows.push(['Grade', 'Jumlah Bal', 'Total Berat Netto (kg)', 'Rata-rata (kg/bal)', 'Total Nilai Pembelian (Rp)', '', '', '', '', '', '', '', '', '', '']);
-    gradeBreakdown.forEach((gb) => {
-      const avg = gb.balCount > 0 ? (gb.totalNetto / gb.balCount).toFixed(2) : '0';
-      rows.push([
-        `Grade ${gb.grade}`,
-        gb.balCount,
-        gb.totalNetto.toFixed(1),
-        avg,
-        Math.round(gb.totalNilai),
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-      ]);
-    });
-
-    // Total section in CSV
-    rows.push(['', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
-    rows.push([
-      'TOTAL KESELURUHAN',
-      `${totals.totalBal} BAL`,
-      '',
-      '',
-      '',
-      '',
-      '',
-      '',
-      totals.totalBruto.toFixed(1),
-      totals.totalTara.toFixed(1),
-      totals.totalNetto.toFixed(1),
-      Math.round(totals.avgHargaKg),
-      Math.round(totals.totalNilai),
-      '',
-      '',
-    ]);
-
-    downloadCsvFile(
-      `Laporan_Detail_Bal_${new Date().toISOString().slice(0, 10)}.csv`,
-      headers,
-      rows
-    );
   };
 
   // Export PDF / Print
@@ -713,7 +769,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
           </div>
         </div>
 
-        {/* Action Buttons: Filter Toggle, CSV, Print */}
+        {/* Action Buttons: Filter Toggle, Excel, Print */}
         <div className="flex items-center space-x-2">
           <button
             type="button"
@@ -731,13 +787,13 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
 
           <button
             type="button"
-            onClick={handleExportCSV}
+            onClick={handleExportExcel}
             disabled={sortedData.length === 0}
             className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white rounded-none font-bold text-xs flex items-center space-x-1.5 shadow-xs transition cursor-pointer"
-            title="Download Spreadsheet Excel / CSV"
+            title="Download laporan dalam format Excel"
           >
             <FileSpreadsheet className="w-3.5 h-3.5 text-white" />
-            <span>Export CSV</span>
+            <span>Export Excel</span>
           </button>
 
           <button
@@ -887,7 +943,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
                   {gradeBreakdown.map((gb) => {
                     const pct = totals.totalNetto > 0 ? ((gb.totalNetto / totals.totalNetto) * 100).toFixed(1) : '0';
-                    const avg = gb.balCount > 0 ? (gb.totalNetto / gb.balCount).toFixed(1) : '0';
+                    const avg = gb.balDitimbang > 0 ? (gb.totalNetto / gb.balDitimbang).toFixed(1) : '0';
 
                     return (
                       <div
@@ -1071,10 +1127,26 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                   className="w-full px-2 py-1.5 bg-white border border-[#ced4da] rounded-none text-xs focus:outline-none focus:border-slate-800"
                 >
                   <option value="ALL">Semua Status</option>
-                  <option value="di_gudang">Di Gudang (Tersedia)</option>
-                  <option value="siap_kirim">Siap Kirim DO</option>
-                  <option value="keluar">Keluar (Terkirim Pabrik)</option>
-                  <option value="terkirim_sample">Terkirim Sample QC</option>
+                  <option value="proses_sortir">Proses Sortir</option>
+                  <option value="di_gudang">Di Gudang</option>
+                  <option value="terkirim_sample">Sample</option>
+                  <option value="keluar">Dikirim</option>
+                </select>
+              </div>
+
+              {/* Filter 4b: Status Bayar */}
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                  Status Bayar
+                </label>
+                <select
+                  value={filterStatusBayar}
+                  onChange={(e) => setFilterStatusBayar(e.target.value)}
+                  className="w-full px-2 py-1.5 bg-white border border-[#ced4da] rounded-none text-xs focus:outline-none focus:border-slate-800"
+                >
+                  <option value="ALL">Semua Status Bayar</option>
+                  <option value="lunas">Lunas</option>
+                  <option value="belum_lunas">Belum Lunas</option>
                 </select>
               </div>
 
@@ -1364,7 +1436,10 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                   </div>
                 </th>
 
-                {/* 12. Status Bal */}
+                {/* 12. Status Bayar */}
+                <th className="py-2.5 px-3 text-center whitespace-nowrap">Status Bayar</th>
+
+                {/* 13. Status Bal */}
                 <th
                   onClick={() => handleHeaderSort('status_stok')}
                   className="py-2.5 px-3 text-center cursor-pointer hover:bg-gray-200/80 transition group select-none"
@@ -1381,7 +1456,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
             <tbody className="divide-y divide-gray-200">
               {paginatedData.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="py-12 text-center text-gray-500 bg-white">
+                  <td colSpan={13} className="py-12 text-center text-gray-500 bg-white">
                     <div className="flex flex-col items-center justify-center space-y-2">
                       <Package className="w-8 h-8 text-gray-300" />
                       <p className="font-semibold text-gray-700">Tidak ada data bal yang cocok dengan filter.</p>
@@ -1400,6 +1475,8 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                 paginatedData.map((bal, idx) => {
                   const rowNumber = (currentPage - 1) * itemsPerPage + idx + 1;
                   const dateStr = bal.tanggal_masuk ? bal.tanggal_masuk.split('T')[0] : '-';
+                  // Bal proses sortir belum punya berat dan nilai
+                  const ditimbang = (bal.berat_kg || 0) > 0;
 
                   return (
                     <tr
@@ -1453,17 +1530,23 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
 
                       {/* 7. Bruto */}
                       <td className="py-2 px-3 text-right font-mono text-gray-700 border-r border-gray-100 whitespace-nowrap">
-                        {(bal.berat_bruto_kg || 0).toFixed(1)}
+                        {ditimbang ? (bal.berat_bruto_kg || 0).toFixed(1) : '-'}
                       </td>
 
                       {/* 8. Tara */}
                       <td className="py-2 px-2.5 text-right font-mono text-gray-500 border-r border-gray-100 whitespace-nowrap">
-                        {(bal.potongan_tara_kg || 0).toFixed(1)}
+                        {ditimbang ? (bal.potongan_tara_kg || 0).toFixed(1) : '-'}
                       </td>
 
                       {/* 9. Netto [HIGHLIGHT] */}
                       <td className="py-2 px-3 text-right font-mono font-black text-blue-950 border-r border-gray-100 bg-blue-50/30 whitespace-nowrap">
-                        {(bal.berat_kg || 0).toFixed(1)} <span className="text-[10px] font-normal text-gray-500">kg</span>
+                        {ditimbang ? (
+                          <>
+                            {(bal.berat_kg || 0).toFixed(1)} <span className="text-[10px] font-normal text-gray-500">kg</span>
+                          </>
+                        ) : (
+                          <span className="font-normal text-gray-400">-</span>
+                        )}
                       </td>
 
                       {/* 10. Harga/kg [HIGHLIGHT] */}
@@ -1473,10 +1556,15 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
 
                       {/* 11. Total Harga [HIGHLIGHT] */}
                       <td className="py-2 px-3 text-right font-mono font-black text-[#b81d24] border-r border-gray-100 bg-red-50/30 whitespace-nowrap">
-                        Rp {Math.round(bal.total_harga || 0).toLocaleString('id-ID')}
+                        {ditimbang ? `Rp ${Math.round(bal.total_harga || 0).toLocaleString('id-ID')}` : <span className="font-normal text-gray-400">-</span>}
                       </td>
 
-                      {/* 12. Status */}
+                      {/* 12. Status Bayar */}
+                      <td className="py-2 px-3 text-center whitespace-nowrap border-r border-gray-100">
+                        {getStatusBayarBadge(bal.status_bayar)}
+                      </td>
+
+                      {/* 13. Status */}
                       <td className="py-2 px-3 text-center whitespace-nowrap">
                         {getStatusBadge(bal.status_stok || 'di_gudang')}
                       </td>
@@ -1508,8 +1596,8 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                   <td className="py-3 px-3 text-right font-mono text-[#b81d24] border-r border-gray-300 whitespace-nowrap bg-red-100 font-black text-sm">
                     Rp {Math.round(totals.totalNilai).toLocaleString('id-ID')}
                   </td>
-                  <td className="py-3 px-3 text-center bg-gray-200/80 text-[11px] text-gray-700">
-                    100% Data
+                  <td colSpan={2} className="py-3 px-3 text-center bg-gray-200/80 text-[11px] text-gray-700">
+                    {totals.totalBalDitimbang} ditimbang • {totals.totalBal - totals.totalBalDitimbang} proses sortir
                   </td>
                 </tr>
               </tfoot>
@@ -1612,9 +1700,9 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                 <th className="p-1 border border-gray-300">PETANI</th>
                 <th className="p-1 border border-gray-300 text-right">BERAT</th>
                 <th className="p-1 border border-gray-300 text-right">HARGA</th>
-                <th className="p-1 border border-gray-300 text-center">STATUS</th>
+                <th className="p-1 border border-gray-300 text-center">STATUS BAYAR</th>
                 <th className="p-1 border border-gray-300 text-right">POTONGAN</th>
-                <th className="p-1 border border-gray-300 text-center">STATUS (DIGUDANG/TERKIRIM)</th>
+                <th className="p-1 border border-gray-300 text-center">STATUS BAL</th>
               </tr>
             </thead>
             <tbody>
@@ -1624,11 +1712,11 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                   <td className="p-1 border border-gray-300 font-mono">{b.tanggal_masuk?.split('T')[0] || '-'}</td>
                   <td className="p-1 border border-gray-300 font-mono font-bold">{b.no_bal}</td>
                   <td className="p-1 border border-gray-300">{b.nama_petani}</td>
-                  <td className="p-1 border border-gray-300 text-right font-mono font-bold">{(b.berat_kg || 0).toFixed(1)}</td>
-                  <td className="p-1 border border-gray-300 text-right font-mono font-bold">Rp {Math.round(b.total_harga || 0).toLocaleString('id-ID')}</td>
-                  <td className="p-1 border border-gray-300 text-center uppercase text-[9px]">{b.status_pembayaran === 'lunas' ? 'LUNAS' : 'KASBON'}</td>
+                  <td className="p-1 border border-gray-300 text-right font-mono font-bold">{(b.berat_kg || 0) > 0 ? (b.berat_kg || 0).toFixed(1) : '-'}</td>
+                  <td className="p-1 border border-gray-300 text-right font-mono font-bold">{(b.berat_kg || 0) > 0 ? `Rp ${Math.round(b.total_harga || 0).toLocaleString('id-ID')}` : '-'}</td>
+                  <td className="p-1 border border-gray-300 text-center uppercase text-[9px]">{b.status_bayar === 'lunas' ? 'LUNAS' : b.status_bayar === 'belum_lunas' ? 'BELUM LUNAS' : '-'}</td>
                   <td className="p-1 border border-gray-300 text-right font-mono">Rp {Math.round(b.potongan || 0).toLocaleString('id-ID')}</td>
-                  <td className="p-1 border border-gray-300 text-center uppercase text-[9px]">{b.status_stok === 'di_gudang' ? 'DIGUDANG' : b.status_stok === 'keluar' ? 'TERKIRIM' : b.status_stok}</td>
+                  <td className="p-1 border border-gray-300 text-center uppercase text-[9px]">{labelStatusStok(b.status_stok)}</td>
                 </tr>
               ))}
             </tbody>
@@ -1665,7 +1753,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                 <tbody>
                   {gradeBreakdown.map((gb, idx) => {
                     const pct = totals.totalNetto > 0 ? ((gb.totalNetto / totals.totalNetto) * 100).toFixed(1) : '0';
-                    const avg = gb.balCount > 0 ? (gb.totalNetto / gb.balCount).toFixed(1) : '0';
+                    const avg = gb.balDitimbang > 0 ? (gb.totalNetto / gb.balDitimbang).toFixed(1) : '0';
                     return (
                       <tr key={gb.grade} className="border-b border-gray-200">
                         <td className="p-1 border border-gray-300 text-center">{idx + 1}</td>

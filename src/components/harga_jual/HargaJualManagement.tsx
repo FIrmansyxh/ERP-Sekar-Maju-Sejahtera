@@ -418,102 +418,122 @@ return (
 
       {/* Modal Add / Edit Form */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in duration-100">
-          <div className="bg-white rounded-sm shadow-xl w-full max-w-md border border-gray-300 overflow-hidden">
-            {/* Modal Header */}
-            <div className="bg-gray-900 text-white px-5 py-3.5 flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <DollarSign className="w-4 h-4 text-yellow-400" />
-                <h3 className="text-sm font-bold">
-                  {editingItem ? 'Edit Master Harga Jual' : 'Tambah Master Harga Jual Baru'}
-                </h3>
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto font-sans animate-in fade-in duration-150">
+          <div className="bg-white border border-gray-300 w-full max-w-md rounded-none shadow-2xl flex flex-col text-xs text-gray-800">
+            {/* Header (seragam dengan form master lain) */}
+            <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between gap-3 bg-white">
+              <div className="flex items-center space-x-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-sm bg-red-50 border border-red-100 flex items-center justify-center shrink-0">
+                  <DollarSign className="w-4 h-4 text-[#b81d24]" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-sm font-bold text-gray-900 tracking-tight truncate">
+                    {editingItem ? 'Edit Master Harga Jual' : 'Tambah Master Harga Jual Baru'}
+                  </h2>
+                  <p className="text-[11px] text-gray-500 font-medium">
+                    Kode harga untuk pengiriman sample & DO
+                  </p>
+                </div>
               </div>
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="text-gray-400 hover:text-white transition"
+                className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-sm transition cursor-pointer shrink-0"
+                title="Tutup"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Modal Form */}
-            <form onSubmit={handleSaveForm} className="p-5 space-y-4 text-xs">
+            <form onSubmit={handleSaveForm} className="p-5 space-y-4">
               {errorMessage && (
-                <div className="p-3 bg-red-50 border border-red-300 text-xs text-red-800 rounded-xs flex items-center space-x-2">
+                <div className="p-3 bg-red-50 border border-red-300 text-xs text-red-800 rounded-sm flex items-center space-x-2">
                   <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
                   <span>{errorMessage}</span>
                 </div>
               )}
 
               {/* Kode */}
-              <div className="space-y-1">
-                <label className="block font-semibold text-gray-800">
-                  Kode Harga Jual <span className="text-red-500">*</span>
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">
+                  Kode Harga Jual <span className="text-[#b81d24]">*</span>
                 </label>
                 <input
                   type="text"
-                  placeholder="Misal: HJ-45, HJ-43, HJ-SUPER-150..."
+                  placeholder="Contoh: HJ-45, HJ-43, HJ-SUPER-150"
                   value={formKode}
                   onChange={(e) => setFormKode(e.target.value)}
-                  className="w-full px-3 py-2 text-xs font-mono font-bold bg-white border border-gray-300 rounded-xs uppercase focus:ring-1 focus:ring-gray-700"
+                  className="w-full bg-white border border-gray-300 rounded-sm px-3 py-2 text-xs font-mono font-bold uppercase placeholder:normal-case placeholder:font-sans placeholder:font-normal text-gray-900 focus:outline-none focus:border-[#b81d24]"
                   required
                 />
-                <p className="text-[10px] text-gray-500">
+                <p className="text-[10px] text-gray-500 mt-1">
                   Kode ini yang akan muncul pada pilihan dropdown di pengiriman sample & DO.
                 </p>
               </div>
 
               {/* Harga Jual */}
-              <div className="space-y-1">
-                <label className="block font-semibold text-gray-800">
-                  Harga Jual (Rp / Kg) <span className="text-red-500">*</span>
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">
+                  Harga Jual per Kg <span className="text-[#b81d24]">*</span>
                 </label>
-                <div className="flex items-center space-x-1.5">
-                  <span className="text-xs font-bold text-gray-600 font-mono">Rp</span>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-500 text-xs">
+                    Rp
+                  </span>
                   <input
                     type="number"
                     min="0"
-                    placeholder="Contoh: 45000 atau 43000"
+                    placeholder="Contoh: 45000"
                     value={formHargaJual}
                     onChange={(e) => setFormHargaJual(e.target.value === '' ? '' : Number(e.target.value))}
-                    className="w-full px-3 py-2 text-xs font-mono font-bold text-emerald-900 bg-white border border-gray-300 rounded-xs focus:ring-1 focus:ring-gray-700"
+                    className="w-full bg-white border border-gray-300 rounded-sm pl-9 pr-12 py-2 text-xs font-bold text-gray-900 placeholder:font-normal focus:outline-none focus:border-[#b81d24]"
                     required
                   />
-                  <span className="text-xs text-gray-500">/kg</span>
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-gray-500">
+                    / kg
+                  </span>
                 </div>
                 {formHargaJual !== '' && Number(formHargaJual) > 0 && (
-                  <p className="text-[11px] font-mono text-emerald-700 font-semibold mt-0.5">
-                    Terbaca: {formatRupiah(Number(formHargaJual))} per kilogram
+                  <p className="text-[11px] text-gray-600 mt-1">
+                    Terbaca: <strong className="text-gray-900">{formatRupiah(Number(formHargaJual))}</strong> per kilogram
                   </p>
                 )}
               </div>
 
               {/* Tanggal Berlaku */}
-              <div className="space-y-1">
-                <label className="block font-semibold text-gray-800">
-                  Tanggal Berlaku <span className="text-red-500">*</span>
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">
+                  Tanggal Berlaku <span className="text-[#b81d24]">*</span>
                 </label>
                 <input
                   type="date"
                   value={formTanggalBerlaku}
                   onChange={(e) => setFormTanggalBerlaku(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-white border border-gray-300 rounded-xs focus:ring-1 focus:ring-gray-700"
+                  className="w-full bg-white border border-gray-300 rounded-sm px-3 py-2 text-xs text-gray-800 focus:outline-none focus:border-[#b81d24]"
                   required
                 />
               </div>
 
               {/* Status Aktif */}
-              <div className="flex items-center space-x-2 pt-1">
-                <input
-                  type="checkbox"
-                  id="chk-status-aktif"
-                  checked={formStatusAktif}
-                  onChange={(e) => setFormStatusAktif(e.target.checked)}
-                  className="rounded-xs text-[#b81d24] focus:ring-[#b81d24]"
-                />
-                <label htmlFor="chk-status-aktif" className="text-xs text-gray-700 select-none cursor-pointer">
-                  Aktifkan kode harga ini (tampil pada dropdown pemilihan)
+              <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-3">
+                <div>
+                  <label htmlFor="chk-status-aktif" className="text-xs font-semibold text-gray-700 block cursor-pointer">
+                    Status Kode Harga
+                  </label>
+                  <p className="text-[11px] text-gray-500">
+                    Kode aktif tampil pada dropdown pemilihan harga jual
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                  <input
+                    type="checkbox"
+                    id="chk-status-aktif"
+                    checked={formStatusAktif}
+                    onChange={(e) => setFormStatusAktif(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#b81d24]"></div>
                 </label>
               </div>
 
@@ -522,13 +542,13 @@ return (
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-3.5 py-1.5 text-xs text-gray-700 hover:bg-gray-100 rounded-xs transition cursor-pointer"
+                  className="px-3.5 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-sm transition cursor-pointer shadow-xs"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 bg-[#b81d24] hover:bg-[#991b1b] text-white text-xs font-bold rounded-xs flex items-center space-x-1.5 shadow-xs transition cursor-pointer"
+                  className="px-4 py-1.5 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#a0181e] rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
                 >
                   <Save className="w-3.5 h-3.5" />
                   <span>Simpan Data</span>

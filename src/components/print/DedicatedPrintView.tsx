@@ -427,8 +427,9 @@ const SuratJalanContent: React.FC<SuratJalanContentProps> = ({
     const barcodeVal = barcodeList[index] || (found ? found.barcode || found.barang_id : id);
     const grade = found?.kode_grade || 'A';
     const berat =
-      found?.berat_kg ||
-      (pengiriman.total_berat_kg ? pengiriman.total_berat_kg / (pengiriman.total_bal || 1) : 45);
+      pengiriman.berat_kirim_map?.[id] ??
+      (found?.berat_kg ||
+        (pengiriman.total_berat_kg ? pengiriman.total_berat_kg / (pengiriman.total_bal || 1) : 45));
 
     let pricePerKg = pengiriman.harga_deal_map?.[id] || 0;
     if (!pricePerKg || pricePerKg <= 0) {

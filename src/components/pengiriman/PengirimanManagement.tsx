@@ -48,7 +48,7 @@ import { loadHargaJualData, loadBatchSampleData } from '../../utils/storage';
 import { SuratJalanPrintModal } from './SuratJalanPrintModal';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { openPrintDocument } from '../../utils/openDedicatedPrint';
-import { formatNumber, formatRupiah, generateNoSuratJalanSimple } from '../../utils/formatters';
+import { formatNumber, formatRupiah, generateNoSuratJalanSimple, normalizeKg } from '../../utils/formatters';
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
 
 import { useSessionDraft } from '../../hooks/useSessionDraft';
@@ -149,6 +149,10 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   // Custom prices & price codes editable directly in the shipment table
   const [customKodeHargaMap, setCustomKodeHargaMap] = useSessionDraft<Record<string, string>>('kirim_kode_harga', undefined, {});
   const [bulkKodeHarga, setBulkKodeHarga] = useState<string>('');
+
+  // Koreksi berat per bal saat dikirim (mis. susut selama disimpan), disimpan apa adanya seperti diketik.
+  // Hanya tercatat di DO; data bal di gudang tidak diubah.
+  const [beratKirimInputMap, setBeratKirimInputMap] = useSessionDraft<Record<string, string>>('kirim_berat_kirim', undefined, {});
 
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -374,6 +378,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     // Centang jika sudah di-scan barcode atau dimasukkan ID-nya secara manual oleh petugas pengiriman
     setSelectedBalIds([]);
     setCustomKodeHargaMap(initialKode);
+    setBeratKirimInputMap({});
 
     // Cek apakah Batch ini sudah dalam status pengiriman (Peringatan Pengiriman Ganda / Double Shipment)
     const batchShipments = pengirimanList.filter(
@@ -419,6 +424,82 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     }
   };
 
+  const parseBeratInput = (raw: string): number => normalizeKg(parseFloat(raw.replace(',', '.')));
+
+  // Berat yang dipakai DO: hasil koreksi operator bila ada, selain itu berat bal di gudang.
+  // Isian tidak valid dihitung 0 agar total tidak diam-diam memakai berat lama.
+  const getBeratKirim = (barangId: string, beratGudangKg: number): number => {
+    const raw = beratKirimInputMap[barangId];
+    if (raw === undefined) return beratGudangKg;
+    const val = parseBeratInput(raw);
+    return val > 0 ? val : 0;
+  };
+
+  const handleUpdateBeratKirim = (barangId: string, raw: string) => {
+    // Angka dengan satu pemisah desimal (koma atau titik) dan maksimal 3 desimal
+    if (!/^\d*[.,]?\d{0,3}$/.test(raw)) return;
+    setBeratKirimInputMap((prev) => ({ ...prev, [barangId]: raw }));
+  };
+
+  // Isian kosong atau sama dengan berat gudang dianggap tidak dikoreksi
+  const handleCommitBeratKirim = (barangId: string, beratGudangKg: number) => {
+    setBeratKirimInputMap((prev) => {
+      const raw = prev[barangId];
+      if (raw === undefined) return prev;
+      if (raw.trim() === '' || parseBeratInput(raw) === normalizeKg(beratGudangKg)) {
+        const { [barangId]: _removed, ...rest } = prev;
+        return rest;
+      }
+      return prev;
+    });
+  };
+
+  const renderBeratKirimInput = (barangId: string, beratGudangKg: number, disabled = false) => {
+    const raw = beratKirimInputMap[barangId];
+    const beratKirim = getBeratKirim(barangId, beratGudangKg);
+    const isInvalid = raw !== undefined && raw.trim() !== '' && beratKirim <= 0;
+    const selisih = normalizeKg(beratKirim - beratGudangKg);
+    const isChanged = raw !== undefined && raw.trim() !== '' && !isInvalid && selisih !== 0;
+
+    return (
+      <div className="flex flex-col items-end">
+        <div className="relative w-24">
+          <input
+            type="text"
+            inputMode="decimal"
+            data-scanner-ignore
+            value={raw ?? String(beratGudangKg).replace('.', ',')}
+            disabled={disabled}
+            onChange={(e) => handleUpdateBeratKirim(barangId, e.target.value)}
+            onBlur={() => handleCommitBeratKirim(barangId, beratGudangKg)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                e.currentTarget.blur();
+              }
+            }}
+            title="Ubah bila berat bal berubah (mis. susut). Data bal di gudang tidak ikut berubah."
+            className={`w-full pl-2 pr-7 py-1 text-right text-xs font-mono font-semibold text-gray-900 border rounded-xs focus:outline-none focus:ring-1 disabled:bg-gray-100 disabled:text-gray-400 ${
+              isInvalid
+                ? 'bg-red-50 border-red-500 focus:ring-red-500'
+                : isChanged
+                ? 'bg-amber-50 border-amber-500 focus:ring-amber-500'
+                : 'bg-white border-gray-300 focus:ring-[#b81d24]'
+            }`}
+          />
+          <span className="absolute inset-y-0 right-2 flex items-center text-[10px] text-gray-500 pointer-events-none">Kg</span>
+        </div>
+        {isInvalid ? (
+          <span className="mt-0.5 text-[10px] font-semibold text-red-600">Berat wajib lebih dari 0</span>
+        ) : isChanged ? (
+          <span className="mt-0.5 text-[10px] font-semibold text-amber-700 whitespace-nowrap">
+            Gudang {formatNumber(beratGudangKg)} Kg ({selisih < 0 ? 'susut' : 'naik'} {formatNumber(Math.abs(selisih))} Kg)
+          </span>
+        ) : null}
+      </div>
+    );
+  };
+
   
   // Apply bulk price code to all currently selected bales
   const handleApplyBulkKodeHarga = () => {
@@ -450,6 +531,10 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     const balObj = barangList.find((b) => b.barang_id === barangId);
     setSelectedBalIds((prev) => prev.filter((id) => id !== barangId));
     setRegulerManifestBalIds((prev) => prev.filter((id) => id !== barangId));
+    setBeratKirimInputMap((prev) => {
+      const { [barangId]: _removed, ...rest } = prev;
+      return rest;
+    });
     setScanAlert({
       type: 'warning',
       message: `Bal #${balObj?.no_bal || barangId} dikeluarkan dari muatan surat jalan.`,
@@ -579,6 +664,14 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
         setScanAlert({
           type: 'error',
           message: `PERINGATAN: Bal #${targetBal.no_bal || targetBal.barang_id} sedang berstatus TERKIRIM SAMPLE QC (belum kembali ke gudang)!`,
+        });
+        setScanInputText('');
+        return;
+      }
+      if (targetBal.status_stok !== 'di_gudang') {
+        setScanAlert({
+          type: 'error',
+          message: `PERINGATAN: Bal #${targetBal.no_bal || targetBal.barang_id} masih berstatus PROSES SORTIR (belum ditimbang) sehingga belum bisa dikirim.`,
         });
         setScanInputText('');
         return;
@@ -797,6 +890,17 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
         setIsScanDropdownOpen(false);
         return;
       }
+      if (bal.status_stok !== 'di_gudang') {
+        setScanAlert({
+          type: 'error',
+          message: bal.status_stok === 'terkirim_sample'
+            ? `PERINGATAN: Bal #${bal.no_bal || bal.barang_id} sedang berstatus TERKIRIM SAMPLE QC (belum kembali ke gudang)!`
+            : `PERINGATAN: Bal #${bal.no_bal || bal.barang_id} masih berstatus PROSES SORTIR (belum ditimbang) sehingga belum bisa dikirim.`,
+        });
+        setScanInputText('');
+        setIsScanDropdownOpen(false);
+        return;
+      }
 
       setRegulerManifestBalIds((prev) => prev.includes(bal.barang_id) ? prev : [...prev, bal.barang_id]);
 
@@ -838,7 +942,16 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   }, [sourceMode, barangList, selectedBalIds, regulerManifestBalIds]);
 
   const totalSelectedBal = selectedBalObjects.length;
-  const totalSelectedBerat = selectedBalObjects.reduce((sum, b) => sum + (b.berat_kg || 0), 0);
+  const totalSelectedBerat = normalizeKg(
+    selectedBalObjects.reduce((sum, b) => sum + getBeratKirim(b.barang_id, b.berat_kg || 0), 0)
+  );
+  const totalSelectedBeratGudang = normalizeKg(selectedBalObjects.reduce((sum, b) => sum + (b.berat_kg || 0), 0));
+  const totalSelisihBerat = normalizeKg(totalSelectedBerat - totalSelectedBeratGudang);
+
+  // Bal terpilih yang isian beratnya tidak valid (kosong, nol, atau bukan angka)
+  const invalidBeratBalObjects = selectedBalObjects.filter(
+    (b) => beratKirimInputMap[b.barang_id] !== undefined && getBeratKirim(b.barang_id, b.berat_kg || 0) <= 0
+  );
 
   // Map of agreed prices from batch sample
   const hargaDealMap = useMemo(() => {
@@ -865,9 +978,9 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       } else if (hargaDealMap[b.barang_id] !== undefined) {
         dealPrice = hargaDealMap[b.barang_id];
       }
-      return sum + Math.round(b.berat_kg * dealPrice);
+      return sum + Math.round(getBeratKirim(b.barang_id, b.berat_kg || 0) * dealPrice);
     }, 0);
-  }, [selectedBalObjects, customKodeHargaMap, hargaDealMap, activeHargaJualList]);
+  }, [selectedBalObjects, customKodeHargaMap, hargaDealMap, activeHargaJualList, beratKirimInputMap]);
 
   // Riwayat Pengiriman / Surat Jalan yang terkait dengan Batch yang sedang aktif
   const existingShipmentsForBatch = useMemo(() => {
@@ -936,6 +1049,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     setSelectedBalIds([]);
     setRegulerManifestBalIds([]);
     setCustomKodeHargaMap({});
+    setBeratKirimInputMap({});
     setScanAlert(null);
     setFilterGrade('all');
     setFilterPetani('all');
@@ -979,6 +1093,11 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       setErrorMessage('Tujuan gudang / pabrik buyer wajib diisi.');
       return;
     }
+    if (invalidBeratBalObjects.length > 0) {
+      const daftarBal = invalidBeratBalObjects.map((b) => `#${b.no_bal || b.barang_id}`).join(', ');
+      setErrorMessage(`Berat kirim belum valid pada bal ${daftarBal}. Isi berat lebih dari 0 Kg.`);
+      return;
+    }
     if (!driverNama.trim()) {
       setErrorMessage('Nama supir / driver wajib diisi.');
       return;
@@ -996,14 +1115,17 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     const finalTujuan = tujuanBuyer.trim();
     if (!finalTujuan) return;
 
-    // Group grades
+    // Group grades & snapshot berat kirim tiap bal agar riwayat DO tidak ikut berubah bila data bal diedit
     const gradesBreakdown: Record<string, { bal: number; kg: number }> = {};
+    const finalBeratKirimMap: Record<string, number> = {};
     selectedBalObjects.forEach((b) => {
+      const beratKirim = getBeratKirim(b.barang_id, b.berat_kg || 0);
+      finalBeratKirimMap[b.barang_id] = beratKirim;
       if (!gradesBreakdown[b.kode_grade]) {
         gradesBreakdown[b.kode_grade] = { bal: 0, kg: 0 };
       }
       gradesBreakdown[b.kode_grade].bal += 1;
-      gradesBreakdown[b.kode_grade].kg += b.berat_kg || 0;
+      gradesBreakdown[b.kode_grade].kg = normalizeKg(gradesBreakdown[b.kode_grade].kg + beratKirim);
     });
 
     
@@ -1047,6 +1169,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       batch_sample_id_ref: sourceMode === 'sample_batch' ? selectedBatchSampleId : undefined,
       harga_deal_map: Object.keys(finalHargaDealMap).length > 0 ? finalHargaDealMap : undefined,
       kode_harga_jual_map: Object.keys(finalKodeHargaMap).length > 0 ? finalKodeHargaMap : undefined,
+      berat_kirim_map: finalBeratKirimMap,
       total_nilai_deal: totalNilaiSuratJalan,
     };
 
@@ -1882,8 +2005,9 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                         activeBatchObj.items.map((it, idx) => {
                           const isIncluded = selectedBalIds.includes(it.barang_id);
                           const balObj = barangList.find((b) => b.barang_id === it.barang_id);
-                          const berat = balObj?.berat_kg || it.berat_bal_kg || 0;
-                          
+                          const beratGudang = balObj?.berat_kg || it.berat_bal_kg || 0;
+                          const berat = getBeratKirim(it.barang_id, beratGudang);
+
                           const currentKode = customKodeHargaMap[it.barang_id] ?? it.kode_harga_jual ?? '';
                           let currentPrice = it.harga_deal_kg ?? it.harga_tawaran_kg ?? 45000;
                           if (currentKode) {
@@ -1938,9 +2062,9 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                                 </span>
                               </td>
 
-                              {/* Berat */}
-                              <td className="p-2 text-right font-mono font-semibold text-gray-800">
-                                {formatNumber(berat, 1)} Kg
+                              {/* Berat (bisa dikoreksi saat kirim) */}
+                              <td className="p-2 text-right">
+                                {renderBeratKirimInput(it.barang_id, beratGudang, it.sudah_dikirim_do)}
                               </td>
 
                               {/* Status Sample Evaluasi */}
@@ -2027,7 +2151,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                             if (master) currentPrice = master.harga_jual;
                           }
 
-                          const subtotalBal = Math.round(bal.berat_kg * currentPrice);
+                          const subtotalBal = Math.round(getBeratKirim(bal.barang_id, bal.berat_kg || 0) * currentPrice);
 
                           return (
                             <tr
@@ -2061,8 +2185,8 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                                   {bal.kode_grade}
                                 </span>
                               </td>
-                              <td className="p-2 text-right font-mono font-semibold">
-                                {formatNumber(bal.berat_kg, 1)} Kg
+                              <td className="p-2 text-right">
+                                {renderBeratKirimInput(bal.barang_id, bal.berat_kg || 0)}
                               </td>
                               <td className="p-2 text-[11px] text-gray-600">
                                 <strong>{bal.nama_petani || '-'}</strong>
@@ -2109,7 +2233,12 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                           Total Dicentang ({totalSelectedBal} Bal)
                         </td>
                         <td className="p-2 text-right font-mono">
-                          {formatNumber(totalSelectedBerat, 1)} Kg
+                          <div>{formatNumber(totalSelectedBerat, 1)} Kg</div>
+                          {totalSelisihBerat !== 0 && (
+                            <div className="text-[10px] font-semibold text-amber-700 whitespace-nowrap">
+                              {totalSelisihBerat < 0 ? 'Susut' : 'Naik'} {formatNumber(Math.abs(totalSelisihBerat))} Kg
+                            </div>
+                          )}
                         </td>
                         <td colSpan={3} className="p-2 text-right uppercase text-[11px]">
                           Grand Total Nilai Surat Jalan:
@@ -2190,7 +2319,11 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       <ConfirmModal
         isOpen={isConfirmOpen}
         title="Konfirmasi Penerbitan Surat Jalan DO"
-        message={`Apakah Anda yakin ingin menerbitkan Surat Jalan ${noSuratJalan} untuk pengiriman ${totalSelectedBal} bal tembakau (${formatNumber(totalSelectedBerat, 1)} Kg) ke ${tujuanBuyer}?`}
+        message={`Apakah Anda yakin ingin menerbitkan Surat Jalan ${noSuratJalan} untuk pengiriman ${totalSelectedBal} bal tembakau (${formatNumber(totalSelectedBerat, 1)} Kg${
+          totalSelisihBerat !== 0
+            ? `, ${totalSelisihBerat < 0 ? 'susut' : 'naik'} ${formatNumber(Math.abs(totalSelisihBerat))} Kg dari berat gudang ${formatNumber(totalSelectedBeratGudang, 1)} Kg`
+            : ''
+        }) ke ${tujuanBuyer}?`}
         confirmText="Ya, Terbitkan Surat Jalan"
         cancelText="Periksa Lagi"
         onConfirm={handleConfirmSave}

@@ -16,6 +16,7 @@ import {
 import { AuditLogEntry } from '../../types';
 import { loadAuditLogData } from '../../utils/storage';
 import { formatDateTimeIndo } from '../../utils/formatters';
+import { downloadExcelReport, todayStamp } from '../../utils/excelExport';
 import { Pagination } from '../common/Pagination';
 
 export const AuditTrailView: React.FC = () => {
@@ -73,27 +74,43 @@ export const AuditTrailView: React.FC = () => {
     return filteredLogs.slice(start, start + itemsPerPage);
   }, [filteredLogs, currentPage, itemsPerPage]);
 
-  const handleExportCSV = () => {
+  const handleExportExcel = () => {
     if (filteredLogs.length === 0) return;
-    const headers = ['Timestamp', 'User', 'Role', 'Modul', 'Aksi', 'Target ID', 'Deskripsi', 'Rincian Perubahan'];
-    const rows = filteredLogs.map((l) => [
-      `"${l.timestamp}"`,
-      `"${l.user_nama.replace(/"/g, '""')}"`,
-      `"${l.user_role}"`,
-      `"${l.modul}"`,
-      `"${l.aksi}"`,
-      `"${l.target_id}"`,
-      `"${l.deskripsi.replace(/"/g, '""')}"`,
-      `"${(l.rincian_perubahan || []).join('; ').replace(/"/g, '""')}"`
+    downloadExcelReport(`Audit_Trail_ERP_${todayStamp()}`, [
+      {
+        name: 'Audit Trail',
+        title: 'Audit Trail & Log Aktivitas Sistem',
+        info: [
+          [
+            `Modul: ${filterModul !== 'all' ? filterModul : 'Semua'}`,
+            `Aksi: ${filterAksi !== 'all' ? filterAksi : 'Semua'}`,
+            searchQuery.trim() ? `Pencarian: ${searchQuery.trim()}` : '',
+          ].filter(Boolean).join(' · '),
+        ],
+        columns: [
+          { header: 'No', type: 'integer', align: 'center' },
+          { header: 'Waktu', type: 'datetime' },
+          { header: 'Pengguna' },
+          { header: 'Role', align: 'center' },
+          { header: 'Modul' },
+          { header: 'Aksi', align: 'center' },
+          { header: 'Target ID', align: 'center' },
+          { header: 'Deskripsi', width: 45 },
+          { header: 'Rincian Perubahan', width: 50 },
+        ],
+        rows: filteredLogs.map((l, idx) => [
+          idx + 1,
+          l.timestamp,
+          l.user_nama,
+          l.user_role,
+          l.modul,
+          l.aksi,
+          l.target_id,
+          l.deskripsi,
+          (l.rincian_perubahan || []).join('\n') || '-',
+        ]),
+      },
     ]);
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Audit_Trail_ERP_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   const getAksiBadge = (aksi: string) => {
@@ -137,12 +154,12 @@ export const AuditTrailView: React.FC = () => {
           </button>
           <button
             type="button"
-            onClick={handleExportCSV}
+            onClick={handleExportExcel}
             disabled={filteredLogs.length === 0}
             className="px-3 py-1.5 bg-[#b81d24] hover:bg-[#9e161c] text-white text-xs font-semibold rounded transition flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Ekspor CSV</span>
+            <span>Ekspor Excel</span>
           </button>
         </div>
       </div>

@@ -61,10 +61,9 @@ Konsekuensi penting dari arsitektur ini:
 
 | Modul | Fungsi |
 |---|---|
-| Master Petani | Registrasi petani, kartu petani, status keaktifan, impor dan ekspor CSV |
+| Master Petani | Registrasi petani (nomor HP dan alamat opsional), kartu petani, status keaktifan, impor data, dan ekspor Excel |
 | Master Harga Beli | Kode harga beli per kilogram beserta tanggal berlaku |
 | Master Harga Jual | Kode harga jual per pembeli beserta tanggal berlaku |
-| Inventaris Bal Gudang | Stok fisik bal, lokasi penyimpanan, dan cetak label thermal |
 
 ### Pengiriman
 
@@ -80,7 +79,7 @@ Konsekuensi penting dari arsitektur ini:
 |---|---|
 | Dashboard Analytic | Ringkasan eksekutif, distribusi grade, dan tren pembelian |
 | Laporan Bal, Kode Bal, Mutu Grade | Analisis stok dan valuasi per kategori |
-| Laporan Pembelian, Petani, Pengiriman | Rekapitulasi dengan filter dinamis dan unduhan |
+| Laporan Pembelian, Petani, Pengiriman | Rekapitulasi dengan filter dinamis dan unduhan Excel siap cetak |
 | Manajemen Pengguna | Pembuatan akun staf, penetapan peran, reset kata sandi, dan jejak audit |
 
 ## Peran pengguna dan hak akses
@@ -96,7 +95,7 @@ tersimpan dari sesi sebelumnya.
 | Admin Timbang | Penimbangan bal dan transaksi pembelian |
 | Admin Kasir | Pembayaran, nota timbang, dan laporan pembelian |
 | Admin Pengiriman | Delivery order, surat jalan, dan status batch |
-| Kepala Gudang | Inventaris bal, laporan, dan dashboard analitik |
+| Kepala Gudang | Seluruh laporan, dashboard analitik, dan status batch |
 
 Berganti akun dilakukan melalui logout lalu login kembali. Tidak tersedia jalur pintas
 pergantian akun tanpa kata sandi.
@@ -212,7 +211,7 @@ Urutan penyiapan yang disarankan.
 2. **Ganti kata sandi Super Admin** melalui Manajemen Pengguna, menu Reset Kata Sandi.
 3. Buat akun staf sesuai peran masing-masing, satu akun untuk satu orang.
 4. Isi Master Harga Beli dan Master Harga Jual beserta tanggal berlakunya.
-5. Daftarkan petani secara manual atau lewat Import CSV pada Master Petani.
+5. Daftarkan petani secara manual atau lewat Import Data (salin tempel dari Excel) pada Master Petani.
 6. Mulai operasi harian dari modul Sortir.
 
 Kata sandi disimpan sebagai hash SHA-256, tidak pernah dalam bentuk teks biasa. Sistem tidak
@@ -223,8 +222,8 @@ menyediakan pemulihan kata sandi mandiri, sehingga reset hanya dapat dilakukan o
 Karena data berada di peramban, pencadangan berkala adalah tanggung jawab operasional dan
 harus dijadwalkan.
 
-- **Master Petani** menyediakan ekspor CSV melalui tombol Import / Export.
-- **Modul laporan** menyediakan unduhan rekap untuk keperluan arsip dan audit.
+- **Master Petani** menyediakan ekspor Excel melalui tombol Import / Export.
+- **Modul laporan** menyediakan unduhan rekap Excel (.xlsx) untuk keperluan arsip dan audit.
 - Simpan hasil unduhan pada penyimpanan terpisah, misalnya server berkas kantor.
 
 Hal yang menyebabkan data hilang permanen dan perlu dihindari.
@@ -246,9 +245,8 @@ src/
 │   ├── Header.tsx           Bilah atas, profil pengguna, dan logout
 │   ├── Sidebar.tsx          Navigasi modul
 │   ├── petani/              Master petani, kartu petani, impor dan ekspor
-│   ├── harga/               Master harga beli beserta riwayatnya
+│   ├── harga/               Master harga beli
 │   ├── harga_jual/          Master harga jual
-│   ├── barang/              Inventaris bal dan master barang
 │   ├── transaksi/           Sortir, timbang, kasir, nota, dan koreksi transaksi
 │   ├── pengiriman/          Delivery order dan surat jalan
 │   ├── sample/              Pengiriman sample dan evaluasi mutu
@@ -265,7 +263,9 @@ src/
     ├── crypto.ts            Hash kata sandi SHA-256
     ├── formatters.ts        Format angka, tanggal, dan penanganan presisi berat
     ├── financialCalculations.ts  Perhitungan nilai transaksi
-    └── printDownload.ts     Ekspor PDF dan CSV
+    ├── kuponSortir.ts       Aturan kupon terbuka Sortir dan Timbangan
+    ├── excelExport.ts       Ekspor laporan Excel (.xlsx) siap cetak
+    └── printDownload.ts     Ekspor PDF
 ```
 
 ## Catatan keamanan

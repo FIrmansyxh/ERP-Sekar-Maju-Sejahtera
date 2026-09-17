@@ -179,7 +179,7 @@ export const PetaniCardPrintModal: React.FC<PetaniCardPrintModalProps> = ({
                   <div className="flex items-start justify-between">
                     <span className="text-[10px] text-gray-500 font-medium shrink-0">ALAMAT:</span>
                     <span className="text-[10px] text-gray-700 text-right leading-tight truncate max-w-[210px]">
-                      {petani.alamat}
+                      {petani.alamat || petani.desa_kecamatan || '-'}
                     </span>
                   </div>
                 </div>

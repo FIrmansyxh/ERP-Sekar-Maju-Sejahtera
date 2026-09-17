@@ -20,7 +20,6 @@ export const RoleMatrixModal: React.FC<RoleMatrixModalProps> = ({
     { id: 'modul-0-kasir', name: 'Kasir & Nota Pembayaran' },
     { id: 'modul-1-petani', name: 'Master Petani & Kartu' },
     { id: 'modul-3-harga', name: 'Master Kualitas & Harga' },
-    { id: 'modul-2-barang', name: 'Inventaris Bal Gudang' },
     { id: 'modul-5-pengiriman', name: 'Pengiriman Reguler (DO)' },
     { id: 'modul-4-sample', name: 'Pengiriman Sample' },
     { id: 'modul-6-dashboard-analytic', name: 'Dashboard Analytic ERP' },

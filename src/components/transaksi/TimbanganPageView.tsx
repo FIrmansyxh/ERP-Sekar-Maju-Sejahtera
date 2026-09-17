@@ -26,9 +26,10 @@ import {
   X,
   Info
 } from 'lucide-react';
-import { TransaksiPembelian, Petani, TabelHarga, Barang, TransaksiItemBal, UserRole, User as UserType } from '../../types';
+import { TransaksiPembelian, Petani, TabelHarga, Barang, TransaksiItemBal, UserRole, User as UserType, SaveTransaksiMeta } from '../../types';
 import { formatRupiah, formatNoKupon, formatDateHariBulanTahun, hitungPotonganTaraKg, normalizeKg } from '../../utils/formatters';
 import { recordAuditLog } from '../../utils/storage';
+import { buildBarangDariItem, isKuponProsesSortir, terapkanHasilTimbang } from '../../utils/kuponSortir';
 
 interface TimbanganPageViewProps {
   transaksiList: TransaksiPembelian[];
@@ -40,7 +41,7 @@ interface TimbanganPageViewProps {
   initialKuponNo?: string;
   initialTxId?: string;
   initialBalNo?: string;
-  onSaveTransaksi: (newTx: TransaksiPembelian, generatedBarang: Barang | Barang[]) => void;
+  onSaveTransaksi: (newTx: TransaksiPembelian, generatedBarang: Barang | Barang[], meta?: SaveTransaksiMeta) => void;
   onNavigateToKasir: (kuponNo?: string, txId?: string) => void;
   onNavigateToSortir: () => void;
 }
@@ -108,6 +109,8 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
 
   // Working copy of items for current selected transaction
   const [workingItems, setWorkingItems] = useState<TransaksiItemBal[]>([]);
+  // Versi kupon sebelumnya, untuk membedakan perubahan dari Sortir dengan perubahan bal aktif
+  const prevTxRef = useRef<TransaksiPembelian | undefined>(undefined);
   const [activeItemId, setActiveItemId] = useState<string>(() => {
     if (initialBalMatch) return initialBalMatch.item.item_id;
     return '';
@@ -156,16 +159,30 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
 
   // Sync working items when selected transaction changes
   useEffect(() => {
+    const prevTx = prevTxRef.current;
+    prevTxRef.current = currentTx;
     if (currentTx && currentTx.items && currentTx.items.length > 0) {
       setWorkingItems(currentTx.items);
-      
-      // 1. If activeItemId is already a valid item of this currentTx, keep it and update inputs
+
+      // 1. If activeItemId is already a valid item of this currentTx, keep it.
+      // Kupon bisa berubah dari Sortir saat operator sedang mengetik berat, jadi isian
+      // bal yang belum ditimbang tidak ditimpa.
       const existingActive = currentTx.items.find((it) => it.item_id === activeItemId);
       if (existingActive) {
-        setBeratBrutoInput(existingActive.berat_bruto_kg && existingActive.berat_bruto_kg > 0 ? existingActive.berat_bruto_kg : '');
-        setBeratNettoInput(existingActive.berat_kg && existingActive.berat_kg > 0 ? existingActive.berat_kg : '');
-        setIsNettoManual(existingActive.is_netto_manual || false);
-        setLokasiBlok(existingActive.lokasi_simpan || 'Blok A (Utara)');
+        const prevActive = prevTx?.transaksi_id === currentTx.transaksi_id
+          ? (prevTx.items || []).find((it) => it.item_id === existingActive.item_id)
+          : undefined;
+        const beratBalAktifTetap = Boolean(
+          prevActive &&
+          prevActive.berat_kg === existingActive.berat_kg &&
+          prevActive.berat_bruto_kg === existingActive.berat_bruto_kg
+        );
+        if (!beratBalAktifTetap) {
+          setBeratBrutoInput(existingActive.berat_bruto_kg && existingActive.berat_bruto_kg > 0 ? existingActive.berat_bruto_kg : '');
+          setBeratNettoInput(existingActive.berat_kg && existingActive.berat_kg > 0 ? existingActive.berat_kg : '');
+          setIsNettoManual(existingActive.is_netto_manual || false);
+          setLokasiBlok(existingActive.lokasi_simpan || 'Blok A (Utara)');
+        }
         return;
       }
 
@@ -616,84 +633,48 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
       return;
     }
 
-    const updatedItems = workingItems.map((it) => {
-      if (it.item_id === activeBalItem.item_id) {
-        return {
-          ...it,
-          berat_bruto_kg: liveBruto,
-          potongan_tara_kg: liveTara,
-          berat_kg: liveNetto,
-          is_netto_manual: isNettoManual,
-          potongan_kuli: livePotKuli,
-          potongan_tali: livePotTali,
-          potongan_tikar: livePotTikar,
-            potongan_tikar_rp: livePotTikar,
-          potongan: livePotTotal,
-          total_kotor: liveTotalKotor,
-          subtotal_bersih: liveSubtotalBersih,
-          status_timbang: 'selesai_timbang' as const,
-          lokasi_simpan: lokasiBlok,
-        };
-      }
-      return it;
+    // Tulis hasil timbang satu bal ke versi kupon terbaru, supaya bal yang baru
+    // ditambahkan Sortir secara paralel tidak ikut tertimpa.
+    const kuponTerbaru = { ...currentTx, petugas_timbang: currentUser?.nama_lengkap || 'Operator Timbang Digital' };
+    const itemsDenganId = (kuponTerbaru.items || []).map((it, idx) => ({
+      ...it,
+      barang_id: it.barang_id || `BAL-${currentTx.transaksi_id.replace('TRX-', '')}-${String(idx + 1).padStart(2, '0')}`,
+    }));
+    const updatedTx = terapkanHasilTimbang({ ...kuponTerbaru, items: itemsDenganId }, activeBalItem.item_id, {
+      berat_bruto_kg: liveBruto,
+      potongan_tara_kg: liveTara,
+      berat_kg: liveNetto,
+      is_netto_manual: isNettoManual,
+      ganti_tikar: activeBalItem.ganti_tikar,
+      potongan_kuli: livePotKuli,
+      potongan_tali: livePotTali,
+      potongan_tikar: livePotTikar,
+      potongan: livePotTotal,
+      total_kotor: liveTotalKotor,
+      subtotal_bersih: liveSubtotalBersih,
+      status_timbang: 'selesai_timbang',
+      lokasi_simpan: lokasiBlok,
     });
 
+    if (!updatedTx) {
+      setScanFeedback({
+        text: `Bal "${activeBalItem.no_bal}" sudah dihapus dari Kupon ${currentTx.no_kupon} oleh Sortir. Berat tidak disimpan.`,
+        isError: true,
+      });
+      return;
+    }
+
+    const updatedItems = updatedTx.items || [];
     setWorkingItems(updatedItems);
+    const allItemsWeighed = updatedItems.length > 0 && updatedItems.every((it) => (it.berat_kg || 0) > 0);
+    const totalNettoKg = updatedTx.berat_kg;
+    const weighedItem = updatedItems.find((it) => it.item_id === activeBalItem.item_id)!;
 
-    // Save directly to global storage state
-    const allItemsWeighed = updatedItems.every((it) => (it.berat_kg || 0) > 0);
-    const totalNettoKg = normalizeKg(updatedItems.reduce((acc, it) => acc + (it.berat_kg || 0), 0));
-    const totalBrutoKg = normalizeKg(updatedItems.reduce((acc, it) => acc + (it.berat_bruto_kg || 0), 0));
-    const totalKotorAll = updatedItems.reduce((acc, it) => acc + (it.total_kotor || 0), 0);
-    const totalPotonganAll = updatedItems.reduce((acc, it) => acc + (it.potongan || 0), 0);
-    const finalHargaTotal = updatedItems.reduce((acc, it) => acc + (it.subtotal_bersih || 0), 0);
-    const weighedCount = updatedItems.filter((it) => (it.berat_kg || 0) > 0).length;
-
-    const updatedItemsWithId = updatedItems.map((it, idx) => ({
-      ...it,
-      barang_id: it.barang_id || `BAL-${currentTx.transaksi_id.replace('TRX-', '')}-${String(idx + 1).padStart(2, '0')}`
-    }));
-
-    // Generated Barang inventory records
-    const updatedBarangs: Barang[] = updatedItemsWithId.map((it) => ({
-      barang_id: it.barang_id!,
-      barcode: it.barcode || it.no_bal,
-      kode_grade: it.kode_grade,
-      no_bal: it.no_bal,
-      berat_kg: it.berat_kg,
-      harga_per_kg: it.harga_per_kg,
-      total_harga: (it.berat_kg || 0) * (it.harga_per_kg || 0),
-      status_stok: 'di_gudang',
-      tanggal_masuk: currentTx.tanggal_transaksi?.split(' ')[0] || new Date().toISOString().split('T')[0],
-      petani_id: currentTx.petani_id,
-      nama_petani: currentTx.nama_petani,
-      transaksi_pembelian_id: currentTx.transaksi_id,
-      catatan: `Timbang Kupon: ${currentTx.no_kupon}, Bruto: ${it.berat_bruto_kg}kg, Netto: ${it.berat_kg}kg`,
-    }));
-
-    const updatedTx: TransaksiPembelian = {
-      ...currentTx,
-      items: updatedItemsWithId,
-      barang_ids: updatedBarangs.map(b => b.barang_id),
-      total_bal: updatedItemsWithId.length,
-      bal_selesai_timbang: weighedCount,
-      berat_terukur_kg: totalBrutoKg,
-      berat_kg: totalNettoKg,
-      harga_per_kg: totalNettoKg > 0 ? Math.round(totalKotorAll / totalNettoKg) : (currentTx.harga_per_kg || 0),
-      total_kotor: totalKotorAll,
-      potongan_tara_kg: updatedItems.reduce((acc, it) => acc + (it.potongan_tara_kg || 0), 0),
-      potongan_kuli: updatedItems.reduce((acc, it) => acc + (it.potongan_kuli || 7000), 0),
-      potongan_tali: updatedItems.reduce((acc, it) => acc + (it.potongan_tali || 3000), 0),
-      potongan_tikar: updatedItems.reduce((acc, it) => acc + (it.potongan_tikar || 0), 0),
-      total_potongan: totalPotonganAll,
-      total_harga_beli: totalKotorAll,
-      harga_final: finalHargaTotal,
-      status_transaksi: allItemsWeighed ? 'lengkap' : 'menunggu',
-      status_tahap: allItemsWeighed ? 'lengkap' : 'menunggu_timbang',
-      petugas_timbang: currentUser?.nama_lengkap || 'Operator Timbang Digital',
-    };
-
-    onSaveTransaksi(updatedTx, updatedBarangs);
+    onSaveTransaksi(
+      updatedTx,
+      [buildBarangDariItem(updatedTx, weighedItem, barangList.find((b) => b.barang_id === weighedItem.barang_id))],
+      { skipAudit: true }
+    );
 
     // Record activity log for Super Admin accountability audit trail
     recordAuditLog({
@@ -714,7 +695,12 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     setIsDropdownOpen(false);
     setHighlightedIndex(-1);
 
-    if (allItemsWeighed) {
+    if (allItemsWeighed && isKuponProsesSortir(updatedTx)) {
+      setScanFeedback({
+        text: `Semua bal yang sudah masuk (${updatedItems.length} bal) pada Kupon ${currentTx.no_kupon} sudah ditimbang. Sortir kupon ini masih berjalan, bal berikutnya bisa langsung discan begitu ditambahkan.`,
+        isError: false,
+      });
+    } else if (allItemsWeighed) {
       setScanFeedback({
         text: `Seluruh bal (${updatedItems.length} bal) pada Kupon ${currentTx.no_kupon} selesai ditimbang (${totalNettoKg} kg Netto). Bal "${activeBalItem.no_bal}" tersimpan.`,
         isError: false,
@@ -827,47 +813,36 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     // Simpan nilai berat kotor (bruto) sebelumnya agar tidak hilang dan operator bisa langsung mengedit
     const existingBruto = item.berat_bruto_kg || (item.berat_kg ? normalizeKg(item.berat_kg + (item.potongan_tara_kg || 0)) : 0);
 
-    const updatedItems = workingItems.map((it) => {
-      if (it.item_id === itemId) {
-        return {
-          ...it,
-          berat_kg: 0,
-          berat_bruto_kg: existingBruto,
-          total_kotor: 0,
-          potongan: 0,
-          subtotal_bersih: 0,
-          status_timbang: 'menunggu_timbang' as const,
-        };
-      }
-      return it;
-    });
-
-    setWorkingItems(updatedItems);
     setBeratBrutoInput(existingBruto > 0 ? existingBruto : '');
-    
-    // Save to global state so it's persisted immediately
-    if (currentTx) {
-      const allItemsWeighed = updatedItems.every((it) => (it.berat_kg || 0) > 0);
-      const weighedCount = updatedItems.filter((it) => (it.berat_kg || 0) > 0).length;
-      const totalKotorAll = updatedItems.reduce((acc, it) => acc + (it.total_kotor || 0), 0);
-      const totalPotonganAll = updatedItems.reduce((acc, it) => acc + (it.potongan || 0), 0);
-      const finalHargaTotal = updatedItems.reduce((acc, it) => acc + (it.subtotal_bersih || 0), 0);
 
-      const updatedTx: TransaksiPembelian = {
-        ...currentTx,
-        items: updatedItems,
-        total_bal: updatedItems.length,
-        bal_selesai_timbang: weighedCount,
-        berat_kg: updatedItems.reduce((sum, item) => sum + (item.berat_kg || 0), 0),
-        total_kotor: totalKotorAll,
-        total_potongan: totalPotonganAll,
-        total_harga_beli: totalKotorAll,
-        harga_final: finalHargaTotal,
-        total_bersih: finalHargaTotal,
-        status_transaksi: allItemsWeighed ? 'lengkap' : 'menunggu',
-        status_tahap: allItemsWeighed ? 'lengkap' : 'menunggu_timbang',
-      };
-      onSaveTransaksi(updatedTx, []);
+    // Simpan ke versi kupon terbaru; bal kembali berstatus Proses Sortir sampai ditimbang ulang
+    if (currentTx) {
+      const updatedTx = terapkanHasilTimbang(currentTx, itemId, {
+        berat_kg: 0,
+        berat_bruto_kg: existingBruto,
+        total_kotor: 0,
+        potongan: 0,
+        subtotal_bersih: 0,
+        status_timbang: 'menunggu_timbang',
+      });
+      if (!updatedTx) return;
+      const unlockedItem = (updatedTx.items || []).find((it) => it.item_id === itemId)!;
+      setWorkingItems(updatedTx.items || []);
+      onSaveTransaksi(
+        updatedTx,
+        unlockedItem.barang_id
+          ? [buildBarangDariItem(updatedTx, unlockedItem, barangList.find((b) => b.barang_id === unlockedItem.barang_id))]
+          : [],
+        { skipAudit: true }
+      );
+      recordAuditLog({
+        user_nama: currentUser?.nama_lengkap || 'Operator Timbang Digital',
+        user_role: userRole,
+        modul: 'Timbangan Bal',
+        aksi: 'BUKA_KUNCI_TIMBANG',
+        target_id: item.no_bal,
+        deskripsi: `Kunci timbang bal ${item.no_bal} (Kupon: ${currentTx.no_kupon}) dibuka untuk timbang ulang. Netto sebelumnya: ${item.berat_kg || 0} Kg`,
+      });
     }
     setScanFeedback({
       text: `Kunci bal "${item.no_bal}" berhasil dibuka. Bobot bruto ${existingBruto > 0 ? `(${existingBruto} kg) ` : ''}siap diedit atau diperbarui pada form.`,
@@ -898,7 +873,9 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     }
   };
 
-  const allCurrentWeighed = workingItems.length > 0 && workingItems.every((it) => (it.berat_kg || 0) > 0);
+  // Kupon yang sortirnya belum ditutup belum dianggap tuntas walaupun semua bal yang ada sudah ditimbang
+  const allCurrentWeighed =
+    workingItems.length > 0 && workingItems.every((it) => (it.berat_kg || 0) > 0) && !isKuponProsesSortir(currentTx);
   const weighedCount = workingItems.filter((it) => (it.berat_kg || 0) > 0).length;
 
   return (
@@ -1222,7 +1199,9 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                         >
                           <div className="flex justify-between items-center mb-0.5">
                             <strong className="text-gray-800 font-mono text-xs">{tx.no_kupon}</strong>
-                            <span className="text-[10px] text-gray-500 font-medium">{isComplete ? '✓ LENGKAP' : '⏳ PROSES'}</span>
+                            <span className="text-[10px] text-gray-500 font-medium">
+                              {isKuponProsesSortir(tx) ? '✂ SORTIR BERJALAN' : isComplete ? '✓ LENGKAP' : '⏳ PROSES'}
+                            </span>
                           </div>
                           <div className="text-[10px] text-gray-600">
                             {tx.nama_petani} • {weighed}/{items.length} Bal ditimbang
@@ -1245,6 +1224,14 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
               <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider">
                 Daftar Bal ({workingItems.length})
               </h3>
+              {isKuponProsesSortir(currentTx) && (
+                <span
+                  className="px-1.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded-xs text-[10px] font-bold"
+                  title="Sortir kupon ini belum ditutup. Bal baru dari Sortir akan muncul otomatis."
+                >
+                  Sortir masih berjalan
+                </span>
+              )}
             </div>
             <div className="divide-y divide-gray-100 max-h-[500px] overflow-y-auto">
               {workingItems.map((item, index) => {

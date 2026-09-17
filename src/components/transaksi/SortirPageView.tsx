@@ -19,10 +19,10 @@ import {
   RotateCcw,
   AlertTriangle
 } from 'lucide-react';
-import { TransaksiPembelian, Petani, TabelHarga, Barang, TransaksiItemBal, UserRole, User as UserType } from '../../types';
-import { formatRupiah, formatNoKupon, formatDateHariBulanTahun, generateTransaksiId, hitungPotonganTaraKg } from '../../utils/formatters';
+import { TransaksiPembelian, Petani, TabelHarga, Barang, TransaksiItemBal, UserRole, User as UserType, SaveTransaksiMeta } from '../../types';
+import { formatRupiah, formatNoKupon, formatDateHariBulanTahun, formatNumber, generateTransaksiId, hitungPotonganTaraKg } from '../../utils/formatters';
 import { useSessionDraft } from '../../hooks/useSessionDraft';
-import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
+import { buildBarangDariItem, hitungUlangKupon, isBalDitimbang, isKuponProsesSortir, nextBarangId } from '../../utils/kuponSortir';
 
 interface SortirPageViewProps {
   petaniList: Petani[];
@@ -31,7 +31,8 @@ interface SortirPageViewProps {
   barangList?: Barang[];
   userRole: UserRole;
   currentUser?: UserType | null;
-  onSaveTransaksi: (newTx: TransaksiPembelian, generatedBarang: Barang | Barang[]) => void;
+  onSaveTransaksi: (newTx: TransaksiPembelian, generatedBarang: Barang | Barang[], meta?: SaveTransaksiMeta) => void;
+  onDeleteTransaksi?: (transaksiId: string, alasan?: string) => void;
   onNavigateToTimbangan: (kuponNo?: string, txId?: string, balNo?: string) => void;
 }
 
@@ -43,6 +44,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
   userRole,
   currentUser,
   onSaveTransaksi,
+  onDeleteTransaksi,
   onNavigateToTimbangan,
 }) => {
   // Form Header State
@@ -63,22 +65,38 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
   const [tanggal, setTanggal] = useSessionDraft<string>('sortir_tanggal', draftUserId, () => new Date().toISOString().split('T')[0]);
   const [petugasSortirNama, setPetugasSortirNama] = useState(currentUser?.nama_lengkap || 'Sistem');
 
-  // Daftar bal yang sedang dikerjakan. Dipulihkan otomatis bila operator
-  // berpindah modul atau halaman ter-refresh sebelum sempat disimpan.
-  const [balItems, setBalItems, resetDraftBalItems] = useSessionDraft<TransaksiItemBal[]>('sortir_bal_items', draftUserId, []);
+  // Kupon terbuka: tersimpan sejak bal pertama discan sehingga Timbangan di komputer
+  // lain bisa langsung menimbang, walaupun sortir kupon ini belum selesai.
+  const [openTxId, setOpenTxId, resetOpenTxId] = useSessionDraft<string>('sortir_open_tx_id', draftUserId, '');
+  const openTx = useMemo(
+    () => (openTxId ? transaksiList.find((t) => t.transaksi_id === openTxId && isKuponProsesSortir(t)) : undefined),
+    [openTxId, transaksiList]
+  );
+  const balItems: TransaksiItemBal[] = openTx?.items || [];
+
+  // Kupon ditutup atau dihapus dari tempat lain (tunggu data transaksi selesai dimuat)
+  useEffect(() => {
+    if (openTxId && !openTx && transaksiList.length > 0) resetOpenTxId();
+  }, [openTxId, openTx, transaksiList.length]);
+
+  // Kupon proses sortir lain yang bisa dilanjutkan (mis. setelah browser ditutup)
+  const kuponBelumSelesai = useMemo(
+    () => transaksiList.filter((t) => isKuponProsesSortir(t) && t.transaksi_id !== openTxId),
+    [transaksiList, openTxId]
+  );
 
   // Bal Adder Input Fields
   const [inputNoBal, setInputNoBal] = useState('');
 
-  useUnsavedChangesWarning(balItems.length > 0);
-  
   // Real-time Check Duplikasi Kupon
   const duplicateKuponTx = useMemo(() => {
     const clean = (noKupon || '').trim().toLowerCase();
     if (!clean) return null;
-    return transaksiList.find(tx => (tx.no_kupon || '').trim().toLowerCase() === clean);
-  }, [noKupon, transaksiList]);
-  const isKuponExists = Boolean(duplicateKuponTx);
+    return transaksiList.find(
+      (tx) => tx.transaksi_id !== openTxId && (tx.no_kupon || '').trim().toLowerCase() === clean
+    );
+  }, [noKupon, transaksiList, openTxId]);
+  const isKuponExists = Boolean(duplicateKuponTx) && !openTx;
 
   const handleGenerateNextKupon = () => {
     let maxNum = 0;
@@ -244,6 +262,18 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
       return;
     }
 
+    // Kupon baru dibuka bersamaan dengan bal pertama
+    if (!openTx) {
+      if (!selectedPetaniId || !currentPetani) {
+        setScanFeedback({ text: 'Pilih petani penyetor terlebih dahulu sebelum menambah bal.', isError: true });
+        return;
+      }
+      if (isKuponExists) {
+        setScanFeedback({ text: `Nomor kupon "${noKupon}" sudah digunakan transaksi lain. Gunakan nomor kupon yang berbeda.`, isError: true });
+        return;
+      }
+    }
+
     const balCode = inputNoBal.trim() || getNextSuggestedNoBal();
     const cleanedBalCode = balCode.replace(/-/g, '').toUpperCase();
     
@@ -290,8 +320,63 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
       lokasi_simpan: 'Blok A',
     };
 
-    setBalItems((prev) => [...prev, newItem]);
-    setScanFeedback({ text: `✓ Bal \"${cleanedBalCode}\" Grade ${selectedGrade} berhasil ditambahkan!`, isError: false });
+    const petugas = petugasSortirNama || 'Petugas Sortir QC';
+    let kuponDasar: TransaksiPembelian;
+    if (openTx) {
+      kuponDasar = openTx;
+    } else {
+      const txId = generateTransaksiId(tanggal, transaksiList);
+      const seqPart = txId.split('-')[2] || '001';
+      kuponDasar = {
+        transaksi_id: txId,
+        no_kupon: noKupon.trim() || `KUP${seqPart.padStart(4, '0')}`,
+        petani_id: currentPetani!.petani_id,
+        nama_petani: currentPetani!.nama_petani,
+        no_hp: currentPetani!.no_hp || '-',
+        desa_kecamatan: currentPetani!.alamat || currentPetani!.desa_kecamatan || '',
+        no_bal: '',
+        kode_grade: '-',
+        items: [],
+        jenis_timbang: 'bruto',
+        berat_terukur_kg: 0,
+        potongan_tara_kg: 0,
+        berat_kg: 0,
+        harga_per_kg: 0,
+        potongan_kuli: 0,
+        potongan_tikar: 0,
+        total_potongan: 0,
+        total_harga_beli: 0,
+        harga_final: 0,
+        status_transaksi: 'menunggu',
+        status_tahap: 'proses_sortir',
+        status_nota: 'belum_cetak',
+        unduh_nota_count: 0,
+        tanggal_transaksi: tanggal,
+        operator_nama: petugas,
+        petugas_sortir: petugas,
+        catatan_qc: 'Sortir sedang berjalan.',
+      };
+    }
+
+    const itemBaru = { ...newItem, barang_id: nextBarangId(kuponDasar.transaksi_id, kuponDasar.items || []) };
+    const updatedTx = hitungUlangKupon(kuponDasar, [...(kuponDasar.items || []), itemBaru]);
+    onSaveTransaksi(
+      updatedTx,
+      [buildBarangDariItem(updatedTx, itemBaru)],
+      openTx
+        ? { skipAudit: true }
+        : {
+            audit: {
+              aksi: 'BUKA_KUPON_SORTIR',
+              deskripsi: `Kupon ${updatedTx.no_kupon} dibuka untuk ${updatedTx.nama_petani}, bal pertama ${cleanedBalCode} (Grade ${selectedGrade})`,
+            },
+          }
+    );
+    if (!openTx) setOpenTxId(updatedTx.transaksi_id);
+    setScanFeedback({
+      text: `✓ Bal "${cleanedBalCode}" Grade ${selectedGrade} tersimpan di Kupon ${updatedTx.no_kupon} dan sudah bisa ditimbang.`,
+      isError: false,
+    });
     
     // Clear and prepare for next scan
     setInputNoBal('');
@@ -317,145 +402,92 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
     }
   };
 
-  const handleRemoveItem = (index: number) => {
-    setBalItems((prev) => prev.filter((_, i) => i !== index));
-    setScanFeedback(null);
-  };
-
-  const handleToggleItemGantiTikar = (index: number) => {
-    setBalItems((prev) =>
-      prev.map((it, i) => {
-        if (i === index) {
-          const nextVal = !it.ganti_tikar;
-          return {
-            ...it,
-            ganti_tikar: nextVal,
-            potongan_tara_kg: hitungPotonganTaraKg(0, nextVal, it.no_bal),
-            potongan_tikar: nextVal ? 75000 : 0,
-            potongan: (it.potongan_kuli || 7000) + (it.potongan_tali || 3000) + (nextVal ? 75000 : 0),
-          };
-        }
-        return it;
-      })
-    );
-  };
-
-  // Save Transaction (Intake Sortir Complete)
-  const handleSaveSortirData = (shouldNavigateToTimbang = false) => {
-    if (!selectedPetaniId || !currentPetani) {
-      alert('Pilih petani penyetor terlebih dahulu.');
-      return;
-    }
-
-    if (balItems.length === 0) {
-      alert('Tambahkan minimal 1 bal tembakau yang telah disortir.');
-      return;
-    }
-
-    if (isKuponExists) {
-      alert(`Nomor kupon "${noKupon}" sudah digunakan oleh transaksi lain. Harap gunakan nomor kupon yang berbeda.`);
-      return;
-    }
-
-    const txId = generateTransaksiId(tanggal, transaksiList);
-    const seqPart = txId.split('-')[2] || '001';
-    const kuponFinal = noKupon.trim() || `KUP${seqPart.padStart(4, '0')}`;
-
-    const uniqueGrades: string[] = Array.from(new Set(balItems.map((i) => i.kode_grade)));
-    const gradeSummary = uniqueGrades.length === 1 ? uniqueGrades[0] : `Multi (${uniqueGrades.join(', ')})`;
-    const avgHarga = Math.round(
-      balItems.reduce((acc, i) => acc + (i.harga_per_kg || 0), 0) / (balItems.length || 1)
-    );
-
-    const generatedBarangList: Barang[] = balItems.map((item, idx) => ({
-      barang_id: `BAL-${txId.replace('TRX-', '')}-${String(idx + 1).padStart(2, '0')}`,
-      barcode: item.barcode || item.no_bal,
-      kode_grade: item.kode_grade,
-      no_bal: item.no_bal,
-      berat_kg: 0,
-      status_stok: 'di_gudang',
-      tanggal_masuk: tanggal,
-      petani_id: currentPetani.petani_id,
-      nama_petani: currentPetani.nama_petani,
-      desa_kecamatan: currentPetani.alamat || currentPetani.desa_kecamatan || 'Ds. Wringin Anom',
-      transaksi_pembelian_id: txId,
-      catatan: `Sortir Intake Kupon: ${kuponFinal}`,
-    }));
-
-    const finalTx: TransaksiPembelian = {
-      transaksi_id: txId,
-      no_kupon: kuponFinal,
-      petani_id: currentPetani.petani_id,
-      nama_petani: currentPetani.nama_petani,
-      no_hp: currentPetani.no_hp || '-',
-      desa_kecamatan: currentPetani.alamat || currentPetani.desa_kecamatan || 'Pamekasan',
-      no_bal: balItems.map((i) => i.no_bal).join(', '),
-      kode_grade: gradeSummary,
-      total_bal: balItems.length,
-      bal_selesai_timbang: 0,
-      items: balItems.map((it, idx) => ({
-        ...it,
-        barang_id: generatedBarangList[idx]?.barang_id,
-      })),
-      barang_ids: generatedBarangList.map((b) => b.barang_id),
-      jenis_timbang: 'bruto',
-      berat_terukur_kg: 0,
-      potongan_tara_kg: balItems.reduce((acc, i) => acc + (i.potongan_tara_kg || 0), 0),
-      berat_kg: 0,
-      harga_per_kg: avgHarga,
-      total_kotor: 0,
-      potongan_kuli: balItems.reduce((acc, i) => acc + (i.potongan_kuli || 7000), 0),
-      potongan_tali: balItems.reduce((acc, i) => acc + (i.potongan_tali || 3000), 0),
-      potongan_tikar: balItems.reduce((acc, i) => acc + (i.potongan_tikar || 0), 0),
-      total_potongan: balItems.reduce((acc, i) => acc + (i.potongan || 10000), 0),
-      total_harga_beli: 0,
-      harga_final: 0,
-      status_transaksi: 'menunggu',
-      status_tahap: 'menunggu_timbang',
-      status_nota: 'belum_cetak',
-      unduh_nota_count: 0,
-      tanggal_transaksi: tanggal,
-      operator_nama: petugasSortirNama || 'Petugas Sortir QC',
-      petugas_sortir: petugasSortirNama || 'Petugas Sortir QC',
-      catatan_qc: `Sortir ${balItems.length} bal tembakau. Menunggu timbangan.`,
-    };
-
-    onSaveTransaksi(finalTx, generatedBarangList);
-    setSaveSuccessMsg(`Data Sortir Kupon ${kuponFinal} (${balItems.length} Bal) berhasil disimpan!`);
-
-    // Reset Form for next kupon. Draf sesi ikut dibuang karena datanya
-    // sudah masuk ke penyimpanan permanen.
-    resetDraftBalItems();
-    resetDraftPetani();
-    
-      let maxNum = 0;
-      transaksiList.forEach(tx => {
-        const match = tx.no_kupon.match(/\d+/);
-        if (match) {
-          const num = parseInt(match[0], 10);
-          if (num > maxNum) maxNum = num;
-        }
+  const handleRemoveItem = (itemId: string) => {
+    if (!openTx) return;
+    const item = balItems.find((it) => it.item_id === itemId);
+    if (!item) return;
+    // Hasil timbang tidak boleh hilang karena perubahan di Sortir
+    if (isBalDitimbang(item)) {
+      setScanFeedback({
+        text: `Bal "${item.no_bal}" sudah ditimbang (${formatNumber(item.berat_kg)} kg) sehingga tidak bisa dihapus dari Sortir.`,
+        isError: true,
       });
-      const currentMatch = noKupon.match(/\d+/);
-      if (currentMatch) {
-         const currentNum = parseInt(currentMatch[0], 10);
-         if (currentNum > maxNum) maxNum = currentNum;
-      }
-      setNoKupon(`KUP${String(maxNum + 1).padStart(4, '0')}`);
+      return;
+    }
+    const updatedTx = hitungUlangKupon(openTx, balItems.filter((it) => it.item_id !== itemId));
+    onSaveTransaksi(updatedTx, [], {
+      audit: {
+        aksi: 'SORTIR_HAPUS_BAL',
+        deskripsi: `Bal ${item.no_bal} (Grade ${item.kode_grade}) dihapus dari Kupon ${openTx.no_kupon} saat sortir`,
+      },
+    });
+    setScanFeedback({ text: `Bal "${item.no_bal}" dihapus dari Kupon ${openTx.no_kupon}.`, isError: false });
+  };
+
+  // Siapkan form untuk kupon berikutnya
+  const resetFormKuponBaru = (kuponTerakhir: string) => {
+    resetOpenTxId();
+    resetDraftPetani();
+    let maxNum = 0;
+    [...transaksiList.map((tx) => tx.no_kupon || ''), kuponTerakhir].forEach((kupon) => {
+      const match = kupon.match(/\d+/);
+      if (match) maxNum = Math.max(maxNum, parseInt(match[0], 10));
+    });
+    setNoKupon(`KUP${String(maxNum + 1).padStart(4, '0')}`);
     setInputNoBal('');
     setScanFeedback(null);
-
-    if (shouldNavigateToTimbang) {
-      onNavigateToTimbangan(kuponFinal, txId);
-    }
   };
 
-  // Recent sortir queue waiting for weight
-  const waitingSortirList = useMemo(() => {
-    return transaksiList.filter(
-      (t) => t.status_transaksi === 'menunggu' || (t.items || []).some((it) => (it.berat_kg || 0) <= 0)
+  // Menutup kupon: tidak ada bal baru lagi dan kupon bisa dibayar setelah semua bal ditimbang
+  const handleSelesaiSortir = () => {
+    if (!openTx) return;
+    if (balItems.length === 0) {
+      alert('Tambahkan minimal 1 bal tembakau sebelum menyelesaikan sortir.');
+      return;
+    }
+
+    const belumDitimbang = balItems.filter((it) => !isBalDitimbang(it)).length;
+    const updatedTx = hitungUlangKupon(
+      { ...openTx, status_tahap: 'menunggu_timbang', catatan_qc: `Sortir ${balItems.length} bal tembakau selesai.` },
+      balItems
     );
-  }, [transaksiList]);
+    onSaveTransaksi(updatedTx, [], {
+      audit: {
+        aksi: 'SELESAI_SORTIR',
+        deskripsi: `Sortir Kupon ${openTx.no_kupon} selesai: ${balItems.length} bal (${belumDitimbang} belum ditimbang)`,
+      },
+    });
+    setSaveSuccessMsg(
+      belumDitimbang > 0
+        ? `Sortir Kupon ${openTx.no_kupon} selesai (${balItems.length} bal). ${belumDitimbang} bal masih menunggu timbang.`
+        : `Sortir Kupon ${openTx.no_kupon} selesai dan seluruh ${balItems.length} bal sudah ditimbang. Kupon siap dibayar di Kasir.`
+    );
+    resetFormKuponBaru(openTx.no_kupon);
+  };
+
+  // Membatalkan kupon yang belum ada bal tertimbang
+  const handleBatalkanKupon = () => {
+    if (!openTx || !onDeleteTransaksi) return;
+    if (balItems.some(isBalDitimbang)) {
+      alert(`Kupon ${openTx.no_kupon} tidak bisa dibatalkan karena sebagian bal sudah ditimbang. Hapus bal yang belum ditimbang satu per satu, atau selesaikan sortir.`);
+      return;
+    }
+    if (!window.confirm(`Batalkan Kupon ${openTx.no_kupon}? ${balItems.length} bal pada kupon ini akan dihapus.`)) return;
+    onDeleteTransaksi(openTx.transaksi_id, 'Kupon dibatalkan dari Sortir sebelum selesai');
+    resetOpenTxId();
+    setScanFeedback({ text: `Kupon ${openTx.no_kupon} dibatalkan.`, isError: false });
+  };
+
+  // Melanjutkan kupon proses sortir yang belum ditutup
+  const handleLanjutkanKupon = (tx: TransaksiPembelian) => {
+    setOpenTxId(tx.transaksi_id);
+    setNoKupon(tx.no_kupon);
+    setSelectedPetaniId(tx.petani_id);
+    setTanggal((tx.tanggal_transaksi || '').split(' ')[0] || tanggal);
+    setSaveSuccessMsg(null);
+    setScanFeedback({ text: `Melanjutkan sortir Kupon ${tx.no_kupon} (${(tx.items || []).length} bal).`, isError: false });
+    setTimeout(() => barcodeInputRef.current?.focus(), 100);
+  };
 
   return (
     <div className="space-y-4 font-sans pb-10">
@@ -476,6 +508,35 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
         </div>
       )}
 
+      {/* Kupon proses sortir yang belum ditutup */}
+      {!openTx && kuponBelumSelesai.length > 0 && (
+        <div className="bg-amber-50 border border-amber-300 p-3.5 rounded-sm space-y-2">
+          <div className="flex items-center space-x-2 text-xs font-bold text-amber-900">
+            <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>Kupon Sortir Belum Selesai ({kuponBelumSelesai.length})</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {kuponBelumSelesai.map((tx) => {
+              const items = tx.items || [];
+              const ditimbang = items.filter(isBalDitimbang).length;
+              return (
+                <button
+                  key={tx.transaksi_id}
+                  type="button"
+                  onClick={() => handleLanjutkanKupon(tx)}
+                  className="px-3 py-1.5 bg-white border border-amber-300 hover:bg-amber-100 rounded-sm text-left transition cursor-pointer"
+                >
+                  <div className="text-xs font-mono font-bold text-slate-900">{tx.no_kupon}</div>
+                  <div className="text-[10px] text-slate-600">
+                    {tx.nama_petani} • {items.length} bal • {ditimbang} ditimbang • <span className="font-semibold text-[#b81d24]">Lanjutkan</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Main Sortir Input Card */}
       <div className="bg-white border border-gray-200 shadow-2xs">
         <div className="bg-gray-100/80 px-4 py-2.5 border-b border-gray-200 flex items-center justify-between">
@@ -485,9 +546,19 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
               Formulir Input Data Sortir
             </h3>
           </div>
-          <span className="text-[11px] text-gray-500 font-medium">
-            Tanggal: <strong className="text-gray-900 font-mono">{formatDateHariBulanTahun(tanggal)}</strong>
-          </span>
+          <div className="flex items-center gap-2">
+            {openTx && (
+              <span
+                className="px-2 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded-xs text-[10px] font-bold"
+                title="Setiap bal langsung tersimpan dan bisa ditimbang di Timbangan"
+              >
+                Kupon {openTx.no_kupon} terbuka • tersimpan otomatis
+              </span>
+            )}
+            <span className="text-[11px] text-gray-500 font-medium">
+              Tanggal: <strong className="text-gray-900 font-mono">{formatDateHariBulanTahun(tanggal)}</strong>
+            </span>
+          </div>
         </div>
 
         <div className="p-4 sm:p-5 space-y-5">
@@ -509,9 +580,11 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
               </div>
               <input
                 type="text"
-                value={noKupon}
+                value={openTx ? openTx.no_kupon : noKupon}
                 onChange={(e) => setNoKupon(formatNoKupon(e.target.value))}
-                className={`w-full bg-white border rounded-sm px-3 py-1.5 text-xs text-slate-900 font-mono font-semibold focus:outline-none focus:ring-1 ${isKuponExists ? 'border-rose-500 focus:border-rose-600 focus:ring-rose-600 ring-1 ring-rose-200 bg-rose-50/40' : 'border-slate-300 focus:border-slate-800 focus:ring-slate-800'}`}
+                disabled={Boolean(openTx)}
+                title={openTx ? 'Nomor kupon terkunci selama kupon terbuka' : undefined}
+                className={`w-full bg-white border rounded-sm px-3 py-1.5 text-xs text-slate-900 font-mono font-semibold focus:outline-none focus:ring-1 disabled:bg-slate-100 disabled:text-slate-600 disabled:cursor-not-allowed ${isKuponExists ? 'border-rose-500 focus:border-rose-600 focus:ring-rose-600 ring-1 ring-rose-200 bg-rose-50/40' : 'border-slate-300 focus:border-slate-800 focus:ring-slate-800'}`}
                 placeholder="Contoh: KUP0001"
                 required
               />
@@ -543,12 +616,22 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 2. Petani Penyetor <span className="text-rose-500">*</span>
               </label>
-              <SearchableSelect
-                value={selectedPetaniId}
-                onChange={(val) => setSelectedPetaniId(val)}
-                options={activeFarmers.map(p => ({ value: p.petani_id, label: `${p.nama_petani} (${p.petani_id})` }))}
-                placeholder="Pilih Petani..."
-              />
+              {openTx ? (
+                <input
+                  type="text"
+                  value={`${openTx.nama_petani} (${openTx.petani_id})`}
+                  disabled
+                  title="Petani terkunci selama kupon terbuka"
+                  className="w-full bg-slate-100 border border-slate-300 rounded-sm px-3 py-1.5 text-xs text-slate-600 cursor-not-allowed"
+                />
+              ) : (
+                <SearchableSelect
+                  value={selectedPetaniId}
+                  onChange={(val) => setSelectedPetaniId(val)}
+                  options={activeFarmers.map(p => ({ value: p.petani_id, label: `${p.nama_petani} (${p.petani_id})` }))}
+                  placeholder="Pilih Petani..."
+                />
+              )}
               {currentPetani && (
                 <p className="text-[10px] text-slate-400 mt-1 truncate">
                   Desa: {currentPetani.alamat || currentPetani.desa_kecamatan || '-'}
@@ -565,7 +648,8 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                 type="date"
                 value={tanggal}
                 onChange={(e) => setTanggal(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-sm px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800"
+                disabled={Boolean(openTx)}
+                className="w-full bg-white border border-slate-300 rounded-sm px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800 disabled:bg-slate-100 disabled:text-slate-600 disabled:cursor-not-allowed"
                 required
               />
             </div>
@@ -715,7 +799,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                 </span>
               </h4>
               <p className="text-[11px] text-slate-500">
-                Berat netto akan diisi saat bal tiba di Meja Timbang
+                Setiap bal langsung tersimpan dan bisa ditimbang di Meja Timbang tanpa menunggu sortir selesai
               </p>
             </div>
 
@@ -739,12 +823,14 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                         <Layers className="w-8 h-8 mx-auto text-slate-300 mb-2" />
                         <p className="font-semibold text-slate-700 text-xs">Belum ada bal yang ditambahkan pada kupon ini</p>
                         <p className="text-[11px] text-slate-400 mt-0.5">
-                          Scan barcode stiker bal atau masukkan nomor bal di atas lalu simpan.
+                          Scan barcode stiker bal atau masukkan nomor bal di atas. Kupon tersimpan otomatis sejak bal pertama.
                         </p>
                       </td>
                     </tr>
                   ) : (
-                    balItems.map((item, index) => (
+                    balItems.map((item, index) => {
+                      const ditimbang = isBalDitimbang(item);
+                      return (
                       <tr key={item.item_id || index} className="hover:bg-slate-50/80 transition-colors">
                         <td className="py-2.5 px-3.5 text-center font-mono text-slate-500">
                           {index + 1}
@@ -764,22 +850,30 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                         </td>
                         
                         <td className="py-2.5 px-3.5 text-center">
-                          <span className="px-2 py-0.5 bg-slate-100 text-slate-600 border border-slate-200 rounded text-[10px] font-medium">
-                            Menunggu Timbang
-                          </span>
+                          {ditimbang ? (
+                            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded text-[10px] font-semibold">
+                              Ditimbang • {formatNumber(item.berat_kg)} kg
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 bg-slate-100 text-slate-600 border border-slate-200 rounded text-[10px] font-medium">
+                              Menunggu Timbang
+                            </span>
+                          )}
                         </td>
                         <td className="py-2.5 px-3.5 text-center">
                           <button
                             type="button"
-                            onClick={() => handleRemoveItem(index)}
-                            className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
-                            title="Hapus baris ini"
+                            onClick={() => handleRemoveItem(item.item_id)}
+                            disabled={ditimbang}
+                            className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-400"
+                            title={ditimbang ? 'Bal sudah ditimbang, tidak bisa dihapus dari Sortir' : 'Hapus bal ini dari kupon'}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </td>
                       </tr>
-                    ))
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -790,9 +884,9 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
           <div className="p-4 bg-slate-50 border border-slate-200 rounded-sm flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="text-xs text-slate-600">
               Total Bal Disortir: <strong className="text-slate-900 text-sm font-semibold">{balItems.length} Bal</strong>
-              {currentPetani && (
+              {openTx && (
                 <span className="ml-2 text-slate-500">
-                  (Petani: <strong className="text-slate-700">{currentPetani.nama_petani}</strong> • Kupon: <strong className="text-slate-700 font-mono">{noKupon}</strong>)
+                  ({balItems.filter(isBalDitimbang).length} sudah ditimbang • Petani: <strong className="text-slate-700">{openTx.nama_petani}</strong> • Kupon: <strong className="text-slate-700 font-mono">{openTx.no_kupon}</strong>)
                 </span>
               )}
             </div>
@@ -800,22 +894,23 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
             <div className="flex items-center space-x-2 w-full sm:w-auto">
               <button
                 type="button"
-                onClick={resetDraftBalItems}
-                disabled={balItems.length === 0}
-                className="px-3 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 font-medium text-xs rounded-sm transition cursor-pointer disabled:opacity-50"
+                onClick={handleBatalkanKupon}
+                disabled={!openTx || balItems.some(isBalDitimbang)}
+                title={balItems.some(isBalDitimbang) ? 'Kupon yang sudah ada bal tertimbang tidak bisa dibatalkan' : 'Hapus kupon ini beserta seluruh balnya'}
+                className="px-3 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 font-medium text-xs rounded-sm transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Reset Bal
+                Batalkan Kupon
               </button>
 
               <button
                 type="button"
-                onClick={() => handleSaveSortirData(false)}
-                disabled={balItems.length === 0 || isKuponExists}
-                title={isKuponExists ? 'Nomor kupon sudah digunakan oleh transaksi lain' : undefined}
+                onClick={handleSelesaiSortir}
+                disabled={!openTx || balItems.length === 0}
+                title="Tutup kupon. Kupon bisa dibayar di Kasir setelah semua bal ditimbang."
                 className="flex-1 sm:flex-none px-4 py-2 bg-[#b81d24] hover:bg-[#b81d24] text-white font-medium text-xs rounded-sm transition flex items-center justify-center space-x-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-2xs"
               >
                 <Check className="w-4 h-4 text-emerald-400" />
-                <span>Simpan Data Sortir</span>
+                <span>Selesai Sortir</span>
               </button>
 
               

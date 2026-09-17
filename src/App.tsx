@@ -9,7 +9,8 @@ import {
   User,
   UserRole,
   MasterHargaJual,
-  BatchPengirimanSample
+  BatchPengirimanSample,
+  SaveTransaksiMeta
 } from './types';
 import { 
   loadPetaniData, 
@@ -32,8 +33,11 @@ import {
   saveUserData,
   loadCurrentUser, 
   saveCurrentUser,
-  recordAuditLog
+  recordAuditLog,
+  STORAGE_KEY_BARANG,
+  STORAGE_KEY_TRANSAKSI
 } from './utils/storage';
+import { normalizeStatusBal, resolveStatusStok } from './utils/kuponSortir';
 import { clearAllDrafts, getDraftRecovery, markDraftCleanExit, touchDraftAlive } from './utils/draftStorage';
 import { hasModuleAccess } from './utils/rbac';
 import { normalizeKg } from './utils/formatters';
@@ -83,9 +87,6 @@ import { PetaniImportExportModal } from './components/petani/PetaniImportExportM
 
 // PRD 4.2: Master Harga Beli
 import { HargaManagement } from './components/harga/HargaManagement';
-
-// PRD 5.6: Inventaris Bal Gudang
-import { BarangManagement } from './components/barang/BarangManagement';
 
 //  Transaksi Pembelian Timbang & Kupon (3 Sub-menus: Sortir, Timbangan, Kasir)
 import { SortirPageView } from './components/transaksi/SortirPageView';
@@ -273,7 +274,7 @@ export default function App() {
       });
       ErpApiService.getBarangList().then((res) => {
         if (res.fromBackend) {
-          setBarangList(res.data);
+          setBarangList(normalizeStatusBal(res.data));
         }
       });
       ErpApiService.getTransaksiList().then((res) => {
@@ -325,14 +326,28 @@ export default function App() {
   useEffect(() => {
     setUserList(loadUserData());
     setPetaniList(loadPetaniData());
-    setBarangList(loadBarangData());
+    setBarangList(normalizeStatusBal(loadBarangData()));
     setHargaList(loadHargaData());
     setTransaksiList(loadTransaksiData());
     setSampleList(loadSampleData());
     setPengirimanList(loadPengirimanData());
     setHargaJualList(loadHargaJualData());
     setBatchSampleList(loadBatchSampleData());
-    
+
+  }, []);
+
+  // Kupon yang dikerjakan paralel (mis. Sortir dan Timbangan di tab/jendela lain)
+  // langsung ikut diperbarui begitu tab lain menyimpan perubahan.
+  useEffect(() => {
+    const handleDataChange = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEY_TRANSAKSI) {
+        setTransaksiList(loadTransaksiData());
+      } else if (e.key === STORAGE_KEY_BARANG) {
+        setBarangList(normalizeStatusBal(loadBarangData()));
+      }
+    };
+    window.addEventListener('storage', handleDataChange);
+    return () => window.removeEventListener('storage', handleDataChange);
   }, []);
 
   // Check RBAC module access whenever activeModuleId or currentUser changes
@@ -733,17 +748,12 @@ export default function App() {
     showToast(`Tarif Grade "${target?.kode_grade || hargaId}" (Rp ${(target?.harga_per_kg || 0).toLocaleString('id-ID')}) berhasil dihapus dari Master Harga.`);
   };
 
-  // --- PRD 5.6: Barang / Inventaris Handlers ---
-  const handleUpdateBarang = (updated: Barang) => {
-    if (currentUser?.status_aktif === false) return showToast('Akun Anda dinonaktifkan.', 'info');
-    const list = barangList.map((b) => (b.barang_id === updated.barang_id ? updated : b));
-    setBarangList(list);
-    saveBarangData(list);
-    showToast(`Data bal ${updated.no_bal} berhasil diperbarui.`);
-  };
-
   // ---  Transaksi Pembelian Handlers ---
-  const handleSaveTransaksi = (newTx: TransaksiPembelian, generatedBarang: Barang | Barang[]) => {
+  const handleSaveTransaksi = (
+    newTx: TransaksiPembelian,
+    generatedBarang: Barang | Barang[],
+    meta: SaveTransaksiMeta = {}
+  ) => {
     if (currentUser?.status_aktif === false) {
       showToast('Akun Anda dinonaktifkan. Aksi tidak dapat dilakukan.', 'info');
       return;
@@ -783,9 +793,20 @@ export default function App() {
     }
 
     if (barangsToAdd.length > 0) {
-      const addedIds = new Set(barangsToAdd.map(b => b.barang_id));
-      const filteredOldBarangs = updatedBarangList.filter((b) => !addedIds.has(b.barang_id));
-      updatedBarangList = [...barangsToAdd, ...filteredOldBarangs];
+      // Gabung dengan data bal lama: status mengikuti hasil timbang, tetapi bal yang
+      // sedang menjadi sample atau sudah dikirim tidak dikembalikan ke gudang.
+      const prevById = new Map<string, Barang>(updatedBarangList.map((b) => [b.barang_id, b]));
+      const mergedById = new Map<string, Barang>(
+        barangsToAdd.map((b): [string, Barang] => {
+          const prev = prevById.get(b.barang_id);
+          return [b.barang_id, { ...prev, ...b, status_stok: resolveStatusStok(prev?.status_stok, b.berat_kg) }];
+        })
+      );
+      const newBarangs = barangsToAdd.filter((b) => !prevById.has(b.barang_id)).map((b) => mergedById.get(b.barang_id)!);
+      updatedBarangList = [
+        ...newBarangs,
+        ...updatedBarangList.map((b) => mergedById.get(b.barang_id) || b),
+      ];
     }
     
     setBarangList(updatedBarangList);
@@ -827,7 +848,19 @@ export default function App() {
     savePetaniData(updatedPetaniList);
 
     // Integrasi Audit Trail Activity Log
-    if (exists && oldTx) {
+    if (meta.audit) {
+      recordAuditLog({
+        user_nama: currentUser?.nama_lengkap || 'Sistem',
+        user_role: currentRole,
+        modul: 'Transaksi Pembelian',
+        aksi: meta.audit.aksi,
+        target_id: newTx.transaksi_id,
+        deskripsi: meta.audit.deskripsi,
+        rincian_perubahan: meta.audit.rincian_perubahan,
+      });
+    } else if (meta.skipAudit) {
+      // Pemanggil sudah mencatat audit sendiri
+    } else if (exists && oldTx) {
       // Cek apakah baru saja dicatat dengan detail kaya oleh TransaksiEditModal
       const isRecentlyLoggedByModal = Boolean(
         newTx.terakhir_diubah_pada &&
@@ -873,7 +906,9 @@ export default function App() {
       });
     }
 
-    showToast(`Transaksi ${newTx.transaksi_id} (${balCount} Bal, ${newTx.berat_kg} Kg) berhasil disimpan!`);
+    if (!meta.silent) {
+      showToast(`Transaksi ${newTx.transaksi_id} (${balCount} Bal, ${newTx.berat_kg} Kg) berhasil disimpan!`);
+    }
   };
 
   const handleDeleteTransaksi = (transaksiId: string, alasanHapus?: string) => {
@@ -1146,8 +1181,6 @@ export default function App() {
         return { title: 'Master Harga Beli', breadcrumb: 'Beranda / Master Harga' };
       case 'modul-3-harga-jual':
         return { title: 'Master Harga Jual Pabrik', breadcrumb: 'Beranda / Master Harga Jual' };
-      case 'modul-2-barang':
-        return { title: 'Inventaris Bal Gudang', breadcrumb: 'Beranda / Inventaris Bal' };
       case 'modul-0-sortir':
         return { title: 'Sortir Mutu Grade & Sample Bal', breadcrumb: 'Beranda / Pembelian / Sortir' };
       case 'modul-0-timbangan':
@@ -1226,7 +1259,6 @@ export default function App() {
               handleSidebarClick(modId);
             }}
             petaniCount={totalPetani}
-            barangCount={barangList.length}
             transaksiCount={transaksiList.length}
             sampleCount={sampleList.length}
             pengirimanCount={pengirimanList.length}
@@ -1250,7 +1282,6 @@ export default function App() {
                 handleSidebarClick(modId);
               }}
               petaniCount={totalPetani}
-              barangCount={barangList.length}
               transaksiCount={transaksiList.length}
               sampleCount={sampleList.length}
               pengirimanCount={pengirimanList.length}
@@ -1303,7 +1334,6 @@ export default function App() {
                 transaksiList={transaksiList}
                 hargaList={hargaList}
                 userRole={currentRole}
-                onNavigateToBarang={() => handleSelectModule('modul-2-barang')}
                 onNavigateToTransaksi={() => handleSelectModule('modul-0-transaksi')}
               />
             )}
@@ -1327,7 +1357,6 @@ export default function App() {
                 userRole={currentRole}
                 onNavigateToHarga={() => handleSelectModule('modul-3-harga')}
                 onNavigateToHargaJual={() => handleSelectModule('modul-3-harga-jual')}
-                onNavigateToBarang={() => handleSelectModule('modul-2-barang')}
               />
             )}
 
@@ -1361,7 +1390,6 @@ export default function App() {
                 
                 userRole={currentRole}
                 onNavigateToSample={() => handleSelectModule('modul-4-sample')}
-                onNavigateToBarang={() => handleSelectModule('modul-2-barang')}
               />
             )}
 
@@ -1398,17 +1426,6 @@ export default function App() {
               />
             )}
 
-            {/* PRD 5.6: Inventaris Bal Gudang */}
-            {activeModuleId === 'modul-2-barang' && (
-              <BarangManagement
-                barangList={barangList}
-                userRole={currentRole}
-                onUpdateBarang={handleUpdateBarang}
-                onNavigateToTransaksi={() => handleSelectModule('modul-0-transaksi')}
-                onNavigateToSample={() => handleSelectModule('modul-4-sample')}
-                onNavigateToPengiriman={() => handleSelectModule('modul-5-pengiriman')}
-              />
-            )}
 
             {/*  Proses 1 - Sortir Page */}
             {activeModuleId === 'modul-0-sortir' && (
@@ -1420,10 +1437,8 @@ export default function App() {
                 
                 userRole={currentRole}
                 currentUser={currentUser}
-                onSaveTransaksi={(newTx, newBarangs) => {
-                  handleSaveTransaksi(newTx, newBarangs);
-                  showToast(`Kupon ${newTx.no_kupon} berhasil disimpan!`);
-                }}
+                onSaveTransaksi={(newTx, newBarangs, meta) => handleSaveTransaksi(newTx, newBarangs, { silent: true, ...meta })}
+                onDeleteTransaksi={handleDeleteTransaksi}
                 onNavigateToTimbangan={(kuponNo, txId, balNo) => {
                   setTargetKuponNo(kuponNo);
                   setTargetTxId(txId);
@@ -1446,8 +1461,8 @@ export default function App() {
                 initialKuponNo={targetKuponNo}
                 initialTxId={targetTxId}
                 initialBalNo={targetBalNo}
-                onSaveTransaksi={(newTx, newBarangs) => {
-                  handleSaveTransaksi(newTx, newBarangs);
+                onSaveTransaksi={(newTx, newBarangs, meta) => {
+                  handleSaveTransaksi(newTx, newBarangs, { ...meta, silent: true });
                   showToast(`Data timbangan kupon ${newTx.no_kupon} diperbarui!`);
                 }}
                 onNavigateToKasir={(kuponNo, txId) => {

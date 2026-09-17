@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { 
   FileText, 
   Search, 
@@ -23,7 +22,8 @@ import {
 } from 'lucide-react';
 
 import { TransaksiPembelian, Petani } from '../../types';
-import { downloadCsvFile, downloadElementAsPdf } from '../../utils/printDownload';
+import { downloadElementAsPdf } from '../../utils/printDownload';
+import { downloadExcelReport, periodeInfo, todayStamp } from '../../utils/excelExport';
 import { formatDateHariBulanTahun } from '../../utils/formatters';
 import { hitungNilaiBal, hitungModalTransaksi } from '../../utils/finance';
 
@@ -536,26 +536,22 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
   }, [sortedData]);
 
 
-  // Export CSV / Excel Compatible
-  const handleExportCSV = () => {
+  // Export Excel
+  const handleExportExcel = () => {
     if (sortedData.length === 0) return;
 
-    const headers = [
-      'No',
-      'Tanggal',
-      'Kupon',
-      'Petani',
-      'No Bal',
-      'Kode Beli',
-      'Bruto (kg)',
-      'Netto (kg)',
-      'Potongan Kuli (Rp)',
-      'Potongan Tikar (Rp)',
-      'Total Harga Beli (Rp)',
-      'Jumlah Bayar (Rp)',
+    const namaSupplier = petaniList.find((p) => p.petani_id === appliedFilters.supplier)?.nama_petani;
+    const info = [
+      periodeInfo(appliedFilters.startDate, appliedFilters.endDate),
+      [
+        `Kode Beli: ${appliedFilters.grade && appliedFilters.grade !== 'ALL' ? appliedFilters.grade : 'Semua'}`,
+        `Kupon: ${appliedFilters.kupon && appliedFilters.kupon !== 'ALL' ? appliedFilters.kupon : 'Semua'}`,
+        `Petani: ${namaSupplier || 'Semua'}`,
+        appliedFilters.noBall ? `No Bal: ${appliedFilters.noBall}` : '',
+      ].filter(Boolean).join(' · '),
     ];
 
-    const rows: (string | number)[][] = sortedData.map((row, idx) => {
+    const rows = sortedData.map((row, idx) => {
       const bruto = row.jenis_timbang === 'bruto' ? (row.berat_terukur_kg || row.berat_kg + 2) : 0;
       const subtotalHrgBeli = hitungModalTransaksi(row);
       const potKuli = Number(row.potongan_kuli || 0);
@@ -563,48 +559,61 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
       const totalPot = Number(row.total_potongan !== undefined ? row.total_potongan : (potKuli + potTikar));
       const jmlBayar = row.harga_final !== undefined && row.harga_final !== null ? row.harga_final : (subtotalHrgBeli - totalPot);
       const rowGrades = getTransactionUniqueGrades(row);
-      const gradeStr = rowGrades.length > 0 ? rowGrades.join(', ') : (row.kode_grade || '-');
+      const balCount = row.total_bal || (row.items && row.items.length > 0 ? row.items.length : 1);
 
       return [
         idx + 1,
-        row.tanggal_transaksi ? row.tanggal_transaksi.split('T')[0] : '-',
+        row.tanggal_transaksi,
         row.no_kupon || '-',
         row.nama_petani || '-',
+        balCount,
         (row.items && row.items.length > 0) ? row.items.map(it => it.no_bal || it.barcode || it.sample_label_code).filter(Boolean).join(', ') : (row.no_bal || '-'),
-        gradeStr,
-        bruto,
+        rowGrades.length > 0 ? rowGrades.join(', ') : (row.kode_grade || '-'),
+        bruto > 0 ? bruto : '-',
         row.berat_kg || 0,
         potKuli,
         potTikar,
         subtotalHrgBeli,
         jmlBayar,
+        row.status_pembayaran === 'belum_lunas' ? 'Belum Lunas' : 'Lunas',
       ];
     });
 
-    // Add Summary rows
-    rows.push(['', '', '', '', '', '', '', '', '', '', '', '']);
-    rows.push(['', '', '', '', '', 'TOTAL POTONGAN OUT (KULI)', '', '', totals.totalPotonganKuli, '', '', '']);
-    rows.push(['', '', '', '', '', 'TOTAL POTONGAN GANTI TIKAR', '', '', '', totals.totalPotonganTikar, '', '']);
-    rows.push([
-      '',
-      '',
-      '',
-      '',
-      '',
-      'TOTAL AKUMULASI KESELURUHAN',
-      totals.totalBruto,
-      totals.totalNetto,
-      totals.totalPotonganKuli,
-      totals.totalPotonganTikar,
-      totals.totalNilaiHargaBeli,
-      totals.totalJumlahBayar,
+    downloadExcelReport(`Laporan_Pembelian_Barang_${todayStamp()}`, [
+      {
+        name: 'Pembelian Barang',
+        title: 'Laporan Rekapitulasi Pembelian Barang',
+        info,
+        columns: [
+          { header: 'No', type: 'integer', align: 'center' },
+          { header: 'Tanggal', type: 'date' },
+          { header: 'Kupon', align: 'center' },
+          { header: 'Petani' },
+          { header: 'Jumlah Bal', type: 'integer', align: 'center' },
+          { header: 'No Bal', width: 28 },
+          { header: 'Kode Beli', align: 'center' },
+          { header: 'Bruto (Kg)', type: 'kg' },
+          { header: 'Netto (Kg)', type: 'kg' },
+          { header: 'Potongan Kuli (Rp)', type: 'rupiah' },
+          { header: 'Potongan Tikar (Rp)', type: 'rupiah' },
+          { header: 'Total Harga Beli (Rp)', type: 'rupiah' },
+          { header: 'Jumlah Bayar (Rp)', type: 'rupiah' },
+          { header: 'Status Bayar', align: 'center' },
+        ],
+        rows,
+        totalRow: [
+          `TOTAL (${totals.count} transaksi)`, '', '', '',
+          totals.totalBal, '', '',
+          totals.totalBruto,
+          totals.totalNetto,
+          totals.totalPotonganKuli,
+          totals.totalPotonganTikar,
+          totals.totalNilaiHargaBeli,
+          totals.totalJumlahBayar,
+          '',
+        ],
+      },
     ]);
-
-    downloadCsvFile(
-      `Laporan_Pembelian_Barang_${new Date().toISOString().slice(0, 10)}.csv`,
-      headers,
-      rows
-    );
   };
 
   return (
@@ -625,12 +634,12 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
         {/* Top Action Buttons (Direct Download Only) */}
         <div className="flex items-center space-x-2">
           <button
-            onClick={handleExportCSV}
+            onClick={handleExportExcel}
             disabled={sortedData.length === 0}
             className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
           >
-            <Download className="w-3.5 h-3.5 text-gray-500" />
-            <span>Export Excel / CSV</span>
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+            <span>Export Excel</span>
           </button>
           
           <button

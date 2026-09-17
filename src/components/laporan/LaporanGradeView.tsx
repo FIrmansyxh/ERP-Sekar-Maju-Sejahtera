@@ -13,7 +13,8 @@ import {
   Warehouse,
   Truck,
   Layers,
-  Filter
+  Filter,
+  FileSpreadsheet
 } from 'lucide-react';
 import { 
   TabelHarga, 
@@ -25,7 +26,7 @@ import {
   UserRole 
 } from '../../types';
 import { formatNumber, formatRupiah } from '../../utils/formatters';
-import { downloadCsvFile } from '../../utils/printDownload';
+import { downloadExcelReport, labelStatusStok, todayStamp } from '../../utils/excelExport';
 
 // Keep export for DashboardAnalyticView compatibility
 export const GRADE_PALETTE = [
@@ -47,7 +48,6 @@ export interface LaporanGradeViewProps {
   initialTab?: 'beli' | 'jual';
   onNavigateToHarga?: () => void;
   onNavigateToHargaJual?: () => void;
-  onNavigateToBarang?: () => void;
 }
 
 export interface BalDetailItem {
@@ -662,57 +662,97 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
       : <ArrowDown className="w-3 h-3 text-[#b81d24] ml-1 inline shrink-0" />;
   };
 
-  // CSV Export
-  const handleExportCsv = () => {
+  // Excel Export
+  const handleExportExcel = () => {
     const tabName = activeTab === 'beli' ? 'Beli' : 'Jual';
-    const filename = `Laporan_Harga_${tabName}_${new Date().toISOString().slice(0, 10)}.csv`;
-    const headers = [
-      'No',
-      'Kode',
-      'Nama Grade / Ref',
-      'Harga Satuan (Rp)',
-      'Jumlah Bal',
-      'Berat Bruto (Kg)',
-      'Berat Netto (Kg)',
-      'Total Nilai (Rp)',
-      'Di Gudang (Bal)',
-      'Di Gudang (%)',
-      'Dikirimkan (Bal)',
-      'Dikirimkan (%)',
-    ];
+    const info = [searchQuery.trim() ? `Pencarian: ${searchQuery.trim()}` : 'Seluruh kode harga'];
+    const rincianBal = filteredAndSortedData.flatMap((item) => item.bal_items.map((bal) => ({ kode: item.kode, bal })));
 
-    const rows = filteredAndSortedData.map((item, idx) => [
-      (idx + 1).toString(),
-      item.kode,
-      item.nama_grade,
-      item.harga_nominal.toString(),
-      item.jumlah_bal.toString(),
-      item.berat_bruto.toFixed(1),
-      item.berat_netto.toFixed(1),
-      Math.round(item.total_nilai).toString(),
-      item.bal_gudang.toString(),
-      item.persen_gudang.toFixed(1) + '%',
-      item.bal_kirim.toString(),
-      item.persen_kirim.toFixed(1) + '%',
+    downloadExcelReport(`Laporan_Harga_${tabName}_${todayStamp()}`, [
+      {
+        name: `Harga ${tabName}`,
+        title: `Laporan Harga ${tabName}`,
+        info,
+        columns: [
+          { header: 'No', type: 'integer', align: 'center' },
+          { header: 'Kode', align: 'center' },
+          { header: 'Nama Grade / Referensi' },
+          { header: `Harga ${tabName} (Rp/Kg)`, type: 'rupiah' },
+          { header: 'Jumlah Bal', type: 'integer' },
+          { header: 'Berat Bruto (Kg)', type: 'kg' },
+          { header: 'Berat Netto (Kg)', type: 'kg' },
+          { header: 'Total Nilai (Rp)', type: 'rupiah' },
+          { header: 'Di Gudang (Bal)', type: 'integer' },
+          { header: 'Di Gudang (%)', type: 'percent' },
+          { header: 'Dikirim (Bal)', type: 'integer' },
+          { header: 'Dikirim (%)', type: 'percent' },
+        ],
+        rows: filteredAndSortedData.map((item, idx) => [
+          idx + 1,
+          item.kode,
+          item.nama_grade,
+          item.harga_nominal,
+          item.jumlah_bal,
+          item.berat_bruto,
+          item.berat_netto,
+          item.total_nilai,
+          item.bal_gudang,
+          item.persen_gudang,
+          item.bal_kirim,
+          item.persen_kirim,
+        ]),
+        totalRow: [
+          `TOTAL (${filteredAndSortedData.length} kode)`, '', '', '',
+          totals.jumlah_bal,
+          totals.berat_bruto,
+          totals.berat_netto,
+          totals.total_nilai,
+          totals.bal_gudang,
+          totalPersenGudang,
+          totals.bal_kirim,
+          totalPersenKirim,
+        ],
+      },
+      {
+        name: 'Rincian Bal',
+        title: `Rincian Bal per Kode Harga ${tabName}`,
+        info,
+        columns: [
+          { header: 'No', type: 'integer', align: 'center' },
+          { header: 'Kode', align: 'center' },
+          { header: 'No Bal', align: 'center' },
+          { header: 'Petani' },
+          { header: 'Tanggal', type: 'date' },
+          { header: 'Bruto (Kg)', type: 'kg' },
+          { header: 'Netto (Kg)', type: 'kg' },
+          { header: 'Harga (Rp/Kg)', type: 'rupiah' },
+          { header: 'Nilai (Rp)', type: 'rupiah' },
+          { header: 'Status', align: 'center' },
+          { header: 'No Surat Jalan', align: 'center' },
+        ],
+        rows: rincianBal.map(({ kode, bal }, idx) => [
+          idx + 1,
+          kode,
+          bal.no_bal,
+          bal.nama_petani || '-',
+          bal.tanggal,
+          bal.berat_bruto,
+          bal.berat_netto,
+          bal.harga_per_kg,
+          bal.total_nilai,
+          labelStatusStok(bal.status_stok),
+          bal.no_surat_jalan || '-',
+        ]),
+        totalRow: [
+          `TOTAL (${rincianBal.length} bal)`, '', '', '', '',
+          totals.berat_bruto,
+          totals.berat_netto,
+          '',
+          totals.total_nilai,
+          '', '',
+        ],
+      },
     ]);
-
-    // Totals row
-    rows.push([
-      '',
-      'TOTAL',
-      `${filteredAndSortedData.length} Kode`,
-      '',
-      totals.jumlah_bal.toString(),
-      totals.berat_bruto.toFixed(1),
-      totals.berat_netto.toFixed(1),
-      Math.round(totals.total_nilai).toString(),
-      totals.bal_gudang.toString(),
-      totalPersenGudang.toFixed(1) + '%',
-      totals.bal_kirim.toString(),
-      totalPersenKirim.toFixed(1) + '%',
-    ]);
-
-    downloadCsvFile(filename, headers, rows);
   };
 
   return (
@@ -738,7 +778,7 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
           </div>
         </div>
         
-        {/* Right Controls: Tab Switcher & CSV Export */}
+        {/* Right Controls: Tab Switcher & Excel Export */}
         <div className="flex items-center space-x-2">
           <div className="flex bg-gray-100 p-0.5 rounded-sm border border-gray-300">
             <button
@@ -774,12 +814,12 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
           </div>
 
           <button
-            id="btn-export-laporan-harga-csv"
-            onClick={handleExportCsv}
+            id="btn-export-laporan-harga-excel"
+            onClick={handleExportExcel}
             className="flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-sm hover:bg-gray-50 transition text-xs font-semibold shadow-2xs cursor-pointer"
           >
-            <Download className="w-3.5 h-3.5" />
-            <span>Ekspor CSV</span>
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+            <span>Ekspor Excel</span>
           </button>
         </div>
       </div>

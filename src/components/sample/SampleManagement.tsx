@@ -45,7 +45,6 @@ import {
 } from '../../types';
 import { loadHargaJualData, loadBatchSampleData, loadHargaData, loadTransaksiData } from '../../utils/storage';
 import { SampleStatusUpdateModal } from './SampleStatusUpdateModal';
-import { BatchEvaluasiSortirModal } from './BatchEvaluasiSortirModal';
 import { BatchSamplePrintModal } from './BatchSamplePrintModal';
 import { ConfirmModal } from '../common/ConfirmModal';
 
@@ -275,7 +274,9 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
     // 3. Cek status fisik bal di gudang
     if (bal.status_stok !== 'di_gudang') {
       let alasan = `Status fisik bal: "${bal.status_stok}".`;
-      if (bal.status_stok === 'terkirim_sample') {
+      if (bal.status_stok === 'proses_sortir') {
+        alasan = 'Bal ini masih Proses Sortir dan belum ditimbang.';
+      } else if (bal.status_stok === 'terkirim_sample') {
         alasan = `Bal ini sudah berstatus terkirim sampel (${bal.catatan || 'Dalam proses pengujian sample'}).`;
       } else if (bal.status_stok === 'keluar') {
         alasan = `Bal ini sudah keluar gudang melalui DO pengiriman reguler.`;
@@ -365,7 +366,6 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
   const [currentPage, setCurrentPage] = useState<number>(1);
 
   // Modals State
-  const [evaluatingBatch, setEvaluatingBatch] = useState<BatchPengirimanSample | null>(null);
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
   const [printingBatch, setPrintingBatch] = useState<BatchPengirimanSample | null>(null);
   const [updatingSingleSample, setUpdatingSingleSample] = useState<PengirimanSample | null>(null);

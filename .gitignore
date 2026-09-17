@@ -12,7 +12,6 @@ coverage/
 
 # Variabel lingkungan (jangan pernah di-commit)
 .env*
-!.env.example
 
 # Berkas sementara sistem operasi
 .DS_Store

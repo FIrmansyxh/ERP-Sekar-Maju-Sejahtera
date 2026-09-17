@@ -29,7 +29,8 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { Petani, TransaksiPembelian, Barang, UserRole } from '../../types';
-import { downloadCsvFile, downloadElementAsPdf } from '../../utils/printDownload';
+import { downloadElementAsPdf } from '../../utils/printDownload';
+import { downloadExcelReport, periodeInfo, todayStamp } from '../../utils/excelExport';
 import { formatDateHariBulanTahun } from '../../utils/formatters';
 import { hitungModalTransaksi } from '../../utils/finance';
 import { Pagination } from '../common/Pagination';
@@ -301,39 +302,92 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
     setCurrentPage(1);
   };
 
-  // Export CSV
-  const handleDownloadCsv = () => {
-    const headers = [
-      'No',
-      'ID Petani',
-      'Nama Petani',
-            'No HP',
-      'Desa / Wilayah',
-      'Status Petani',
-      'Total Transaksi',
-      'Total Setoran (Bal)',
-      'Total Berat (Kg)',
-      'Total Pembelian (Rp)',
-      'Grade Dominan',
-      'Setoran Terakhir',
+  // Export Excel
+  const handleDownloadExcel = () => {
+    const f = appliedFilters;
+    const info = [
+      periodeInfo(f.startDate, f.endDate),
+      [
+        `Status: ${f.status === 'aktif' ? 'Aktif' : f.status === 'nonaktif' ? 'Nonaktif' : 'Semua'}`,
+        `Wilayah: ${f.wilayah && f.wilayah !== 'ALL' ? f.wilayah : 'Semua'}`,
+        f.search ? `Pencarian: ${f.search}` : '',
+      ].filter(Boolean).join(' · '),
     ];
 
-    const rows = filteredPetaniData.map((p, idx) => [
-      idx + 1,
-      p.petani_id,
-      p.nama_petani,
-      p.no_hp || '-',
-      p.desa_kecamatan || p.alamat || '-',
-      p.status_aktif ? 'Aktif' : 'Non-Aktif',
-      p.totalTransaksi,
-      p.totalBal,
-      p.totalKg,
-      p.totalNilaiRp,
-      p.gradeDominan,
-      p.lastTxDate,
+    downloadExcelReport(`Laporan_Petani_${todayStamp()}`, [
+      {
+        name: 'Rekap Petani',
+        title: 'Laporan Rekapitulasi Setoran Petani',
+        info,
+        columns: [
+          { header: 'No', type: 'integer', align: 'center' },
+          { header: 'ID Petani', align: 'center' },
+          { header: 'Nama Petani' },
+          { header: 'No HP', align: 'center' },
+          { header: 'Desa / Wilayah' },
+          { header: 'Status', align: 'center' },
+          { header: 'Total Transaksi', type: 'integer' },
+          { header: 'Total Setoran (Bal)', type: 'integer' },
+          { header: 'Total Netto (Kg)', type: 'kg' },
+          { header: 'Total Nilai Beli (Rp)', type: 'rupiah' },
+          { header: 'Grade Dominan', align: 'center' },
+          { header: 'Setoran Terakhir', type: 'date' },
+        ],
+        rows: filteredPetaniData.map((p, idx) => [
+          idx + 1,
+          p.petani_id,
+          p.nama_petani,
+          p.no_hp || '-',
+          p.desa_kecamatan || p.alamat || '-',
+          p.status_aktif ? 'Aktif' : 'Nonaktif',
+          p.totalTransaksi,
+          p.totalBal,
+          p.totalKg,
+          p.totalNilaiRp,
+          p.gradeDominan,
+          p.lastTxDate,
+        ]),
+        totalRow: [
+          `TOTAL (${filteredPetaniData.length} petani)`, '', '', '', '', '',
+          filteredPetaniData.reduce((sum, p) => sum + p.totalTransaksi, 0),
+          overallKPIs.totalBalSetor,
+          overallKPIs.totalKgSetor,
+          overallKPIs.totalNilaiRp,
+          '', '',
+        ],
+      },
+      {
+        name: 'Rekap per Wilayah',
+        title: 'Rekapitulasi Pasokan per Desa / Wilayah',
+        info,
+        columns: [
+          { header: 'No', type: 'integer', align: 'center' },
+          { header: 'Desa / Wilayah' },
+          { header: 'Jumlah Petani', type: 'integer' },
+          { header: 'Total Setoran (Bal)', type: 'integer' },
+          { header: 'Total Netto (Kg)', type: 'kg' },
+          { header: 'Total Nilai Pembelian (Rp)', type: 'rupiah' },
+          { header: 'Kontribusi Pasokan', type: 'percent' },
+        ],
+        rows: wilayahAggregates.map((w, idx) => [
+          idx + 1,
+          w.desa,
+          w.countPetani,
+          w.totalBal,
+          w.totalKg,
+          w.totalNilai,
+          overallKPIs.totalKgSetor > 0 ? (w.totalKg / overallKPIs.totalKgSetor) * 100 : 0,
+        ]),
+        totalRow: [
+          'TOTAL', '',
+          filteredPetaniData.length,
+          overallKPIs.totalBalSetor,
+          overallKPIs.totalKgSetor,
+          overallKPIs.totalNilaiRp,
+          overallKPIs.totalKgSetor > 0 ? 100 : 0,
+        ],
+      },
     ]);
-
-    downloadCsvFile(`Laporan_Petani_Sekar_Anom_${new Date().toISOString().slice(0, 10)}`, headers, rows);
   };
 
   // Export PDF (Direct Download)
@@ -385,7 +439,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
           </div>
         </div>
 
-        {/* Action Controls: Unduh CSV, Unduh PDF, & Toggle Ringkasan */}
+        {/* Action Controls: Unduh Excel, Unduh PDF, & Toggle Ringkasan */}
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -407,12 +461,12 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
           </button>
 
           <button
-            onClick={handleDownloadCsv}
+            onClick={handleDownloadExcel}
             className="px-3 py-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-bold rounded-xs transition flex items-center space-x-1.5 cursor-pointer shadow-2xs"
-            title="Download Spreadsheet CSV/Excel"
+            title="Download laporan dalam format Excel"
           >
-            <Download className="w-3.5 h-3.5 text-gray-600" />
-            <span>Unduh CSV</span>
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+            <span>Unduh Excel</span>
           </button>
 
           <button

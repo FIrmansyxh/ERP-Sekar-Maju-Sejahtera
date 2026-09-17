@@ -27,16 +27,16 @@ import {
   TrendingUp,
   Tag,
   Warehouse,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { Barang, TabelHarga } from '../../types';
 import { formatRupiah } from '../../utils/formatters';
-import { downloadCsvFile } from '../../utils/printDownload';
+import { downloadExcelReport, todayStamp } from '../../utils/excelExport';
 
 interface DistribusiStokHargaBeliChartProps {
   barangList: Barang[];
   hargaList?: TabelHarga[];
   onNavigateToHarga?: () => void;
-  onNavigateToGudang?: () => void;
 }
 
 type MetricMode = 'bal' | 'tonase' | 'nilai';
@@ -82,7 +82,6 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
   barangList = [],
   hargaList = [],
   onNavigateToHarga,
-  onNavigateToGudang,
 }) => {
   const [metricMode, setMetricMode] = useState<MetricMode>('bal');
   const [viewMode, setViewMode] = useState<ViewMode>('dual');
@@ -281,39 +280,58 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
     return 'Valuasi Stok (Rp)';
   }, [metricMode]);
 
-  // Export CSV data distribusi stok harga beli
-  const handleExportCSV = () => {
-    const headers = [
-      'No',
-      'Kode Grade Harga',
-      'Nama Klasifikasi',
-      'Tarif Harga Beli (Rp/kg)',
-      'Jumlah Bal (Pcs)',
-      'Total Berat (Kg)',
-      'Total Berat (Ton)',
-      'Valuasi Stok (Rp)',
-      'Pangsa Stok Bal (%)',
-      'Pangsa Tonase (%)',
-      'Pangsa Nilai (%)',
-      'Status Gudang',
-    ];
+  // Export Excel data distribusi stok harga beli
+  const handleExportExcel = () => {
+    const pct = (part: number, whole: number) => (whole > 0 ? (part / whole) * 100 : 0);
+    const { grandTotalBal, grandTotalKg, grandTotalNilai } = aggregatedData;
 
-    const rows = aggregatedData.items.map((item, idx) => [
-      idx + 1,
-      item.kode_grade,
-      item.nama_grade,
-      item.harga_per_kg,
-      item.balCount,
-      item.totalKg.toFixed(2),
-      (item.totalKg / 1000).toFixed(2),
-      item.totalNilai,
-      item.pctBal,
-      item.pctKg,
-      item.pctNilai,
-      stockScope === 'aktif' ? 'Stok Aktif di Gudang' : 'Seluruh Inventaris',
+    downloadExcelReport(`Distribusi_Stok_Kode_Harga_Beli_${todayStamp()}`, [
+      {
+        name: 'Distribusi Stok',
+        title: 'Distribusi Stok per Kode Harga Beli',
+        info: [`Cakupan: ${stockScope === 'aktif' ? 'Stok aktif di gudang (di gudang & siap kirim)' : 'Seluruh inventaris'}`],
+        columns: [
+          { header: 'No', type: 'integer', align: 'center' },
+          { header: 'Kode Grade', align: 'center' },
+          { header: 'Nama Klasifikasi' },
+          { header: 'Harga Beli (Rp/Kg)', type: 'rupiah' },
+          { header: 'Jumlah Bal', type: 'integer' },
+          { header: 'Di Gudang (Bal)', type: 'integer' },
+          { header: 'Siap Kirim (Bal)', type: 'integer' },
+          { header: 'Total Berat (Kg)', type: 'kg' },
+          { header: 'Valuasi Stok (Rp)', type: 'rupiah' },
+          { header: 'Porsi Bal', type: 'percent' },
+          { header: 'Porsi Tonase', type: 'percent' },
+          { header: 'Porsi Nilai', type: 'percent' },
+        ],
+        rows: aggregatedData.items.map((item, idx) => [
+          idx + 1,
+          item.kode_grade,
+          item.nama_grade,
+          item.harga_per_kg,
+          item.balCount,
+          item.diGudangCount,
+          item.siapKirimCount,
+          item.totalKg,
+          item.totalNilai,
+          pct(item.balCount, grandTotalBal),
+          pct(item.totalKg, grandTotalKg),
+          pct(item.totalNilai, grandTotalNilai),
+        ]),
+        totalRow: [
+          'TOTAL', '', '',
+          aggregatedData.weightedAvgPrice,
+          grandTotalBal,
+          aggregatedData.items.reduce((sum, item) => sum + item.diGudangCount, 0),
+          aggregatedData.items.reduce((sum, item) => sum + item.siapKirimCount, 0),
+          grandTotalKg,
+          grandTotalNilai,
+          grandTotalBal > 0 ? 100 : 0,
+          grandTotalKg > 0 ? 100 : 0,
+          grandTotalNilai > 0 ? 100 : 0,
+        ],
+      },
     ]);
-
-    downloadCsvFile('Distribusi_Stok_Kode_Harga_Beli_Tembakau', headers, rows);
   };
 
   // Custom Tooltip Recharts yang detail, informatif, dan interaktif (solid, non-transparan)
@@ -501,15 +519,15 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
               </button>
             </div>
 
-            {/* Export CSV Button */}
+            {/* Export Excel Button */}
             <button
               type="button"
-              onClick={handleExportCSV}
+              onClick={handleExportExcel}
               className="px-2.5 py-1 text-[11px] font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-xs transition flex items-center space-x-1 cursor-pointer shadow-2xs"
-              title="Unduh data distribusi stok per kode harga beli dalam format CSV"
+              title="Unduh data distribusi stok per kode harga beli dalam format Excel"
             >
-              <Download className="w-3.5 h-3.5 text-gray-500" />
-              <span>Export CSV</span>
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+              <span>Export Excel</span>
             </button>
           </div>
         </div>

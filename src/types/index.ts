@@ -59,7 +59,8 @@ export interface RolePermissionInfo {
   };
 }
 
-export type StatusStokBarang = 'di_gudang' | 'siap_kirim' | 'keluar' | 'terkirim_sample';
+// proses_sortir = bal sudah discan di Sortir tetapi belum ditimbang
+export type StatusStokBarang = 'proses_sortir' | 'di_gudang' | 'siap_kirim' | 'keluar' | 'terkirim_sample';
 
 
 export interface Barang {
@@ -195,7 +196,17 @@ export interface TransaksiPembelian {
   alasan_perubahan_terakhir?: string;
 }
 
-export type StatusSample = 'sample' | 'dikirim' | 'diterima' | 'disetujui' | 'ditolak' | 'nego';
+/** Opsi tambahan saat menyimpan transaksi pembelian */
+export interface SaveTransaksiMeta {
+  /** Tanpa notifikasi toast, mis. simpan otomatis per bal di Sortir */
+  silent?: boolean;
+  /** Catatan audit khusus yang menggantikan catatan audit umum */
+  audit?: { aksi: string; deskripsi: string; rincian_perubahan?: string[] };
+  /** Audit sudah dicatat sendiri oleh pemanggil */
+  skipAudit?: boolean;
+}
+
+export type StatusSample ='sample' | 'dikirim' | 'diterima' | 'disetujui' | 'ditolak' | 'nego';
 
 export type StatusBatchSample = 'sample' | 'diproses' | 'dikirim' | 'dibatalkan' | 'selesai';
 
@@ -296,54 +307,12 @@ export interface PengirimanBarang {
   total_nilai_deal?: number;
   harga_deal_map?: Record<string, number>; // barang_id -> harga_deal_per_kg
   kode_harga_jual_map?: Record<string, string>; // barang_id -> kode_harga_jual
+  berat_kirim_map?: Record<string, number>; // barang_id -> berat netto saat dikirim (kg), boleh beda dari data bal karena susut
   nomor_kontrak?: string;
   catatan?: string;
   petugas?: string;
   dibuat_oleh?: string;
   rincian_grade?: Record<string, { bal: number; kg: number }>;
-}
-
-export interface MasterBarang {
-  master_id: string;
-  kode_barang: string;
-  nama_barang: string;
-  kode_grade: string;
-  kategori: string;
-  varietas: string;
-  berat_standar_kg: number;
-  satuan: string;
-  harga_referensi_kg: number;
-  lokasi_default_gudang: string;
-  status_aktif: boolean;
-  tanggal_dibuat: string;
-}
-
-export interface StockOpnameItemDetail {
-  barang_id: string;
-  barcode: string;
-  no_bal: string;
-  kode_bal_pembeli?: string;
-  kode_grade: string;
-  berat_kg: number;
-  status_sistem: StatusStokBarang;
-  status_fisik: 'ditemukan' | 'tidak_ditemukan' | 'tambahan_baru';
-  waktu_scan?: string;
-}
-
-export interface StockOpnameSession {
-  opname_id: string;
-  judul_opname: string;
-  tanggal_opname: string;
-  petugas_opname: string;
-  target_grade: string;
-  total_sistem_bal: number;
-  total_fisik_bal: number;
-  total_selisih_bal: number;
-  total_berat_sistem_kg: number;
-  total_berat_fisik_kg: number;
-  status: 'draft' | 'proses' | 'selesai';
-  catatan?: string;
-  items_detail: StockOpnameItemDetail[];
 }
 
 export interface ModuleNav {

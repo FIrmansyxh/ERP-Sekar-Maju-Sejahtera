@@ -2,40 +2,10 @@ import jsPDF from 'jspdf';
 import { toPng } from 'html-to-image';
 
 /**
- * Utility for downloading ready-to-print formatted documents (PDF/CSV/Excel)
+ * Utility for downloading ready-to-print formatted documents (PDF)
  * with high-fidelity styling matching the web preview.
+ * Ekspor spreadsheet ada di utils/excelExport.ts.
  */
-
-// Universal CSV Exporter with UTF-8 BOM for Microsoft Excel & Google Sheets compatibility
-export function downloadCsvFile(
-  filename: string,
-  headers: string[],
-  rows: (string | number | boolean | null | undefined)[][]
-): void {
-  const escapeCell = (val: string | number | boolean | null | undefined): string => {
-    if (val === null || val === undefined) return '""';
-    const str = String(val);
-    if (str.includes('"') || str.includes(',') || str.includes('\n') || str.includes('\r')) {
-      return `"${str.replace(/"/g, '""')}"`;
-    }
-    return `"${str}"`;
-  };
-
-  const headerLine = headers.map(escapeCell).join(',');
-  const rowLines = rows.map((r) => r.map(escapeCell).join(','));
-  const csvContent = '\uFEFF' + [headerLine, ...rowLines].join('\r\n');
-
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  const cleanFilename = filename.endsWith('.csv') ? filename : `${filename}.csv`;
-  link.setAttribute('download', cleanFilename);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-}
 
 /**
  * DIRECT HIGH-FIDELITY PDF DOWNLOADER
@@ -412,80 +382,5 @@ export function printHtmlElementDirectly(element: HTMLElement | null, docTitle: 
       }
     }, 1500);
   }, 400);
-}
-
-// Fallback HTML downloader if ever explicitly requested
-export function downloadHtmlDocument(
-  filename: string,
-  title: string,
-  bodyHtml: string,
-  extraCss: string = ''
-): void {
-  const fullHtml = `<!DOCTYPE html>
-<html lang="id">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title}</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
-    * {
-      box-sizing: border-box;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-    }
-    body {
-      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-      background-color: #f3f4f6;
-      color: #111827;
-      margin: 0;
-      padding: 24px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      min-height: 100vh;
-    }
-    .doc-container {
-      background: #ffffff;
-      border: 1px solid #e5e7eb;
-      padding: 32px;
-      max-width: 860px;
-      width: 100%;
-    }
-    @page {
-      size: auto;
-      margin: 10mm;
-    }
-    @media print {
-      body {
-        background: #ffffff !important;
-        padding: 0 !important;
-      }
-      .doc-container {
-        border: none !important;
-        padding: 0 !important;
-      }
-    }
-    ${extraCss}
-  </style>
-</head>
-<body>
-  <div class="doc-container">
-    <div>${bodyHtml}</div>
-  </div>
-</body>
-</html>`;
-
-  const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  const cleanFilename = filename.endsWith('.html') ? filename : `${filename}.html`;
-  link.setAttribute('download', cleanFilename);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
 }
 

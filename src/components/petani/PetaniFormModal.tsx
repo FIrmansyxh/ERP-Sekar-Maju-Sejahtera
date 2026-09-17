@@ -73,12 +73,10 @@ export const PetaniFormModal: React.FC<PetaniFormModalProps> = ({
       newErrors.nama_petani = 'Nama petani wajib diisi (minimal 2 karakter).';
     }
 
-    if (!formData.no_hp || formData.no_hp.trim().length < 9) {
-      newErrors.no_hp = 'Nomor HP wajib diisi (minimal 9 digit angka).';
-    }
-
-    if (!formData.alamat || formData.alamat.trim().length < 3) {
-      newErrors.alamat = 'Alamat lengkap petani wajib diisi.';
+    // Nomor HP dan alamat opsional; nomor HP hanya diperiksa bila diisi
+    const noHp = (formData.no_hp || '').trim();
+    if (noHp && noHp.length < 9) {
+      newErrors.no_hp = 'Nomor HP minimal 9 digit angka, atau kosongkan bila tidak ada.';
     }
 
     setErrors(newErrors);
@@ -98,7 +96,7 @@ export const PetaniFormModal: React.FC<PetaniFormModalProps> = ({
             nama_petani: (formData.nama_petani || '').trim(),
       no_hp: (formData.no_hp || '').trim(),
       alamat: (formData.alamat || '').trim(),
-      desa_kecamatan: formData.alamat || '',
+      desa_kecamatan: (formData.alamat || '').trim() || formData.desa_kecamatan || '',
       status_aktif: formData.status_aktif ?? true,
       tanggal_daftar: formData.tanggal_daftar || new Date().toISOString().split('T')[0],
       catatan: formData.catatan || '',
@@ -207,7 +205,7 @@ export const PetaniFormModal: React.FC<PetaniFormModalProps> = ({
             {/* Nomor HP */}
             <div>
               <label className="block text-gray-700 font-semibold mb-1">
-                Nomor HP / WhatsApp <span className="text-[#b81d24]">*</span>
+                Nomor HP / WhatsApp <span className="text-gray-400 font-normal text-[11px]">(Opsional)</span>
               </label>
               <div className="relative">
                 <input
@@ -231,7 +229,7 @@ export const PetaniFormModal: React.FC<PetaniFormModalProps> = ({
             {/* Alamat Lengkap */}
             <div>
               <label className="block text-gray-700 font-semibold mb-1">
-                Alamat Lengkap <span className="text-[#b81d24]">*</span>
+                Alamat Lengkap <span className="text-gray-400 font-normal text-[11px]">(Opsional)</span>
               </label>
               <textarea
                 rows={3}

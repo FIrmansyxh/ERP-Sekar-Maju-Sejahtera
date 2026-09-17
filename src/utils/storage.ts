@@ -2,8 +2,6 @@ import { hashPassword } from './crypto';
 import {
   Petani,
   Barang,
-  MasterBarang,
-  StockOpnameSession,
   TabelHarga,
   MasterHargaJual,
   TransaksiPembelian,
@@ -15,9 +13,7 @@ import {
 } from '../types';
 import LZString from 'lz-string';
 
-import { INITIAL_PETANI_DATA } from '../data/initialPetaniData';
 import { INITIAL_BARANG_DATA } from '../data/initialBarangData';
-import { INITIAL_MASTER_BARANG_DATA } from '../data/initialMasterBarangData';
 import { INITIAL_HARGA_DATA } from '../data/initialHargaData';
 import { INITIAL_HARGA_JUAL_DATA } from '../data/initialHargaJualData';
 import { INITIAL_TRANSAKSI_DATA } from '../data/initialTransaksiData';
@@ -37,8 +33,6 @@ const NS = 'erp_tembakau_';
 
 const KEY_PETANI = `${NS}petani_${STORAGE_VERSION}`;
 const KEY_BARANG = `${NS}barang_${STORAGE_VERSION}`;
-const KEY_MASTER_BARANG = `${NS}master_barang_${STORAGE_VERSION}`;
-const KEY_STOCK_OPNAME = `${NS}stock_opname_${STORAGE_VERSION}`;
 const KEY_HARGA = `${NS}harga_${STORAGE_VERSION}`;
 const KEY_HARGA_JUAL = `${NS}harga_jual_${STORAGE_VERSION}`;
 const KEY_TRANSAKSI = `${NS}transaksi_${STORAGE_VERSION}`;
@@ -48,6 +42,10 @@ const KEY_PENGIRIMAN = `${NS}pengiriman_${STORAGE_VERSION}`;
 const KEY_USERS = `${NS}users_${STORAGE_VERSION}`;
 const KEY_CURRENT_USER = `${NS}current_user_${STORAGE_VERSION}`;
 const KEY_AUDIT_LOG = `${NS}audit_log_${STORAGE_VERSION}`;
+
+/** Kunci yang dipantau untuk sinkronisasi kupon antar tab/jendela */
+export const STORAGE_KEY_TRANSAKSI = KEY_TRANSAKSI;
+export const STORAGE_KEY_BARANG = KEY_BARANG;
 
 /** Kunci sesi login (tidak dikompresi agar mudah dibersihkan saat logout). */
 const KEY_RAW_AUTH = `${NS}auth_session`;
@@ -59,8 +57,6 @@ const KEY_ACTIVE_MODULE = `${NS}active_module`;
 const DATA_KEYS = [
   KEY_PETANI,
   KEY_BARANG,
-  KEY_MASTER_BARANG,
-  KEY_STOCK_OPNAME,
   KEY_HARGA,
   KEY_HARGA_JUAL,
   KEY_TRANSAKSI,
@@ -270,24 +266,6 @@ export async function authenticateUser(
   return { success: true, user: updatedCurrent, message: 'Login berhasil.' };
 }
 
-// --- MASTER BARANG ---
-export function loadMasterBarangData(): MasterBarang[] {
-  return readList<MasterBarang>(KEY_MASTER_BARANG) ?? INITIAL_MASTER_BARANG_DATA;
-}
-
-export function saveMasterBarangData(data: MasterBarang[]): void {
-  safeSetItem(KEY_MASTER_BARANG, data);
-}
-
-// --- SESI STOCK OPNAME ---
-export function loadStockOpnameData(): StockOpnameSession[] {
-  return readList<StockOpnameSession>(KEY_STOCK_OPNAME) ?? [];
-}
-
-export function saveStockOpnameData(data: StockOpnameSession[]): void {
-  safeSetItem(KEY_STOCK_OPNAME, data);
-}
-
 // --- MASTER PETANI ---
 export function loadPetaniData(): Petani[] {
   return readList<Petani>(KEY_PETANI) ?? [];
@@ -416,8 +394,6 @@ export function recordAuditLog(entry: Omit<AuditLogEntry, 'log_id' | 'timestamp'
 export function resetAllERPData(): void {
   savePetaniData([]);
   saveBarangData([]);
-  saveMasterBarangData([]);
-  saveStockOpnameData([]);
   saveHargaData([]);
   saveHargaJualData([]);
   saveTransaksiData([]);

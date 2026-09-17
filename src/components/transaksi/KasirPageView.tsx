@@ -26,6 +26,7 @@ import { TransaksiEditModal } from './TransaksiEditModal';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { Pagination } from '../common/Pagination';
 import { openPrintDocument } from '../../utils/openDedicatedPrint';
+import { isKuponProsesSortir } from '../../utils/kuponSortir';
 
 interface KasirPageViewProps {
   transaksiList: TransaksiPembelian[];
@@ -110,7 +111,8 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     if (items.length === 0) {
       const isWeighed = (tx.berat_kg || 0) > 0;
       return {
-        isAllWeighed: isWeighed,
+        isAllWeighed: isWeighed && !isKuponProsesSortir(tx),
+        isSortirOpen: isKuponProsesSortir(tx),
         unweighedCount: isWeighed ? 0 : 1,
         totalBal: 1,
         weighedCount: isWeighed ? 1 : 0,
@@ -118,14 +120,22 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
       };
     }
     const unweighed = items.filter((it) => (it.berat_kg || 0) <= 0);
+    // Kupon yang sortirnya belum ditutup masih bisa bertambah bal, jadi belum boleh dibayar
+    const isSortirOpen = isKuponProsesSortir(tx);
     return {
-      isAllWeighed: unweighed.length === 0,
+      isAllWeighed: unweighed.length === 0 && !isSortirOpen,
+      isSortirOpen,
       unweighedCount: unweighed.length,
       totalBal: items.length,
       weighedCount: items.length - unweighed.length,
       unweighedBalList: unweighed.map((it) => it.no_bal),
     };
   };
+
+  const alasanBelumSiapBayar = (tx: TransaksiPembelian, status: ReturnType<typeof getKuponWeighStatus>) =>
+    status.isSortirOpen
+      ? `Sortir Kupon ${tx.no_kupon} belum ditutup (masih Proses Sortir${status.unweighedCount > 0 ? `, ${status.unweighedCount} bal belum ditimbang` : ''}). Tunggu petugas Sortir menekan "Selesai Sortir".`
+      : `Kupon ${tx.no_kupon} masih memiliki ${status.unweighedCount} bal yang belum ditimbang (${status.unweighedBalList.join(', ')}).`;
 
   const handleConfirmCashPayment = (
     txId: string,
@@ -143,7 +153,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     const weighStatus = getKuponWeighStatus(tx);
     if (!weighStatus.isAllWeighed) {
       alert(
-        `⚠️ Pembayaran Gagal!\n\nKupon ${tx.no_kupon} masih memiliki ${weighStatus.unweighedCount} bal yang belum ditimbang (${weighStatus.unweighedBalList.join(', ')}).\n\nSesuai SOP, seluruh bal dalam 1 kupon harus ditimbang semua terlebih dahulu baru bisa lanjut ke pembayaran kasir.`
+        `⚠️ Pembayaran Gagal!\n\n${alasanBelumSiapBayar(tx, weighStatus)}\n\nSesuai SOP, sortir kupon harus selesai dan seluruh bal harus ditimbang terlebih dahulu baru bisa lanjut ke pembayaran kasir.`
       );
       return;
     }
@@ -179,7 +189,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
       setConfirmConfig({
         isOpen: true,
         title: 'Tidak Dapat Melakukan Pembayaran',
-        message: `Kupon ${tx.no_kupon} masih memiliki ${weighStatus.unweighedCount} bal yang belum ditimbang di modul Timbangan:\n[${weighStatus.unweighedBalList.join(', ')}]\n\nSesuai SOP, seluruh bal dalam 1 kupon harus ditimbang lengkap terlebih dahulu baru bisa lanjut ke pembayaran kasir.\n\nApakah Anda ingin membuka Kupon ${tx.no_kupon} di modul Timbangan sekarang?`,
+        message: `${alasanBelumSiapBayar(tx, weighStatus)}\n\nSesuai SOP, sortir kupon harus selesai dan seluruh bal harus ditimbang lengkap terlebih dahulu baru bisa lanjut ke pembayaran kasir.\n\nApakah Anda ingin membuka Kupon ${tx.no_kupon} di modul Timbangan sekarang?`,
         confirmText: 'Buka Modul Timbangan',
         cancelText: 'Tutup',
         onConfirm: () => {
@@ -199,7 +209,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
       setConfirmConfig({
         isOpen: true,
         title: 'Nota Belum Dapat Dicetak',
-        message: `Kupon ${tx.no_kupon} belum selesai ditimbang (${weighStatus.unweighedCount} bal belum ditimbang: ${weighStatus.unweighedBalList.join(', ')}).\n\nSeluruh bal dalam 1 kupon harus ditimbang lengkap dan dibayar di kasir sebelum nota resmi dapat dicetak.\n\nApakah Anda ingin membuka Kupon ${tx.no_kupon} di modul Timbangan sekarang?`,
+        message: `${alasanBelumSiapBayar(tx, weighStatus)}\n\nSortir kupon harus selesai, seluruh bal ditimbang lengkap, dan dibayar di kasir sebelum nota resmi dapat dicetak.\n\nApakah Anda ingin membuka Kupon ${tx.no_kupon} di modul Timbangan sekarang?`,
         confirmText: 'Buka Modul Timbangan',
         cancelText: 'Tutup',
         onConfirm: () => {
@@ -929,7 +939,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
               ) : (
                 paginatedList.map((tx, index) => {
                   const seq = (currentPage - 1) * itemsPerPage + index + 1;
-                  const { isAllWeighed, unweighedCount, totalBal: balCount, weighedCount, unweighedBalList } = getKuponWeighStatus(tx);
+                  const { isAllWeighed, isSortirOpen, unweighedCount, totalBal: balCount, weighedCount, unweighedBalList } = getKuponWeighStatus(tx);
                   const isLunas = tx.status_pembayaran === 'lunas' || tx.metode_pembayaran === 'cash';
                   const totalKotorVal = tx.total_kotor || tx.total_harga_beli || 0;
                   const pajakVal = tx.pajak || 0;
@@ -963,12 +973,14 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                             {tx.no_kupon || '-'}
                           </span>
                           {!isLunas && !isAllWeighed && (
-                            <span 
+                            <span
                               className="inline-flex items-center space-x-0.5 text-[9px] font-medium text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded mt-0.5 w-fit"
-                              title={`Masih ada ${unweighedCount} bal belum ditimbang (${unweighedBalList.join(', ')}). Tidak bisa bayar sampai semua ditimbang.`}
+                              title={isSortirOpen
+                                ? `Sortir kupon ini belum ditutup${unweighedCount > 0 ? ` dan ${unweighedCount} bal belum ditimbang` : ''}. Tidak bisa bayar sampai sortir selesai.`
+                                : `Masih ada ${unweighedCount} bal belum ditimbang (${unweighedBalList.join(', ')}). Tidak bisa bayar sampai semua ditimbang.`}
                             >
                               <AlertTriangle className="w-2.5 h-2.5 text-amber-600 shrink-0 mr-0.5" />
-                              <span>{unweighedCount} blm timbang</span>
+                              <span>{isSortirOpen ? 'Sortir berjalan' : `${unweighedCount} blm timbang`}</span>
                             </span>
                           )}
                           {!isLunas && isAllWeighed && (

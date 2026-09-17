@@ -28,9 +28,9 @@ import {
   MasterHargaJual,
   UserRole 
 } from '../../types';
-import { downloadCsvFile } from '../../utils/printDownload';
+import { downloadExcelReport, labelStatusPengiriman, labelStatusSample, labelStatusStok, todayStamp } from '../../utils/excelExport';
 import { formatRupiah } from '../../utils/formatters';
-import { loadHargaJualData } from '../../utils/storage';
+import { loadBatchSampleData, loadHargaJualData } from '../../utils/storage';
 import {
   hitungTotalModal,
   hitungTotalPenjualan,
@@ -530,73 +530,232 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
 
   // Export functions 
   const exportBukuKasPembelian = () => {
-    const headers = ['No', 'ID Transaksi', 'Kupon', 'Tanggal', 'Nama Petani', 'No Bal', 'Grade', 'Netto (kg)', 'Harga Beli (Rp/kg)', 'Potongan (Rp)', 'Jumlah Bayar (Rp)'];
-    const rows = transaksiList.map((t, idx) => {
+    const rows = transaksiList.map((t) => {
       const modal = hitungModalTransaksi(t);
       const potongan = Number(t.total_potongan || 0);
       const bayar = t.harga_final !== undefined && t.harga_final !== 0 ? t.harga_final : (modal - potongan);
-
-      return [
-        idx + 1,
-        t.transaksi_id,
-        t.no_kupon || '-',
-        t.tanggal_transaksi ? t.tanggal_transaksi.split('T')[0] : '-',
-        t.nama_petani,
-        t.no_bal,
-        t.kode_grade,
-        t.berat_kg,
-        t.harga_per_kg,
-        potongan,
-        bayar,
-      ];
+      const noBal = t.items && t.items.length > 0
+        ? t.items.map((it) => it.no_bal || it.barcode).filter(Boolean).join(', ')
+        : (t.no_bal || '-');
+      return { t, modal, potongan, bayar, noBal, balCount: t.total_bal || t.items?.length || 1 };
     });
-    downloadCsvFile('Buku_Kas_Pembelian_Petani', headers, rows);
+
+    downloadExcelReport(`Buku_Kas_Pembelian_Petani_${todayStamp()}`, [
+      {
+        name: 'Buku Kas Pembelian',
+        title: 'Buku Kas Pembelian Petani',
+        info: ['Seluruh transaksi pembelian'],
+        columns: [
+          { header: 'No', type: 'integer', align: 'center' },
+          { header: 'ID Transaksi', align: 'center' },
+          { header: 'Kupon', align: 'center' },
+          { header: 'Tanggal', type: 'date' },
+          { header: 'Nama Petani' },
+          { header: 'Jumlah Bal', type: 'integer' },
+          { header: 'No Bal', width: 28 },
+          { header: 'Grade', align: 'center' },
+          { header: 'Netto (Kg)', type: 'kg' },
+          { header: 'Total Harga Beli (Rp)', type: 'rupiah' },
+          { header: 'Potongan (Rp)', type: 'rupiah' },
+          { header: 'Jumlah Bayar (Rp)', type: 'rupiah' },
+          { header: 'Status Bayar', align: 'center' },
+        ],
+        rows: rows.map(({ t, modal, potongan, bayar, noBal, balCount }, idx) => [
+          idx + 1,
+          t.transaksi_id,
+          t.no_kupon || '-',
+          t.tanggal_transaksi,
+          t.nama_petani,
+          balCount,
+          noBal,
+          t.kode_grade || '-',
+          t.berat_kg,
+          modal,
+          potongan,
+          bayar,
+          t.status_pembayaran === 'belum_lunas' ? 'Belum Lunas' : 'Lunas',
+        ]),
+        totalRow: [
+          `TOTAL (${rows.length} transaksi)`, '', '', '', '',
+          rows.reduce((sum, r) => sum + r.balCount, 0),
+          '', '',
+          rows.reduce((sum, r) => sum + (r.t.berat_kg || 0), 0),
+          rows.reduce((sum, r) => sum + r.modal, 0),
+          rows.reduce((sum, r) => sum + r.potongan, 0),
+          rows.reduce((sum, r) => sum + r.bayar, 0),
+          '',
+        ],
+      },
+    ]);
   };
 
   const exportInventarisBalGudang = () => {
-    const headers = ['No', 'No Bal', 'Grade', 'Berat Netto (kg)', 'Status Stok', 'Lokasi Simpan', 'Tanggal Masuk', 'Petani'];
-    const rows = barangList.map((b, idx) => [
-      idx + 1,
-      b.no_bal,
-      b.kode_grade,
-      b.berat_kg,
-      b.status_stok,
-      b.tanggal_masuk,
-      b.nama_petani || '-',
+    const hargaBeliGrade = new Map(hargaList.map((h) => [(h.kode_grade || '').toUpperCase(), h.harga_per_kg || 0]));
+    const rows = barangList.map((b) => {
+      const hargaBeli = b.harga_per_kg || hargaBeliGrade.get((b.kode_grade || '').toUpperCase()) || 0;
+      return { b, hargaBeli, nilai: (b.berat_kg || 0) * hargaBeli };
+    });
+
+    downloadExcelReport(`Inventaris_Bal_Gudang_${todayStamp()}`, [
+      {
+        name: 'Inventaris Bal',
+        title: 'Inventaris Bal Gudang Tembakau',
+        info: ['Seluruh bal tercatat (semua status stok)'],
+        columns: [
+          { header: 'No', type: 'integer', align: 'center' },
+          { header: 'No Bal', align: 'center' },
+          { header: 'Grade', align: 'center' },
+          { header: 'Petani' },
+          { header: 'Tanggal Masuk', type: 'date' },
+          { header: 'Berat Netto (Kg)', type: 'kg' },
+          { header: 'Harga Beli (Rp/Kg)', type: 'rupiah' },
+          { header: 'Nilai Beli (Rp)', type: 'rupiah' },
+          { header: 'Status Stok', align: 'center' },
+        ],
+        rows: rows.map(({ b, hargaBeli, nilai }, idx) => [
+          idx + 1,
+          b.no_bal,
+          b.kode_grade,
+          b.nama_petani || '-',
+          b.tanggal_masuk,
+          b.berat_kg,
+          hargaBeli,
+          nilai,
+          labelStatusStok(b.status_stok),
+        ]),
+        totalRow: [
+          `TOTAL (${rows.length} bal)`, '', '', '', '',
+          rows.reduce((sum, r) => sum + (r.b.berat_kg || 0), 0),
+          '',
+          rows.reduce((sum, r) => sum + r.nilai, 0),
+          '',
+        ],
+      },
     ]);
-    downloadCsvFile('Inventaris_Bal_Gudang_Tembakau', headers, rows);
   };
 
   const exportDistribusiSuratJalan = () => {
-    const headers = ['No', 'No Surat Jalan', 'Pabrik Tujuan', 'Nama Sopir', 'No Kendaraan', 'Total Bal', 'Total Berat (kg)', 'Tanggal Kirim', 'Status'];
-    const rows = pengirimanList.map((p, idx) => [
-      idx + 1,
-      p.no_surat_jalan,
-      p.tujuan,
-      p.driver_nama,
-      p.plat_nomor,
-      p.total_bal,
-      p.total_berat_kg,
-      p.tanggal_kirim,
-      p.status,
+    downloadExcelReport(`Distribusi_Surat_Jalan_DO_${todayStamp()}`, [
+      {
+        name: 'Surat Jalan DO',
+        title: 'Distribusi Surat Jalan (DO)',
+        info: ['Seluruh surat jalan pengiriman'],
+        columns: [
+          { header: 'No', type: 'integer', align: 'center' },
+          { header: 'No Surat Jalan', align: 'center' },
+          { header: 'Tanggal Kirim', type: 'date' },
+          { header: 'Pabrik Tujuan' },
+          { header: 'Nama Sopir' },
+          { header: 'No Kendaraan', align: 'center' },
+          { header: 'Total Bal', type: 'integer' },
+          { header: 'Total Netto (Kg)', type: 'kg' },
+          { header: 'Nilai DO (Rp)', type: 'rupiah' },
+          { header: 'Status', align: 'center' },
+        ],
+        rows: pengirimanList.map((p, idx) => [
+          idx + 1,
+          p.no_surat_jalan,
+          p.tanggal_kirim,
+          p.tujuan,
+          p.driver_nama || '-',
+          p.plat_nomor || '-',
+          p.total_bal,
+          p.total_berat_kg,
+          p.total_nilai_deal || 0,
+          labelStatusPengiriman(p.status),
+        ]),
+        totalRow: [
+          `TOTAL (${pengirimanList.length} DO)`, '', '', '', '', '',
+          pengirimanList.reduce((sum, p) => sum + (p.total_bal || 0), 0),
+          pengirimanList.reduce((sum, p) => sum + (p.total_berat_kg || 0), 0),
+          pengirimanList.reduce((sum, p) => sum + (p.total_nilai_deal || 0), 0),
+          '',
+        ],
+      },
     ]);
-    downloadCsvFile('Distribusi_Surat_Jalan_DO', headers, rows);
   };
 
   const exportLaporanQCSample = () => {
-    const headers = ['No', 'Sample ID', 'Grade', 'Asal Gudang', 'Pabrik Tujuan Uji Lab', 'Berat Sample (Gram)', 'Tanggal Kirim', 'Status Hasil QC', 'Catatan'];
-    const rows = sampleList.map((s, idx) => [
-      idx + 1,
-      s.sample_id,
-      s.kode_grade,
-      s.sumber,
-      s.tujuan,
-      s.berat_sample_gram,
-      s.tanggal_kirim,
-      s.status,
-      s.catatan || '-',
+    // Sample kini dicatat per batch; daftar sample lama dipakai hanya bila belum ada batch
+    const batches = loadBatchSampleData();
+    const items = batches.flatMap((batch) => (batch.items || []).map((it) => ({ batch, it })));
+
+    if (items.length === 0 && sampleList.length > 0) {
+      downloadExcelReport(`Laporan_Uji_Mutu_Sample_QC_${todayStamp()}`, [
+        {
+          name: 'Sample QC',
+          title: 'Laporan Uji Mutu Sample QC',
+          columns: [
+            { header: 'No', type: 'integer', align: 'center' },
+            { header: 'Sample ID', align: 'center' },
+            { header: 'Grade', align: 'center' },
+            { header: 'Asal Gudang' },
+            { header: 'Tujuan Uji Lab' },
+            { header: 'Berat Sample (Gram)', type: 'decimal' },
+            { header: 'Tanggal Kirim', type: 'date' },
+            { header: 'Status Hasil QC', align: 'center' },
+            { header: 'Catatan' },
+          ],
+          rows: sampleList.map((s, idx) => [
+            idx + 1, s.sample_id, s.kode_grade, s.sumber, s.tujuan, s.berat_sample_gram,
+            s.tanggal_kirim, labelStatusSample(s.status), s.catatan || '-',
+          ]),
+        },
+      ]);
+      return;
+    }
+
+    downloadExcelReport(`Laporan_Uji_Mutu_Sample_QC_${todayStamp()}`, [
+      {
+        name: 'Sample QC',
+        title: 'Laporan Uji Mutu Sample QC',
+        info: [`${batches.length} batch sample`],
+        columns: [
+          { header: 'No', type: 'integer', align: 'center' },
+          { header: 'Kode Batch', align: 'center' },
+          { header: 'Tanggal Kirim', type: 'date' },
+          { header: 'Tujuan / Buyer' },
+          { header: 'No Bal', align: 'center' },
+          { header: 'No Jadi', align: 'center' },
+          { header: 'Grade', align: 'center' },
+          { header: 'Petani' },
+          { header: 'Netto (Kg)', type: 'kg' },
+          { header: 'Harga Tawaran (Rp/Kg)', type: 'rupiah' },
+          { header: 'Harga Deal (Rp/Kg)', type: 'rupiah' },
+          { header: 'Nilai (Rp)', type: 'rupiah' },
+          { header: 'Status Hasil QC', align: 'center' },
+          { header: 'Sudah DO', align: 'center' },
+          { header: 'Catatan' },
+        ],
+        rows: items.map(({ batch, it }, idx) => {
+          const harga = it.harga_deal_kg || it.harga_tawaran_kg || 0;
+          return [
+            idx + 1,
+            batch.kode_batch,
+            batch.tanggal_kirim,
+            batch.tujuan_buyer,
+            it.no_bal,
+            it.kode_bal_pembeli || '-',
+            it.kode_grade,
+            it.nama_petani || '-',
+            it.berat_bal_kg,
+            it.harga_tawaran_kg,
+            it.harga_deal_kg || '-',
+            (it.berat_bal_kg || 0) * harga,
+            labelStatusSample(it.status_item),
+            it.sudah_dikirim_do ? 'Ya' : 'Belum',
+            it.alasan_tolak || it.catatan_nego || '-',
+          ];
+        }),
+        totalRow: [
+          `TOTAL (${items.length} bal)`, '', '', '', '', '', '', '',
+          items.reduce((sum, { it }) => sum + (it.berat_bal_kg || 0), 0),
+          '', '',
+          items.reduce((sum, { it }) => sum + (it.berat_bal_kg || 0) * (it.harga_deal_kg || it.harga_tawaran_kg || 0), 0),
+          '', '', '',
+        ],
+      },
     ]);
-    downloadCsvFile('Laporan_Uji_Mutu_Sample_QC', headers, rows);
   };
 
   return (
@@ -1153,7 +1312,7 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
         <div className="flex items-center space-x-2 pb-3 mb-3 border-b border-gray-100">
           <FileText className="w-4 h-4 text-[#b81d24]" />
           <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
-            Pusat Unduh Dokumen & Laporan Audit (CSV / Excel)
+            Pusat Unduh Dokumen & Laporan Audit (Excel)
           </h3>
         </div>
 
@@ -1176,7 +1335,7 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
                 className="mt-3 w-full py-1.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 text-xs font-semibold flex items-center justify-center space-x-1.5 transition cursor-pointer"
               >
                 <Download className="w-3.5 h-3.5 text-gray-600" />
-                <span>Unduh CSV</span>
+                <span>Unduh Excel</span>
               </button>
             </div>
           )}
@@ -1198,7 +1357,7 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
                 className="mt-3 w-full py-1.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 text-xs font-semibold flex items-center justify-center space-x-1.5 transition cursor-pointer"
               >
                 <Download className="w-3.5 h-3.5 text-gray-600" />
-                <span>Unduh CSV</span>
+                <span>Unduh Excel</span>
               </button>
             </div>
           )}
@@ -1220,7 +1379,7 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
                 className="mt-3 w-full py-1.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 text-xs font-semibold flex items-center justify-center space-x-1.5 transition cursor-pointer"
               >
                 <Download className="w-3.5 h-3.5 text-gray-600" />
-                <span>Unduh CSV</span>
+                <span>Unduh Excel</span>
               </button>
             </div>
           )}
@@ -1241,7 +1400,7 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
               className="mt-3 w-full py-1.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 text-xs font-semibold flex items-center justify-center space-x-1.5 transition cursor-pointer"
             >
               <Download className="w-3.5 h-3.5 text-gray-600" />
-              <span>Unduh CSV</span>
+              <span>Unduh Excel</span>
             </button>
           </div>
 
