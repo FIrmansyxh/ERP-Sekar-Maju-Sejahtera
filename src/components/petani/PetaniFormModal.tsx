@@ -173,8 +173,10 @@ export const PetaniFormModal: React.FC<PetaniFormModalProps> = ({
                   Format: PTN-YYYY-XXX
                 </span>
               </div>
-              <p className="text-[10px] text-gray-400 mt-1">
-                ID Petani dibuat otomatis berdasarkan tahun pendaftaran dan urutan nomor registrasi.
+              <p className="text-[10px] text-gray-500 mt-1">
+                {isEdit
+                  ? 'ID Petani unik tidak dapat diubah.'
+                  : 'ID Petani resmi ditetapkan secara berurutan dan otomatis oleh database sistem (PostgreSQL) saat disimpan.'}
               </p>
             </div>
 

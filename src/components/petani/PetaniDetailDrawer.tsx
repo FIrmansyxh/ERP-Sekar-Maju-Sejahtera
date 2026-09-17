@@ -8,7 +8,6 @@ import {
   CreditCard, 
   Printer, 
   Edit3, 
-  Trash2,
   History, 
   Scale, 
   Layers, 
@@ -21,7 +20,6 @@ import {
 } from 'lucide-react';
 import { Petani, UserRole, TransaksiPembelian } from '../../types';
 import { formatDateIndo, formatNumber } from '../../utils/formatters';
-import { ConfirmModal } from '../common/ConfirmModal';
 
 interface PetaniDetailDrawerProps {
   isOpen: boolean;
@@ -33,7 +31,6 @@ interface PetaniDetailDrawerProps {
   onPrintCard: (petani: Petani) => void;
   onToggleStatus: (petani: Petani) => void;
   onResetCard: (petani: Petani) => void;
-  onDeletePetani?: (petani: Petani) => void;
 }
 
 export const PetaniDetailDrawer: React.FC<PetaniDetailDrawerProps> = ({
@@ -46,10 +43,8 @@ export const PetaniDetailDrawer: React.FC<PetaniDetailDrawerProps> = ({
   onPrintCard,
   onToggleStatus,
   onResetCard,
-  onDeletePetani,
 }) => {
   const [activeTab, setActiveTab] = useState<'info' | 'transaksi' | 'kartu'>('info');
-  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
   if (!isOpen || !petani) return null;
 
@@ -96,17 +91,6 @@ export const PetaniDetailDrawer: React.FC<PetaniDetailDrawerProps> = ({
               <Printer className="w-3 h-3" />
               <span>Cetak Kartu</span>
             </button>
-
-            {onDeletePetani && (
-              <button
-                onClick={() => setIsDeleteConfirmOpen(true)}
-                className="px-2.5 py-1 text-xs font-bold text-white bg-[#dc3545] hover:bg-[#c82333] rounded-none transition flex items-center space-x-1 cursor-pointer shadow-xs"
-                title="Hapus Data Petani"
-              >
-                <Trash2 className="w-3 h-3" />
-                <span>Hapus</span>
-              </button>
-            )}
 
             <button
               onClick={onClose}
@@ -337,30 +321,6 @@ export const PetaniDetailDrawer: React.FC<PetaniDetailDrawerProps> = ({
         </div>
 
       </div>
-
-      {/* Confirmation Modal Delete Petani */}
-      <ConfirmModal
-        isOpen={isDeleteConfirmOpen}
-        title="Konfirmasi Hapus Data Petani"
-        message={`Apakah Anda yakin ingin menghapus data petani "${petani.nama_petani}" (${petani.petani_id}) secara permanen?`}
-        detail={
-          realTransactions.length > 0
-            ? `⚠️ PERINGATAN KRITIS: Petani ini memiliki ${realTransactions.length} transaksi pembelian tercatat. Menghapus data petani ini dapat mempengaruhi integritas data dan riwayat laporan pembelian!`
-            : `Perhatian: Tindakan ini tidak dapat dibatalkan dan akan menghapus seluruh data registrasi petani "${petani.nama_petani}" dari sistem master data.`
-        }
-        variant="danger"
-        isDanger={true}
-        confirmText="Ya, Hapus Permanen"
-        cancelText="Batal"
-        onConfirm={() => {
-          if (onDeletePetani) {
-            onDeletePetani(petani);
-          }
-          setIsDeleteConfirmOpen(false);
-          onClose();
-        }}
-        onCancel={() => setIsDeleteConfirmOpen(false)}
-      />
 
     </div>
   );

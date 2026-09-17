@@ -1140,7 +1140,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                                 setTxToDelete(tx);
                               }}
                               className="p-1 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-                              title="Hapus Transaksi (Memerlukan Konfirmasi)"
+                              title="Batalkan Transaksi (Void) - Memerlukan Alasan Audit"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -1263,7 +1263,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                   <Trash2 className="w-5 h-5 text-rose-600" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-gray-900">Konfirmasi Hapus Transaksi Pembelian</h3>
+                  <h3 className="text-sm font-bold text-gray-900">Konfirmasi Pembatalan Transaksi Pembelian (Void)</h3>
                   <p className="text-xs text-rose-600 font-mono font-semibold">
                     Kupon: {txToDelete.no_kupon} • ID: {txToDelete.transaksi_id}
                   </p>
@@ -1385,7 +1385,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 className="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs rounded-none transition cursor-pointer shadow-xs flex items-center space-x-1.5"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                <span>Ya, Hapus Transaksi</span>
+                <span>Ya, Batalkan Transaksi (Void)</span>
               </button>
             </div>
           </div>

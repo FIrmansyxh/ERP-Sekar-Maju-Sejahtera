@@ -62,7 +62,7 @@ export async function checkBackendHealth(): Promise<boolean> {
   }
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 detik timeout
+    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 detik timeout
 
     const res = await fetch(`${API_BASE_URL}/health`, {
       method: 'GET',
@@ -71,8 +71,18 @@ export async function checkBackendHealth(): Promise<boolean> {
     });
 
     clearTimeout(timeoutId);
-    return res.ok;
-  } catch {
+    if (!res.ok) return false;
+
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      console.warn(`[ERP-API] Endpoint ${API_BASE_URL}/health mengembalikan ${contentType}, bukan JSON. Pastikan konfigurasi Nginx server mengarahkan rute /api ke Laravel.`);
+      return false;
+    }
+
+    const data = await res.json().catch(() => null);
+    return Boolean(data && (data.status === 'ok' || data.status === 'success'));
+  } catch (err) {
+    console.warn(`[ERP-API] Tidak dapat menghubungi backend server di ${API_BASE_URL}/health:`, err);
     return false;
   }
 }
@@ -101,6 +111,13 @@ export async function apiRequest<T = any>(
     ...options,
     headers,
   });
+
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    const textPreview = await res.text().catch(() => '');
+    console.error(`[ERP-API] Request ke ${url} merespon dengan ${contentType} (bukan JSON):`, textPreview.substring(0, 200));
+    throw new Error(`Server tidak mengembalikan JSON (${res.status} ${res.statusText}). Periksa konfigurasi Nginx / backend server.`);
+  }
 
   const data = await res.json().catch(() => ({ status: 'error', message: 'Respon tidak valid dari server' }));
 

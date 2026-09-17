@@ -24,6 +24,7 @@ import {
   loadHargaJualData,
   saveHargaJualData,
   loadUserData,
+  saveUserData,
   saveCurrentUser,
   authenticateUser as authenticateLocalUser
 } from '../utils/storage';
@@ -158,6 +159,20 @@ export class ErpApiService {
     return resultPetani;
   }
 
+  public static async deletePetani(petaniId: string, alasan?: string): Promise<boolean> {
+    try {
+      const isOnline = await this.isBackendOnline();
+      if (isOnline) {
+        await api.delete(`/petani/${petaniId}`);
+        return true;
+      }
+    } catch (err) {
+      console.warn('Gagal menonaktifkan petani di backend API:', err);
+      throw err;
+    }
+    return false;
+  }
+
   // --- TRANSAKSI ---
   public static async getTransaksiList(): Promise<{ data: TransaksiPembelian[]; fromBackend: boolean }> {
     try {
@@ -207,5 +222,186 @@ export class ErpApiService {
       console.warn('Gagal mengambil harga beli dari API:', err);
     }
     return { data: loadHargaData(), fromBackend: false };
+  }
+
+  // --- USERS MANAGEMENT ---
+  public static async getUserList(): Promise<{ data: User[]; fromBackend: boolean }> {
+    try {
+      const isOnline = await this.isBackendOnline();
+      if (isOnline) {
+        const res = await api.get<User[]>('/users');
+        if (res.status === 'success' && Array.isArray(res.data)) {
+          saveUserData(res.data);
+          return { data: res.data, fromBackend: true };
+        }
+      }
+    } catch (err) {
+      console.warn('Gagal mengambil daftar users dari API, memakai fallback lokal:', err);
+    }
+    return { data: loadUserData(), fromBackend: false };
+  }
+
+  public static async saveUser(user: Partial<User>, isEdit: boolean = false): Promise<User> {
+    try {
+      const isOnline = await this.isBackendOnline();
+      if (isOnline) {
+        if (isEdit && user.user_id) {
+          const res = await api.put<User>(`/users/${user.user_id}`, {
+            username: user.username,
+            nama_lengkap: user.nama_lengkap,
+            role: user.role,
+            role_code: user.role,
+            email: user.email || '',
+            no_hp: user.no_hp || '',
+            unit_penugasan: user.unit_penugasan || '',
+            status_aktif: user.status_aktif,
+            password: user.password || undefined,
+          });
+          if (res.data) {
+            const formatted: User = {
+              ...res.data,
+              role: res.data.role || (res.data as any).role_code || user.role || 'superadmin',
+              status_aktif: Boolean(res.data.status_aktif),
+            };
+            const list = loadUserData().map(u => u.user_id === formatted.user_id ? formatted : u);
+            saveUserData(list);
+            return formatted;
+          }
+        } else {
+          const res = await api.post<User>('/users', {
+            user_id: user.user_id,
+            username: user.username,
+            nama_lengkap: user.nama_lengkap,
+            role: user.role,
+            role_code: user.role,
+            password: user.password,
+            email: user.email || '',
+            no_hp: user.no_hp || '',
+            unit_penugasan: user.unit_penugasan || '',
+          });
+          if (res.data) {
+            const formatted: User = {
+              ...res.data,
+              role: res.data.role || (res.data as any).role_code || user.role || 'superadmin',
+              status_aktif: Boolean(res.data.status_aktif),
+            };
+            const list = [formatted, ...loadUserData().filter(u => u.user_id !== formatted.user_id)];
+            saveUserData(list);
+            return formatted;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Gagal menyimpan user ke backend API, beralih ke penyimpanan lokal:', err);
+    }
+
+    // Fallback simpan lokal jika offline atau terjadi kendala jaringan
+    const currentList = loadUserData();
+    let resultUser: User;
+    if (isEdit && user.user_id) {
+      resultUser = { ...currentList.find(u => u.user_id === user.user_id)!, ...user } as User;
+      saveUserData(currentList.map(u => u.user_id === resultUser.user_id ? resultUser : u));
+    } else {
+      const count = currentList.length + 1;
+      const newId = user.user_id || `USR-${String(count).padStart(3, '0')}`;
+      resultUser = {
+        user_id: newId,
+        username: user.username || '',
+        nama_lengkap: user.nama_lengkap || '',
+        role: user.role || 'superadmin',
+        unit_penugasan: user.unit_penugasan || '',
+        status_aktif: true,
+        dibuat_pada: new Date().toISOString(),
+        ...user,
+      } as User;
+      saveUserData([resultUser, ...currentList]);
+    }
+    return resultUser;
+  }
+
+  public static async toggleUserStatus(userId: string, nextStatus?: boolean): Promise<boolean> {
+    try {
+      const isOnline = await this.isBackendOnline();
+      if (isOnline) {
+        await api.put(`/users/${userId}/status`, { status_aktif: nextStatus });
+        return true;
+      }
+    } catch (err) {
+      console.warn('Gagal toggle status user di backend API:', err);
+      throw err;
+    }
+    return false;
+  }
+
+  public static async resetUserPassword(userId: string, newPass: string): Promise<boolean> {
+    try {
+      const isOnline = await this.isBackendOnline();
+      if (isOnline) {
+        await api.put(`/users/${userId}/reset-password`, { password: newPass });
+        return true;
+      }
+    } catch (err) {
+      console.warn('Gagal reset password user di backend API:', err);
+      throw err;
+    }
+    return false;
+  }
+
+  // --- HARGA JUAL ---
+  public static async getHargaJualList(): Promise<{ data: MasterHargaJual[]; fromBackend: boolean }> {
+    try {
+      const isOnline = await this.isBackendOnline();
+      if (isOnline) {
+        const res = await api.get<MasterHargaJual[]>('/master/harga-jual');
+        if (res.status === 'success' && Array.isArray(res.data)) {
+          saveHargaJualData(res.data);
+          return { data: res.data, fromBackend: true };
+        }
+      }
+    } catch (err) {
+      console.warn('Gagal mengambil harga jual dari API:', err);
+    }
+    return { data: loadHargaJualData(), fromBackend: false };
+  }
+
+  public static async saveHargaJual(item: Partial<MasterHargaJual>): Promise<MasterHargaJual> {
+    try {
+      const isOnline = await this.isBackendOnline();
+      if (isOnline) {
+        const res = await api.post<MasterHargaJual>('/master/harga-jual', {
+          harga_jual_id: item.harga_jual_id,
+          kode: item.kode,
+          harga_jual: item.harga_jual,
+          tanggal_berlaku: item.tanggal_berlaku,
+          status_aktif: item.status_aktif,
+        });
+        if (res.data) {
+          const list = loadHargaJualData();
+          const exists = list.some(h => h.harga_jual_id === res.data!.harga_jual_id);
+          const updated = exists
+            ? list.map(h => h.harga_jual_id === res.data!.harga_jual_id ? res.data! : h)
+            : [res.data, ...list];
+          saveHargaJualData(updated);
+          return res.data;
+        }
+      }
+    } catch (err) {
+      console.warn('Gagal simpan harga jual ke backend API, beralih ke penyimpanan lokal:', err);
+    }
+
+    const currentList = loadHargaJualData();
+    const exists = currentList.some(h => h.harga_jual_id === item.harga_jual_id);
+    const resultItem = {
+      harga_jual_id: item.harga_jual_id || `HJ-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
+      kode: item.kode || '',
+      harga_jual: item.harga_jual || 0,
+      tanggal_berlaku: item.tanggal_berlaku || new Date().toISOString().split('T')[0],
+      status_aktif: item.status_aktif ?? true,
+    } as MasterHargaJual;
+    const updated = exists
+      ? currentList.map(h => h.harga_jual_id === resultItem.harga_jual_id ? resultItem : h)
+      : [resultItem, ...currentList];
+    saveHargaJualData(updated);
+    return resultItem;
   }
 }

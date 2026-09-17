@@ -4,7 +4,6 @@ import { CheckCircle2, XCircle, ChevronDown, ChevronUp,
   Plus, 
   Search, 
   Edit3, 
-  Trash2, 
   Calendar,
   AlertCircle,
   X,
@@ -12,7 +11,6 @@ import { CheckCircle2, XCircle, ChevronDown, ChevronUp,
  } from 'lucide-react';
 import { TabelHarga, UserRole } from '../../types';
 import { formatRupiah } from '../../utils/formatters';
-import { ConfirmModal } from '../common/ConfirmModal';
 import { Pagination } from '../common/Pagination';
 
 interface HargaManagementProps {
@@ -26,7 +24,6 @@ export const HargaManagement: React.FC<HargaManagementProps> = ({
   hargaList = [],
   userRole,
   onSaveNewPrice,
-  onDeleteHarga,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
@@ -48,9 +45,6 @@ export const HargaManagement: React.FC<HargaManagementProps> = ({
   
   const [errorMessage, setErrorMessage] = useState('');
   const [successToast, setSuccessToast] = useState('');
-
-  // Delete modal state
-  const [itemToDelete, setItemToDelete] = useState<TabelHarga | null>(null);
 
   // Filtered List
   const filteredList = useMemo(() => {
@@ -131,15 +125,6 @@ export const HargaManagement: React.FC<HargaManagementProps> = ({
     setTimeout(() => setSuccessToast(''), 3000);
     
     setIsModalOpen(false);
-  };
-
-  const handleConfirmDelete = () => {
-    if (itemToDelete && onDeleteHarga) {
-      onDeleteHarga(itemToDelete.harga_id);
-      setSuccessToast('Data Master Harga Beli berhasil dihapus');
-      setTimeout(() => setSuccessToast(''), 3000);
-    }
-    setItemToDelete(null);
   };
 
 return (
@@ -376,14 +361,6 @@ return (
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => setItemToDelete(item)}
-                            className="p-1.5 text-slate-400 hover:text-red-700 hover:bg-red-50 rounded transition-colors cursor-pointer"
-                            title="Hapus Master Harga Beli"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
                         </div>
                       </td>
                     )}
@@ -527,19 +504,6 @@ return (
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
-      {itemToDelete && (
-        <ConfirmModal
-          isOpen={true}
-          title="Hapus Master Harga Beli"
-          message={`Apakah Anda yakin ingin menghapus kode harga beli "${itemToDelete.kode_grade}" (${formatRupiah(itemToDelete.harga_per_kg)}/kg)? Tindakan ini tidak dapat dibatalkan.`}
-          confirmLabel="Hapus Data"
-          cancelLabel="Batal"
-          onConfirm={handleConfirmDelete}
-          onCancel={() => setItemToDelete(null)}
-          isDanger={true}
-        />
-      )}
     </div>
   );
 };

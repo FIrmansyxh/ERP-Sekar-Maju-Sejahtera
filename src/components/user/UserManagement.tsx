@@ -6,7 +6,6 @@ import {
   ShieldCheck, 
   KeyRound, 
   Edit3, 
-  Trash2, 
   ChevronDown, 
   ChevronUp, 
   RefreshCw, 
@@ -21,7 +20,6 @@ import { formatDateTimeIndo } from '../../utils/formatters';
 import { UserFormModal } from './UserFormModal';
 import { UserResetPasswordModal } from './UserResetPasswordModal';
 import { RoleMatrixModal } from './RoleMatrixModal';
-import { ConfirmModal } from '../common/ConfirmModal';
 import { Pagination } from '../common/Pagination';
 import { AuditTrailView } from './AuditTrailView';
 
@@ -29,7 +27,7 @@ interface UserManagementProps {
   userList: User[];
   currentUser: User | null;
   onSaveUser: (user: User) => void;
-  onDeleteUser: (userId: string) => void;
+  onDeleteUser?: (userId: string) => void;
   onToggleStatus: (userId: string) => void;
   onResetPassword: (userId: string, newPass: string) => void;
 }
@@ -38,7 +36,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({
   userList,
   currentUser,
   onSaveUser,
-  onDeleteUser,
   onToggleStatus,
   onResetPassword,
 }) => {
@@ -58,7 +55,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [resettingUser, setResettingUser] = useState<User | null>(null);
-  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [isMatrixOpen, setIsMatrixOpen] = useState(false);
 
   // Extract unique units for filter
@@ -100,8 +96,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({
     const start = (currentPage - 1) * itemsPerPage;
     return filteredUsers.slice(start, start + itemsPerPage);
   }, [filteredUsers, currentPage, itemsPerPage]);
-
-  const targetDeleteUser = userList.find((u) => u.user_id === deletingUserId);
 
   return (
     <div className="space-y-4 font-sans text-gray-800">
@@ -485,26 +479,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                           >
                             {user.status_aktif ? <Ban className="w-3.5 h-3.5" /> : <CheckCircle className="w-3.5 h-3.5" />}
                           </button>
-
-                          {/* Delete User */}
-                          <button
-                            onClick={() => {
-                              if (isCurrent) {
-                                alert('Anda tidak dapat menghapus akun Anda sendiri saat sedang login.');
-                                return;
-                              }
-                              setDeletingUserId(user.user_id);
-                            }}
-                            disabled={isCurrent}
-                            className={`p-1.5 rounded transition-colors cursor-pointer ${
-                              isCurrent 
-                                ? 'text-slate-300 cursor-not-allowed' 
-                                : 'text-slate-400 hover:text-red-700 hover:bg-red-50'
-                            }`}
-                            title={isCurrent ? 'Tidak bisa menghapus akun sendiri' : 'Hapus Pengguna'}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
                         </div>
                       </td>
                     </tr>
@@ -554,22 +528,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({
       <RoleMatrixModal
         isOpen={isMatrixOpen}
         onClose={() => setIsMatrixOpen(false)}
-      />
-
-      {/* Delete Confirmation Modal */}
-      <ConfirmModal
-        isOpen={Boolean(deletingUserId)}
-        onClose={() => setDeletingUserId(null)}
-        onConfirm={() => {
-          if (deletingUserId) {
-            onDeleteUser(deletingUserId);
-            setDeletingUserId(null);
-          }
-        }}
-        title="Hapus Akun Pengguna"
-        message={`Apakah Anda yakin ingin menghapus akun pengguna "${targetDeleteUser?.nama_lengkap}" (@${targetDeleteUser?.username})? Tindakan ini bersifat permanen.`}
-        confirmText="Hapus Pengguna"
-        variant="danger"
       />
 
     </div>

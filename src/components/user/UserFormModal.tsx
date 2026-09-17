@@ -71,7 +71,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
       // Auto-generate next user ID
       const nextNum = existingUsers.length + 1;
       setUsername(`staf_${nextNum}`);
-      setPassword('');
+      setPassword('123456');
       setNamaLengkap('');
       setRole('admin_sortir');
       setEmail('');
@@ -105,20 +105,22 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
       return;
     }
 
-    if (!isEdit && (!password.trim() || password.trim().length < 6)) {
-      setError('Kata sandi awal minimal 6 karakter untuk keamanan akun pengguna baru.');
-      return;
-    }
-
-    if (isEdit && password.trim() && password.trim().length < 6) {
-      setError('Kata sandi baru minimal 6 karakter.');
-      return;
-    }
-
-    const finalPassword = password.trim() || editingUser?.password || '';
-    if (!finalPassword) {
-      setError('Akun ini belum memiliki kata sandi. Isi kata sandi baru minimal 6 karakter.');
-      return;
+    let finalPassword = password.trim();
+    if (!isEdit) {
+      if (!finalPassword) {
+        finalPassword = '123456';
+      } else if (finalPassword.length < 6) {
+        setError('Kata sandi awal minimal 6 karakter untuk keamanan akun pengguna baru.');
+        return;
+      }
+    } else {
+      if (finalPassword && finalPassword.length < 6) {
+        setError('Kata sandi baru minimal 6 karakter.');
+        return;
+      }
+      if (!finalPassword && editingUser) {
+        finalPassword = editingUser.password || '';
+      }
     }
 
     const userData: User = {
