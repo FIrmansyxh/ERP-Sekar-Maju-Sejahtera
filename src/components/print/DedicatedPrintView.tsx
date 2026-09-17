@@ -19,8 +19,8 @@ import {
   loadTransaksiData, 
   loadPengirimanData, 
   loadBarangData, 
-  loadPetaniData, 
-  loadHargaData 
+  loadPetaniData,
+  loadCurrentUser
 } from '../../utils/storage';
 import { 
   TransaksiPembelian, 
@@ -37,6 +37,8 @@ import {
 } from '../../utils/formatters';
 import { downloadElementAsPdf } from '../../utils/printDownload';
 import { NotaTimbangContent } from '../transaksi/NotaTimbangContent';
+import { KopSurat } from '../common/KopSurat';
+import { beratKirimBal } from '../../utils/beratKirim';
 
 export interface DedicatedPrintViewProps {
   type: 'nota' | 'surat_jalan' | 'sample' | 'bon_produksi';
@@ -59,7 +61,6 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
   pengirimanList: propPengirimanList,
   barangList: propBarangList,
   petaniList: propPetaniList,
-  tabelHarga: propTabelHarga,
 }) => {
   const printAreaRef = useRef<HTMLDivElement>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
@@ -90,11 +91,6 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
       : loadPetaniData();
   }, [propPetaniList]);
 
-  const activeTabelHarga = useMemo(() => {
-    return propTabelHarga && propTabelHarga.length > 0
-      ? propTabelHarga
-      : loadHargaData();
-  }, [propTabelHarga]);
 
   // Find exact document
   const cleanId = (id || '').trim();
@@ -131,7 +127,7 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
   // Document Title for Tab / Save As
   const docTitle = useMemo(() => {
     if (type === 'nota' && foundTransaksi) {
-      return `Nota Timbang & Pembelian - ${foundTransaksi.transaksi_id} (${foundTransaksi.no_kupon})`;
+      return `Nota Timbang & Pembelian - ${foundTransaksi.no_kupon}`;
     }
     if (type === 'surat_jalan' && foundPengiriman) {
       return foundPengiriman.jenis_pengeluaran === 'produksi_sendiri'
@@ -179,7 +175,7 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
     try {
       const filename =
         type === 'nota' && foundTransaksi
-          ? `NOTA_TIMBANG_${foundTransaksi.transaksi_id.replace(/[/\\?%*:|"<>]/g, '_')}_${foundTransaksi.no_kupon}.pdf`
+          ? `NOTA_TIMBANG_${foundTransaksi.no_kupon.replace(/[/\\?%*:|"<>]/g, '_')}.pdf`
           : `SURAT_JALAN_${(foundPengiriman?.no_surat_jalan || id).replace(/[/\\?%*:|"<>]/g, '_')}.pdf`;
 
       await downloadElementAsPdf(printAreaRef.current, filename, { orientation: 'portrait' });
@@ -383,7 +379,6 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
             <SuratJalanContent
               pengiriman={foundPengiriman}
               barangList={activeBarangList}
-              tabelHarga={activeTabelHarga}
             />
           )}
         </div>
@@ -399,31 +394,25 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
 interface SuratJalanContentProps {
   pengiriman: PengirimanBarang;
   barangList: Barang[];
-  tabelHarga: TabelHarga[];
 }
 
 const SuratJalanContent: React.FC<SuratJalanContentProps> = ({
   pengiriman,
   barangList,
-  tabelHarga,
 }) => {
   const barangIds = pengiriman.barang_ids || [];
   const barcodeList = pengiriman.barcode_list || [];
+  // Petugas Logistik / Pengirim = nama akun yang login dan mencetak surat jalan
+  const namaPetugasLogistik = loadCurrentUser()?.nama_lengkap || pengiriman.petugas || '';
 
   const balDetails = barangIds.map((id, index) => {
     const found = barangList.find((b) => b.barang_id === id);
     const barcodeVal = barcodeList[index] || (found ? found.barcode || found.barang_id : id);
     const grade = found?.kode_grade || 'A';
-    const berat =
-      pengiriman.berat_kirim_map?.[id] ??
-      (found?.berat_kg ||
-        (pengiriman.total_berat_kg ? pengiriman.total_berat_kg / (pengiriman.total_bal || 1) : 45));
+    const berat = beratKirimBal(pengiriman, id, found);
 
-    let pricePerKg = pengiriman.harga_deal_map?.[id] || 0;
-    if (!pricePerKg || pricePerKg <= 0) {
-      const fromTable = tabelHarga.find((t) => t.kode_grade?.toUpperCase() === grade.toUpperCase());
-      pricePerKg = fromTable?.harga_per_kg || 100000;
-    }
+    // Harga jual hanya dari data DO; tanpa harga beli atau angka pengganti.
+    const pricePerKg = pengiriman.harga_deal_map?.[id] || 0;
 
     const subtotal = Math.round(berat * pricePerKg);
 
@@ -443,31 +432,12 @@ const SuratJalanContent: React.FC<SuratJalanContentProps> = ({
 
   return (
     <div className="space-y-4 text-xs text-slate-900 font-sans">
-      {/* Header Kop Surat Resmi */}
-      <div className="border-b-2 border-slate-900 pb-3 flex justify-between items-start">
-        <div className="space-y-0.5">
-          <div className="flex items-center space-x-2">
-            <div className="w-7 h-7 bg-[#b81d24] text-white font-black flex items-center justify-center text-xs shadow-2xs">
-              SMS
-            </div>
-            <h1 className="text-base font-black tracking-tight text-[#b81d24] uppercase">
-              PR. SEKAR MAJU SEJAHTERA
-            </h1>
-          </div>
-          <div className="text-[11px] font-bold text-slate-800 uppercase tracking-wide">
-            PABRIK ROKOK & PENGOLAHAN TEMBAKAU RAJANG MADURA
-          </div>
-          <div className="text-[10px] text-slate-600 leading-tight">
-            Jl. Raya Proppo No. 88, Kec. Proppo, Kab. Pamekasan, Jawa Timur 69363
-            <br />
-            Telp: (0324) 321889 / 0812-3456-7890 • NPWP: 01.234.567.8-608.000
-          </div>
-        </div>
-
-        <div className="text-right space-y-1">
-          <div className="inline-block bg-[#b81d24] text-white px-2.5 py-1 text-xs font-black uppercase tracking-wider shadow-2xs">
-            {pengiriman.jenis_pengeluaran === 'produksi_sendiri' ? 'BON PEMAKAIAN PRODUKSI (BPP)' : 'SURAT JALAN PENGIRIMAN (DO)'}
-          </div>
+      <div>
+        <KopSurat
+          judul={pengiriman.jenis_pengeluaran === 'produksi_sendiri' ? 'Bon Pemakaian Produksi (BPP)' : 'Surat Jalan Pengiriman (DO)'}
+          className="mb-2"
+        />
+        <div className="flex items-center justify-between">
           <div className="text-xs font-mono font-bold text-slate-900">
             No: <span className="text-[#b81d24]">{pengiriman.no_surat_jalan}</span>
           </div>
@@ -517,7 +487,7 @@ const SuratJalanContent: React.FC<SuratJalanContentProps> = ({
             <div>
               <span className="text-slate-500 text-[10px] block">Petugas Logistik:</span>
               <span className="font-semibold text-slate-800">
-                {pengiriman.petugas || 'Admin Ekspedisi'}
+                {namaPetugasLogistik || '-'}
               </span>
             </div>
           </div>
@@ -539,9 +509,9 @@ const SuratJalanContent: React.FC<SuratJalanContentProps> = ({
           <thead>
             <tr className="bg-slate-100 border-b border-slate-400 font-bold text-slate-900 text-[11px]">
               <th className="p-2 border border-slate-300 text-center w-[6%]">No</th>
-              <th className="p-2 border border-slate-300 w-[22%]">No Bal / Barcode</th>
+              <th className="p-2 border border-slate-300 w-[22%]">No Bal</th>
               <th className="p-2 border border-slate-300 text-center w-[12%]">Grade</th>
-              <th className="p-2 border border-slate-300 text-right w-[18%]">Berat Netto</th>
+              <th className="p-2 border border-slate-300 text-right w-[18%]">Berat Bruto</th>
               <th className="p-2 border border-slate-300 text-right w-[21%]">Harga / Kg</th>
               <th className="p-2 border border-slate-300 text-right w-[21%]">Total Nilai</th>
             </tr>
@@ -562,10 +532,10 @@ const SuratJalanContent: React.FC<SuratJalanContentProps> = ({
                   {b.berat_kg.toLocaleString('id-ID', { maximumFractionDigits: 1 })} kg
                 </td>
                 <td className="p-1.5 border border-slate-300 text-right font-mono text-slate-700 whitespace-nowrap">
-                  {formatRupiah(b.harga_per_kg)}
+                  {b.harga_per_kg > 0 ? formatRupiah(b.harga_per_kg) : '-'}
                 </td>
                 <td className="p-1.5 border border-slate-300 text-right font-mono font-bold text-slate-950 whitespace-nowrap">
-                  {formatRupiah(b.total_harga)}
+                  {b.harga_per_kg > 0 ? formatRupiah(b.total_harga) : '-'}
                 </td>
               </tr>
             ))}
@@ -602,15 +572,15 @@ const SuratJalanContent: React.FC<SuratJalanContentProps> = ({
       <div className="pt-4 grid grid-cols-3 gap-4 text-center text-xs avoid-page-break">
         <div>
           <p className="text-slate-600 font-medium">Petugas Logistik / Pengirim</p>
-          <div className="h-16 flex items-end justify-center">
+          <div className="h-24 flex items-end justify-center">
             <span className="font-bold border-b border-slate-900 pb-0.5 min-w-[130px] inline-block">
-              {pengiriman.petugas || <>&nbsp;</>}
+              {namaPetugasLogistik || <>&nbsp;</>}
             </span>
           </div>
         </div>
         <div>
           <p className="text-slate-600 font-medium">Pengemudi / Supir Ekspedisi</p>
-          <div className="h-16 flex items-end justify-center">
+          <div className="h-24 flex items-end justify-center">
             <span className="font-bold border-b border-slate-900 pb-0.5 min-w-[130px] inline-block">
               {pengiriman.driver_nama || <>&nbsp;</>}
             </span>
@@ -618,7 +588,7 @@ const SuratJalanContent: React.FC<SuratJalanContentProps> = ({
         </div>
         <div>
           <p className="text-slate-600 font-medium">Penerima Gudang Pabrik</p>
-          <div className="h-16 flex items-end justify-center">
+          <div className="h-24 flex items-end justify-center">
             <span className="font-bold border-b border-slate-900 pb-0.5 min-w-[130px] inline-block">
               {pengiriman.penerima || <>&nbsp;</>}
             </span>

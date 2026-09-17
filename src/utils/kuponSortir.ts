@@ -1,5 +1,6 @@
 import { Barang, StatusStokBarang, TransaksiItemBal, TransaksiPembelian } from '../types';
 import { normalizeKg } from './formatters';
+import { POTONGAN_KULI_PER_BAL } from '../config/aturanTimbang';
 
 /**
  * Aturan kupon terbuka: Sortir dan Timbangan boleh mengerjakan kupon yang sama
@@ -78,7 +79,7 @@ export function hitungUlangKupon(tx: TransaksiPembelian, items: TransaksiItemBal
     harga_per_kg: totalNetto > 0 ? Math.round(totalKotor / totalNetto) : avgHarga,
     total_kotor: totalKotor,
     potongan_tara_kg: normalizeKg(items.reduce((sum, it) => sum + (it.potongan_tara_kg || 0), 0)),
-    potongan_kuli: items.reduce((sum, it) => sum + (it.potongan_kuli ?? 7000), 0),
+    potongan_kuli: items.reduce((sum, it) => sum + (it.potongan_kuli ?? POTONGAN_KULI_PER_BAL), 0),
     potongan_tali: items.reduce((sum, it) => sum + (it.potongan_tali ?? 3000), 0),
     potongan_tikar: items.reduce((sum, it) => sum + (it.potongan_tikar || 0), 0),
     total_potongan: items.reduce((sum, it) => sum + (it.potongan || 0), 0),

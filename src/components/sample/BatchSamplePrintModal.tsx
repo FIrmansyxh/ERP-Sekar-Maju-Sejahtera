@@ -14,6 +14,9 @@ import {
 import { BatchPengirimanSample } from '../../types';
 import { formatRupiah, formatNumber } from '../../utils/formatters';
 import { downloadElementAsPdf } from '../../utils/printDownload';
+import { COMPANY_NAME } from '../../config/appInfo';
+import { KopSurat } from '../common/KopSurat';
+import { beratBrutoItemSample } from '../../utils/beratKirim';
 
 interface BatchSamplePrintModalProps {
   isOpen: boolean;
@@ -60,17 +63,12 @@ export const BatchSamplePrintModal: React.FC<BatchSamplePrintModalProps> = ({
 
   const items = batch.items || [];
   const totalBal = items.length;
-  const totalNetto = items.reduce((sum, item) => sum + (item.berat_bal_kg || 0), 0);
-  const totalBruto = items.reduce((sum, item) => {
-    if (item.berat_bruto_kg && item.berat_bruto_kg > 0) return sum + item.berat_bruto_kg;
-    const netto = item.berat_bal_kg || 0;
-    const tara = item.potongan_tara_kg !== undefined ? item.potongan_tara_kg : 2;
-    return sum + (netto > 0 ? (netto + tara) : 0);
-  }, 0);
-  const totalNilaiTawaran = items.reduce((sum, item) => sum + (item.berat_bal_kg * item.harga_tawaran_kg), 0);
+  // Dokumen untuk buyer memakai berat bruto; netto hanya untuk pembelian internal
+  const totalBruto = items.reduce((sum, item) => sum + beratBrutoItemSample(item), 0);
+  const totalNilaiTawaran = items.reduce((sum, item) => sum + (beratBrutoItemSample(item) * item.harga_tawaran_kg), 0);
   const totalNilaiDeal = items
     .filter(i => i.status_item === 'disetujui')
-    .reduce((sum, item) => sum + (item.berat_bal_kg * (item.harga_deal_kg || item.harga_tawaran_kg)), 0);
+    .reduce((sum, item) => sum + (beratBrutoItemSample(item) * (item.harga_deal_kg || item.harga_tawaran_kg)), 0);
 
   return (
     <div 
@@ -95,7 +93,7 @@ export const BatchSamplePrintModal: React.FC<BatchSamplePrintModalProps> = ({
             <div className="min-w-0">
               <h2 className="text-sm font-bold text-gray-900 tracking-tight truncate">Dokumen Pengantar & Uji Sample Batch Tembakau</h2>
               <p className="text-[11px] text-gray-500 font-medium">
-                Kode Batch: <span className="font-mono font-bold text-gray-900">{batch.kode_batch}</span>
+                No. Surat Sample: <span className="font-mono font-bold text-gray-900">{batch.kode_batch}</span>
               </p>
             </div>
           </div>
@@ -133,171 +131,138 @@ export const BatchSamplePrintModal: React.FC<BatchSamplePrintModalProps> = ({
 
         {/* Printable Paper View */}
         <div className="p-4 sm:p-8 overflow-y-auto flex-1 bg-gray-100 flex justify-center">
-          <div 
+          <div
             ref={printRef}
-            className="bg-white p-6 sm:p-10 border border-gray-300 shadow-md w-full max-w-[210mm] text-gray-900 space-y-5 print:p-0 print:border-none print:shadow-none"
-            style={{ fontFamily: 'Georgia, serif' }}
+            className="bg-white p-6 sm:p-8 border border-gray-300 shadow-md w-full max-w-[210mm] text-xs text-gray-900 font-sans space-y-4 print:p-0 print:border-none print:shadow-none"
           >
-            {/* Letterhead */}
-            <div className="border-b-2 border-[#b81d24] pb-4 text-center relative">
-              <h1 className="text-xl font-bold uppercase tracking-wider text-gray-950">
-                PR. SEKAR MAJU SEJAHTERA
-              </h1>
-              <p className="text-xs text-gray-600 font-sans tracking-normal mt-0.5">
-                Pusat Pembelian, Pengolahan & Distribusi Tembakau Rajangan Madura
-              </p>
-              <p className="text-[11px] text-gray-500 font-sans mt-0.5">
-                Kantor & Gudang Utama: Jl. Raya Tlanakan No. 88, Pamekasan, Madura | Telp: (0324) 321890
-              </p>
-              <div className="mt-2.5 inline-block bg-[#b81d24] text-white px-4 py-1 text-xs font-bold font-sans uppercase tracking-widest">
-                SURAT PENGANTAR SAMPLE & PENAWARAN BATCH
-              </div>
-            </div>
+            <KopSurat judul="Surat Pengantar Sample & Penawaran Batch" />
 
-            {/* Meta Information */}
-            <div className="grid grid-cols-2 gap-4 font-sans text-xs pt-1">
-              <div className="bg-gray-50 p-3 border border-gray-200 rounded-xs space-y-1">
-                <div className="text-[10px] uppercase font-bold text-gray-500">Tujuan Evaluasi / Pabrik Buyer:</div>
-                <div className="font-bold text-sm text-gray-900">{batch.tujuan_buyer}</div>
+            {/* Metadata (gaya sama dengan Nota Pembelian) */}
+            <div className="grid grid-cols-2 gap-6 border-b border-gray-200 pb-3">
+              <div className="space-y-1.5 pr-2">
+                <div className="flex justify-between items-center gap-3">
+                  <span className="text-gray-500">No. Surat Sample:</span>
+                  <span className="font-mono font-bold text-gray-950">{batch.kode_batch}</span>
+                </div>
+                <div className="flex justify-between items-center gap-3">
+                  <span className="text-gray-500">Tanggal Kirim:</span>
+                  <span className="font-mono text-gray-900">{batch.tanggal_kirim || '-'}</span>
+                </div>
+                <div className="flex justify-between items-center gap-3">
+                  <span className="text-gray-500">Pengirim:</span>
+                  <span className="font-semibold text-gray-900">{batch.dikirim_oleh || '-'}</span>
+                </div>
+              </div>
+              <div className="space-y-1.5 pl-4 border-l border-gray-200">
+                <div className="flex justify-between items-start gap-3">
+                  <span className="text-gray-500 shrink-0">Tujuan / Pabrik Buyer:</span>
+                  <span className="font-bold text-gray-900 text-right">{batch.tujuan_buyer || '-'}</span>
+                </div>
                 {batch.permintaan_buyer && (
-                  <div className="text-[11px] text-gray-700 pt-1 border-t border-gray-200 mt-1">
-                    <span className="font-semibold text-gray-800">Spesifikasi Permintaan:</span> {batch.permintaan_buyer}
+                  <div className="flex justify-between items-start gap-3">
+                    <span className="text-gray-500 shrink-0">Spesifikasi:</span>
+                    <span className="text-gray-800 text-right">{batch.permintaan_buyer}</span>
                   </div>
                 )}
               </div>
-
-              <div className="bg-gray-50 p-3 border border-gray-200 rounded-xs space-y-1 text-right">
-                <div className="flex justify-between">
-                  <span className="text-gray-500 font-medium">No. Batch:</span>
-                  <span className="font-bold font-mono text-gray-900">{batch.kode_batch}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500 font-medium">Tanggal Kirim:</span>
-                  <span className="font-semibold">{batch.tanggal_kirim}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500 font-medium">Pengirim:</span>
-                  <span className="font-semibold">{batch.dikirim_oleh}</span>
-                </div>
-              </div>
             </div>
 
-            {/* Table of Sample Bales */}
-            <div className="font-sans">
-              <table className="w-full border-collapse border border-[#b81d24] text-xs">
+            {/* Tabel Bal Sample */}
+            <div className="border border-slate-200 rounded-md overflow-hidden">
+              <table className="w-full text-xs text-left border-collapse">
                 <thead>
-                  <tr className="bg-[#b81d24] text-white text-[10px] font-bold">
-                    <th className="border border-[#b81d24] p-2 text-center w-8">No</th>
-                    <th className="border border-[#b81d24] p-2 text-left">Kode Bal (Gudang / Buyer)</th>
-                    <th className="border border-[#b81d24] p-2 text-right w-16">Bruto (Kg)</th>
-                    <th className="border border-[#b81d24] p-2 text-right w-16">Netto (Kg)</th>
-                    <th className="border border-[#b81d24] p-2 text-right w-24">Harga Tawar</th>
-                    <th className="border border-[#b81d24] p-2 text-right w-28">Est. Subtotal</th>
+                  <tr className="bg-slate-50/90 border-b border-slate-200 font-semibold text-slate-600 text-xs">
+                    <th className="py-2.5 px-3 w-10">No</th>
+                    <th className="py-2.5 px-3">No Bal</th>
+                    <th className="py-2.5 px-3">Bruto (Kg)</th>
+                    <th className="py-2.5 px-3">Harga Tawar / Kg</th>
+                    <th className="py-2.5 px-3">Est. Subtotal</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-slate-100 text-slate-700">
                   {items.map((it, idx) => {
                     const isAcc = it.status_item === 'disetujui';
-                    const isReject = it.status_item === 'ditolak';
-                    const isNego = it.status_item === 'nego';
-
-                    const netto = it.berat_bal_kg || 0;
-                    const bruto = it.berat_bruto_kg && it.berat_bruto_kg > 0
-                      ? it.berat_bruto_kg
-                      : (netto > 0 ? netto + (it.potongan_tara_kg !== undefined ? it.potongan_tara_kg : 2) : 0);
-                    const hrgBeli = it.harga_beli_kg || 0;
-                    const subtotal = netto * it.harga_tawaran_kg;
+                    const bruto = beratBrutoItemSample(it);
+                    const subtotal = bruto * it.harga_tawaran_kg;
+                    const kodeBuyerBerbeda =
+                      it.kode_bal_pembeli && it.kode_bal_pembeli.trim().toUpperCase() !== (it.no_bal || '').trim().toUpperCase();
 
                     return (
-                      <tr key={it.sample_item_id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/70'}>
-                        <td className="border border-gray-300 p-1.5 text-center font-bold">{idx + 1}</td>
-                        <td className="border border-gray-300 p-1.5">
-                          <div className="font-mono font-bold text-gray-900">
-                            {it.no_bal || it.barang_id}
-                            {it.kode_bal_pembeli && it.kode_bal_pembeli !== it.no_bal && (
-                              <span className="text-gray-600 font-normal"> / {it.kode_bal_pembeli}</span>
-                            )}
-                          </div>
-                          <div className="text-[9px] text-gray-500 font-mono">{it.sample_item_id} • Petani: {it.nama_petani || '-'}</div>
+                      <tr key={it.sample_item_id}>
+                        <td className="py-2 px-3 text-center font-mono text-slate-500">{idx + 1}</td>
+                        <td className="py-2 px-3">
+                          <div className="font-mono font-semibold text-slate-900">{it.no_bal}</div>
+                          {kodeBuyerBerbeda && (
+                            <div className="text-[10px] text-slate-500">Kode buyer: <span className="font-mono">{it.kode_bal_pembeli}</span></div>
+                          )}
+                          <div className="text-[10px] text-slate-500">Petani: {it.nama_petani || '-'}</div>
                         </td>
-                        <td className="border border-gray-300 p-1.5 text-right font-mono text-gray-700">
-                          {formatNumber(bruto, 1)}
-                        </td>
-                        <td className="border border-gray-300 p-1.5 text-right font-mono font-bold text-gray-900">
-                          {formatNumber(netto, 1)}
-                        </td>
-                        <td className="border border-gray-300 p-1.5 text-right font-mono font-bold text-gray-900">
+                        <td className="py-2 px-3 text-right font-mono font-semibold text-slate-900">{formatNumber(bruto, 1)} kg</td>
+                        <td className="py-2 px-3 text-right font-mono text-slate-800">
                           {formatRupiah(it.harga_tawaran_kg)}
                           {isAcc && it.harga_deal_kg && it.harga_deal_kg !== it.harga_tawaran_kg && (
-                            <div className="text-[9px] text-emerald-700 font-semibold">
-                              Deal: {formatRupiah(it.harga_deal_kg)}
-                            </div>
+                            <div className="text-[10px] text-emerald-700 font-semibold">Deal: {formatRupiah(it.harga_deal_kg)}</div>
                           )}
                         </td>
-                        <td className="border border-gray-300 p-1.5 text-right font-mono font-bold text-gray-950">
-                          {formatRupiah(subtotal)}
-                        </td>
+                        <td className="py-2 px-3 text-right font-mono font-semibold text-slate-900">{formatRupiah(subtotal)}</td>
                       </tr>
                     );
                   })}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-gray-100 font-bold border-t-2 border-[#b81d24] text-[11px]">
-                    <td colSpan={2} className="border border-[#b81d24] p-2 text-right uppercase">
-                      Total ({totalBal} Bal Sample)
+
+                  <tr className="bg-slate-100/90 font-semibold border-t border-slate-300 text-slate-800">
+                    <td colSpan={2} className="py-2.5 px-3 text-right uppercase text-[11px] text-slate-700">
+                      Total ({totalBal} Bal Sample):
                     </td>
-                    <td className="border border-[#b81d24] p-2 text-right font-mono">
-                      {formatNumber(totalBruto, 1)}
-                    </td>
-                    <td className="border border-[#b81d24] p-2 text-right font-mono font-bold text-gray-950">
-                      {formatNumber(totalNetto, 1)}
-                    </td>
-                    <td className="border border-[#b81d24] p-2 text-right text-[10px] text-gray-600">
-                      Total Nilai:
-                    </td>
-                    <td className="border border-[#b81d24] p-2 text-right font-mono font-bold text-gray-950">
-                      {formatRupiah(totalNilaiTawaran)}
-                    </td>
+                    <td className="py-2.5 px-3 text-right font-mono text-slate-900">{formatNumber(totalBruto, 1)} kg</td>
+                    <td className="py-2.5 px-3 text-right text-[11px] text-slate-600">Total Nilai:</td>
+                    <td className="py-2.5 px-3 text-right font-mono text-slate-900">{formatRupiah(totalNilaiTawaran)}</td>
                   </tr>
                   {totalNilaiDeal > 0 && (
-                    <tr className="bg-emerald-50 font-bold border-b border-[#b81d24] text-emerald-900">
-                      <td colSpan={4} className="border border-[#b81d24] p-2 text-right uppercase text-[11px]">
+                    <tr className="bg-emerald-50 font-semibold text-emerald-900">
+                      <td colSpan={3} className="py-2.5 px-3 text-right uppercase text-[11px]">
                         Total Nilai Disetujui (Deal Final):
                       </td>
-                      <td colSpan={2} className="border border-[#b81d24] p-2 text-right font-mono text-sm text-emerald-800">
+                      <td colSpan={2} className="py-2.5 px-3 text-right font-mono text-emerald-800">
                         {formatRupiah(totalNilaiDeal)}
                       </td>
                     </tr>
                   )}
-                </tfoot>
+                </tbody>
               </table>
             </div>
 
-            {/* Signatures */}
-            <div className="font-sans grid grid-cols-3 gap-6 pt-6 text-center text-xs">
+            {/* Tanda Tangan (gaya sama dengan Nota Pembelian) */}
+            <div className="pt-4 grid grid-cols-3 gap-4 text-center text-xs avoid-page-break">
               <div>
-                <p className="text-gray-500 mb-14">Dibuat & Dikirim Oleh,</p>
-                <p className="font-bold border-t border-[#b81d24] pt-1 text-gray-900">{batch.dikirim_oleh}</p>
-                <p className="text-[10px] text-gray-500">QC & Logistik PR. Sekar Maju Sejahtera</p>
+                <p className="text-gray-600 font-medium">Dibuat & Dikirim Oleh</p>
+                <div className="h-22 flex items-end justify-center">
+                  <span className="font-semibold border-b border-gray-800 pb-0.5 min-w-[130px] inline-block text-gray-900">
+                    {batch.dikirim_oleh || <>&nbsp;</>}
+                  </span>
+                </div>
+                <p className="text-[10px] text-gray-500 mt-0.5">QC & Logistik {COMPANY_NAME}</p>
               </div>
-
               <div>
-                <p className="text-gray-500 mb-14">Mengetahui (Pimpinan Gudang),</p>
-                <p className="font-bold border-t border-[#b81d24] pt-1 text-gray-900">H. Achmad Syafi'i</p>
-                <p className="text-[10px] text-gray-500">Kepala Gudang & Pembelian</p>
+                <p className="text-gray-600 font-medium">Mengetahui</p>
+                <div className="h-22 flex items-end justify-center">
+                  <span className="font-semibold border-b border-gray-800 pb-0.5 min-w-[130px] inline-block text-gray-900">
+                    &nbsp;
+                  </span>
+                </div>
+                <p className="text-[10px] text-gray-500 mt-0.5">Kepala Gudang & Pembelian</p>
               </div>
-
               <div>
-                <p className="text-gray-500 mb-14">Diterima & Diuji Oleh (Pabrik Buyer),</p>
-                <p className="font-bold border-t border-[#b81d24] pt-1 text-gray-900 min-h-[22px]">
-                  {batch.petugas_qc_pabrik || <>&nbsp;</>}
-                </p>
-                <p className="text-[10px] text-gray-500">Tim QC / Lab Pembelian Pabrik</p>
+                <p className="text-gray-600 font-medium">Diterima & Diuji Oleh</p>
+                <div className="h-22 flex items-end justify-center">
+                  <span className="font-semibold border-b border-gray-800 pb-0.5 min-w-[130px] inline-block text-gray-900">
+                    {batch.petugas_qc_pabrik || <>&nbsp;</>}
+                  </span>
+                </div>
+                <p className="text-[10px] text-gray-500 mt-0.5">Tim QC / Lab Pabrik Buyer</p>
               </div>
             </div>
 
-            {/* Note footer */}
-            <div className="text-[10px] text-gray-400 border-t border-gray-200 pt-3 text-center font-sans">
+            <div className="text-[10px] text-gray-400 border-t border-gray-200 pt-3 text-center">
               Dokumen ini merupakan bukti sah pengiriman sample tembakau rajangan Madura dan lampiran kesepakatan spesifikasi mutu & harga sebelum penerbitan Delivery Order (Surat Jalan).
             </div>
           </div>

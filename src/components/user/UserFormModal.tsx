@@ -158,7 +158,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                 {isEdit ? 'Perbarui Data Pengguna' : 'Tambah Pengguna Baru (RBAC)'}
               </h2>
               <p className="text-[11px] text-gray-500 font-medium">
-                {isEdit ? `ID: ${editingUser?.user_id}` : 'Registrasi akun staf & wewenang operasional'}
+                {isEdit ? `Akun: @${editingUser?.username}` : 'Registrasi akun staf & wewenang operasional'}
               </p>
             </div>
           </div>

@@ -50,6 +50,8 @@ import { ConfirmModal } from '../common/ConfirmModal';
 
 import { Pagination } from '../common/Pagination';
 import { generateBatchSampleId, generateSampleId, formatRupiah, formatNumber } from '../../utils/formatters';
+import { cekNomorDokumen, normalisasiNomor, pesanNomorKembar } from '../../utils/nomorDokumen';
+import { beratBrutoBal, beratBrutoItemSample } from '../../utils/beratKirim';
 
 import { useSessionDraft } from '../../hooks/useSessionDraft';
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
@@ -148,14 +150,8 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
     return bal.berat_kg || fallbackKg || 0;
   };
 
-  // Resolver for Bruto weight
-  const resolveBeratBruto = (bal: Partial<Barang> | undefined, fallbackNetto: number = 0): number => {
-    if (!bal) return fallbackNetto > 0 ? Number((fallbackNetto + 2).toFixed(1)) : 0;
-    if (bal.berat_bruto_kg && bal.berat_bruto_kg > 0) return bal.berat_bruto_kg;
-    const netto = bal.berat_kg || fallbackNetto || 0;
-    const tara = bal.potongan_tara_kg !== undefined ? bal.potongan_tara_kg : 2;
-    return netto > 0 ? Number((netto + tara).toFixed(1)) : 0;
-  };
+  // Pengiriman sample memakai berat bruto hasil timbangan (tanpa tara tebakan)
+  const resolveBeratBruto = (bal: Partial<Barang> | undefined): number => beratBrutoBal(bal);
 
   // Main view mode: 'list' (Daftar & Monitoring Batch) or 'create' (Input & Dispatch Sample Workstation)
   const [viewMode, setViewMode] = useState<'list' | 'create'>('list');
@@ -298,7 +294,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
       badgeText: 'TERSEDIA',
       badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-300',
       message: `Bal #${bal.no_bal || bal.barang_id} siap digunakan.`,
-      detail: `Grade ${bal.kode_grade} • ${bal.berat_kg} kg`,
+      detail: `Grade ${bal.kode_grade} • ${formatNumber(beratBrutoBal(bal), 1)} kg bruto`,
     };
   };
 
@@ -350,7 +346,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
     setPendingScanBal(bal);
     setScanSampleAlert({
       type: 'success',
-      message: `✓ No Bal #${bal.no_bal || bal.barang_id} (Grade ${bal.kode_grade} - ${bal.berat_kg} kg) dipilih. Lanjut ke No Jadi.`,
+      message: `✓ No Bal #${bal.no_bal || bal.barang_id} (Grade ${bal.kode_grade} - ${formatNumber(beratBrutoBal(bal), 1)} kg bruto) dipilih. Lanjut ke No Jadi.`,
     });
     setIsBalDropdownOpen(false);
     setScanGudang(bal.no_bal || bal.barang_id);
@@ -367,6 +363,15 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
 
   // Modals State
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
+  // No. Surat Pengiriman Sample diisi manual dan tidak boleh kembar
+  const [noSuratSample, setNoSuratSample] = useState('');
+  const cekNoSuratSample = cekNomorDokumen(
+    noSuratSample,
+    [...activeBatchSampleList]
+      .filter((b) => b.batch_id !== editingBatchId)
+      .sort((a, b) => (a.tanggal_kirim || '').localeCompare(b.tanggal_kirim || ''))
+      .map((b) => b.kode_batch || '')
+  );
   const [printingBatch, setPrintingBatch] = useState<BatchPengirimanSample | null>(null);
   const [updatingSingleSample, setUpdatingSingleSample] = useState<PengirimanSample | null>(null);
   const [deletingBatchId, setDeletingBatchId] = useState<string | null>(null);
@@ -390,20 +395,6 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
   const [isConfirmCreateOpen, setIsConfirmCreateOpen] = useState(false);
   const [batchToDelete, setBatchToDelete] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
-
-  // Helper default price by grade
-  const getDefaultPriceByGrade = (grade: string): number => {
-    switch ((grade || 'A').toUpperCase()) {
-      case 'A1': case 'A+': return 145000;
-      case 'A': return 140000;
-      case 'B+': return 125000;
-      case 'B': return 120000;
-      case 'C': return 100000;
-      case 'D': return 80000;
-      case 'E': return 60000;
-      default: return 100000;
-    }
-  };
 
   // Available bal in warehouse for sample
 
@@ -446,7 +437,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
     setPendingScanBal(targetBal);
     setScanSampleAlert({
       type: 'success',
-      message: `✓ No Bal #${targetBal.no_bal || targetBal.barang_id} (Grade ${targetBal.kode_grade} - ${targetBal.berat_kg} kg) ditemukan. Lanjut ke No Jadi.`,
+      message: `✓ No Bal #${targetBal.no_bal || targetBal.barang_id} (Grade ${targetBal.kode_grade} - ${formatNumber(beratBrutoBal(targetBal), 1)} kg bruto) ditemukan. Lanjut ke No Jadi.`,
     });
     setTimeout(() => inputPembeliRef.current?.focus(), 100);
   };
@@ -545,7 +536,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
     }
 
     const finalNetto = resolveBeratNetto(pendingScanBal);
-    const finalBruto = resolveBeratBruto(pendingScanBal, finalNetto);
+    const finalBruto = resolveBeratBruto(pendingScanBal);
     const finalTara = pendingScanBal.potongan_tara_kg !== undefined ? pendingScanBal.potongan_tara_kg : 2;
     const finalHargaBeli = resolveHargaBeli(pendingScanBal);
 
@@ -664,6 +655,14 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
 
   // Submit Create Batch Form
   const handleSaveBatchForm = () => {
+    if (cekNoSuratSample.kosong) {
+      setErrorMessage('No. Surat Pengiriman Sample wajib diisi manual.');
+      return;
+    }
+    if (cekNoSuratSample.kembar) {
+      setErrorMessage(pesanNomorKembar('Surat Pengiriman Sample', noSuratSample, cekNoSuratSample));
+      return;
+    }
     const finalTujuan = tujuanBuyer.trim();
     if (!finalTujuan) {
       setErrorMessage('Tujuan gudang / pabrik penerima sample wajib diisi!');
@@ -675,7 +674,12 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
     }
     
 
-    const nextBatchId = editingBatchId || generateBatchSampleId(activeBatchSampleList.length + 1);
+    let nextSeq = activeBatchSampleList.length + 1;
+    while (!editingBatchId && activeBatchSampleList.some((b) => b.batch_id === generateBatchSampleId(nextSeq))) {
+      nextSeq += 1;
+    }
+    const nextBatchId = editingBatchId || generateBatchSampleId(nextSeq);
+    const kodeBatch = normalisasiNomor(noSuratSample);
     const existingBatch = activeBatchSampleList.find(b => b.batch_id === editingBatchId);
     
     const items: SampleItemDetail[] = selectedBalItems.map((s, idx) => {
@@ -683,7 +687,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
       const matchedBal = barangList.find(b => b.barang_id === s.barangId || b.no_bal === s.noBal);
       const finalHargaBeli = s.hargaBeliKg || existingItem?.harga_beli_kg || resolveHargaBeli(matchedBal);
       const finalNetto = s.beratBalKg || resolveBeratNetto(matchedBal);
-      const finalBruto = s.beratBrutoKg || existingItem?.berat_bruto_kg || resolveBeratBruto(matchedBal, finalNetto);
+      const finalBruto = s.beratBrutoKg || existingItem?.berat_bruto_kg || resolveBeratBruto(matchedBal);
       const finalTara = s.potonganTaraKg || existingItem?.potongan_tara_kg || matchedBal?.potongan_tara_kg || 0;
       const finalPetani = matchedBal?.nama_petani || txItemMap.get(s.barangId)?.nama_petani || txItemMap.get(s.noBal)?.nama_petani || existingItem?.nama_petani || '-';
 
@@ -705,12 +709,12 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
       };
     });
 
-    const totalEstimasiNilai = items.reduce((sum, it) => sum + it.berat_bal_kg * it.harga_tawaran_kg, 0);
+    const totalEstimasiNilai = items.reduce((sum, it) => sum + beratBrutoItemSample(it) * it.harga_tawaran_kg, 0);
 
     const newBatch: BatchPengirimanSample = {
       ...existingBatch,
       batch_id: nextBatchId,
-      kode_batch: existingBatch?.kode_batch || nextBatchId,
+      kode_batch: kodeBatch,
       tujuan_buyer: finalTujuan,
       permintaan_buyer: permintaanBuyer,
       sumber_gudang: sumberGudang,
@@ -757,7 +761,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
         return {
           ...b,
           status_stok: 'terkirim_sample' as const,
-          catatan_qc: `Sample Batch ${nextBatchId} dikirim ke ${finalTujuan}`,
+          catatan_qc: `Sample Batch ${kodeBatch} dikirim ke ${finalTujuan}`,
         };
       }
       return b;
@@ -797,6 +801,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
     setIsConfirmCreateOpen(false);
     resetDraftSampleItems();
     setTujuanBuyer('');
+    setNoSuratSample('');
     setViewMode('list');
   };
 
@@ -871,6 +876,8 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
             type="button"
             onClick={() => {
               setTujuanBuyer('');
+              setNoSuratSample('');
+              setEditingBatchId(null);
               resetDraftSampleItems();
               setErrorMessage('');
               setViewMode('create');
@@ -1012,7 +1019,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                     <th className="px-3.5 py-2.5">Kode Batch & Info</th>
                     <th className="px-3.5 py-2.5">Tujuan Buyer / Pabrik</th>
                     <th className="px-3.5 py-2.5 text-center">Jml Bal</th>
-                    <th className="px-3.5 py-2.5 text-right">Berat (Bruto / Netto)</th>
+                    <th className="px-3.5 py-2.5 text-right">Berat Bruto</th>
                     <th className="px-3.5 py-2.5">Tanggal Kirim</th>
                     <th className="px-3.5 py-2.5 text-right">Nilai Deal / Tawar</th>
                     <th className="px-3.5 py-2.5 text-center">Aksi</th>
@@ -1032,13 +1039,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                       const rejected = batch.total_bal_ditolak || batch.items?.filter(it => it.status_item === 'ditolak').length || 0;
                       const nego = batch.total_bal_nego || batch.items?.filter(it => it.status_item === 'nego').length || 0;
 
-                      const batchNetto = batch.items?.reduce((sum, it) => sum + (it.berat_bal_kg || 0), 0) || 0;
-                      const batchBruto = batch.items?.reduce((sum, it) => {
-                        if (it.berat_bruto_kg && it.berat_bruto_kg > 0) return sum + it.berat_bruto_kg;
-                        const netto = it.berat_bal_kg || 0;
-                        const tara = it.potongan_tara_kg !== undefined ? it.potongan_tara_kg : 2;
-                        return sum + (netto > 0 ? (netto + tara) : 0);
-                      }, 0) || 0;
+                      const batchBruto = batch.items?.reduce((sum, it) => sum + beratBrutoItemSample(it), 0) || 0;
 
                       return (
                         <tr key={batch.batch_id} className="hover:bg-gray-50/80 transition">
@@ -1047,7 +1048,6 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                           </td>
                           <td className="px-3.5 py-3">
                             <div className="font-bold text-gray-900 font-mono">{batch.kode_batch}</div>
-                            <div className="text-[10px] text-gray-400 font-mono">{batch.batch_id}</div>
                             {batch.permintaan_buyer && (
                               <div className="text-[10px] text-gray-600 italic line-clamp-1 max-w-[200px] mt-0.5">
                                 {batch.permintaan_buyer}
@@ -1069,12 +1069,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                             </span>
                           </td>
                           <td className="px-3.5 py-3 text-right font-mono">
-                            <div className="font-bold text-gray-900">
-                              Netto: {formatNumber(batchNetto, 1)} kg
-                            </div>
-                            <div className="text-[10px] text-gray-500">
-                              Bruto: {formatNumber(batchBruto, 1)} kg
-                            </div>
+                            <div className="font-bold text-gray-900">{formatNumber(batchBruto, 1)} kg</div>
                           </td>
                           <td className="px-3.5 py-3">
                             <div className="text-[11px] text-gray-800 font-medium flex items-center space-x-1">
@@ -1108,6 +1103,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                                   setViewMode('create');
                                   // Populate the form
                                   setEditingBatchId(batch.batch_id);
+                                  setNoSuratSample(batch.kode_batch || '');
                                   setTujuanBuyer(batch.tujuan_buyer || '');
                                   setPermintaanBuyer(batch.permintaan_buyer || '');
                                   setSumberGudang(batch.sumber_gudang || '');
@@ -1118,7 +1114,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                                   const items = batch.items?.map(it => {
                                     const matchedBal = barangList.find(b => b.barang_id === it.barang_id || b.no_bal === it.no_bal);
                                     const netto = it.berat_bal_kg || resolveBeratNetto(matchedBal);
-                                    const bruto = it.berat_bruto_kg || resolveBeratBruto(matchedBal, netto);
+                                    const bruto = it.berat_bruto_kg || resolveBeratBruto(matchedBal);
                                     const tara = it.potongan_tara_kg !== undefined ? it.potongan_tara_kg : (matchedBal?.potongan_tara_kg || 0);
                                     const hrgBeli = it.harga_beli_kg || resolveHargaBeli(matchedBal);
 
@@ -1215,9 +1211,6 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
               <h2 className="text-sm font-bold text-gray-900">Form Pengiriman 1 Batch Sample Tembakau</h2>
               <p className="text-xs text-gray-500 mt-0.5">Pilih atau scan bal tembakau yang akan dikirimkan untuk uji lab mutu buyer</p>
             </div>
-            <span className="text-xs font-mono font-bold bg-gray-100 text-gray-700 px-2.5 py-1 border border-gray-300 rounded-xs">
-              ID Batch Baru: {generateBatchSampleId(activeBatchSampleList.length + 1)}
-            </span>
           </div>
 
           {errorMessage && (
@@ -1230,6 +1223,33 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
           {/* Form Meta Fields */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-gray-50 p-4 border border-gray-200 rounded-xs">
             
+            {/* No. Surat Pengiriman Sample (manual) */}
+            <div className="space-y-1">
+              <label className="block text-xs font-semibold text-gray-700">
+                No. Surat Pengiriman Sample: <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                placeholder={cekNoSuratSample.saran ? `Contoh: ${cekNoSuratSample.saran}` : 'Contoh: SAMPLE-PJM0001'}
+                value={noSuratSample}
+                onChange={(e) => setNoSuratSample(e.target.value.toUpperCase())}
+                className={`w-full px-2.5 py-1.5 text-xs bg-white border rounded-xs font-mono font-bold uppercase text-gray-900 placeholder:font-sans placeholder:font-normal placeholder:normal-case focus:outline-none focus:ring-1 ${
+                  cekNoSuratSample.kembar ? 'border-red-500 bg-red-50 focus:ring-red-500' : 'border-gray-300 focus:ring-gray-700'
+                }`}
+              />
+              {cekNoSuratSample.kembar ? (
+                <p className="text-[10px] text-red-600 font-semibold">
+                  {pesanNomorKembar('Surat Pengiriman Sample', noSuratSample, cekNoSuratSample)}
+                </p>
+              ) : cekNoSuratSample.terakhir ? (
+                <p className="text-[10px] text-gray-500">
+                  Nomor terakhir: <span className="font-mono font-semibold text-gray-700">{cekNoSuratSample.terakhir}</span>
+                </p>
+              ) : (
+                <p className="text-[10px] text-gray-500">Wajib diisi manual, tidak boleh sama dengan surat sample lain.</p>
+              )}
+            </div>
+
             {/* Buyer Destination */}
             <div className="space-y-1">
               <label className="block text-xs font-semibold text-gray-700">
@@ -1289,7 +1309,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                 </div>
                 <div className="text-right">
                   <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 border border-emerald-200 rounded-xs">
-                    {selectedBalItems.length} Bal Terpilih • Est. Nilai: {formatRupiah(selectedBalItems.reduce((s, it) => s + (it.beratBalKg * it.hargaTawaranKg), 0))}
+                    {selectedBalItems.length} Bal Terpilih • Est. Nilai: {formatRupiah(selectedBalItems.reduce((s, it) => s + (it.beratBrutoKg * it.hargaTawaranKg), 0))}
                   </span>
                 </div>
               </div>
@@ -1409,7 +1429,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                                     </span>
                                   </div>
                                   <div className="text-[10px] text-gray-500 truncate mt-0.5">
-                                    Grade {bal.kode_grade} • {bal.berat_kg} kg • Petani: {bal.nama_petani || '-'} • {usage.detail}
+                                    Grade {bal.kode_grade} • {formatNumber(beratBrutoBal(bal), 1)} kg bruto • Petani: {bal.nama_petani || '-'} • {usage.detail}
                                   </div>
                                 </div>
                                 {!usage.isAvailable && (
@@ -1532,7 +1552,6 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                     <th className="p-2.5 w-16 text-center border-r border-gray-200">Grade</th>
                     <th className="p-2.5 text-right w-32 border-r border-gray-200">Harga Beli (Rp/Kg)</th>
                     <th className="p-2.5 text-right w-24 border-r border-gray-200">Bruto (Kg)</th>
-                    <th className="p-2.5 text-right w-24 border-r border-gray-200">Netto (Kg)</th>
                     <th className="p-2.5 text-right w-36 border-r border-gray-200">Harga Tawar/Deal (Rp)</th>
                     <th className="p-2.5 text-right w-36 border-r border-gray-200">Est. Subtotal (Rp)</th>
                     <th className="p-2.5 text-center w-14">Aksi</th>
@@ -1541,7 +1560,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                 <tbody className="divide-y divide-gray-200">
                   {selectedBalItems.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="p-8 text-center text-gray-500">
+                      <td colSpan={9} className="p-8 text-center text-gray-500">
                         <Package className="w-8 h-8 text-gray-300 mx-auto mb-2" />
                         <span className="font-semibold block text-gray-500">Belum ada bal dipilih</span>
                       </td>
@@ -1550,8 +1569,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                     selectedBalItems.map((item, idx) => {
                       const matchedBal = barangList.find(b => b.barang_id === item.barangId || b.no_bal === item.noBal);
                       const hrgBeli = item.hargaBeliKg || resolveHargaBeli(matchedBal);
-                      const netto = item.beratBalKg || resolveBeratNetto(matchedBal);
-                      const bruto = item.beratBrutoKg || resolveBeratBruto(matchedBal, netto);
+                      const bruto = item.beratBrutoKg || resolveBeratBruto(matchedBal);
 
                       return (
                         <tr key={item.barangId} className="hover:bg-gray-50 transition">
@@ -1566,17 +1584,14 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                           <td className="p-2.5 text-right font-mono border-r border-gray-200 font-bold text-emerald-800 bg-emerald-50/30">
                             {formatRupiah(hrgBeli)}
                           </td>
-                          <td className="p-2.5 text-right font-mono border-r border-gray-200 text-gray-700">
-                            {formatNumber(bruto, 1)} kg
-                          </td>
                           <td className="p-2.5 text-right font-mono border-r border-gray-200 font-bold text-gray-900">
-                            {formatNumber(netto, 1)} kg
+                            {formatNumber(bruto, 1)} kg
                           </td>
                           <td className="p-2.5 text-right font-mono border-r border-gray-200">
                             {formatRupiah(item.hargaTawaranKg)}
                           </td>
                           <td className="p-2.5 text-right font-mono font-bold border-r border-gray-200 text-[#b81d24]">
-                            {formatRupiah(netto * item.hargaTawaranKg)}
+                            {formatRupiah(bruto * item.hargaTawaranKg)}
                           </td>
                           <td className="p-2.5 text-center">
                             <button
@@ -1602,18 +1617,15 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                       <td className="p-2.5 text-right font-mono border-r border-gray-200 text-[11px] text-gray-500">
                         -
                       </td>
-                      <td className="p-2.5 text-right font-mono border-r border-gray-200 text-gray-700">
+                      <td className="p-2.5 text-right font-mono border-r border-gray-200 font-bold text-gray-900">
                         {formatNumber(selectedBalItems.reduce((s, it) => {
                           const matchedBal = barangList.find(b => b.barang_id === it.barangId || b.no_bal === it.noBal);
-                          return s + (it.beratBrutoKg || resolveBeratBruto(matchedBal, it.beratBalKg));
+                          return s + (it.beratBrutoKg || resolveBeratBruto(matchedBal));
                         }, 0), 1)} kg
-                      </td>
-                      <td className="p-2.5 text-right font-mono border-r border-gray-200 font-bold text-gray-900">
-                        {formatNumber(selectedBalItems.reduce((s, it) => s + it.beratBalKg, 0), 1)} kg
                       </td>
                       <td className="p-2.5 text-right border-r border-gray-200"></td>
                       <td className="p-2.5 text-right font-mono font-bold text-emerald-800 border-r border-gray-200">
-                        {formatRupiah(selectedBalItems.reduce((s, it) => s + (it.beratBalKg * it.hargaTawaranKg), 0))}
+                        {formatRupiah(selectedBalItems.reduce((s, it) => s + (it.beratBrutoKg * it.hargaTawaranKg), 0))}
                       </td>
                       <td></td>
                     </tr>
@@ -1646,8 +1658,17 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
 
                 <button
                   type="button"
-                  disabled={selectedBalItems.length === 0 || !tujuanBuyer.trim()}
+                  disabled={selectedBalItems.length === 0 || !tujuanBuyer.trim() || cekNoSuratSample.kosong}
                   onClick={() => {
+                    if (cekNoSuratSample.kosong) {
+                      setErrorMessage('No. Surat Pengiriman Sample wajib diisi manual.');
+                      return;
+                    }
+                    if (cekNoSuratSample.kembar) {
+                      setErrorMessage(pesanNomorKembar('Surat Pengiriman Sample', noSuratSample, cekNoSuratSample));
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                      return;
+                    }
                     if (!tujuanBuyer.trim()) {
                       setErrorMessage('Tujuan gudang / pabrik penerima sample wajib diisi!');
                       return;
@@ -1728,7 +1749,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
       <ConfirmModal
         isOpen={isConfirmCreateOpen}
         title="Konfirmasi Pengiriman Batch Sample Tembakau"
-        message={`Apakah Anda yakin ingin mengirimkan Batch Sample berisi ${selectedBalItems.length} bal tembakau ke ${tujuanBuyer}? Bal yang terpilih akan ditandai berstatus "Terkirim Sample".`}
+        message={`Apakah Anda yakin ingin mengirimkan Batch Sample ${normalisasiNomor(noSuratSample)} berisi ${selectedBalItems.length} bal tembakau ke ${tujuanBuyer}? Bal yang terpilih akan ditandai berstatus "Terkirim Sample".`}
         confirmText="Ya, Kirim Batch Sample"
         cancelText="Periksa Lagi"
         onConfirm={handleSaveBatchForm}

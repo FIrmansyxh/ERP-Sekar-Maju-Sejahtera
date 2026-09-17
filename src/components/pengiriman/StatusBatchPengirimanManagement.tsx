@@ -40,6 +40,8 @@ import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
 import { SuratJalanPrintModal } from './SuratJalanPrintModal';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { openPrintDocument } from '../../utils/openDedicatedPrint';
+import { isSuratJalanTerkunci, pesanSuratJalanTerkunci } from '../../utils/kunciHapus';
+import { beratBrutoBal, beratBrutoItemSample } from '../../utils/beratKirim';
 
 interface StatusBatchPengirimanManagementProps {
   batchSampleList: BatchPengirimanSample[];
@@ -173,6 +175,8 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
              kode_grade: matchedBarang.kode_grade,
              kode_harga_jual: matchedBarang.kode_harga_jual || '',
              berat_bal_kg: matchedBarang.berat_kg,
+             berat_bruto_kg: beratBrutoBal(matchedBarang),
+             potongan_tara_kg: matchedBarang.potongan_tara_kg,
              harga_tawaran_kg: 0,
              status_item: 'dikirim',
              sudah_dikirim_do: false,
@@ -198,7 +202,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
     const item = batchItems[matchedIndex];
     setScanSortirFeedback({
       type: 'success',
-      message: `Bal #${item.no_bal} (${item.kode_grade} - ${item.berat_bal_kg}kg) ditemukan! Status saat ini: ${item.status_item.toUpperCase()}`,
+      message: `Bal #${item.no_bal} (${item.kode_grade} - ${formatNumber(beratBrutoItemSample(item), 1)}kg bruto) ditemukan! Status saat ini: ${item.status_item.toUpperCase()}`,
       itemRef: item,
     });
     setScanSortirInput('');
@@ -291,7 +295,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
           const countNego = updatedBatchItems.filter((i) => i.status_item === 'nego').length;
           const totalDeal = updatedBatchItems
             .filter((i) => i.status_item === 'disetujui')
-            .reduce((sum, i) => sum + i.berat_bal_kg * (i.harga_deal_kg || i.harga_tawaran_kg), 0);
+            .reduce((sum, i) => sum + beratBrutoItemSample(i) * (i.harga_deal_kg || i.harga_tawaran_kg), 0);
             
           let batchStatus: any = 'sample';
           if (countAcc > 0) batchStatus = 'diproses';
@@ -357,7 +361,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
     const countNego = batchItems.filter((i) => i.status_item === 'nego').length;
     const totalDeal = batchItems
       .filter((i) => i.status_item === 'disetujui')
-      .reduce((sum, i) => sum + i.berat_bal_kg * (i.harga_deal_kg || i.harga_tawaran_kg), 0);
+      .reduce((sum, i) => sum + beratBrutoItemSample(i) * (i.harga_deal_kg || i.harga_tawaran_kg), 0);
 
     let batchStatus: any = 'sample';
     if (countAcc > 0) batchStatus = 'diproses';
@@ -420,7 +424,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
     const countNego = remainingItems.filter((i) => i.status_item === 'nego').length;
     const totalDeal = remainingItems
       .filter((i) => i.status_item === 'disetujui')
-      .reduce((sum, i) => sum + i.berat_bal_kg * (i.harga_deal_kg || i.harga_tawaran_kg), 0);
+      .reduce((sum, i) => sum + beratBrutoItemSample(i) * (i.harga_deal_kg || i.harga_tawaran_kg), 0);
 
     const updatedBatch: BatchPengirimanSample = {
       ...activeBatch,
@@ -458,7 +462,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
   const countPending = batchItems.filter((i) => i.status_item === 'dikirim' || i.status_item === 'diterima').length;
   const totalDealRp = batchItems
     .filter((i) => i.status_item === 'disetujui')
-    .reduce((sum, i) => sum + i.berat_bal_kg * (i.harga_deal_kg || i.harga_tawaran_kg), 0);
+    .reduce((sum, i) => sum + beratBrutoItemSample(i) * (i.harga_deal_kg || i.harga_tawaran_kg), 0);
 
   // --- TAB 2 FILTERED SHIPMENTS ---
   const filteredPengirimanList = useMemo(() => {
@@ -479,9 +483,8 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
         const matchTujuan = (krm.tujuan || '').toLowerCase().includes(q);
         const matchDriver = (krm.driver_nama || '').toLowerCase().includes(q);
         const matchPlat = (krm.plat_nomor || '').toLowerCase().includes(q);
-        const matchKontrak = (krm.nomor_kontrak || '').toLowerCase().includes(q);
         const matchBatch = (krm.batch_sample_id_ref || '').toLowerCase().includes(q);
-        return matchNo || matchTujuan || matchDriver || matchPlat || matchKontrak || matchBatch;
+        return matchNo || matchTujuan || matchDriver || matchPlat || matchBatch;
       }
 
       return true;
@@ -494,25 +497,25 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
   const countSudahSelesai = pengirimanList.filter((k) => k.status === 'diterima' || k.status === 'selesai').length;
 
   const totalNilaiSemua = useMemo(() => {
-    return pengirimanList.reduce((sum, k) => sum + (k.total_nilai_deal || (k.total_berat_kg * 125000)), 0);
+    return pengirimanList.reduce((sum, k) => sum + (k.total_nilai_deal || 0), 0);
   }, [pengirimanList]);
 
   const totalNilaiAkan = useMemo(() => {
     return pengirimanList
       .filter((k) => k.status === 'dimuat' || k.status === 'dikirim')
-      .reduce((sum, k) => sum + (k.total_nilai_deal || (k.total_berat_kg * 125000)), 0);
+      .reduce((sum, k) => sum + (k.total_nilai_deal || 0), 0);
   }, [pengirimanList]);
 
   const totalNilaiSedang = useMemo(() => {
     return pengirimanList
       .filter((k) => k.status === 'dalam_perjalanan')
-      .reduce((sum, k) => sum + (k.total_nilai_deal || (k.total_berat_kg * 125000)), 0);
+      .reduce((sum, k) => sum + (k.total_nilai_deal || 0), 0);
   }, [pengirimanList]);
 
   const totalNilaiSudah = useMemo(() => {
     return pengirimanList
       .filter((k) => k.status === 'diterima' || k.status === 'selesai')
-      .reduce((sum, k) => sum + (k.total_nilai_deal || (k.total_berat_kg * 125000)), 0);
+      .reduce((sum, k) => sum + (k.total_nilai_deal || 0), 0);
   }, [pengirimanList]);
 
   // Tab 2 Filtered Aggregations
@@ -525,7 +528,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
   }, [filteredPengirimanList]);
 
   const totalNilaiFiltered = useMemo(() => {
-    return filteredPengirimanList.reduce((sum, k) => sum + (k.total_nilai_deal || (k.total_berat_kg * 125000)), 0);
+    return filteredPengirimanList.reduce((sum, k) => sum + (k.total_nilai_deal || 0), 0);
   }, [filteredPengirimanList]);
 
   return (
@@ -607,7 +610,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                   </div>
                   <input
                     type="text"
-                    placeholder="Ketik kode batch (Misal: SPL0001)..."
+                    placeholder="Ketik no. surat sample (Misal: SAMPLE-PJM0001)..."
                     value={scanBatchId}
                     onChange={(e) => {
                       setScanBatchId(e.target.value);
@@ -932,7 +935,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                     <th className="p-3 w-10 text-center">No</th>
                     <th className="p-3 w-36">No Bal / ID</th>
                     <th className="p-3 text-center w-20">Grade</th>
-                    <th className="p-3 text-right w-24">Berat Bal (Kg)</th>
+                    <th className="p-3 text-right w-24">Berat Bruto (Kg)</th>
                     <th className="p-3 text-center w-48">Status Sortir Pembeli</th>
                     <th className="p-3 w-56">Kode Master Harga Jual</th>
                     <th className="p-3 text-right w-36">Harga Beli (Rp/Kg)</th>
@@ -955,7 +958,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                       const isNego = item.status_item === 'nego';
                       const isTolak = item.status_item === 'ditolak';
                       const currentPrice = item.harga_deal_kg || item.harga_tawaran_kg;
-                      const subtotal = item.berat_bal_kg * currentPrice;
+                      const subtotal = beratBrutoItemSample(item) * currentPrice;
 
                       return (
                         <tr 
@@ -967,7 +970,6 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                           <td className="p-3 text-center font-mono text-gray-500">{idx + 1}</td>
                           <td className="p-3 font-mono font-bold text-gray-900">
                             <div>{item.no_bal || item.barang_id}</div>
-                            <div className="text-[10px] text-gray-400">{item.sample_item_id}</div>
                           </td>
                           <td className="p-3 text-center font-bold">
                             <span className="px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded-xs font-mono">
@@ -975,7 +977,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                             </span>
                           </td>
                           <td className="p-3 text-right font-mono font-bold">
-                            {formatNumber(item.berat_bal_kg, 1)} kg
+                            {formatNumber(beratBrutoItemSample(item), 1)} kg
                           </td>
 
                           {/* Sortir Toggle Buttons */}
@@ -1105,7 +1107,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                         Total ({displayedBatchItems.length} Bal)
                       </td>
                       <td className="p-3 text-right font-mono">
-                        {formatNumber(displayedBatchItems.reduce((s, it) => s + it.berat_bal_kg, 0), 1)} kg
+                        {formatNumber(displayedBatchItems.reduce((s, it) => s + beratBrutoItemSample(it), 0), 1)} kg
                       </td>
                       <td colSpan={4} className="p-3 text-right uppercase text-[11px]">
                         Total Nilai Deal Bal Lolos:
@@ -1114,7 +1116,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                         {formatRupiah(
                           displayedBatchItems
                             .filter((it) => it.status_item === 'disetujui')
-                            .reduce((s, it) => s + (it.berat_bal_kg * (it.harga_deal_kg || it.harga_tawaran_kg)), 0)
+                            .reduce((s, it) => s + (beratBrutoItemSample(it) * (it.harga_deal_kg || it.harga_tawaran_kg)), 0)
                         )}
                       </td>
                       <td colSpan={2}></td>
@@ -1251,7 +1253,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                 <Search className="w-4 h-4 text-gray-400 absolute left-2.5 top-2.5" />
                 <input
                   type="text"
-                  placeholder="Cari No. Surat Jalan, Pabrik, Supir, Plat Nomor, Kontrak..."
+                  placeholder="Cari No. Surat Jalan, Pabrik, Supir, Plat Nomor..."
                   value={searchPengirimanText}
                   onChange={(e) => setSearchPengirimanText(e.target.value)}
                   className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-gray-300 rounded-xs focus:ring-1 focus:ring-gray-700"
@@ -1304,7 +1306,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                       const isDiterima = item.status === 'diterima';
                       const isSelesai = item.status === 'selesai';
                       const isSudah = isDiterima || isSelesai;
-                      const nilaiPengiriman = item.total_nilai_deal || (item.total_berat_kg * 125000);
+                      const nilaiPengiriman = item.total_nilai_deal || 0;
 
                       return (
                         <tr key={item.pengiriman_id} className="hover:bg-gray-50 transition">
@@ -1313,12 +1315,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                             <div>{item.no_surat_jalan}</div>
                             {item.batch_sample_id_ref && (
                               <div className="text-[10px] text-gray-500 font-normal">
-                                Ref Batch: {item.batch_sample_id_ref}
-                              </div>
-                            )}
-                            {item.nomor_kontrak && (
-                              <div className="text-[10px] text-blue-600 font-normal">
-                                Kontrak: {item.nomor_kontrak}
+                                Ref Batch: {batchSampleList.find((b) => b.batch_id === item.batch_sample_id_ref)?.kode_batch || item.batch_sample_id_ref}
                               </div>
                             )}
                           </td>
@@ -1338,7 +1335,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                           {/* Nilai Pengiriman */}
                           <td className="p-3 text-right font-mono font-bold text-emerald-800">
                             <div className="text-xs">{formatRupiah(nilaiPengiriman)}</div>
-                            {item.total_berat_kg > 0 && (
+                            {item.total_berat_kg > 0 && nilaiPengiriman > 0 && (
                               <div className="text-[10px] text-gray-500 font-normal">
                                 Rp {formatNumber(Math.round(nilaiPengiriman / item.total_berat_kg))}/kg
                               </div>
@@ -1436,8 +1433,16 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                                 <Printer className="w-3.5 h-3.5" />
                               </button>
 
-                              {/* Delete Button */}
-                              {onDeletePengiriman && (
+                              {/* Delete Button: terkunci bila bal sudah dikirim */}
+                              {onDeletePengiriman && isSuratJalanTerkunci(item) && (
+                                <span
+                                  className="p-1 text-gray-300 rounded-xs border border-gray-200 inline-flex cursor-not-allowed"
+                                  title={pesanSuratJalanTerkunci(item)}
+                                >
+                                  <Lock className="w-3.5 h-3.5" />
+                                </span>
+                              )}
+                              {onDeletePengiriman && !isSuratJalanTerkunci(item) && (
                                 <button
                                   type="button"
                                   onClick={() => setPengirimanToDelete(item.pengiriman_id)}

@@ -1,5 +1,5 @@
 import type { Borders, Cell, Workbook, Worksheet } from 'exceljs';
-import { APP_COMPANY, APP_LOCATION } from '../config/appInfo';
+import { COMPANY_ADDRESS, COMPANY_NAME } from '../config/appInfo';
 
 /**
  * Pembuat laporan Excel (.xlsx) siap pakai untuk seluruh menu laporan.
@@ -214,9 +214,9 @@ function buildSheet(workbook: Workbook, spec: ExcelSheet, sheetName: string, dow
     return row;
   };
 
-  addMergedLine(APP_COMPANY, { size: 14, bold: true, color: { argb: COLOR.text } }, 22);
+  addMergedLine(COMPANY_NAME.toUpperCase(), { size: 14, bold: true, color: { argb: COLOR.text } }, 22);
   addMergedLine(spec.title, { size: 12, bold: true, color: { argb: COLOR.brand } }, 20);
-  [...(spec.info || []), `${APP_LOCATION} · Diunduh ${downloadedAt}`].forEach((line) => {
+  [...(spec.info || []), `${COMPANY_ADDRESS} · Diunduh ${downloadedAt}`].forEach((line) => {
     addMergedLine(line, { size: 9, color: { argb: COLOR.muted } }, 15);
   });
   sheet.addRow([]);
@@ -323,7 +323,7 @@ function buildSheet(workbook: Workbook, spec: ExcelSheet, sheetName: string, dow
     margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.6, header: 0.3, footer: 0.3 },
   };
   sheet.headerFooter = {
-    oddFooter: `&L&8${escapeHeaderFooter(APP_COMPANY)} · ${escapeHeaderFooter(spec.title)}&R&8Halaman &P dari &N`,
+    oddFooter: `&L&8${escapeHeaderFooter(COMPANY_NAME.toUpperCase())} · ${escapeHeaderFooter(spec.title)}&R&8Halaman &P dari &N`,
   };
 }
 
@@ -336,7 +336,7 @@ export async function buildExcelWorkbook(sheets: ExcelSheet[]): Promise<Workbook
   const downloadedAt = `${pad2(now.getDate())}/${pad2(now.getMonth() + 1)}/${now.getFullYear()} ${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
 
   const workbook: Workbook = new ExcelJS.Workbook();
-  workbook.creator = APP_COMPANY;
+  workbook.creator = COMPANY_NAME;
   workbook.created = now;
 
   const usedNames = new Set<string>();

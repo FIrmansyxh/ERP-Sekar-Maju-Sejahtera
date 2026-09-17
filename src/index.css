@@ -23,6 +23,30 @@ table:not(.custom-border) td {
 
 table thead th {
   color: #475569; /* Slate-600 */
+  text-align: center;
+  vertical-align: middle;
+}
+
+/* Judul kolom yang bisa diurutkan: label & ikon urut ikut ke tengah */
+table thead th > .flex {
+  justify-content: center;
+}
+
+/*
+ * Garis pemisah kolom seragam untuk semua tabel (layar & dokumen cetak).
+ * Ditaruh di layer base agar kelas utilitas per sel (mis. border penuh
+ * pada tabel cetak) tetap berlaku; kolom terakhir tidak diberi garis kanan
+ * karena sudah dibatasi bingkai tabel.
+ */
+@layer base {
+  table th,
+  table td {
+    border-right: 1px solid #e2e8f0;
+  }
+
+  table tr > :last-child {
+    border-right-width: 0;
+  }
 }
 
 table:not(.no-zebra) > tbody > tr:nth-child(odd):not(.no-zebra-row) {

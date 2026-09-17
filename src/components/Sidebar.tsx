@@ -141,13 +141,6 @@ export const MODULES_CONFIG = [
     moduleKey: 'transaksi',
   },
   {
-    id: 'modul-5-pengiriman',
-    title: 'Pengiriman Reguler (DO)',
-    subtitle: 'Input No. Bal Muatan',
-    icon: 'Truck',
-    moduleKey: 'pengiriman',
-  },
-  {
     id: 'modul-4-sample',
     title: 'Pengiriman Sample',
     subtitle: 'Uji Mutu Laboratorium',
@@ -160,6 +153,13 @@ export const MODULES_CONFIG = [
     subtitle: 'Sortir Pembeli & Status DO',
     icon: 'Layers',
     moduleKey: 'status-batch',
+  },
+  {
+    id: 'modul-5-pengiriman',
+    title: 'Pengiriman Reguler (DO)',
+    subtitle: 'Input No. Bal Muatan',
+    icon: 'Truck',
+    moduleKey: 'pengiriman',
   },
   {
     id: 'modul-users',
@@ -579,22 +579,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   </button>
                 )}
 
-                {checkAccess('modul-5-pengiriman') && (
-                  <button
-                    onClick={() => onSelectModule('modul-5-pengiriman')}
-                    className={`w-full text-left py-1.5 px-2 rounded-xs flex items-center justify-between cursor-pointer ${
-                      activeModuleId === 'modul-5-pengiriman'
-                        ? 'text-slate-900 font-semibold bg-slate-100'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                    }`}
-                  >
-                    <span>Pengiriman Reguler (DO)</span>
-                    <span className="text-[10px] font-mono font-medium px-1 bg-slate-100 text-slate-600 rounded-xs">
-                      {pengirimanCount}
-                    </span>
-                  </button>
-                )}
-
                 {checkAccess('modul-status-batch') && (
                   <button
                     onClick={() => onSelectModule('modul-status-batch')}
@@ -607,6 +591,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <span>Status & Detail Batch</span>
                     <span className="text-[9px] font-medium px-1.5 py-0.2 bg-amber-100 text-amber-800 rounded-xs border border-amber-200">
                       Sortir & DO
+                    </span>
+                  </button>
+                )}
+
+                {checkAccess('modul-5-pengiriman') && (
+                  <button
+                    onClick={() => onSelectModule('modul-5-pengiriman')}
+                    className={`w-full text-left py-1.5 px-2 rounded-xs flex items-center justify-between cursor-pointer ${
+                      activeModuleId === 'modul-5-pengiriman'
+                        ? 'text-slate-900 font-semibold bg-slate-100'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span>Pengiriman Reguler (DO)</span>
+                    <span className="text-[10px] font-mono font-medium px-1 bg-slate-100 text-slate-600 rounded-xs">
+                      {pengirimanCount}
                     </span>
                   </button>
                 )}

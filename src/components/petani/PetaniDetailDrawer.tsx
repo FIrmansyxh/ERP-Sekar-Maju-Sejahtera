@@ -71,7 +71,7 @@ export const PetaniDetailDrawer: React.FC<PetaniDetailDrawerProps> = ({
               <h2 className="text-sm font-bold text-gray-900 tracking-tight">
                 Detail Master Petani & Profil Timbang
               </h2>
-              <p className="text-[11px] font-mono text-gray-500">{petani.petani_id} | {petani.petani_id}</p>
+              <p className="text-[11px] font-mono text-gray-500">{petani.petani_id}</p>
             </div>
           </div>
 

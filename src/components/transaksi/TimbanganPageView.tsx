@@ -30,6 +30,7 @@ import { TransaksiPembelian, Petani, TabelHarga, Barang, TransaksiItemBal, UserR
 import { formatRupiah, formatNoKupon, formatDateHariBulanTahun, hitungPotonganTaraKg, normalizeKg } from '../../utils/formatters';
 import { recordAuditLog } from '../../utils/storage';
 import { buildBarangDariItem, isKuponProsesSortir, terapkanHasilTimbang } from '../../utils/kuponSortir';
+import { POTONGAN_GANTI_TIKAR, POTONGAN_KULI_PER_BAL, POTONGAN_TALI_PER_BAL } from '../../config/aturanTimbang';
 
 interface TimbanganPageViewProps {
   transaksiList: TransaksiPembelian[];
@@ -415,7 +416,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
       })
     );
     if (itemId === activeItemId) {
-      setPotTikarInput(nextGanti ? 75000 : '');
+      setPotTikarInput(nextGanti ? POTONGAN_GANTI_TIKAR : '');
     }
   };
 
@@ -576,9 +577,9 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     liveTara = Math.max(0, normalizeKg(liveBruto - liveNetto));
   }
 
-  const livePotTikar = isGantiTikarActive ? (typeof potTikarInput === 'number' ? potTikarInput : 75000) : 0;
-  const livePotKuli = 7000;
-  const livePotTali = 3000;
+  const livePotTikar = isGantiTikarActive ? (typeof potTikarInput === 'number' ? potTikarInput : POTONGAN_GANTI_TIKAR) : 0;
+  const livePotKuli = POTONGAN_KULI_PER_BAL;
+  const livePotTali = POTONGAN_TALI_PER_BAL;
   const livePotTotal = livePotKuli + livePotTali + livePotTikar;
   const liveTotalKotor = Math.round(liveNetto * (activeBalItem?.harga_per_kg || 0));
   const liveSubtotalBersih = Math.round(Math.max(0, liveTotalKotor - livePotTotal));

@@ -36,6 +36,10 @@ import { downloadElementAsPdf } from '../../utils/printDownload';
 import { downloadExcelReport, labelStatusStok, periodeInfo, todayStamp } from '../../utils/excelExport';
 import { hitungNilaiBal } from '../../utils/finance';
 import { Pagination } from '../common/Pagination';
+import { KopSurat } from '../common/KopSurat';
+import { SortIcon } from '../common/SortIcon';
+import { COMPANY_NAME } from '../../config/appInfo';
+import { loadCurrentUser } from '../../utils/storage';
 
 interface LaporanBalViewProps {
   barangList: Barang[];
@@ -616,24 +620,13 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
     }
 
     const configIndex = sortConfigs.findIndex(c => c.field === field);
-    if (configIndex === -1) {
-      return null;
-    }
     const config = sortConfigs[configIndex];
-    
-    if (config.direction === 'asc') {
-      return (
-        <span className="inline-flex items-center text-[#b81d24] bg-red-50 p-0.5 px-1 rounded-xs border border-red-200 ml-1" title="Urutan Terendah / Naik / A-Z">
-          <ArrowUp className="w-3.5 h-3.5 text-[#b81d24]" />
-          {sortConfigs.length > 1 && <span className="text-[10px] font-bold ml-0.5 leading-none">{configIndex + 1}</span>}
-        </span>
-      );
-    }
     return (
-      <span className="inline-flex items-center text-[#b81d24] bg-red-50 p-0.5 px-1 rounded-xs border border-red-200 ml-1" title="Urutan Tertinggi / Turun / Z-A">
-        <ArrowDown className="w-3.5 h-3.5 text-[#b81d24]" />
-        {sortConfigs.length > 1 && <span className="text-[10px] font-bold ml-0.5 leading-none">{configIndex + 1}</span>}
-      </span>
+      <SortIcon
+        aktif={configIndex !== -1}
+        arah={config?.direction ?? 'asc'}
+        urutan={configIndex !== -1 && sortConfigs.length > 1 ? configIndex + 1 : undefined}
+      />
     );
   };
 
@@ -768,7 +761,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                 LAPORAN INVENTARIS FISIK
               </span>
               <span className="text-[11px] text-gray-500 font-medium">
-                PR. Sekar Maju Sejahtera
+                {COMPANY_NAME}
               </span>
             </div>
             <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">
@@ -1498,7 +1491,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
 
                       {/* 2. No Bal */}
                       <td className="py-2 px-3 font-mono font-black text-gray-950 border-r border-gray-100 whitespace-nowrap bg-slate-50/40 w-28">
-                        <span className="hover:underline cursor-pointer" title={`ID: ${bal.barang_id}`}>
+                        <span className="hover:underline cursor-pointer">
                           {bal.no_bal || bal.barang_id}
                         </span>
                         {bal.kode_bal_pembeli && (
@@ -1658,25 +1651,11 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
           id="printable-laporan-bal"
           className="w-full max-w-5xl bg-white p-6 text-gray-900 font-sans text-xs space-y-4"
         >
-          {/* Letterhead Kop Surat */}
-          <div className="text-center border-b-2 border-gray-900 pb-3 mb-4">
-            <h2 className="text-lg font-black tracking-widest uppercase text-gray-950">
-              PR. SEKAR MAJU SEJAHTERA
-            </h2>
-            <p className="text-[11px] text-gray-600 tracking-wide font-medium">
-              SISTEM DATA GUDANG & PENGADAAN TEMBAKAU RAJANGAN MADURA
-            </p>
-            <p className="text-[10px] text-gray-500">
-              Jl. Raya Sentol Pamekasan - Madura | Telp: (0324) 321888 | Email: gudang@sekarmajusejahtera.co.id
-            </p>
-          </div>
+          <KopSurat judul="Laporan Detail Bal Tembakau" />
 
-          {/* Title & Metadata */}
+          {/* Metadata */}
           <div className="mb-4">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-center text-gray-900 underline">
-              LAPORAN DETAIL BAL TEMBAKAU
-            </h3>
-            <div className="grid grid-cols-2 gap-2 mt-3 text-[11px] bg-gray-50 p-2 border border-gray-200">
+            <div className="grid grid-cols-2 gap-2 text-[11px] bg-gray-50 p-2 border border-gray-200">
               <div>
                 <span className="font-semibold text-gray-600">Periode Masuk:</span>{' '}
                 <span>
@@ -1785,22 +1764,25 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
             </div>
           )}
 
-          {/* Tanda Tangan Audit */}
+          {/* Tanda Tangan: pembuat = akun yang mengunduh, lainnya ditandatangani & ditulis manual */}
           <div className="grid grid-cols-3 gap-4 pt-6 text-center text-[11px]">
             <div>
-              <p className="text-gray-600">Petugas Administrasi Bal</p>
+              <p className="text-gray-500">Dibuat Oleh,</p>
+              <p className="font-semibold text-gray-700">Petugas Administrasi Bal</p>
               <div className="h-14"></div>
-              <p className="font-bold underline text-gray-900">Siti Rahayu</p>
+              <p className="font-bold text-gray-900 border-t border-gray-400 pt-1 mx-6 min-h-[22px]">{loadCurrentUser()?.nama_lengkap || <>&nbsp;</>}</p>
             </div>
             <div>
-              <p className="text-gray-600">Supervisor QC & Mutu</p>
+              <p className="text-gray-500">Diperiksa Oleh,</p>
+              <p className="font-semibold text-gray-700">Supervisor QC & Mutu</p>
               <div className="h-14"></div>
-              <p className="font-bold underline text-gray-900">drg. Hendra Kusuma</p>
+              <p className="font-bold text-gray-900 border-t border-gray-400 pt-1 mx-6 min-h-[22px]"><>&nbsp;</></p>
             </div>
             <div>
-              <p className="text-gray-600">Kepala Gudang / Mengetahui</p>
+              <p className="text-gray-500">Mengetahui,</p>
+              <p className="font-semibold text-gray-700">Kepala Gudang</p>
               <div className="h-14"></div>
-              <p className="font-bold underline text-gray-900">Bambang Sutrisno, S.T.</p>
+              <p className="font-bold text-gray-900 border-t border-gray-400 pt-1 mx-6 min-h-[22px]"><>&nbsp;</></p>
             </div>
           </div>
         </div>

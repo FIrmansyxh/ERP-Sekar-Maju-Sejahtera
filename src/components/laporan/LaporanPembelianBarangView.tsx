@@ -25,6 +25,9 @@ import { TransaksiPembelian, Petani } from '../../types';
 import { downloadElementAsPdf } from '../../utils/printDownload';
 import { downloadExcelReport, periodeInfo, todayStamp } from '../../utils/excelExport';
 import { isTransaksiLunas, labelStatusBayar } from '../../utils/statusBayar';
+import { KopSurat } from '../common/KopSurat';
+import { SortIcon } from '../common/SortIcon';
+import { loadCurrentUser } from '../../utils/storage';
 import { formatDateHariBulanTahun } from '../../utils/formatters';
 import { hitungNilaiBal, hitungModalTransaksi } from '../../utils/finance';
 
@@ -74,11 +77,12 @@ const SortableHeader: React.FC<SortableHeaderProps> = ({
     >
       <div className={`flex items-center ${align === 'center' ? 'justify-center' : align === 'right' ? 'justify-end' : 'justify-start'} space-x-1`}>
         <span>{title}</span>
-        {sortConfig && (
-          <span className="inline-flex items-center text-[#b81d24] bg-red-50 p-0.5 px-1 rounded-xs border border-red-200 ml-1 flex-shrink-0" title={sortConfig.direction === 'asc' ? "Urutan Terendah / Naik / A-Z" : "Urutan Tertinggi / Turun / Z-A"}>
-            {sortConfig.direction === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-[#b81d24]" /> : <ArrowDown className="w-3.5 h-3.5 text-[#b81d24]" />}
-            {sortConfigs.length > 1 && <span className="text-[10px] font-bold ml-0.5 leading-none">{configIndex + 1}</span>}
-          </span>
+        {onSort && sortField && (
+          <SortIcon
+            aktif={Boolean(sortConfig)}
+            arah={sortConfig?.direction ?? 'asc'}
+            urutan={sortConfig && sortConfigs.length > 1 ? configIndex + 1 : undefined}
+          />
         )}
       </div>
     </th>
@@ -623,14 +627,13 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
       
       {/* Header Banner */}
       <div className="bg-white p-4 border border-gray-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center space-x-2">
-            
-            <h1 className="text-base font-bold text-gray-900 tracking-tight">
-              Laporan Pembelian Barang
-            </h1>
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 bg-[#b81d24] text-white rounded-sm flex items-center justify-center shadow-xs shrink-0">
+            <FileSpreadsheet className="w-5 h-5" />
           </div>
-          
+          <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">
+            Laporan Pembelian Barang
+          </h1>
         </div>
 
         {/* Top Action Buttons (Direct Download Only) */}
@@ -1177,25 +1180,11 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
           id="printable-laporan-pembelian"
           className="w-full max-w-5xl bg-white p-6 text-gray-900 font-sans text-xs space-y-4"
         >
-          {/* Kop Surat PR. Sekar Maju Sejahtera */}
-          <div className="text-center border-b-2 border-gray-900 pb-3 mb-4">
-            <h2 className="text-lg font-black tracking-widest uppercase text-gray-950">
-              PR. SEKAR MAJU SEJAHTERA
-            </h2>
-            <p className="text-[11px] text-gray-600 tracking-wide font-medium">
-              SISTEM DATA GUDANG & PENGADAAN TEMBAKAU RAJANGAN
-            </p>
-            <p className="text-[10px] text-gray-500">
-              Jl. Raya Sentol Pamekasan - Madura | Telp: (0324) 321888 | Email: gudang@sekarmajusejahtera.co.id
-            </p>
-          </div>
+          <KopSurat judul="Laporan Rekapitulasi Pembelian Barang" />
 
-          {/* Title & Metadata Filter */}
+          {/* Metadata Filter */}
           <div className="mb-4">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-center text-gray-900 underline">
-              LAPORAN REKAPITULASI PEMBELIAN BARANG
-            </h3>
-            <div className="grid grid-cols-2 gap-2 mt-3 text-[11px] bg-gray-50 p-2 border border-gray-200">
+            <div className="grid grid-cols-2 gap-2 text-[11px] bg-gray-50 p-2 border border-gray-200">
               <div>
                 <span className="font-semibold text-gray-600">Periode Tanggal:</span>{' '}
                 <span>
@@ -1281,22 +1270,25 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
               </tr>
             </tfoot>
           </table>
-          {/* Tanda Tangan Audit */}
+          {/* Tanda Tangan: pembuat = akun yang mengunduh, lainnya ditandatangani & ditulis manual */}
           <div className="grid grid-cols-3 gap-4 pt-6 text-center text-[11px]">
             <div>
-              <p className="text-gray-600">Operator Loket Timbang</p>
+              <p className="text-gray-500">Dibuat Oleh,</p>
+              <p className="font-semibold text-gray-700">Operator Loket Timbang</p>
               <div className="h-14"></div>
-              <p className="font-bold underline text-gray-900">Siti Rahayu</p>
+              <p className="font-bold text-gray-900 border-t border-gray-400 pt-1 mx-6 min-h-[22px]">{loadCurrentUser()?.nama_lengkap || <>&nbsp;</>}</p>
             </div>
             <div>
-              <p className="text-gray-600">Petugas QC & Mutu</p>
+              <p className="text-gray-500">Diperiksa Oleh,</p>
+              <p className="font-semibold text-gray-700">Petugas QC & Mutu</p>
               <div className="h-14"></div>
-              <p className="font-bold underline text-gray-900">drg. Hendra Kusuma</p>
+              <p className="font-bold text-gray-900 border-t border-gray-400 pt-1 mx-6 min-h-[22px]"><>&nbsp;</></p>
             </div>
             <div>
-              <p className="text-gray-600">Kepala Gudang / Mengetahui</p>
+              <p className="text-gray-500">Mengetahui,</p>
+              <p className="font-semibold text-gray-700">Kepala Gudang</p>
               <div className="h-14"></div>
-              <p className="font-bold underline text-gray-900">Bambang Sutrisno, S.T.</p>
+              <p className="font-bold text-gray-900 border-t border-gray-400 pt-1 mx-6 min-h-[22px]"><>&nbsp;</></p>
             </div>
           </div>
         </div>

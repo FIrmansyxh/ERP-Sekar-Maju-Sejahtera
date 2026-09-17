@@ -28,6 +28,8 @@ interface TransaksiDetailModalProps {
   onUpdateNotaStatus?: (transaksiId: string) => void;
   onMarkAsLunas?: (transaksiId: string) => void;
   onOpenBayarModal?: (tx: TransaksiPembelian) => void;
+  /** Diisi bila kupon tidak boleh dihapus (bal sudah dikirim lewat Surat Jalan). */
+  alasanHapusTerkunci?: string;
 }
 
 export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
@@ -35,6 +37,7 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
   onClose,
   transaksi,
   onDeleteTransaksi,
+  alasanHapusTerkunci,
   onOpenEditModal,
   onUpdateNotaStatus,
   onMarkAsLunas,
@@ -78,7 +81,7 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
     try {
       await downloadElementAsPdf(
         receiptRef.current,
-        `NOTA_TIMBANG_${transaksi.transaksi_id.replace(/\//g, '_')}.pdf`,
+        `NOTA_TIMBANG_${transaksi.no_kupon.replace(/\//g, '_')}.pdf`,
         { orientation: 'portrait' }
       );
       if (onUpdateNotaStatus) {
@@ -132,7 +135,7 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
                 )}
               </div>
               <p className="text-[11px] font-mono text-gray-500 truncate mt-0.5">
-                No. Transaksi: {transaksi.transaksi_id} • <span className="font-bold text-gray-800 whitespace-nowrap font-mono">{transaksi.no_kupon}</span>
+                No. Kupon: <span className="font-bold text-gray-800 whitespace-nowrap font-mono">{transaksi.no_kupon}</span>
               </p>
             </div>
           </div>
@@ -162,7 +165,16 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
               </button>
             )}
 
-            {onDeleteTransaksi && (
+            {onDeleteTransaksi && alasanHapusTerkunci && (
+              <span
+                className="px-3 py-1.5 text-xs font-semibold text-gray-400 bg-gray-50 border border-gray-200 rounded-sm flex items-center space-x-1 cursor-not-allowed"
+                title={alasanHapusTerkunci}
+              >
+                <Lock className="w-3.5 h-3.5" />
+                <span>Terkunci</span>
+              </span>
+            )}
+            {onDeleteTransaksi && !alasanHapusTerkunci && (
               <button
                 type="button"
                 onClick={() => {
@@ -314,7 +326,7 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
               <div>
                 <h3 className="text-sm font-bold text-gray-900">Konfirmasi Hapus Transaksi</h3>
                 <p className="text-xs text-gray-500 font-mono">
-                  {transaksi.no_kupon} ({transaksi.transaksi_id})
+                  Kupon {transaksi.no_kupon}
                 </p>
               </div>
             </div>

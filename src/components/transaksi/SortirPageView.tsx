@@ -23,6 +23,7 @@ import { TransaksiPembelian, Petani, TabelHarga, Barang, TransaksiItemBal, UserR
 import { formatRupiah, formatNoKupon, formatDateHariBulanTahun, formatNumber, generateTransaksiId, hitungPotonganTaraKg } from '../../utils/formatters';
 import { useSessionDraft } from '../../hooks/useSessionDraft';
 import { buildBarangDariItem, hitungUlangKupon, isBalDitimbang, isKuponProsesSortir, nextBarangId } from '../../utils/kuponSortir';
+import { POTONGAN_GANTI_TIKAR, POTONGAN_KULI_PER_BAL, POTONGAN_TALI_PER_BAL } from '../../config/aturanTimbang';
 
 interface SortirPageViewProps {
   petaniList: Petani[];
@@ -295,9 +296,9 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
     }
 
     const tara = hitungPotonganTaraKg(0, isGantiTikar, cleanedBalCode);
-    const potTikar = isGantiTikar ? 75000 : 0;
-    const potKuli = 7000;
-    const potTali = 3000;
+    const potTikar = isGantiTikar ? POTONGAN_GANTI_TIKAR : 0;
+    const potKuli = POTONGAN_KULI_PER_BAL;
+    const potTali = POTONGAN_TALI_PER_BAL;
     const potTotal = potKuli + potTali + potTikar;
 
     const newItem: TransaksiItemBal = {
@@ -596,7 +597,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                     <span>Kupon Sudah Terdaftar!</span>
                   </div>
                   <p className="leading-tight text-[10px] text-rose-900">
-                    Kupon <strong className="font-mono">{noKupon}</strong> telah digunakan transaksi <strong>{duplicateKuponTx.transaksi_id}</strong> (Petani: <strong>{duplicateKuponTx.nama_petani}</strong>).
+                    Kupon <strong className="font-mono">{noKupon}</strong> sudah dipakai (Petani: <strong>{duplicateKuponTx.nama_petani}</strong>).
                   </p>
                   <button
                     type="button"

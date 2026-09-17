@@ -307,7 +307,6 @@ export interface PengirimanBarang {
   harga_deal_map?: Record<string, number>; // barang_id -> harga_deal_per_kg
   kode_harga_jual_map?: Record<string, string>; // barang_id -> kode_harga_jual
   berat_kirim_map?: Record<string, number>; // barang_id -> berat netto saat dikirim (kg), boleh beda dari data bal karena susut
-  nomor_kontrak?: string;
   catatan?: string;
   petugas?: string;
   dibuat_oleh?: string;

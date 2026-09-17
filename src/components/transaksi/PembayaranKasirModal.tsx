@@ -132,8 +132,6 @@ export const PembayaranKasirModal: React.FC<PembayaranKasirModalProps> = ({
           <div className="flex items-center space-x-2">
             <span className="text-gray-500 font-medium">Kupon:</span>
             <strong className="text-gray-900 font-mono text-xs">{transaksi.no_kupon}</strong>
-            <span className="text-gray-300">|</span>
-            <span className="text-gray-500 font-mono text-[11px]">{transaksi.transaksi_id}</span>
           </div>
           <span className="text-[11px] text-gray-500">
             Metode: <strong className="text-gray-800 font-medium">Kas Keluar (Tunai / Cash)</strong>

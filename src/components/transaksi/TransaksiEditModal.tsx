@@ -17,7 +17,8 @@ import {
   ArrowRight,
   Clock,
   ShieldCheck,
-  RotateCcw
+  RotateCcw,
+  Lock
 } from 'lucide-react';
 import { 
   TransaksiPembelian, 
@@ -29,6 +30,8 @@ import {
 } from '../../types';
 import { recordAuditLog } from '../../utils/storage';
 import { formatRupiah, generateBalId, generateNextUniqueNoBal, normalizeKg } from '../../utils/formatters';
+import { isBalTerkirim } from '../../utils/kunciHapus';
+import { POTONGAN_GANTI_TIKAR, POTONGAN_KULI_PER_BAL, POTONGAN_TALI_PER_BAL } from '../../config/aturanTimbang';
 
 interface TransaksiEditModalProps {
   isOpen: boolean;
@@ -109,8 +112,8 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
             potongan_tara_kg: it.potongan_tara_kg || 0,
             berat_kg: it.berat_kg,
             potongan: it.potongan || 0,
-            potongan_kuli: it.potongan_kuli || 7000,
-            potongan_tali: it.potongan_tali || 3000,
+            potongan_kuli: it.potongan_kuli || POTONGAN_KULI_PER_BAL,
+            potongan_tali: it.potongan_tali || POTONGAN_TALI_PER_BAL,
             potongan_tikar: it.potongan_tikar || 0,
             total_kotor: it.total_kotor || Math.round((it.berat_kg || 0) * (it.harga_per_kg || 0)),
             subtotal_bersih: it.subtotal_bersih || Math.max(0, Math.round((it.berat_kg || 0) * (it.harga_per_kg || 0)) - (it.potongan || 0)),
@@ -219,8 +222,8 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
       harga_per_kg: defaultTarif,
       berat_kg: 45.0,
       potongan: 10000,
-      potongan_kuli: 7000,
-      potongan_tali: 3000,
+      potongan_kuli: POTONGAN_KULI_PER_BAL,
+      potongan_tali: POTONGAN_TALI_PER_BAL,
       potongan_tikar: 0,
       total_kotor: Math.round(45.0 * defaultTarif),
       subtotal_bersih: Math.max(0, Math.round(45.0 * defaultTarif) - 10000),
@@ -230,7 +233,17 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
   };
 
   // Remove bal row
+  // Bal yang sudah dikirim lewat Surat Jalan tidak boleh dihapus dari kupon
+  const isRowTerkirim = (row: EditBalRow): boolean => {
+    const bal = barangList.find((b) => (row.barang_id && b.barang_id === row.barang_id) || b.no_bal === row.no_bal);
+    return Boolean(bal && isBalTerkirim(bal));
+  };
+
   const handleRemoveBalRow = (index: number) => {
+    if (balRows[index] && isRowTerkirim(balRows[index])) {
+      setValidationError(`Bal ${balRows[index].no_bal} sudah dikirim lewat Surat Jalan sehingga tidak dapat dihapus.`);
+      return;
+    }
     if (balRows.length <= 1) {
       setValidationError('Transaksi harus memiliki minimal 1 bal.');
       return;
@@ -333,8 +346,8 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
         berat_bruto_kg: row.berat_bruto_kg || row.berat_kg + (row.potongan_tara_kg || 0),
         potongan_tara_kg: row.potongan_tara_kg || 0,
         berat_kg: row.berat_kg,
-        potongan_kuli: row.potongan_kuli || 7000,
-        potongan_tali: row.potongan_tali || 3000,
+        potongan_kuli: row.potongan_kuli || POTONGAN_KULI_PER_BAL,
+        potongan_tali: row.potongan_tali || POTONGAN_TALI_PER_BAL,
         potongan_tikar: row.potongan_tikar || 0,
         potongan: row.potongan,
         total_kotor: row.total_kotor,
@@ -419,7 +432,7 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
       user_role: currentUser?.role || 'admin_sortir',
       modul: 'Koreksi Transaksi',
       aksi: 'UBAH_TRANSAKSI',
-      target_id: updatedTx.transaksi_id,
+      target_id: updatedTx.no_kupon,
       deskripsi: `Koreksi data transaksi ${updatedTx.no_kupon} (${updatedTx.nama_petani}). Alasan: ${alasanEdit.trim()}`,
       rincian_perubahan: changesList,
     });
@@ -448,9 +461,6 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
                 </h2>
                 <span className="px-2 py-0.5 bg-slate-200 text-slate-800 font-mono text-xs font-bold rounded-xs">
                   {transaksi.no_kupon}
-                </span>
-                <span className="text-xs text-slate-500 font-mono">
-                  ({transaksi.transaksi_id})
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
@@ -662,15 +672,24 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
 
                       {/* Action */}
                       <td className="py-2.5 px-3 text-center">
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveBalRow(idx)}
-                          disabled={balRows.length <= 1}
-                          className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-                          title="Hapus Bal dari transaksi ini"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {isRowTerkirim(row) ? (
+                          <span
+                            className="p-1 text-slate-300 inline-flex cursor-not-allowed"
+                            title={`Bal ${row.no_bal} sudah dikirim lewat Surat Jalan sehingga tidak dapat dihapus.`}
+                          >
+                            <Lock className="w-3.5 h-3.5" />
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveBalRow(idx)}
+                            disabled={balRows.length <= 1}
+                            className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                            title="Hapus Bal dari transaksi ini"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}

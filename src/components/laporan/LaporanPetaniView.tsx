@@ -35,6 +35,9 @@ import { formatDateHariBulanTahun } from '../../utils/formatters';
 import { hitungModalTransaksi } from '../../utils/finance';
 import { isTransaksiLunas } from '../../utils/statusBayar';
 import { Pagination } from '../common/Pagination';
+import { COMPANY_NAME } from '../../config/appInfo';
+import { loadCurrentUser } from '../../utils/storage';
+import { KopSurat } from '../common/KopSurat';
 
 interface LaporanPetaniViewProps {
   petaniList: Petani[];
@@ -439,13 +442,13 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
       
       {/* 1. Header Navigation Bar */}
       <div className="bg-white border border-gray-200 p-4 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center space-x-2">
-            <Users className="w-5 h-5 text-[#b81d24]" />
-            <h1 className="text-base font-bold text-gray-900 tracking-tight">
-              Laporan Petani & Rekapitulasi Setoran Tembakau
-            </h1>
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 bg-[#b81d24] text-white rounded-sm flex items-center justify-center shadow-xs shrink-0">
+            <Users className="w-5 h-5" />
           </div>
+          <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">
+            Laporan Petani & Rekapitulasi Setoran Tembakau
+          </h1>
         </div>
 
         {/* Action Controls: Unduh Excel, Unduh PDF, & Toggle Ringkasan */}
@@ -1171,7 +1174,6 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
                     <thead>
                       <tr className="bg-slate-50/90 text-slate-600 font-semibold border-b border-slate-200 text-xs">
                         <th className="py-2.5 px-3 text-center w-12">No</th>
-                        <th className="py-2.5 px-3">ID Transaksi</th>
                         <th className="py-2.5 px-3">Tanggal</th>
                         <th className="py-2.5 px-3 text-center">Kupon</th>
                         <th className="py-2.5 px-3">No Bal</th>
@@ -1190,7 +1192,6 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
                         return (
                           <tr key={t.transaksi_id} className="hover:bg-slate-50/80 transition-colors">
                             <td className="py-2.5 px-3 text-center font-mono text-slate-500">{idx + 1}</td>
-                            <td className="py-2.5 px-3 font-mono font-medium text-slate-800">{t.transaksi_id}</td>
                             <td className="py-2.5 px-3 text-slate-600 font-mono text-xs">{formatDateHariBulanTahun(t.tanggal_transaksi)}</td>
                             <td className="py-2.5 px-3 text-center font-mono font-semibold text-slate-700">{t.no_kupon || '-'}</td>
                             <td className="py-2.5 px-3">
@@ -1248,31 +1249,12 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
       <div className="hidden">
         <div ref={printDocumentRef} className="p-8 bg-white text-gray-900 font-sans" style={{ width: '1080px' }}>
           
-          {/* Official Letterhead Header */}
-          <div className="border-b-2 border-gray-800 pb-3 mb-4 flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-[#b81d24] text-white font-bold flex items-center justify-center text-sm">
-                SMS
-              </div>
-              <div>
-                <h1 className="text-base font-bold tracking-tight text-gray-900">PR. SEKAR MAJU SEJAHTERA</h1>
-                <p className="text-[11px] text-gray-600 font-medium">
-                  Sistem Data Gudang Tembakau & Rekapitulasi Kinerja Petani
-                </p>
-                <p className="text-[10px] text-gray-500">
-                  Pamekasan, Madura, Jawa Timur • Dokumen Resmi Audit
-                </p>
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-xs font-bold text-[#b81d24] uppercase">LAPORAN REKAPITULASI PETANI</div>
-              <div className="text-[10px] text-gray-500 mt-0.5">
-                Tanggal Ekspor: {formatDateHariBulanTahun(new Date().toISOString())}
-              </div>
-              <div className="text-[10px] text-gray-500">
-                Filter: {appliedFilters.wilayah !== 'ALL' ? `Desa ${appliedFilters.wilayah}` : 'Semua Wilayah'} • {appliedFilters.status !== 'ALL' ? `Status ${appliedFilters.status}` : 'Semua Status'}
-              </div>
-            </div>
+          <KopSurat judul="Laporan Rekapitulasi Petani" className="mb-2" />
+          <div className="mb-4 flex items-center justify-between text-[10px] text-gray-500">
+            <span>
+              Filter: {appliedFilters.wilayah !== 'ALL' ? `Desa ${appliedFilters.wilayah}` : 'Semua Wilayah'} • {appliedFilters.status !== 'ALL' ? `Status ${appliedFilters.status}` : 'Semua Status'}
+            </span>
+            <span>Tanggal Ekspor: {formatDateHariBulanTahun(new Date().toISOString())}</span>
           </div>
 
           {/* KPI Summary Block */}
@@ -1339,17 +1321,17 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
               <div className="text-gray-500">Dibuat Oleh,</div>
               <div className="font-bold text-gray-900 mt-0.5">Operator Loket / Kasir</div>
               <div className="h-16"></div>
-              <div className="font-semibold text-gray-800 border-t border-gray-400 pt-1 min-h-[22px]">&nbsp;</div>
+              <div className="font-semibold text-gray-800 border-t border-gray-400 pt-1 min-h-[22px]">{loadCurrentUser()?.nama_lengkap || <>&nbsp;</>}</div>
             </div>
             <div>
               <div className="text-gray-500">Diperiksa Oleh,</div>
               <div className="font-bold text-gray-900 mt-0.5">Kepala Gudang Tembakau</div>
               <div className="h-16"></div>
-              <div className="font-semibold text-gray-800 border-t border-gray-400 pt-1">Bambang Sutrisno, S.T.</div>
+              <div className="font-semibold text-gray-800 border-t border-gray-400 pt-1 min-h-[22px]">&nbsp;</div>
             </div>
             <div>
               <div className="text-gray-500">Mengetahui & Menyetujui,</div>
-              <div className="font-bold text-gray-900 mt-0.5">Direksi PR. Sekar Anom</div>
+              <div className="font-bold text-gray-900 mt-0.5">Direksi {COMPANY_NAME}</div>
               <div className="h-16"></div>
               <div className="font-semibold text-gray-800 border-t border-gray-400 pt-1 min-h-[22px]">&nbsp;</div>
             </div>

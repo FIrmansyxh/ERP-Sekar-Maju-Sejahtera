@@ -16,6 +16,10 @@ import { PengirimanBarang, Barang, TabelHarga, TransaksiPembelian } from '../../
 import { downloadElementAsPdf, printHtmlElementDirectly } from '../../utils/printDownload';
 import { openPrintDocument } from '../../utils/openDedicatedPrint';
 import { formatNumber, formatRupiah, angkaTerbilang } from '../../utils/formatters';
+import { COMPANY_NAME } from '../../config/appInfo';
+import { KopSurat } from '../common/KopSurat';
+import { beratKirimBal } from '../../utils/beratKirim';
+import { loadCurrentUser } from '../../utils/storage';
 
 interface SuratJalanPrintModalProps {
   isOpen: boolean;
@@ -68,42 +72,17 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
     openPrintDocument('surat_jalan', pengiriman.pengiriman_id);
   };
 
-  // Helper to lookup default unit price by grade
-  const getDefaultPriceByGrade = (grade: string): number => {
-    const clean = (grade || 'A').toUpperCase().trim();
-    const fromTable = tabelHarga.find((t) => t.kode_grade?.toUpperCase() === clean);
-    if (fromTable && fromTable.harga_per_kg > 0) return fromTable.harga_per_kg;
-
-    switch (clean) {
-      case 'A':
-      case 'A1':
-      case 'A+':
-        return 140000;
-      case 'B':
-      case 'B+':
-        return 120000;
-      case 'C':
-        return 100000;
-      case 'D':
-        return 80000;
-      case 'E':
-        return 60000;
-      case 'F':
-        return 40000;
-      default:
-        return 100000;
-    }
-  };
-
   const barangIds = pengiriman.barang_ids || [];
   const barcodeList = pengiriman.barcode_list || [];
+  // Petugas Logistik / Pengirim = nama akun yang login dan mencetak surat jalan
+  const namaPetugasLogistik = loadCurrentUser()?.nama_lengkap || pengiriman.petugas || '';
 
   // Map and calculate exact price, weight, and subtotal per bal
   const balDetails = barangIds.map((id, index) => {
     const found = barangList.find((b) => b.barang_id === id);
     const barcodeVal = barcodeList[index] || (found ? found.barcode || found.barang_id : id);
     const grade = found?.kode_grade || 'A';
-    const berat = pengiriman.berat_kirim_map?.[id] ?? (found?.berat_kg || (pengiriman.total_berat_kg ? pengiriman.total_berat_kg / (pengiriman.total_bal || 1) : 45));
+    const berat = beratKirimBal(pengiriman, id, found);
     
     // Priority 1: Agreed deal price from Sample Batch negotiation
     let pricePerKg = pengiriman.harga_deal_map?.[id];
@@ -121,7 +100,7 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
 
     return {
       barang_id: id,
-      no_bal: found?.no_bal || `BAL-${String(index + 1).padStart(3, '0')}`,
+      no_bal: found?.no_bal || barcodeVal,
       barcode: barcodeVal,
       kode_grade: typeof displayGrade !== 'undefined' ? displayGrade : grade,
       berat_kg: berat,
@@ -134,7 +113,7 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
   // Calculate Aggregates
   const totalItemsCount = balDetails.length > 0 ? balDetails.length : pengiriman.total_bal || 1;
   const grandTotalBerat = balDetails.reduce((acc, curr) => acc + curr.berat_kg, 0) || pengiriman.total_berat_kg || 0;
-  const grandTotalNilai = balDetails.reduce((acc, curr) => acc + curr.total_harga, 0) || (grandTotalBerat * 110000);
+  const grandTotalNilai = balDetails.reduce((acc, curr) => acc + curr.total_harga, 0);
   const averageHargaPerKg = grandTotalBerat > 0 ? Math.round(grandTotalNilai / grandTotalBerat) : 0;
   const terbilangStr = angkaTerbilang(grandTotalNilai);
 
@@ -219,39 +198,13 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
             className="bg-white p-6 sm:p-8 border border-gray-300 shadow-sm max-w-3xl mx-auto text-gray-900 print:border-none print:shadow-none print:p-0 font-sans"
             style={{ minHeight: '840px' }}
           >
-            {/* Header Kop Surat Jalan Resmi */}
-            <div className="border-b-2 border-[#b81d24] pb-3 mb-4 flex justify-between items-start">
-              <div className="space-y-0.5">
-                <div className="flex items-center space-x-2">
-                  <div className="w-7 h-7 bg-[#b81d24] text-white font-black flex items-center justify-center text-xs">
-                    SMS
-                  </div>
-                  <div>
-                    <h1 className="text-base font-black tracking-tight text-[#b81d24] uppercase">
-                      PR. SEKAR MAJU SEJAHTERA
-                    </h1>
-                  </div>
-                </div>
-                <div className="text-[11px] font-bold text-gray-800 uppercase tracking-wide">
-                  PABRIK ROKOK & PENGOLAHAN TEMBAKAU RAJANG MADURA
-                </div>
-                <div className="text-[10px] text-gray-600 leading-tight">
-                  Jl. Raya Proppo No. 88, Kec. Proppo, Kab. Pamekasan, Jawa Timur 69363
-                  <br />
-                  Telp: (0324) 321889 / 0812-3456-7890 • NPWP: 01.234.567.8-608.000
-                </div>
+            <KopSurat judul="Surat Jalan Pengiriman (DO)" className="mb-2" />
+            <div className="mb-4 flex items-center justify-between text-xs">
+              <div className="font-mono font-bold text-gray-900">
+                No: <span className="text-[#b81d24]">{pengiriman.no_surat_jalan}</span>
               </div>
-
-              <div className="text-right space-y-1">
-                <div className="inline-block bg-[#b81d24] text-white px-2.5 py-1 text-xs font-black uppercase tracking-wider">
-                  SURAT JALAN PENGIRIMAN (DO)
-                </div>
-                <div className="text-xs font-mono font-bold text-gray-900">
-                  No: <span className="text-[#b81d24]">{pengiriman.no_surat_jalan}</span>
-                </div>
-                <div className="text-[10.5px] text-gray-600 font-medium">
-                  Tgl Kirim: <span className="font-mono font-bold text-gray-800">{pengiriman.tanggal_kirim}</span>
-                </div>
+              <div className="text-[10.5px] text-gray-600 font-medium">
+                Tgl Kirim: <span className="font-mono font-bold text-gray-800">{pengiriman.tanggal_kirim}</span>
               </div>
             </div>
 
@@ -285,7 +238,7 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
                   </div>
                   <div>
                     <span className="text-gray-500 text-[10px] block">Petugas Logistik:</span>
-                    <span className="font-semibold text-gray-800">{pengiriman.petugas || 'Admin Ekspedisi'}</span>
+                    <span className="font-semibold text-gray-800">{namaPetugasLogistik || '-'}</span>
                   </div>
                 </div>
               </div>
@@ -306,9 +259,9 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
                 <thead>
                   <tr className="bg-gray-100 border-b border-gray-400 font-bold text-gray-900 text-[11px]">
                     <th className="p-2 border border-gray-300 text-center w-[6%]">No</th>
-                    <th className="p-2 border border-gray-300 w-[22%]">No Bal / Barcode</th>
+                    <th className="p-2 border border-gray-300 w-[22%]">No Bal</th>
                     <th className="p-2 border border-gray-300 text-center w-[12%]">Grade</th>
-                    <th className="p-2 border border-gray-300 text-right w-[18%]">Berat Netto</th>
+                    <th className="p-2 border border-gray-300 text-right w-[18%]">Berat Bruto</th>
                     <th className="p-2 border border-gray-300 text-right w-[21%]">Harga / Kg</th>
                     <th className="p-2 border border-gray-300 text-right w-[21%]">Total Harga</th>
                   </tr>
@@ -327,10 +280,10 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
                         {b.berat_kg.toLocaleString('id-ID', { maximumFractionDigits: 2 })} kg
                       </td>
                       <td className="p-1.5 border border-gray-300 text-right font-mono text-gray-700 whitespace-nowrap">
-                        {formatRupiah(b.harga_per_kg)}
+                        {b.harga_per_kg > 0 ? formatRupiah(b.harga_per_kg) : '-'}
                       </td>
                       <td className="p-1.5 border border-gray-300 text-right font-mono font-bold text-gray-950 whitespace-nowrap">
-                        {formatRupiah(b.total_harga)}
+                        {b.harga_per_kg > 0 ? formatRupiah(b.total_harga) : '-'}
                       </td>
                     </tr>
                   ))}
@@ -385,17 +338,17 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
 
             {/* Official 3-Party Signatures */}
             <div className="grid grid-cols-3 gap-4 pt-2 border-t border-gray-300 text-center text-xs">
-              <div className="space-y-12">
+              <div className="space-y-20">
                 <div>
                   <span className="font-bold text-gray-800 block">Petugas Pengirim (Gudang)</span>
-                  <span className="text-[10px] text-gray-500">PR. Sekar Maju Sejahtera</span>
+                  <span className="text-[10px] text-gray-500">{COMPANY_NAME}</span>
                 </div>
                 <div className="border-t border-gray-400 font-bold text-gray-900 pt-1 inline-block px-4 min-w-[120px]">
-                  {pengiriman.petugas || <>&nbsp;</>}
+                  {namaPetugasLogistik || <>&nbsp;</>}
                 </div>
               </div>
 
-              <div className="space-y-12">
+              <div className="space-y-20">
                 <div>
                   <span className="font-bold text-gray-800 block">Pengemudi / Ekspedisi</span>
                   <span className="text-[10px] text-gray-500">Pembawa Muatan</span>
@@ -405,7 +358,7 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
                 </div>
               </div>
 
-              <div className="space-y-12">
+              <div className="space-y-20">
                 <div>
                   <span className="font-bold text-gray-800 block">Penerima & QC Pabrik</span>
                   <span className="text-[10px] text-gray-500">{pengiriman.tujuan}</span>
@@ -418,8 +371,8 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
 
             {/* Footer Notice */}
             <div className="mt-6 pt-2 border-t border-gray-200 text-[9px] text-gray-500 flex justify-between items-center">
-              <span>Dicetak melalui Sistem ERP Gudang PR. Sekar Maju Sejahtera</span>
-              <span className="font-mono">Lembar 1: Pabrik Penerima • Lembar 2: Arsip SMS • Lembar 3: Ekspedisi</span>
+              <span>Dicetak melalui Sistem ERP Gudang {COMPANY_NAME}</span>
+              <span className="font-mono">Lembar 1: Pabrik Penerima • Lembar 2: Arsip {COMPANY_NAME} • Lembar 3: Ekspedisi</span>
             </div>
 
           </div>

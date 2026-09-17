@@ -32,6 +32,8 @@ import { PengirimanBarang, PengirimanSample, Barang, UserRole } from '../../type
 import { downloadElementAsPdf } from '../../utils/printDownload';
 import { downloadExcelReport, periodeInfo, todayStamp } from '../../utils/excelExport';
 import { Pagination } from '../common/Pagination';
+import { KopSurat } from '../common/KopSurat';
+import { beratBrutoBal, beratKirimBal } from '../../utils/beratKirim';
 
 interface LaporanPengirimanViewProps {
   pengirimanList: PengirimanBarang[];
@@ -166,16 +168,15 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
         if (p.status !== appliedFilters.status) return false;
       }
 
-      // Search Query (No SJ, Sopir, Plat, Catatan, Kontrak)
+      // Search Query (No SJ, Sopir, Plat, Tujuan, Petugas)
       if (appliedFilters.search) {
         const q = appliedFilters.search.toLowerCase();
         const matchSJ = (p.no_surat_jalan || '').toLowerCase().includes(q);
         const matchDriver = (p.driver_nama || '').toLowerCase().includes(q);
         const matchPlat = (p.plat_nomor || '').toLowerCase().includes(q);
         const matchTujuan = (p.tujuan || '').toLowerCase().includes(q);
-        const matchKontrak = (p.nomor_kontrak || '').toLowerCase().includes(q);
         const matchPetugas = (p.petugas || p.dibuat_oleh || '').toLowerCase().includes(q);
-        if (!matchSJ && !matchDriver && !matchPlat && !matchTujuan && !matchKontrak && !matchPetugas) {
+        if (!matchSJ && !matchDriver && !matchPlat && !matchTujuan && !matchPetugas) {
           return false;
         }
       }
@@ -312,8 +313,8 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
     const rincianBal = filteredPengirimanList.flatMap((p) =>
       (p.barang_ids || []).map((id) => {
         const bal = barangMap.get(id);
-        const beratGudang = bal?.berat_kg || 0;
-        const beratKirim = p.berat_kirim_map?.[id] ?? beratGudang;
+        const beratGudang = beratBrutoBal(bal);
+        const beratKirim = beratKirimBal(p, id, bal);
         const harga = p.harga_deal_map?.[id] || 0;
         return { p, id, bal, beratGudang, beratKirim, harga };
       })
@@ -332,10 +333,9 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
           { header: 'Nama Sopir' },
           { header: 'No Kendaraan', align: 'center' },
           { header: 'Total Bal', type: 'integer' },
-          { header: 'Total Netto (Kg)', type: 'kg' },
+          { header: 'Total Bruto (Kg)', type: 'kg' },
           { header: 'Nilai DO (Rp)', type: 'rupiah' },
           { header: 'Status', align: 'center' },
-          { header: 'Nomor Kontrak', align: 'center' },
           { header: 'Tanggal Diterima', type: 'date' },
           { header: 'Petugas' },
         ],
@@ -350,7 +350,6 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
           p.total_berat_kg,
           p.total_nilai_deal || 0,
           labelStatusDO(p.status),
-          p.nomor_kontrak || '-',
           p.tanggal_diterima || '-',
           p.petugas || p.dibuat_oleh || '-',
         ]),
@@ -359,7 +358,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
           overallKPIs.totalBalKirim,
           overallKPIs.totalKgKirim,
           totalNilaiDO,
-          '', '', '', '',
+          '', '', '',
         ],
       },
       {
@@ -373,7 +372,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
           { header: 'Pabrik Tujuan' },
           { header: 'No Bal', align: 'center' },
           { header: 'Grade', align: 'center' },
-          { header: 'Netto Gudang (Kg)', type: 'kg' },
+          { header: 'Bruto Gudang (Kg)', type: 'kg' },
           { header: 'Berat Kirim (Kg)', type: 'kg' },
           { header: 'Selisih / Susut (Kg)', type: 'kg' },
           { header: 'Harga Jual (Rp/Kg)', type: 'rupiah' },
@@ -410,8 +409,8 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
           { header: 'Pabrik Tujuan' },
           { header: 'Frekuensi DO', type: 'integer' },
           { header: 'Total Bal', type: 'integer' },
-          { header: 'Total Netto (Kg)', type: 'kg' },
-          { header: 'Rata-rata Netto / Trip (Kg)', type: 'kg' },
+          { header: 'Total Bruto (Kg)', type: 'kg' },
+          { header: 'Rata-rata Bruto / Trip (Kg)', type: 'kg' },
           { header: 'DO Diterima', type: 'integer' },
           { header: 'DO Belum Diterima', type: 'integer' },
           { header: 'Porsi Tonase', type: 'percent' },
@@ -500,9 +499,8 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
       const matchDriver = (p.driver_nama || '').toLowerCase().includes(q);
       const matchPlat = (p.plat_nomor || '').toLowerCase().includes(q);
       const matchTujuan = (p.tujuan || '').toLowerCase().includes(q);
-      const matchKontrak = (p.nomor_kontrak || '').toLowerCase().includes(q);
       const matchPetugas = (p.petugas || p.dibuat_oleh || '').toLowerCase().includes(q);
-      return matchSJ || matchDriver || matchPlat || matchTujuan || matchKontrak || matchPetugas;
+      return matchSJ || matchDriver || matchPlat || matchTujuan || matchPetugas;
     });
   }, [filteredPengirimanList, tableSearch]);
 
@@ -553,14 +551,13 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
       
       {/* 1. Header Navigation Bar */}
       <div className="bg-white border border-gray-200 p-4 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center space-x-2">
-            <Truck className="w-5 h-5 text-[#b81d24]" />
-            <h1 className="text-base font-bold text-gray-900 tracking-tight">
-              Laporan Pengiriman & Distribusi Tembakau (DO)
-            </h1>
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 bg-[#b81d24] text-white rounded-sm flex items-center justify-center shadow-xs shrink-0">
+            <Truck className="w-5 h-5" />
           </div>
-          
+          <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">
+            Laporan Pengiriman & Distribusi Tembakau (DO)
+          </h1>
         </div>
 
         {/* Action Controls: Unduh Excel & Unduh PDF */}
@@ -653,7 +650,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
                 {overallKPIs.totalKgKirim.toLocaleString('id-ID')} kg
               </div>
               <div className="text-[10px] text-gray-500 font-medium mt-0.5">
-                {(overallKPIs.totalKgKirim / 1000).toFixed(2)} Ton Netto
+                {(overallKPIs.totalKgKirim / 1000).toFixed(2)} Ton Bruto
               </div>
             </div>
           </div>
@@ -724,7 +721,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
             <div className="relative">
               <input
                 type="text"
-                placeholder="No SJ / Driver / Plat / Kontrak..."
+                placeholder="No SJ / Driver / Plat..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-7 pr-2 py-1.5 text-xs bg-gray-50 border border-gray-300 rounded-xs focus:bg-white focus:outline-none focus:border-[#b81d24]"
@@ -959,7 +956,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
                   <th className="py-2.5 px-3 border-r border-gray-200">Pabrik Rekanan / Tujuan</th>
                   <th className="py-2.5 px-3 border-r border-gray-200">Armada & Driver</th>
                   <th className="py-2.5 px-3 border-r border-gray-200 text-center">Total Bal</th>
-                  <th className="py-2.5 px-3 border-r border-gray-200 text-right">Netto (Kg)</th>
+                  <th className="py-2.5 px-3 border-r border-gray-200 text-right">Bruto (Kg)</th>
                   <th className="py-2.5 px-3 border-r border-gray-200 text-center">Status</th>
                   <th className="py-2.5 px-3 border-r border-gray-200">Petugas</th>
                   <th className="py-2.5 px-2 text-center w-20">Aksi</th>
@@ -987,9 +984,6 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
                         </td>
                         <td className="py-2.5 px-3 border-r border-gray-200">
                           <div className="font-bold font-mono text-gray-900">{p.no_surat_jalan}</div>
-                          {p.nomor_kontrak && (
-                            <div className="text-[10px] text-gray-500 font-mono">Kontrak: {p.nomor_kontrak}</div>
-                          )}
                         </td>
                         <td className="py-2.5 px-3 border-r border-gray-200 font-mono text-gray-700">
                           {p.tanggal_kirim ? p.tanggal_kirim.split('T')[0] : '-'}
@@ -1077,7 +1071,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
                   <th className="py-2.5 px-4 border-r border-gray-200">Pabrik Rekanan Tujuan</th>
                   <th className="py-2.5 px-4 border-r border-gray-200 text-center">Frekuensi DO</th>
                   <th className="py-2.5 px-4 border-r border-gray-200 text-center">Total Bal Terkirim</th>
-                  <th className="py-2.5 px-4 border-r border-gray-200 text-right">Total Netto (Kg)</th>
+                  <th className="py-2.5 px-4 border-r border-gray-200 text-right">Total Bruto (Kg)</th>
                   <th className="py-2.5 px-4 border-r border-gray-200 text-right">Rata-rata Tonase/Trip</th>
                   <th className="py-2.5 px-4 text-center">Realisasi Penerimaan</th>
                 </tr>
@@ -1169,7 +1163,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
               <thead>
                 <tr className="bg-gray-100 text-gray-700 font-bold uppercase text-[10px] border-b border-gray-200">
                   <th className="py-2.5 px-3 border-r border-gray-200 text-center w-10">No</th>
-                  <th className="py-2.5 px-3 border-r border-gray-200">ID Sample</th>
+                  <th className="py-2.5 px-3 border-r border-gray-200">No Bal</th>
                   <th className="py-2.5 px-3 border-r border-gray-200">Grade / Mutu</th>
                   <th className="py-2.5 px-3 border-r border-gray-200">Tanggal Kirim</th>
                   <th className="py-2.5 px-3 border-r border-gray-200">Tujuan Lab / Pabrik</th>
@@ -1193,7 +1187,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
                     return (
                       <tr key={s.sample_id} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'} hover:bg-gray-100/80 transition-colors`}>
                         <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono text-gray-500">{rowNumber}</td>
-                        <td className="py-2.5 px-3 border-r border-gray-200 font-mono font-bold text-gray-900">{s.sample_id}</td>
+                        <td className="py-2.5 px-3 border-r border-gray-200 font-mono font-bold text-gray-900">{s.no_bal || '-'}</td>
                         <td className="py-2.5 px-3 border-r border-gray-200">
                           <span className="px-2 py-0.5 bg-zinc-900 text-white rounded-xs text-[10px] font-bold">
                             Grade {s.kode_grade}
@@ -1313,10 +1307,9 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
               <thead>
                 <tr className="bg-gray-100 text-gray-700 font-bold uppercase text-[10px] border-b border-gray-200">
                   <th className="py-2.5 px-3 border-r border-gray-200 text-center w-10">No</th>
-                  <th className="py-2.5 px-3 border-r border-gray-200">No Bal</th>
-                  <th className="py-2.5 px-3 border-r border-gray-200 text-center">No Bal Fisik</th>
+                  <th className="py-2.5 px-3 border-r border-gray-200 text-center">No Bal</th>
                   <th className="py-2.5 px-3 border-r border-gray-200 text-center">Grade</th>
-                  <th className="py-2.5 px-3 border-r border-gray-200 text-right">Berat Netto (Kg)</th>
+                  <th className="py-2.5 px-3 border-r border-gray-200 text-right">Berat Bruto (Kg)</th>
                   <th className="py-2.5 px-3 border-r border-gray-200">Petani Asal</th>
                   <th className="py-2.5 px-3 border-r border-gray-200 text-center">Tanggal Keluar</th>
                 </tr>
@@ -1324,7 +1317,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
               <tbody className="divide-y divide-gray-200">
                 {balKeluarList.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-gray-500 italic">
+                    <td colSpan={6} className="py-8 text-center text-gray-500 italic">
                       Belum ada catatan bal fisik yang berstatus keluar.
                     </td>
                   </tr>
@@ -1335,7 +1328,6 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
                     return (
                       <tr key={b.barang_id} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'} hover:bg-gray-100/80 transition-colors`}>
                         <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono text-gray-500">{rowNumber}</td>
-                        <td className="py-2.5 px-3 border-r border-gray-200 font-mono font-bold text-gray-900">{b.barang_id}</td>
                         <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono font-bold text-gray-800">{b.no_bal}</td>
                         <td className="py-2.5 px-3 border-r border-gray-200 text-center">
                           <span className="px-2 py-0.5 bg-zinc-900 text-white rounded-none text-[10px] font-bold">
@@ -1343,7 +1335,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
                           </span>
                         </td>
                         <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono font-bold text-gray-900">
-                          {b.berat_kg} kg
+                          {beratBrutoBal(b)} kg
                         </td>
                         <td className="py-2.5 px-3 border-r border-gray-200 font-semibold text-gray-800">
                           {b.nama_petani || '-'}
@@ -1491,7 +1483,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {selectedDOForDetail.barang_ids.map((id, idx) => (
                     <div key={idx} className="p-2 bg-gray-50 border border-gray-200 text-xs font-mono flex items-center justify-between">
-                      <span className="font-bold text-gray-800">{id}</span>
+                      <span className="font-bold text-gray-800">{barangList.find((b) => b.barang_id === id)?.no_bal || id}</span>
                       <span className="text-[10px] text-gray-400">#{idx + 1}</span>
                     </div>
                   ))}
@@ -1527,31 +1519,12 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
       <div className="hidden">
         <div ref={printDocumentRef} className="p-8 bg-white text-gray-900 font-sans" style={{ width: '1080px' }}>
           
-          {/* Letterhead Header */}
-          <div className="border-b-2 border-gray-800 pb-3 mb-4 flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-[#b81d24] text-white font-bold flex items-center justify-center text-sm">
-                SMS
-              </div>
-              <div>
-                <h1 className="text-base font-bold tracking-tight text-gray-900">PR. SEKAR MAJU SEJAHTERA</h1>
-                <p className="text-[11px] text-gray-600 font-medium">
-                  Sistem Data Gudang Tembakau & Rekapitulasi Pengiriman (DO)
-                </p>
-                <p className="text-[10px] text-gray-500">
-                  Pamekasan, Madura, Jawa Timur • Dokumen Resmi Pengiriman Barang
-                </p>
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-xs font-bold text-[#b81d24] uppercase">LAPORAN PENGIRIMAN & DISTRIBUSI</div>
-              <div className="text-[10px] text-gray-500 mt-0.5">
-                Tanggal Ekspor: {formatDateHariBulanTahun(new Date().toISOString())}
-              </div>
-              <div className="text-[10px] text-gray-500">
-                Tujuan: {appliedFilters.pabrik !== 'ALL' ? appliedFilters.pabrik : 'Semua Pabrik'} • Status: {appliedFilters.status !== 'ALL' ? appliedFilters.status : 'Semua Status'}
-              </div>
-            </div>
+          <KopSurat judul="Laporan Pengiriman & Distribusi" className="mb-2" />
+          <div className="mb-4 flex items-center justify-between text-[10px] text-gray-500">
+            <span>
+              Tujuan: {appliedFilters.pabrik !== 'ALL' ? appliedFilters.pabrik : 'Semua Pabrik'} • Status: {appliedFilters.status !== 'ALL' ? appliedFilters.status : 'Semua Status'}
+            </span>
+            <span>Tanggal Ekspor: {formatDateHariBulanTahun(new Date().toISOString())}</span>
           </div>
 
           {/* KPI Summary Block */}
@@ -1585,7 +1558,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
                 <th className="p-2 border border-gray-300">Nama Sopir</th>
                 <th className="p-2 border border-gray-300">No. Kendaraan</th>
                 <th className="p-2 border border-gray-300 text-center">Total Bal</th>
-                <th className="p-2 border border-gray-300 text-right">Netto (Kg)</th>
+                <th className="p-2 border border-gray-300 text-right">Bruto (Kg)</th>
                 <th className="p-2 border border-gray-300 text-center">Status</th>
               </tr>
             </thead>
@@ -1618,7 +1591,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
               <div className="text-gray-500">Diperiksa Oleh,</div>
               <div className="font-bold text-gray-900 mt-0.5">Kepala Gudang Tembakau</div>
               <div className="h-16"></div>
-              <div className="font-semibold text-gray-800 border-t border-gray-400 pt-1">Bambang Sutrisno, S.T.</div>
+              <div className="font-semibold text-gray-800 border-t border-gray-400 pt-1 min-h-[22px]">&nbsp;</div>
             </div>
             <div>
               <div className="text-gray-500">Diterima Oleh,</div>

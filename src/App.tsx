@@ -39,6 +39,7 @@ import {
 } from './utils/storage';
 import { normalizeStatusBal, resolveStatusStok } from './utils/kuponSortir';
 import { filterBarangLunas } from './utils/statusBayar';
+import { balTerkirimDariTransaksi, isSuratJalanTerkunci, pesanSuratJalanTerkunci, pesanTransaksiTerkunci } from './utils/kunciHapus';
 import { clearAllDrafts, getDraftRecovery, markDraftCleanExit, touchDraftAlive } from './utils/draftStorage';
 import { hasModuleAccess } from './utils/rbac';
 import { normalizeKg } from './utils/formatters';
@@ -887,7 +888,7 @@ export default function App() {
         user_role: currentRole,
         modul: 'Transaksi Pembelian',
         aksi: meta.audit.aksi,
-        target_id: newTx.transaksi_id,
+        target_id: newTx.no_kupon,
         deskripsi: meta.audit.deskripsi,
         rincian_perubahan: meta.audit.rincian_perubahan,
       });
@@ -923,8 +924,8 @@ export default function App() {
           user_role: currentRole,
           modul: 'Transaksi Pembelian',
           aksi: 'UBAH_TRANSAKSI',
-          target_id: newTx.transaksi_id,
-          deskripsi: `Koreksi data transaksi ${newTx.transaksi_id} (${newTx.nama_petani})`,
+          target_id: newTx.no_kupon,
+          deskripsi: `Koreksi data kupon ${newTx.no_kupon} (${newTx.nama_petani})`,
           rincian_perubahan: diffSummary.length > 0 ? diffSummary : ['Pembaruan rincian timbang/status'],
         });
       }
@@ -934,13 +935,13 @@ export default function App() {
         user_role: currentRole,
         modul: 'Transaksi Pembelian',
         aksi: 'TAMBAH_TRANSAKSI',
-        target_id: newTx.transaksi_id,
-        deskripsi: `Pencatatan transaksi baru ${newTx.transaksi_id} (Kupon: ${newTx.no_kupon}, Petani: ${newTx.nama_petani}, ${balCount} Bal)`,
+        target_id: newTx.no_kupon,
+        deskripsi: `Pencatatan kupon baru ${newTx.no_kupon} (Petani: ${newTx.nama_petani}, ${balCount} Bal)`,
       });
     }
 
     if (!meta.silent) {
-      showToast(`Transaksi ${newTx.transaksi_id} (${balCount} Bal, ${newTx.berat_kg} Kg) berhasil disimpan!`);
+      showToast(`Kupon ${newTx.no_kupon} (${balCount} Bal, ${newTx.berat_kg} Kg) berhasil disimpan!`);
     }
   };
 
@@ -953,13 +954,20 @@ export default function App() {
     const txToDelete = transaksiList.find((t) => t.transaksi_id === transaksiId);
     if (!txToDelete) return;
 
+    // Kupon yang balnya sudah dikirim lewat Surat Jalan tidak boleh dihapus
+    const noBalTerkirim = balTerkirimDariTransaksi(txToDelete, barangList, pengirimanList);
+    if (noBalTerkirim.length > 0) {
+      showToast(pesanTransaksiTerkunci(txToDelete, noBalTerkirim), 'info');
+      return;
+    }
+
     recordAuditLog({
       user_nama: currentUser?.nama_lengkap || 'Sistem',
       user_role: currentRole,
       modul: 'Transaksi Pembelian',
       aksi: 'HAPUS_TRANSAKSI',
-      target_id: transaksiId,
-      deskripsi: `Penghapusan transaksi ${transaksiId} (Kupon: ${txToDelete.no_kupon}, Petani: ${txToDelete.nama_petani}). Alasan: ${alasanHapus || 'Tanpa keterangan'}`,
+      target_id: txToDelete.no_kupon,
+      deskripsi: `Penghapusan kupon ${txToDelete.no_kupon} (Petani: ${txToDelete.nama_petani}). Alasan: ${alasanHapus || 'Tanpa keterangan'}`,
       rincian_perubahan: [`Alasan: ${alasanHapus || '-'}`],
     });
 
@@ -1019,7 +1027,7 @@ export default function App() {
     const updated = [sample, ...sampleList];
     setSampleList(updated);
     saveSampleData(updated);
-    showToast(`Sample ${sample.sample_id} berhasil dikirim.`);
+    showToast(`Sample bal ${sample.no_bal || "-"} berhasil dikirim.`);
   };
 
   const handleSaveBatchSamples = (newSamples: PengirimanSample[], updatedBarangs: Barang[]) => {
@@ -1040,7 +1048,7 @@ export default function App() {
     const updated = sampleList.map((s) => (s.sample_id === sample.sample_id ? sample : s));
     setSampleList(updated);
     saveSampleData(updated);
-    showToast(`Status sampel ${sample.sample_id} diupdate menjadi "${sample.status.toUpperCase()}".`);
+    showToast(`Status sampel bal ${sample.no_bal || "-"} diupdate menjadi "${sample.status.toUpperCase()}".`);
   };
 
   // --- PRD 6.1: Pengiriman Barang (DO) Handlers ---
@@ -1132,6 +1140,7 @@ export default function App() {
 
   const handleDeleteBatchSample = (batchId: string, revertedBarangs?: Barang[]) => {
     if (currentUser?.status_aktif === false) return showToast('Akun Anda dinonaktifkan.', 'info');
+    const kodeBatch = batchSampleList.find((b) => b.batch_id === batchId)?.kode_batch || '';
     const list = batchSampleList.filter(b => b.batch_id !== batchId);
     setBatchSampleList(list);
     saveBatchSampleData(list);
@@ -1143,7 +1152,7 @@ export default function App() {
       saveBarangData(newBarangList);
     }
     
-    showToast(`Batch ${batchId} berhasil dihapus.`);
+    showToast(`Batch ${kodeBatch} berhasil dihapus.`);
   };
 
   const handleUpdateBatchSample = (updatedBatch: BatchPengirimanSample, updatedBarangs?: Barang[]) => {
@@ -1158,7 +1167,7 @@ export default function App() {
       saveBarangData(newBarangList);
     }
     
-    showToast(`Batch ${updatedBatch.batch_id} berhasil diperbarui.`);
+    showToast(`Batch ${updatedBatch.kode_batch} berhasil diperbarui.`);
   };
 
   const handleUpdatePengiriman = (updatedPengiriman: PengirimanBarang) => {
@@ -1169,6 +1178,12 @@ export default function App() {
   };
 
   const handleDeletePengiriman = (pengirimanId: string, revertedBarangs?: Barang[]) => {
+    const target = pengirimanList.find((p) => p.pengiriman_id === pengirimanId);
+    if (target && isSuratJalanTerkunci(target)) {
+      showToast(pesanSuratJalanTerkunci(target), 'info');
+      return;
+    }
+
     const list = pengirimanList.filter((p) => p.pengiriman_id !== pengirimanId);
     setPengirimanList(list);
     savePengirimanData(list);
@@ -1187,7 +1202,7 @@ export default function App() {
     const updated = pengirimanList.map(p => p.pengiriman_id === pengirimanId ? { ...p, status: newStatus as any } : p);
     setPengirimanList(updated);
     savePengirimanData(updated);
-    showToast(`Status pengiriman ${pengirimanId} menjadi ${newStatus}.`);
+    showToast(`Status surat jalan ${pengirimanList.find((p) => p.pengiriman_id === pengirimanId)?.no_surat_jalan || ''} menjadi ${newStatus}.`);
   };
 
   // Laporan nilai/aset hanya memakai bal dari kupon yang sudah dibayar

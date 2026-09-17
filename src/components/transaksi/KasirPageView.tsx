@@ -1,7 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { 
   Search, 
-  Printer, 
   Scale, 
   CheckCircle2, 
   Clock, 
@@ -11,7 +10,6 @@ import {
   Filter,
   Eye,
   Edit3,
-  ArrowUpDown,
   ArrowUp,
   ArrowDown,
   X,
@@ -25,8 +23,10 @@ import { PembayaranKasirModal } from './PembayaranKasirModal';
 import { TransaksiEditModal } from './TransaksiEditModal';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { Pagination } from '../common/Pagination';
+import { SortIcon } from '../common/SortIcon';
 import { openPrintDocument } from '../../utils/openDedicatedPrint';
 import { isKuponProsesSortir } from '../../utils/kuponSortir';
+import { balTerkirimDariTransaksi, pesanTransaksiTerkunci } from '../../utils/kunciHapus';
 
 interface KasirPageViewProps {
   transaksiList: TransaksiPembelian[];
@@ -201,42 +201,6 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     }
 
     setSelectedTxForBayar(tx);
-  };
-
-  const handleCetakClick = (tx: TransaksiPembelian) => {
-    const weighStatus = getKuponWeighStatus(tx);
-    if (!weighStatus.isAllWeighed) {
-      setConfirmConfig({
-        isOpen: true,
-        title: 'Nota Belum Dapat Dicetak',
-        message: `${alasanBelumSiapBayar(tx, weighStatus)}\n\nSortir kupon harus selesai, seluruh bal ditimbang lengkap, dan dibayar di kasir sebelum nota resmi dapat dicetak.\n\nApakah Anda ingin membuka Kupon ${tx.no_kupon} di modul Timbangan sekarang?`,
-        confirmText: 'Buka Modul Timbangan',
-        cancelText: 'Tutup',
-        onConfirm: () => {
-          setConfirmConfig(prev => ({ ...prev, isOpen: false }));
-          onNavigateToTimbangan(tx.no_kupon, tx.transaksi_id);
-        }
-      });
-      return;
-    }
-
-    const isLunas = tx.status_pembayaran === 'lunas' || tx.metode_pembayaran === 'cash';
-    if (!isLunas) {
-      setConfirmConfig({
-        isOpen: true,
-        title: 'Nota Belum Lunas',
-        message: `Perhatian: Nota pembelian untuk Kupon ${tx.no_kupon} belum dapat dicetak karena kasir belum memproses pembayaran tunai (Cash).\n\nNominal tagihan yang harus dibayarkan: ${formatRupiah(tx.harga_final)}.\n\nApakah Anda ingin membuka popup pembayaran kasir sekarang?`,
-        confirmText: 'Buka Pembayaran Kasir',
-        cancelText: 'Tutup',
-        onConfirm: () => {
-          setConfirmConfig(prev => ({ ...prev, isOpen: false }));
-          setSelectedTxForBayar(tx);
-        }
-      });
-      return;
-    }
-    openPrintDocument('nota', tx.transaksi_id);
-    handleUpdateNotaStatus(tx.transaksi_id);
   };
 
   // Main Filter logic
@@ -818,7 +782,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 >
                   <div className="flex items-center justify-between">
                     <span>Kupon</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    <SortIcon aktif={sortField === 'kupon'} arah={sortDirection} />
                   </div>
                 </th>
                 <th 
@@ -827,7 +791,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 >
                   <div className="flex items-center justify-between">
                     <span>Tanggal</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    <SortIcon aktif={sortField === 'tanggal'} arah={sortDirection} />
                   </div>
                 </th>
                 <th 
@@ -836,7 +800,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 >
                   <div className="flex items-center justify-between">
                     <span>Petani</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    <SortIcon aktif={sortField === 'petani'} arah={sortDirection} />
                   </div>
                 </th>
                 <th 
@@ -845,7 +809,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 >
                   <div className="flex items-center justify-center space-x-1">
                     <span>Jumlah</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    <SortIcon aktif={sortField === 'jumlah'} arah={sortDirection} />
                   </div>
                 </th>
                 <th 
@@ -854,7 +818,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 >
                   <div className="flex items-center justify-end space-x-1">
                     <span>Netto</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    <SortIcon aktif={sortField === 'netto'} arah={sortDirection} />
                   </div>
                 </th>
                 <th 
@@ -863,7 +827,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 >
                   <div className="flex items-center justify-end space-x-1">
                     <span>Total Harga Beli</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    <SortIcon aktif={sortField === 'total_kotor'} arah={sortDirection} />
                   </div>
                 </th>
                 <th 
@@ -872,7 +836,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 >
                   <div className="flex items-center justify-end space-x-1">
                     <span>Pajak</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    <SortIcon aktif={sortField === 'pajak'} arah={sortDirection} />
                   </div>
                 </th>
                 <th 
@@ -881,7 +845,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 >
                   <div className="flex items-center justify-end space-x-1">
                     <span>Potongan</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    <SortIcon aktif={sortField === 'potongan'} arah={sortDirection} />
                   </div>
                 </th>
                 <th 
@@ -890,7 +854,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 >
                   <div className="flex items-center justify-end space-x-1">
                     <span>Jumlah Bayar</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    <SortIcon aktif={sortField === 'jumlah_bayar'} arah={sortDirection} />
                   </div>
                 </th>
                 <th 
@@ -899,7 +863,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 >
                   <div className="flex items-center justify-end space-x-1">
                     <span>Cash</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    <SortIcon aktif={sortField === 'cash'} arah={sortDirection} />
                   </div>
                 </th>
                 <th 
@@ -908,7 +872,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 >
                   <div className="flex items-center justify-end space-x-1">
                     <span>Kredit</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    <SortIcon aktif={sortField === 'kredit'} arah={sortDirection} />
                   </div>
                 </th>
                 <th 
@@ -917,7 +881,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 >
                   <div className="flex items-center justify-end space-x-1">
                     <span>AVG</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    <SortIcon aktif={sortField === 'avg'} arah={sortDirection} />
                   </div>
                 </th>
                 <th className="py-3 px-3.5 text-center w-36">
@@ -1071,17 +1035,6 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                             <span>Detail</span>
                           </button>
 
-                          {/* Tombol Cetak */}
-                          <button
-                            type="button"
-                            onClick={() => handleCetakClick(tx)}
-                            className={`px-2.5 py-1 font-medium text-[11px] rounded transition-colors cursor-pointer inline-flex items-center space-x-1 ${(!isLunas || !isAllWeighed) ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200' : 'bg-[#b81d24] hover:bg-[#a0181e] text-white'}`}
-                            title={(!isLunas || !isAllWeighed) ? "Cetak Nota (Draft / Belum Lunas)" : "Cetak Nota Pembelian Resmi (Lunas)"}
-                          >
-                            <Printer className="w-3 h-3" />
-                            <span>Cetak</span>
-                          </button>
-
                           {/* Tombol Bayar (Jika belum lunas) */}
                           {!isLunas && (
                             isAllWeighed ? (
@@ -1131,8 +1084,16 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                             </button>
                           )}
 
-                          {/* Tombol Hapus khusus superadmin */}
-                          {(userRole === 'superadmin') && (
+                          {/* Tombol Hapus khusus superadmin; terkunci bila bal sudah dikirim */}
+                          {(userRole === 'superadmin') && balTerkirimDariTransaksi(tx, barangList).length > 0 && (
+                            <span
+                              className="p-1 text-slate-300 cursor-not-allowed inline-flex"
+                              title={pesanTransaksiTerkunci(tx, balTerkirimDariTransaksi(tx, barangList))}
+                            >
+                              <Lock className="w-3.5 h-3.5" />
+                            </span>
+                          )}
+                          {(userRole === 'superadmin') && balTerkirimDariTransaksi(tx, barangList).length === 0 && (
                             <button
                               type="button"
                               onClick={() => {
@@ -1218,6 +1179,11 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
         onMarkAsLunas={handleMarkAsLunas}
         onOpenBayarModal={(tx) => setSelectedTxForBayar(tx)}
         onOpenEditModal={(tx) => setSelectedTxForEdit(tx)}
+        alasanHapusTerkunci={(() => {
+          if (!selectedTxForDetail) return undefined;
+          const noBalTerkirim = balTerkirimDariTransaksi(selectedTxForDetail, barangList);
+          return noBalTerkirim.length > 0 ? pesanTransaksiTerkunci(selectedTxForDetail, noBalTerkirim) : undefined;
+        })()}
         onDeleteTransaksi={(txId, alasan) => {
           if (onDeleteTransaksi) onDeleteTransaksi(txId, alasan);
           setSelectedTxForDetail(null);
@@ -1265,7 +1231,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 <div>
                   <h3 className="text-sm font-bold text-gray-900">Konfirmasi Pembatalan Transaksi Pembelian (Void)</h3>
                   <p className="text-xs text-rose-600 font-mono font-semibold">
-                    Kupon: {txToDelete.no_kupon} • ID: {txToDelete.transaksi_id}
+                    Kupon: {txToDelete.no_kupon}
                   </p>
                 </div>
               </div>

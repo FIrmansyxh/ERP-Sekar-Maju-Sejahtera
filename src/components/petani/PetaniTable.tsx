@@ -26,6 +26,7 @@ import { Petani, UserRole, TransaksiPembelian } from '../../types';
 import { formatNumber } from '../../utils/formatters';
 import { canUserPerform } from '../../utils/rbac';
 import { Pagination } from '../common/Pagination';
+import { SortIcon } from '../common/SortIcon';
 
 interface PetaniTableProps {
   data: Petani[];
@@ -119,16 +120,7 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
     }
   };
 
-  const renderSortIcon = (field: string) => {
-    if (sortBy !== field) {
-      return null;
-    }
-    return (
-      <span className="text-xs font-black text-[#b81d24] ml-1">
-        {sortOrder === 'asc' ? '↑' : '↓'}
-      </span>
-    );
-  };
+  const renderSortIcon = (field: string) => <SortIcon aktif={sortBy === field} arah={sortOrder} />;
 
   const canManagePetani = canUserPerform(userRole, 'canCreatePetani');
 

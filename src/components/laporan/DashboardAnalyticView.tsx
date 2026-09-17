@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { 
+import {
+  BarChart3,
   DollarSign, 
   Scale, 
   Package, 
@@ -32,6 +33,7 @@ import { downloadExcelReport, labelStatusPengiriman, labelStatusSample, labelSta
 import { formatRupiah } from '../../utils/formatters';
 import { loadBatchSampleData, loadHargaJualData } from '../../utils/storage';
 import { filterBarangLunas, isTransaksiLunas, labelStatusBayar } from '../../utils/statusBayar';
+import { beratBrutoItemSample } from '../../utils/beratKirim';
 import {
   hitungTotalModal,
   hitungTotalPenjualan,
@@ -535,7 +537,6 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
         info: ['Seluruh transaksi pembelian'],
         columns: [
           { header: 'No', type: 'integer', align: 'center' },
-          { header: 'ID Transaksi', align: 'center' },
           { header: 'Kupon', align: 'center' },
           { header: 'Tanggal', type: 'date' },
           { header: 'Nama Petani' },
@@ -550,7 +551,6 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
         ],
         rows: rows.map(({ t, modal, potongan, bayar, noBal, balCount }, idx) => [
           idx + 1,
-          t.transaksi_id,
           t.no_kupon || '-',
           t.tanggal_transaksi,
           t.nama_petani,
@@ -564,7 +564,7 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
           labelStatusBayar(t),
         ]),
         totalRow: [
-          `TOTAL (${rows.length} transaksi)`, '', '', '', '',
+          `TOTAL (${rows.length} transaksi)`, '', '', '',
           rows.reduce((sum, r) => sum + r.balCount, 0),
           '', '',
           rows.reduce((sum, r) => sum + (r.t.berat_kg || 0), 0),
@@ -712,7 +712,7 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
           { header: 'No Jadi', align: 'center' },
           { header: 'Grade', align: 'center' },
           { header: 'Petani' },
-          { header: 'Netto (Kg)', type: 'kg' },
+          { header: 'Bruto (Kg)', type: 'kg' },
           { header: 'Harga Tawaran (Rp/Kg)', type: 'rupiah' },
           { header: 'Harga Deal (Rp/Kg)', type: 'rupiah' },
           { header: 'Nilai (Rp)', type: 'rupiah' },
@@ -731,10 +731,10 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
             it.kode_bal_pembeli || '-',
             it.kode_grade,
             it.nama_petani || '-',
-            it.berat_bal_kg,
+            beratBrutoItemSample(it),
             it.harga_tawaran_kg,
             it.harga_deal_kg || '-',
-            (it.berat_bal_kg || 0) * harga,
+            beratBrutoItemSample(it) * harga,
             labelStatusSample(it.status_item),
             it.sudah_dikirim_do ? 'Ya' : 'Belum',
             it.alasan_tolak || it.catatan_nego || '-',
@@ -742,9 +742,9 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
         }),
         totalRow: [
           `TOTAL (${items.length} bal)`, '', '', '', '', '', '', '',
-          items.reduce((sum, { it }) => sum + (it.berat_bal_kg || 0), 0),
+          items.reduce((sum, { it }) => sum + beratBrutoItemSample(it), 0),
           '', '',
-          items.reduce((sum, { it }) => sum + (it.berat_bal_kg || 0) * (it.harga_deal_kg || it.harga_tawaran_kg || 0), 0),
+          items.reduce((sum, { it }) => sum + beratBrutoItemSample(it) * (it.harga_deal_kg || it.harga_tawaran_kg || 0), 0),
           '', '', '',
         ],
       },
@@ -756,14 +756,13 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
       
       {/* Header Banner */}
       <div className="bg-white p-4 border border-gray-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center space-x-2">
-            
-            <h1 className="text-base font-bold text-gray-900 tracking-tight">
-              Dashboard Laporan & Analytic ERP
-            </h1>
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 bg-[#b81d24] text-white rounded-sm flex items-center justify-center shadow-xs shrink-0">
+            <BarChart3 className="w-5 h-5" />
           </div>
-          
+          <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">
+            Dashboard Laporan & Analytic ERP
+          </h1>
         </div>
 
         {/* Header Quick Buttons */}

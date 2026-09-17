@@ -123,12 +123,6 @@ export function generateNextUniqueNoBal(
   return candidate;
 }
 
-// Generate Delivery Order / No. Surat Jalan (Urutan sederhana: 1 hingga 9999)
-export function generateNoSuratJalanSimple(sequenceNumber: number = 1, _date?: Date | string | null): string {
-  const num = Math.max(1, Math.min(9999, Math.floor(sequenceNumber)));
-  return String(num);
-}
-
 // Generate Sample ID (Urutan sederhana: 1 hingga 9999)
 export function generateSampleId(_grade?: string, _date?: Date | string | null, sequenceNumber: number = 1): string {
   const num = Math.max(1, Math.min(9999, Math.floor(sequenceNumber)));
@@ -168,6 +162,7 @@ export function extractNomorBalId(noBal?: string): string {
   return match ? match[1] : trimmed;
 }
 
+// Ketentuan tara ini juga tertulis di balik Kartu Petani (PetaniCardPrintModal); ubah keduanya bersamaan.
 export function hitungPotonganTaraKg(beratBruto: number, gantiTikar?: boolean, noBal?: string): number {
   // Kode bal berawalan SB (insensitive) = 2kg rata
   const prefix = extractKodeBalPrefix(noBal);

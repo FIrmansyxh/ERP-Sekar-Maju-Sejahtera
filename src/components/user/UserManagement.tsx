@@ -340,7 +340,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({
             <thead>
               <tr className="bg-slate-50/90 border-b border-slate-200 text-xs font-semibold text-slate-600">
                 <th className="py-2.5 px-3 text-center w-12">No</th>
-                <th className="py-2.5 px-3">User ID</th>
                 <th className="py-2.5 px-3">Username</th>
                 <th className="py-2.5 px-3">Nama Lengkap</th>
                 <th className="py-2.5 px-3">Role & Wewenang</th>
@@ -356,7 +355,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
             <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
               {paginatedUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="py-8 text-center text-slate-500">
+                  <td colSpan={10} className="py-8 text-center text-slate-500">
                     Tidak ada data pengguna yang sesuai dengan kriteria pencarian.
                   </td>
                 </tr>
@@ -373,10 +372,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                     >
                       <td className="py-2.5 px-3 text-center font-mono text-slate-500">
                         {itemNumber}
-                      </td>
-
-                      <td className="py-2.5 px-3 font-mono font-medium text-slate-800">
-                        {user.user_id}
                       </td>
 
                       <td className="py-2.5 px-3 font-mono font-semibold text-slate-900">

@@ -13,6 +13,8 @@ import {
 import { Barang } from '../../types';
 import { formatNumber, formatRupiah, extractKodeBalPrefix } from '../../utils/formatters';
 import { downloadExcelReport, todayStamp } from '../../utils/excelExport';
+import { COMPANY_NAME } from '../../config/appInfo';
+import { SortIcon } from '../common/SortIcon';
 
 interface LaporanKodeBalViewProps {
   barangList: Barang[];
@@ -206,12 +208,7 @@ export const LaporanKodeBalView: React.FC<LaporanKodeBalViewProps> = ({
     }
   };
 
-  const renderSortIcon = (field: keyof KodeBalRow) => {
-    if (sortField !== field) return <ArrowUpDown className="w-3 h-3 text-gray-400 ml-1" />;
-    return sortOrder === 'asc' 
-      ? <ArrowUp className="w-3 h-3 text-[#b81d24] ml-1" />
-      : <ArrowDown className="w-3 h-3 text-[#b81d24] ml-1" />;
-  };
+  const renderSortIcon = (field: keyof KodeBalRow) => <SortIcon aktif={sortField === field} arah={sortOrder} />;
 
   const handleExportExcel = () => {
     downloadExcelReport(`Laporan_Kode_Bal_${todayStamp()}`, [
@@ -244,7 +241,7 @@ export const LaporanKodeBalView: React.FC<LaporanKodeBalViewProps> = ({
 
   return (
     <div className="space-y-4 animate-in fade-in duration-300">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+      <div className="bg-white p-4 border border-gray-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center space-x-3">
           <div className="w-10 h-10 bg-[#b81d24] text-white rounded-sm flex items-center justify-center shrink-0 shadow-xs">
             <PackageSearch className="w-5 h-5" />
@@ -255,7 +252,7 @@ export const LaporanKodeBalView: React.FC<LaporanKodeBalViewProps> = ({
                 LAPORAN INVENTARIS FISIK
               </span>
               <span className="text-[11px] text-gray-500 font-medium">
-                PR. Sekar Maju Sejahtera
+                {COMPANY_NAME}
               </span>
             </div>
             <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">

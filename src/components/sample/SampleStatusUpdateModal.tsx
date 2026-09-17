@@ -87,7 +87,7 @@ export const SampleStatusUpdateModal: React.FC<SampleStatusUpdateModalProps> = (
                 <h2 className="text-sm font-bold text-gray-900 tracking-tight truncate">
                   Update Approval QC Sample
                 </h2>
-                <p className="text-[11px] font-mono text-gray-500 truncate">{sample.sample_id}</p>
+                <p className="text-[11px] font-mono text-gray-500 truncate">No Bal: {sample.no_bal || '-'}</p>
               </div>
             </div>
 
@@ -210,7 +210,7 @@ export const SampleStatusUpdateModal: React.FC<SampleStatusUpdateModalProps> = (
       <ConfirmModal
         isOpen={isConfirmOpen}
         title="Konfirmasi Update Status QC Sample"
-        message={`Apakah Anda yakin ingin memperbarui status sampel ${sample.sample_id} menjadi "${status.toUpperCase()}"?`}
+        message={`Apakah Anda yakin ingin memperbarui status sampel bal ${sample.no_bal || '-'} menjadi "${status.toUpperCase()}"?`}
         detail={`Tujuan: ${sample.tujuan} | Grade ${sample.kode_grade}`}
         variant="warning"
         confirmText="Ya, Perbarui Status"

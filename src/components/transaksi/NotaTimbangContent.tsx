@@ -2,6 +2,8 @@ import React from 'react';
 import { TransaksiPembelian } from '../../types';
 import { formatRupiah, formatAccounting, formatDateHariBulanTahun, terbilangRupiah, normalizeKg } from '../../utils/formatters';
 import { loadCurrentUser } from '../../utils/storage';
+import { KopSurat } from '../common/KopSurat';
+import { POTONGAN_GANTI_TIKAR, POTONGAN_KULI_PER_BAL, POTONGAN_TALI_PER_BAL } from '../../config/aturanTimbang';
 
 export interface NotaTimbangContentProps {
   transaksi: TransaksiPembelian;
@@ -33,39 +35,24 @@ export const NotaTimbangContent: React.FC<NotaTimbangContentProps> = ({ transaks
   const grandTotalRp = items.reduce((sum, it) => sum + (it.subtotal_bersih || 0), 0);
 
   const jumlahGantiTikar = items.filter((it) => it.ganti_tikar).length;
-  const totalPotonganKuli = items.reduce((sum, it) => sum + (it.potongan_kuli || 7000), 0);
-  const totalPotonganTali = items.reduce((sum, it) => sum + (it.potongan_tali || 3000), 0);
-  const totalPotonganTikar = items.reduce((sum, it) => sum + (it.potongan_tikar || (it.ganti_tikar ? 75000 : 0)), 0);
+  const totalPotonganKuli = items.reduce((sum, it) => sum + (it.potongan_kuli || POTONGAN_KULI_PER_BAL), 0);
+  const totalPotonganTali = items.reduce((sum, it) => sum + (it.potongan_tali || POTONGAN_TALI_PER_BAL), 0);
+  const totalPotonganTikar = items.reduce((sum, it) => sum + (it.potongan_tikar || (it.ganti_tikar ? POTONGAN_GANTI_TIKAR : 0)), 0);
 
   const cleanDate = formatDateHariBulanTahun(transaksi.tanggal_transaksi);
   const isLunas = transaksi.status_pembayaran === 'lunas' || transaksi.metode_pembayaran === 'cash';
 
   return (
     <div className="space-y-4 text-xs text-gray-900 font-sans">
-      {/* Header Kop Resmi - Sederhana, Formal & Profesional */}
-      <div className="text-center border-b-2 border-gray-800 pb-3 space-y-1">
-        <h1 className="text-2xl font-black tracking-widest text-gray-900 uppercase">
-          S.A GROUP
-        </h1>
-        <h2 className="text-sm font-bold tracking-tight text-gray-800 uppercase mt-1">
-          SURAT BUKTI TIMBANG & NOTA PEMBELIAN TEMBAKAU
-        </h2>
-        <p className="text-[10.5px] text-gray-600">
-          Jl. Raya Blumbungan, Dusun Kendal, Desa Trasak, Kec. Larangan, Kab. Pamekasan
-        </p>
-      </div>
+      <KopSurat judul="Surat Bukti Timbang & Nota Pembelian Tembakau" />
 
       {/* Metadata Grid - Bersih & Rapi */}
       <div className="grid grid-cols-2 gap-6 border-b border-gray-200 pb-3 text-xs">
         {/* Kolom Kiri: Informasi Transaksi & Pembayaran */}
         <div className="space-y-1.5 pr-2">
           <div className="flex justify-between items-center">
-            <span className="text-gray-500">No. Transaksi:</span>
-            <span className="font-mono font-bold text-gray-950 text-[12px]">{transaksi.transaksi_id}</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-gray-500">No. Kupon Antrian:</span>
-            <span className="font-mono font-bold text-gray-900">{transaksi.no_kupon}</span>
+            <span className="text-gray-500">No. Kupon:</span>
+            <span className="font-mono font-bold text-gray-950 text-[12px]">{transaksi.no_kupon}</span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-gray-500">Tanggal Transaksi:</span>
@@ -129,7 +116,7 @@ export const NotaTimbangContent: React.FC<NotaTimbangContentProps> = ({ transaks
                   {item.potongan_tikar && item.potongan_tikar > 0 ? (
                     <span className="text-slate-800 font-medium">{formatRupiah(item.potongan_tikar)}</span>
                   ) : item.ganti_tikar ? (
-                    <span className="text-slate-800 font-medium">{formatRupiah(75000)}</span>
+                    <span className="text-slate-800 font-medium">{formatRupiah(POTONGAN_GANTI_TIKAR)}</span>
                   ) : (
                     <span className="text-slate-400">Standar</span>
                   )}
@@ -282,7 +269,7 @@ export const NotaTimbangContent: React.FC<NotaTimbangContentProps> = ({ transaks
       <div className="pt-4 grid grid-cols-2 gap-4 text-center text-xs avoid-page-break">
         <div>
           <p className="text-gray-600 font-medium">Penjual</p>
-          <div className="h-14 flex items-end justify-center">
+          <div className="h-22 flex items-end justify-center">
             <span className="font-semibold border-b border-gray-800 pb-0.5 min-w-[130px] inline-block text-gray-900">
               {transaksi.nama_petani || <>&nbsp;</>}
             </span>
@@ -290,7 +277,7 @@ export const NotaTimbangContent: React.FC<NotaTimbangContentProps> = ({ transaks
         </div>
         <div>
           <p className="text-gray-600 font-medium">Admin / Kasir</p>
-          <div className="h-14 flex items-end justify-center">
+          <div className="h-22 flex items-end justify-center">
             <span className="font-semibold border-b border-gray-800 pb-0.5 min-w-[130px] inline-block text-gray-900">
               {currentUser?.nama_lengkap || currentUser?.username || 'Admin'}
             </span>
