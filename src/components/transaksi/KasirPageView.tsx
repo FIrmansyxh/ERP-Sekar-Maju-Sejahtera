@@ -1075,7 +1075,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                           <button
                             type="button"
                             onClick={() => handleCetakClick(tx)}
-                            className={`px-2.5 py-1 font-medium text-[11px] rounded transition-colors cursor-pointer inline-flex items-center space-x-1 ${(!isLunas || !isAllWeighed) ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200' : 'bg-slate-800 hover:bg-slate-900 text-white'}`}
+                            className={`px-2.5 py-1 font-medium text-[11px] rounded transition-colors cursor-pointer inline-flex items-center space-x-1 ${(!isLunas || !isAllWeighed) ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200' : 'bg-[#b81d24] hover:bg-[#a0181e] text-white'}`}
                             title={(!isLunas || !isAllWeighed) ? "Cetak Nota (Draft / Belum Lunas)" : "Cetak Nota Pembelian Resmi (Lunas)"}
                           >
                             <Printer className="w-3 h-3" />

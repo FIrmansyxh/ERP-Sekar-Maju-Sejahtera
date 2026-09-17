@@ -24,6 +24,7 @@ import {
 import { TransaksiPembelian, Petani } from '../../types';
 import { downloadElementAsPdf } from '../../utils/printDownload';
 import { downloadExcelReport, periodeInfo, todayStamp } from '../../utils/excelExport';
+import { isTransaksiLunas, labelStatusBayar } from '../../utils/statusBayar';
 import { formatDateHariBulanTahun } from '../../utils/formatters';
 import { hitungNilaiBal, hitungModalTransaksi } from '../../utils/finance';
 
@@ -512,10 +513,11 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
       totalNilaiHargaBeli += subtotalHrgBeli;
       totalJumlahBayar += jmlBayar;
 
-      if (row.status_pembayaran === 'belum_lunas') {
-        totalJumlahBayarKredit += jmlBayar;
-      } else {
+      // Kupon yang belum dibayar di Kasir (termasuk status kosong) masih kredit
+      if (isTransaksiLunas(row)) {
         totalJumlahBayarLunas += jmlBayar;
+      } else {
+        totalJumlahBayarKredit += jmlBayar;
       }
     });
 
@@ -575,7 +577,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
         potTikar,
         subtotalHrgBeli,
         jmlBayar,
-        row.status_pembayaran === 'belum_lunas' ? 'Belum Lunas' : 'Lunas',
+        labelStatusBayar(row),
       ];
     });
 

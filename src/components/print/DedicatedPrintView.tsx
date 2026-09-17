@@ -211,15 +211,17 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
   // NOT FOUND STATE
   if ((type === 'nota' && !foundTransaksi) || (type === 'surat_jalan' && !foundPengiriman)) {
     return (
-      <div className="print-modal-backdrop fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm font-sans">
-        <div className="bg-white border border-slate-300 rounded-sm p-6 max-w-md w-full text-center shadow-2xl animate-in zoom-in-95 duration-150">
-          <AlertCircle className="w-12 h-12 text-rose-600 mx-auto mb-3" />
-          <h2 className="text-sm font-bold text-slate-900 mb-1">
+      <div className="print-modal-backdrop fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm font-sans">
+        <div className="bg-white border border-gray-300 rounded-none p-6 max-w-md w-full text-center shadow-2xl animate-in zoom-in-95 duration-150">
+          <div className="w-12 h-12 rounded-full bg-red-50 border border-red-100 flex items-center justify-center mx-auto mb-3 text-[#b81d24]">
+            <AlertCircle className="w-6 h-6" />
+          </div>
+          <h2 className="text-sm font-bold text-gray-900 mb-1">
             Data Dokumen Tidak Ditemukan
           </h2>
-          <p className="text-xs text-slate-600 mb-4">
+          <p className="text-xs text-gray-600 mb-4">
             Dokumen <strong>{type === 'nota' ? 'Nota' : 'Surat Jalan'}</strong> dengan nomor identitas{' '}
-            <span className="font-mono font-bold text-slate-800 bg-slate-100 px-1 py-0.5 rounded-xs">
+            <span className="font-mono font-bold text-gray-800 bg-gray-100 px-1 py-0.5 rounded-xs">
               {id}
             </span>{' '}
             belum tersimpan atau tidak ditemukan dalam basis data.
@@ -228,7 +230,7 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
             <button
               type="button"
               onClick={handleClose}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded-xs transition cursor-pointer shadow-sm"
+              className="px-4 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-sm transition cursor-pointer shadow-xs"
             >
               Tutup Pratinjau
             </button>
@@ -245,16 +247,16 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
 
   if (type === 'nota' && foundTransaksi && !isNotaLunas) {
     return (
-      <div className="print-modal-backdrop fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm font-sans">
-        <div className="bg-white border border-amber-300 rounded-sm p-6 max-w-md w-full text-center shadow-2xl animate-in zoom-in-95 duration-150">
-          <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-3 text-amber-700">
+      <div className="print-modal-backdrop fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm font-sans">
+        <div className="bg-white border border-gray-300 rounded-none p-6 max-w-md w-full text-center shadow-2xl animate-in zoom-in-95 duration-150">
+          <div className="w-12 h-12 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center mx-auto mb-3 text-amber-700">
             <Lock className="w-6 h-6" />
           </div>
-          <h2 className="text-sm font-bold text-slate-900 mb-1">
+          <h2 className="text-sm font-bold text-gray-900 mb-1">
             Dokumen Nota Timbang Terkunci
           </h2>
-          <p className="text-xs text-slate-600 mb-4 leading-relaxed">
-            Nota untuk transaksi kupon <strong className="text-slate-900 font-mono">{foundTransaksi.no_kupon}</strong> ({foundTransaksi.nama_petani}) belum dapat dicetak atau diunduh karena status pembayaran masih <strong>KREDIT / BELUM LUNAS</strong>.
+          <p className="text-xs text-gray-600 mb-4 leading-relaxed">
+            Nota untuk transaksi kupon <strong className="text-gray-900 font-mono">{foundTransaksi.no_kupon}</strong> ({foundTransaksi.nama_petani}) belum dapat dicetak atau diunduh karena status pembayaran masih <strong>KREDIT / BELUM LUNAS</strong>.
             <br className="my-1" />
             Tombol cetak baru akan terbuka setelah transaksi diselesaikan dan dilunasi di loket kasir.
           </p>
@@ -262,7 +264,7 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
             <button
               type="button"
               onClick={handleClose}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded-xs transition cursor-pointer shadow-sm"
+              className="px-4 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-sm transition cursor-pointer shadow-xs"
             >
               Kembali / Tutup Pratinjau
             </button>
@@ -273,56 +275,53 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
   }
 
   return (
-    <div className="print-modal-backdrop fixed inset-0 z-[9999] flex flex-col bg-slate-950/80 backdrop-blur-sm font-sans text-slate-900 select-none">
-      
+    <div className="print-modal-backdrop fixed inset-0 z-[9999] flex flex-col bg-[#f8f9fa] font-sans text-gray-900 select-none">
+
       {/* Top Header & Main Action Bar (Hidden on print) */}
-      <header className="no-print bg-[#1e293b] text-white border-b border-slate-700 shadow-lg px-4 py-2.5 shrink-0 z-50">
+      <header className="no-print bg-white border-b border-gray-200 shadow-xs px-4 py-3 shrink-0 z-50">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-3">
-          
+
           {/* Left: Document Info Badge */}
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 rounded-sm bg-[#b81d24] text-white flex items-center justify-center shrink-0 font-black text-xs shadow-xs">
-              SMS
+          <div className="flex items-center space-x-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-sm bg-red-50 border border-red-100 flex items-center justify-center shrink-0">
+              <FileText className="w-4 h-4 text-[#b81d24]" />
             </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <h1 className="text-xs sm:text-sm font-bold tracking-tight text-white flex items-center gap-1.5">
-                  <FileText className="w-4 h-4 text-emerald-400" />
-                  <span>
-                    {type === 'nota'
-                      ? 'Pratinjau Nota Pembelian & Kasir'
-                      : foundPengiriman?.jenis_pengeluaran === 'produksi_sendiri'
-                      ? 'Pratinjau Bon Pemakaian Produksi (BPP)'
-                      : 'Pratinjau Surat Jalan Pengiriman (DO)'}
-                  </span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-sm font-bold tracking-tight text-gray-900 truncate">
+                  {type === 'nota'
+                    ? 'Pratinjau Nota Pembelian & Kasir'
+                    : foundPengiriman?.jenis_pengeluaran === 'produksi_sendiri'
+                    ? 'Pratinjau Bon Pemakaian Produksi (BPP)'
+                    : 'Pratinjau Surat Jalan Pengiriman (DO)'}
                 </h1>
-                <span className="bg-red-500/20 text-red-300 border border-red-500/30 text-[10px] font-mono px-1.5 py-0.5 rounded-xs">
+                <span className="bg-red-50 text-[#b81d24] border border-red-200 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-sm">
                   {type === 'nota' ? foundTransaksi?.no_kupon : foundPengiriman?.no_surat_jalan}
                 </span>
               </div>
-              <p className="text-[11px] text-slate-300 hidden sm:block">
-                Pilih opsi di sebelah kanan: <strong className="text-cyan-300">Download PDF</strong> untuk menyimpan berkas ke komputer.
+              <p className="text-[11px] text-gray-500 font-medium hidden sm:block">
+                Periksa dokumen, lalu klik <strong className="text-gray-800">Download PDF</strong> untuk menyimpan berkas ke komputer.
               </p>
             </div>
           </div>
 
           {/* Center: Zoom Controls */}
-          <div className="hidden lg:flex items-center space-x-1.5 bg-slate-800/80 border border-slate-700 rounded-sm px-2 py-1 text-slate-300 text-xs">
+          <div className="hidden lg:flex items-center space-x-1.5 bg-white border border-gray-300 rounded-sm px-2 py-1 text-gray-600 text-xs shadow-2xs">
             <button
               type="button"
               onClick={() => setZoomScale((prev) => Math.max(0.7, Number((prev - 0.1).toFixed(1))))}
-              className="p-1 hover:bg-slate-700 rounded-xs transition cursor-pointer text-slate-300 hover:text-white"
+              className="p-1 hover:bg-gray-100 rounded-xs transition cursor-pointer text-gray-500 hover:text-gray-900"
               title="Zoom Out (-10%)"
             >
               <ZoomOut className="w-3.5 h-3.5" />
             </button>
-            <span className="font-mono text-[11px] min-w-[42px] text-center font-bold text-slate-200">
+            <span className="font-mono text-[11px] min-w-[42px] text-center font-bold text-gray-800">
               {Math.round(zoomScale * 100)}%
             </span>
             <button
               type="button"
               onClick={() => setZoomScale((prev) => Math.min(1.3, Number((prev + 0.1).toFixed(1))))}
-              className="p-1 hover:bg-slate-700 rounded-xs transition cursor-pointer text-slate-300 hover:text-white"
+              className="p-1 hover:bg-gray-100 rounded-xs transition cursor-pointer text-gray-500 hover:text-gray-900"
               title="Zoom In (+10%)"
             >
               <ZoomIn className="w-3.5 h-3.5" />
@@ -330,55 +329,44 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
             <button
               type="button"
               onClick={() => setZoomScale(1)}
-              className="p-1 hover:bg-slate-700 rounded-xs transition cursor-pointer text-slate-400 hover:text-slate-200 ml-0.5"
+              className="p-1 hover:bg-gray-100 rounded-xs transition cursor-pointer text-gray-400 hover:text-gray-700 ml-0.5"
               title="Reset Zoom (100%)"
             >
               <RotateCcw className="w-3 h-3" />
             </button>
           </div>
 
-          {/* Right: The Two Primary Action Choices (Download PDF vs Cetak Print) + Close */}
+          {/* Right: Tutup + Download PDF */}
           <div className="flex items-center space-x-2 shrink-0">
-            
-            {/* OPSI 1: CETAK JADI PDF (DOWNLOAD PDF) */}
+            <button
+              type="button"
+              onClick={handleClose}
+              className="px-3.5 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
+              title="Tutup Pratinjau (Esc)"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>Tutup</span>
+            </button>
+
             <button
               type="button"
               disabled={isGeneratingPdf}
               onClick={handleDownloadPdf}
-              className="px-3.5 py-1.5 text-xs font-bold bg-[#007bff] hover:bg-[#0069d9] active:bg-[#0056b3] text-white rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-sm disabled:opacity-50"
-              title="Cetak Jadi PDF (Unduh berkas PDF langsung ke komputer)"
+              className="px-4 py-1.5 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#a0181e] rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+              title="Unduh dokumen dalam format PDF"
             >
-              <Download className="w-4 h-4 text-cyan-200" />
+              <Download className="w-3.5 h-3.5" />
               <span>{isGeneratingPdf ? 'Membuat PDF...' : 'Download PDF'}</span>
-            </button>
-
-            {/* TOMBOL TUTUP */}
-            <button
-              type="button"
-              onClick={handleClose}
-              className="px-2.5 py-1.5 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-sm transition flex items-center space-x-1 cursor-pointer"
-              title="Tutup Pratinjau (Esc)"
-            >
-              <X className="w-4 h-4 text-slate-300" />
-              <span className="hidden sm:inline">Tutup</span>
             </button>
           </div>
         </div>
       </header>
 
-      {/* Guidance Sub-bar (Hidden on print) */}
-      <div className="no-print bg-slate-900/90 border-b border-slate-800 px-4 py-1.5 text-center text-xs text-slate-300 font-medium">
-        <span>
-          Silakan tentukan pilihan:{' '}
-          <strong className="text-cyan-300 font-bold">Download PDF</strong> untuk mengunduh dan menyimpan dokumen.
-        </span>
-      </div>
-
       {/* Scrollable Printable Document Canvas */}
-      <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-800/60 flex justify-center items-start print:p-0 print:m-0 print:bg-white print:overflow-visible">
+      <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gray-100 flex justify-center items-start print:p-0 print:m-0 print:bg-white print:overflow-visible">
         <div
           ref={printAreaRef}
-          className="print-canvas-paper bg-white border border-slate-300 print:border-none shadow-2xl print:shadow-none p-6 sm:p-8 mx-auto w-full max-w-[820px] text-slate-900 font-sans print:m-0 transition-transform duration-100"
+          className="print-canvas-paper bg-white border border-gray-300 print:border-none shadow-md print:shadow-none p-6 sm:p-8 mx-auto w-full max-w-[820px] text-slate-900 font-sans print:m-0 transition-transform duration-100"
           style={{ 
             minHeight: '1050px',
             transform: zoomScale !== 1 ? `scale(${zoomScale})` : undefined,

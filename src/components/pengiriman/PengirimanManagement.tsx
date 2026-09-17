@@ -1971,7 +1971,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                           <th className="p-2 w-28">No Bal</th>
                           <th className="p-2 text-center w-20">Grade</th>
                           <th className="p-2 text-right w-24">Berat Bal (Kg)</th>
-                          <th className="p-2">Petani & Lokasi Gudang</th>
+                          <th className="p-2">Petani</th>
                           <th className="p-2 w-48">Kode Master Harga Jual</th>
                           <th className="p-2 text-right w-32">Harga (Rp/Kg)</th>
                           <th className="p-2 text-right w-36">Total Nilai Bal</th>
@@ -2336,12 +2336,14 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/50 backdrop-blur-2xs animate-in fade-in duration-150">
           <div className="bg-white rounded-sm border border-gray-300 shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
             {/* Modal Header */}
-            <div className="px-5 py-3.5 bg-[#b81d24] text-white flex items-center justify-between">
-              <div className="flex items-center space-x-2.5">
-                <Package className="w-5 h-5 text-slate-300" />
-                <div>
-                  <h3 className="font-bold text-sm">Pilih Bal Tembakau dari Stok Gudang</h3>
-                  <p className="text-[11px] text-gray-300">
+            <div className="px-5 py-4 border-b border-gray-200 bg-white flex items-center justify-between gap-3">
+              <div className="flex items-center space-x-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-sm bg-red-50 border border-red-100 flex items-center justify-center shrink-0">
+                  <Package className="w-4 h-4 text-[#b81d24]" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-bold text-gray-900 tracking-tight">Pilih Bal Tembakau dari Stok Gudang</h3>
+                  <p className="text-[11px] text-gray-500 font-medium">
                     Tersedia {availableBalList.length} bal tembakau yang siap dimuat ke dalam surat jalan reguler.
                   </p>
                 </div>
@@ -2349,9 +2351,10 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
               <button
                 type="button"
                 onClick={() => setIsStokModalOpen(false)}
-                className="text-gray-400 hover:text-white p-1 rounded-xs transition cursor-pointer"
+                className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-sm transition cursor-pointer shrink-0"
+                title="Tutup"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
@@ -2362,7 +2365,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                   <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-2.5" />
                   <input
                     type="text"
-                    placeholder="Cari No. Bal / ID / Petani / Gudang..."
+                    placeholder="Cari No. Bal / ID / Petani..."
                     value={stokModalSearch}
                     onChange={(e) => setStokModalSearch(e.target.value)}
                     className="w-full pl-8 pr-3 py-1.5 bg-white border border-gray-300 rounded-xs focus:ring-1 focus:ring-gray-700 text-xs"
@@ -2402,7 +2405,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                     <th className="p-2.5 w-28">No. Bal</th>
                     <th className="p-2.5 text-center w-20">Grade</th>
                     <th className="p-2.5 text-right w-24">Berat (Kg)</th>
-                    <th className="p-2.5">Petani & Asal Gudang</th>
+                    <th className="p-2.5">Petani</th>
                     <th className="p-2.5 text-center w-28">Status Muatan</th>
                   </tr>
                 </thead>

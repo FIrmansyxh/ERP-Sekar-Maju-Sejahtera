@@ -819,7 +819,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
           </button>
           <button
             type="submit"
-            className="px-4 py-1 bg-gray-900 hover:bg-black text-white text-xs font-bold rounded-xs transition flex items-center space-x-1 cursor-pointer"
+            className="px-4 py-1 bg-[#b81d24] hover:bg-[#a0181e] text-white text-xs font-bold rounded-sm shadow-xs transition flex items-center space-x-1 cursor-pointer"
           >
             <Search className="w-3.5 h-3.5" />
             <span>Terapkan Filter</span>
@@ -1318,14 +1318,13 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
                   <th className="py-2.5 px-3 border-r border-gray-200 text-center">Grade</th>
                   <th className="py-2.5 px-3 border-r border-gray-200 text-right">Berat Netto (Kg)</th>
                   <th className="py-2.5 px-3 border-r border-gray-200">Petani Asal</th>
-                  <th className="py-2.5 px-3 border-r border-gray-200">Lokasi Asal Gudang</th>
                   <th className="py-2.5 px-3 border-r border-gray-200 text-center">Tanggal Keluar</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {balKeluarList.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-8 text-center text-gray-500 italic">
+                    <td colSpan={7} className="py-8 text-center text-gray-500 italic">
                       Belum ada catatan bal fisik yang berstatus keluar.
                     </td>
                   </tr>
@@ -1514,7 +1513,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
             <div className="p-3 bg-gray-50 border-t border-gray-200 flex justify-end">
               <button
                 onClick={() => setSelectedDOForDetail(null)}
-                className="px-4 py-1.5 bg-gray-800 hover:bg-black text-white text-xs font-bold rounded-xs transition cursor-pointer"
+                className="px-4 py-1.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 text-xs font-semibold rounded-sm shadow-xs transition cursor-pointer"
               >
                 Tutup
               </button>

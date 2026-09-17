@@ -1013,7 +1013,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                     <th className="px-3.5 py-2.5">Tujuan Buyer / Pabrik</th>
                     <th className="px-3.5 py-2.5 text-center">Jml Bal</th>
                     <th className="px-3.5 py-2.5 text-right">Berat (Bruto / Netto)</th>
-                    <th className="px-3.5 py-2.5">Gudang Asal & Tanggal</th>
+                    <th className="px-3.5 py-2.5">Tanggal Kirim</th>
                     <th className="px-3.5 py-2.5 text-right">Nilai Deal / Tawar</th>
                     <th className="px-3.5 py-2.5 text-center">Aksi</th>
                   </tr>
@@ -1077,12 +1077,9 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                             </div>
                           </td>
                           <td className="px-3.5 py-3">
-                            <div className="text-gray-800 font-medium text-[11px] truncate max-w-[180px]">
-                              {batch.sumber_gudang}
-                            </div>
-                            <div className="text-[10px] text-gray-500 flex items-center space-x-1 mt-0.5">
+                            <div className="text-[11px] text-gray-800 font-medium flex items-center space-x-1">
                               <Calendar className="w-3 h-3 text-gray-400" />
-                              <span>Kirim: {batch.tanggal_kirim}</span>
+                              <span>{batch.tanggal_kirim}</span>
                             </div>
                           </td>
                           <td className="px-3.5 py-3 text-right">

@@ -28,7 +28,7 @@ export const HomeDashboardView: React.FC<HomeDashboardViewProps> = ({
   const allMenus = [
     { no: 1, nama: 'Home', judul: 'Dasbor Menu Utama & Status Sistem', modId: 'modul-home' },
     { no: 2, nama: 'Dashboard Laporan & Analytic ERP', judul: 'Executive Summary, Distribusi Grade & Pusat Unduh Dokumen', modId: 'modul-6-dashboard-analytic' },
-    { no: 3, nama: 'Laporan Bal', judul: 'Detail Setiap Bal, Berat, Harga Beli, Total Harga, Lokasi & Filter Multi-Parameter', modId: 'modul-6-laporan-bal' },
+    { no: 3, nama: 'Laporan Bal', judul: 'Detail Setiap Bal, Berat, Harga Beli, Total Harga, Status Bayar & Filter Multi-Parameter', modId: 'modul-6-laporan-bal' },
     { no: 4, nama: 'Laporan Kode Bal', judul: 'Analisa Kode Awal Bal Tembakau', modId: 'modul-6-laporan-kode-bal' },
     { no: 5, nama: 'Laporan Stok & Mutu Grade', judul: 'Rekapitulasi Mutu Grade, Tonase Bal, Valuasi Inventaris & Perputaran Stok', modId: 'modul-6-laporan-grade' },
     { no: 6, nama: 'Laporan Pembelian Barang', judul: 'Rekapitulasi Pembelian Multi-Parameter, Potongan Kuli & Tikar', modId: 'modul-6-laporan-pembelian' },
@@ -38,7 +38,7 @@ export const HomeDashboardView: React.FC<HomeDashboardViewProps> = ({
     { no: 10, nama: 'Master Harga Beli', judul: 'Tarif Acuan Grade A-F Tembakau Masuk', modId: 'modul-3-harga' },
     { no: 11, nama: 'Master Harga Jual Pabrik', judul: 'Daftar Kode & Master Harga Jual Tembakau ke Pabrik Rekanan', modId: 'modul-3-harga-jual' },
     { no: 12, nama: 'Sortir', judul: 'Proses 1: Kupon Petani, Sortir Mutu Grade Bal & Penentuan No Bal', modId: 'modul-0-sortir' },
-    { no: 13, nama: 'Timbangan', judul: 'Proses 2: Standby Scan No Bal, Input Berat Bruto/Netto & Blok Simpan', modId: 'modul-0-timbangan' },
+    { no: 13, nama: 'Timbangan', judul: 'Proses 2: Standby Scan No Bal, Input Berat Bruto/Netto', modId: 'modul-0-timbangan' },
     { no: 14, nama: 'Kasir', judul: 'Proses 3: Data Pembelian Barang, Rekap Pembayaran & Cetak Nota Resmi', modId: 'modul-0-kasir' },
     { no: 15, nama: 'Pengiriman Reguler (DO Luar)', judul: 'Surat Jalan Pengiriman Bal ke Buyer Pabrik Rokok', modId: 'modul-5-pengiriman' },
     { no: 16, nama: 'Pengiriman Sample', judul: 'Uji Laboratorium Mutu & Approval Grade Sample Internal/Eksternal', modId: 'modul-4-sample' },
@@ -61,7 +61,7 @@ export const HomeDashboardView: React.FC<HomeDashboardViewProps> = ({
       {currentUser && (
         <div className="bg-white border border-gray-200 p-4 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-full bg-slate-800 text-white font-bold flex items-center justify-center text-sm shrink-0 shadow-xs">
+            <div className="w-10 h-10 rounded-full bg-[#b81d24] text-white font-bold flex items-center justify-center text-sm shrink-0 shadow-xs">
               {currentUser.nama_lengkap.split(' ').map((n) => n[0]).slice(0, 2).join('')}
             </div>
             <div>

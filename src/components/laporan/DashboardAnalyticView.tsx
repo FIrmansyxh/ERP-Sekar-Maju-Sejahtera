@@ -31,6 +31,7 @@ import {
 import { downloadExcelReport, labelStatusPengiriman, labelStatusSample, labelStatusStok, todayStamp } from '../../utils/excelExport';
 import { formatRupiah } from '../../utils/formatters';
 import { loadBatchSampleData, loadHargaJualData } from '../../utils/storage';
+import { filterBarangLunas, isTransaksiLunas, labelStatusBayar } from '../../utils/statusBayar';
 import {
   hitungTotalModal,
   hitungTotalPenjualan,
@@ -85,14 +86,14 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
   // 1. Total Pembelian (Modal Murni: Netto × Harga Beli, abaikan potongan tali/kuli/tikar)
   const totalPembelianRupiah = useMemo(() => {
     // HANYA hitung pembelian jika transaksi sudah LUNAS (dibayar)
-    const lunasTrx = transaksiList.filter(t => t.status_pembayaran === 'lunas');
+    const lunasTrx = transaksiList.filter((t) => isTransaksiLunas(t));
     return hitungTotalModal(lunasTrx);
   }, [transaksiList]);
 
   // Total Bal yang Dibeli
   const totalBalDibeli = useMemo(() => {
     return transaksiList.reduce((sum, t) => {
-      if (t.status_pembayaran !== 'lunas') return sum;
+      if (!isTransaksiLunas(t)) return sum;
       const count = t.total_bal || (t.items && t.items.length > 0 ? t.items.length : (t.barang_ids ? t.barang_ids.length : 1));
       return sum + count;
     }, 0);
@@ -102,33 +103,18 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
   const totalTonaseMasukKg = useMemo(() => {
     return transaksiList.reduce((sum, t) => {
       // HANYA hitung tonase masuk jika transaksi sudah LUNAS (dibayar)
-      if (t.status_pembayaran !== 'lunas') return sum;
+      if (!isTransaksiLunas(t)) return sum;
       return sum + (t.berat_kg || 0);
     }, 0);
   }, [transaksiList]);
 
   // 3. Stok Aktif di Gudang & 4. Valuasi (Stok Gudang = Sisa bal di gudang × Netto × Harga Beli)
+  // Aset dan valuasi hanya dari bal kupon yang sudah dibayar; yang belum dibayar masih kredit
+  const barangLunasList = useMemo(() => filterBarangLunas(barangList, transaksiList), [barangList, transaksiList]);
+
   const stokAktifGudang = useMemo(() => {
-    // Filter out items that are orphaned from non-lunas transactions if applicable
-    const validRefsFromTx = new Set<string>();
-    transaksiList.forEach(tx => { 
-      if (tx.status_pembayaran === "lunas") {
-        tx.items?.forEach(item => {
-          if (item.barang_id) validRefsFromTx.add(item.barang_id);
-          if (item.no_bal) validRefsFromTx.add(item.no_bal);
-          if (item.barcode) validRefsFromTx.add(item.barcode);
-        });
-        tx.barang_ids?.forEach(id => validRefsFromTx.add(id)); 
-      }
-    });
-
-    const validBarangList = barangList.filter(b => {
-      if (b.transaksi_pembelian_id && !validRefsFromTx.has(b.barang_id) && !validRefsFromTx.has(b.no_bal)) return false;
-      return true;
-    });
-
-    return hitungValuasiStokGudang(validBarangList, hargaList);
-  }, [barangList, transaksiList, hargaList]);
+    return hitungValuasiStokGudang(barangLunasList, hargaList);
+  }, [barangLunasList, hargaList]);
 
   // Helper to get fallback price
   const getPriceByGrade = (kodeGrade: string) => {
@@ -196,7 +182,7 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
   const topHargaBeli = useMemo(() => {
     const priceMap = new Map<number, { harga: number; count: number; totalKg: number; totalNilai: number }>();
 
-    transaksiList.forEach(tx => { if (tx.status_pembayaran === "lunas") {
+    transaksiList.forEach(tx => { if (isTransaksiLunas(tx)) {
       const p = tx.harga_per_kg || 0;
       if (p > 0) {
         const existing = priceMap.get(p) || { harga: p, count: 0, totalKg: 0, totalNilai: 0 };
@@ -241,6 +227,7 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
     const map = new Map<string, { nama: string; balCount: number; totalKg: number; totalNilai: number }>();
 
     transaksiList.forEach(t => {
+      if (!isTransaksiLunas(t)) return;
       const key = t.petani_id || t.nama_petani;
       const existing = map.get(key) || { nama: t.nama_petani, balCount: 0, totalKg: 0, totalNilai: 0 };
       
@@ -256,9 +243,9 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
     });
 
     // Reconcile with exact bal count in inventaris bal gudang if barangList is provided
-    if (barangList && barangList.length > 0) {
+    if (barangLunasList.length > 0) {
       map.forEach((val, key) => {
-        const balInGudang = barangList.filter(b => b.petani_id === key || b.nama_petani === val.nama).length;
+        const balInGudang = barangLunasList.filter(b => b.petani_id === key || b.nama_petani === val.nama).length;
         if (balInGudang > 0) {
           val.balCount = balInGudang;
         }
@@ -267,7 +254,7 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
 
     const sorted = Array.from(map.values()).sort((a, b) => b.totalKg - a.totalKg);
     return sorted.slice(0, 5);
-  }, [transaksiList, barangList]);
+  }, [transaksiList, barangLunasList]);
 
 
   // Profitabilitas (Disinkronkan dengan rumus shippedBalMetrics)
@@ -300,7 +287,8 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
   const trendPembelianData = useMemo(() => {
     // Filter transaksi berdasarkan selectedTahun jika bukan 'semua'
     const filteredTrx = transaksiList.filter((trx) => {
-      if (!trx.tanggal_transaksi) return false;
+      // Tren nilai pembelian hanya dari kupon yang sudah dibayar
+      if (!trx.tanggal_transaksi || !isTransaksiLunas(trx)) return false;
       if (selectedTahun !== 'semua') {
         return trx.tanggal_transaksi.startsWith(selectedTahun);
       }
@@ -573,7 +561,7 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
           modal,
           potongan,
           bayar,
-          t.status_pembayaran === 'belum_lunas' ? 'Belum Lunas' : 'Lunas',
+          labelStatusBayar(t),
         ]),
         totalRow: [
           `TOTAL (${rows.length} transaksi)`, '', '', '', '',
@@ -591,16 +579,19 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
 
   const exportInventarisBalGudang = () => {
     const hargaBeliGrade = new Map(hargaList.map((h) => [(h.kode_grade || '').toUpperCase(), h.harga_per_kg || 0]));
+    const lunasIds = new Set(barangLunasList.map((b) => b.barang_id));
     const rows = barangList.map((b) => {
       const hargaBeli = b.harga_per_kg || hargaBeliGrade.get((b.kode_grade || '').toUpperCase()) || 0;
-      return { b, hargaBeli, nilai: (b.berat_kg || 0) * hargaBeli };
+      return { b, hargaBeli, nilai: (b.berat_kg || 0) * hargaBeli, lunas: lunasIds.has(b.barang_id) };
     });
+    // Total berat dan nilai hanya dari bal yang sudah lunas
+    const rowsLunas = rows.filter((r) => r.lunas);
 
     downloadExcelReport(`Inventaris_Bal_Gudang_${todayStamp()}`, [
       {
         name: 'Inventaris Bal',
         title: 'Inventaris Bal Gudang Tembakau',
-        info: ['Seluruh bal tercatat (semua status stok)'],
+        info: ['Seluruh bal tercatat. Total berat dan nilai hanya menghitung bal yang sudah lunas.'],
         columns: [
           { header: 'No', type: 'integer', align: 'center' },
           { header: 'No Bal', align: 'center' },
@@ -610,9 +601,10 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
           { header: 'Berat Netto (Kg)', type: 'kg' },
           { header: 'Harga Beli (Rp/Kg)', type: 'rupiah' },
           { header: 'Nilai Beli (Rp)', type: 'rupiah' },
+          { header: 'Status Bayar', align: 'center' },
           { header: 'Status Stok', align: 'center' },
         ],
-        rows: rows.map(({ b, hargaBeli, nilai }, idx) => [
+        rows: rows.map(({ b, hargaBeli, nilai, lunas }, idx) => [
           idx + 1,
           b.no_bal,
           b.kode_grade,
@@ -621,13 +613,15 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
           b.berat_kg,
           hargaBeli,
           nilai,
+          lunas ? 'Lunas' : 'Belum Lunas',
           labelStatusStok(b.status_stok),
         ]),
         totalRow: [
-          `TOTAL (${rows.length} bal)`, '', '', '', '',
-          rows.reduce((sum, r) => sum + (r.b.berat_kg || 0), 0),
+          `TOTAL LUNAS (${rowsLunas.length} dari ${rows.length} bal)`, '', '', '', '',
+          rowsLunas.reduce((sum, r) => sum + (r.b.berat_kg || 0), 0),
           '',
-          rows.reduce((sum, r) => sum + r.nilai, 0),
+          rowsLunas.reduce((sum, r) => sum + r.nilai, 0),
+          '',
           '',
         ],
       },
@@ -689,7 +683,6 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
             { header: 'No', type: 'integer', align: 'center' },
             { header: 'Sample ID', align: 'center' },
             { header: 'Grade', align: 'center' },
-            { header: 'Asal Gudang' },
             { header: 'Tujuan Uji Lab' },
             { header: 'Berat Sample (Gram)', type: 'decimal' },
             { header: 'Tanggal Kirim', type: 'date' },
@@ -697,7 +690,7 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
             { header: 'Catatan' },
           ],
           rows: sampleList.map((s, idx) => [
-            idx + 1, s.sample_id, s.kode_grade, s.sumber, s.tujuan, s.berat_sample_gram,
+            idx + 1, s.sample_id, s.kode_grade, s.tujuan, s.berat_sample_gram,
             s.tanggal_kirim, labelStatusSample(s.status), s.catatan || '-',
           ]),
         },
@@ -813,7 +806,7 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
             </div>
             <div className="flex items-center justify-between text-[10px] text-gray-500 mt-2 pt-2 border-t border-gray-100">
               <span title="Murni Berat Netto × Harga Beli/kg">Modal Murni Semua Bal</span>
-              <span className="font-semibold text-gray-700">{totalBalDibeli} Bal ({transaksiList.length} Nota)</span>
+              <span className="font-semibold text-gray-700">{totalBalDibeli} Bal ({transaksiList.filter((t) => isTransaksiLunas(t)).length} Nota Lunas)</span>
             </div>
           </div>
 
@@ -1172,7 +1165,7 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
       {/* Visualisasi Recharts: Distribusi Stok Bal Berdasarkan Kode Harga Beli Tembakau */}
       {!isQCOnly && (
         <DistribusiStokHargaBeliChart
-          barangList={barangList}
+          barangList={barangLunasList}
           hargaList={hargaList}
           onNavigateToHarga={onNavigateToModule ? () => onNavigateToModule('modul-6-laporan-grade') : undefined}
         />
@@ -1349,7 +1342,7 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
                   <Package className="w-4 h-4 text-gray-400" />
                 </div>
                 <p className="text-[11px] text-gray-500 mt-1">
-                  Daftar seluruh bal tembakau fisik, status stok, dan lokasi penyimpanan.
+                  Daftar seluruh bal tembakau fisik, status stok, dan status bayar.
                 </p>
               </div>
               <button

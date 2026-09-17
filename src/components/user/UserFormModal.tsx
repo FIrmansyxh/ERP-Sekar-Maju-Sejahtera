@@ -148,25 +148,27 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
       <div className="bg-white rounded-md shadow-2xl border border-gray-200 w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
         
         {/* Header */}
-        <div className="px-5 py-4 border-b border-gray-200 bg-[#b81d24] text-white flex items-center justify-between">
-          <div className="flex items-center space-x-2.5">
-            <div className="p-1.5 bg-white/20 rounded-sm">
-              {isEdit ? <UserCheck className="w-5 h-5" /> : <UserPlus className="w-5 h-5" />}
+        <div className="px-5 py-4 border-b border-gray-200 bg-white flex items-center justify-between gap-3">
+          <div className="flex items-center space-x-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-sm bg-red-50 border border-red-100 flex items-center justify-center shrink-0">
+              {isEdit ? <UserCheck className="w-4 h-4 text-[#b81d24]" /> : <UserPlus className="w-4 h-4 text-[#b81d24]" />}
             </div>
-            <div>
-              <h2 className="text-base font-bold leading-tight">
+            <div className="min-w-0">
+              <h2 className="text-sm font-bold text-gray-900 tracking-tight truncate">
                 {isEdit ? 'Perbarui Data Pengguna' : 'Tambah Pengguna Baru (RBAC)'}
               </h2>
-              <p className="text-xs text-red-100">
+              <p className="text-[11px] text-gray-500 font-medium">
                 {isEdit ? `ID: ${editingUser?.user_id}` : 'Registrasi akun staf & wewenang operasional'}
               </p>
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-1.5 text-white/80 hover:text-white hover:bg-white/20 rounded-sm transition cursor-pointer"
+            className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-sm transition cursor-pointer shrink-0"
+            title="Tutup"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 

@@ -27,6 +27,7 @@ import {
 } from '../../types';
 import { formatNumber, formatRupiah } from '../../utils/formatters';
 import { downloadExcelReport, labelStatusStok, todayStamp } from '../../utils/excelExport';
+import { isTransaksiLunas } from '../../utils/statusBayar';
 
 // Keep export for DashboardAnalyticView compatibility
 export const GRADE_PALETTE = [
@@ -250,6 +251,8 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
 
     // 2. Also check if any transaction items are not yet in barangList
     transaksiList.forEach((tx) => {
+      // Kupon yang belum dibayar masih kredit, belum masuk nilai laporan
+      if (!isTransaksiLunas(tx)) return;
       if (tx.items && tx.items.length > 0) {
         tx.items.forEach((it) => {
           const id = it.barang_id || `${tx.transaksi_id}-${it.item_id}`;
@@ -665,7 +668,7 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
   // Excel Export
   const handleExportExcel = () => {
     const tabName = activeTab === 'beli' ? 'Beli' : 'Jual';
-    const info = [searchQuery.trim() ? `Pencarian: ${searchQuery.trim()}` : 'Seluruh kode harga'];
+    const info = [searchQuery.trim() ? `Pencarian: ${searchQuery.trim()} · Hanya bal lunas` : 'Seluruh kode harga · Hanya bal dari kupon yang sudah lunas'];
     const rincianBal = filteredAndSortedData.flatMap((item) => item.bal_items.map((bal) => ({ kode: item.kode, bal })));
 
     downloadExcelReport(`Laporan_Harga_${tabName}_${todayStamp()}`, [
@@ -760,8 +763,8 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
       {/* Clean Top Header matching Laporan Kode Bal */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-gray-900 rounded-none flex items-center justify-center shrink-0 shadow-xs">
-            <Tag className="w-5 h-5 text-yellow-400" />
+          <div className="w-10 h-10 bg-[#b81d24] text-white rounded-sm flex items-center justify-center shrink-0 shadow-xs">
+            <Tag className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center space-x-2">
@@ -775,6 +778,7 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
             <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">
               Laporan Harga {activeTab === 'beli' ? 'Beli' : 'Jual'}
             </h1>
+            <p className="text-[11px] text-gray-500">Hanya bal dari kupon yang sudah lunas; bal yang belum dibayar masih kredit.</p>
           </div>
         </div>
         

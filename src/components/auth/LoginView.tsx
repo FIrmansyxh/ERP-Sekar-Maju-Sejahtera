@@ -104,7 +104,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 </div>
                 <div className="flex items-start space-x-3 text-white/95">
                   <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-                  <span className="leading-snug">Manajemen Stok Bal & Multi-Gudang Terpusat</span>
+                  <span className="leading-snug">Manajemen Stok Bal Gudang & Status Pembayaran</span>
                 </div>
                 <div className="flex items-start space-x-3 text-white/95">
                   <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />

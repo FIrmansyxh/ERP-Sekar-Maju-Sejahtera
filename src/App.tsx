@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Petani, 
   Barang, 
@@ -38,6 +38,7 @@ import {
   STORAGE_KEY_TRANSAKSI
 } from './utils/storage';
 import { normalizeStatusBal, resolveStatusStok } from './utils/kuponSortir';
+import { filterBarangLunas } from './utils/statusBayar';
 import { clearAllDrafts, getDraftRecovery, markDraftCleanExit, touchDraftAlive } from './utils/draftStorage';
 import { hasModuleAccess } from './utils/rbac';
 import { normalizeKg } from './utils/formatters';
@@ -1189,6 +1190,9 @@ export default function App() {
     showToast(`Status pengiriman ${pengirimanId} menjadi ${newStatus}.`);
   };
 
+  // Laporan nilai/aset hanya memakai bal dari kupon yang sudah dibayar
+  const barangLunasList = useMemo(() => filterBarangLunas(barangList, transaksiList), [barangList, transaksiList]);
+
   const totalPetani = petaniList.length;
   const totalAktif = petaniList.filter((p) => p.status_aktif).length;
   const totalNonaktif = totalPetani - totalAktif;
@@ -1221,7 +1225,7 @@ export default function App() {
       case 'modul-0-sortir':
         return { title: 'Sortir Mutu Grade & Sample Bal', breadcrumb: 'Beranda / Pembelian / Sortir' };
       case 'modul-0-timbangan':
-        return { title: 'Meja Timbangan Bal & Alokasi Gudang', breadcrumb: 'Beranda / Pembelian / Timbangan' };
+        return { title: 'Meja Timbangan Bal', breadcrumb: 'Beranda / Pembelian / Timbangan' };
       case 'modul-0-kasir':
       case 'modul-0-transaksi':
         return { title: 'Data Pembelian Barang (Kasir & Cetak Nota)', breadcrumb: 'Beranda / Pembelian / Kasir' };
@@ -1377,7 +1381,7 @@ export default function App() {
 
             {/* Laporan Kode Bal */}
             {activeModuleId === 'modul-6-laporan-kode-bal' && (
-              <LaporanKodeBalView barangList={barangList} />
+              <LaporanKodeBalView barangList={barangLunasList} />
             )}
 
             {/* Laporan Harga */}
@@ -1386,7 +1390,7 @@ export default function App() {
                 initialTab="beli"
                 hargaJualList={hargaJualList}
                 hargaList={hargaList}
-                barangList={barangList}
+                barangList={barangLunasList}
                 transaksiList={transaksiList}
                 pengirimanList={pengirimanList}
                 sampleList={sampleList}

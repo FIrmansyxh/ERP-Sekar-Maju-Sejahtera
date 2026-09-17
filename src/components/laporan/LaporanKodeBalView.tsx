@@ -218,7 +218,7 @@ export const LaporanKodeBalView: React.FC<LaporanKodeBalViewProps> = ({
       {
         name: 'Kode Bal',
         title: 'Laporan Kode Bal',
-        info: [searchQuery.trim() ? `Pencarian kode: ${searchQuery.trim()}` : 'Seluruh kode bal'],
+        info: [searchQuery.trim() ? `Pencarian kode: ${searchQuery.trim()} · Hanya bal lunas` : 'Seluruh kode bal · Hanya bal dari kupon yang sudah lunas'],
         columns: [
           { header: 'No', type: 'integer', align: 'center' },
           { header: 'Kode Bal', align: 'center' },
@@ -246,8 +246,8 @@ export const LaporanKodeBalView: React.FC<LaporanKodeBalViewProps> = ({
     <div className="space-y-4 animate-in fade-in duration-300">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-gray-900 rounded-none flex items-center justify-center shrink-0 shadow-xs">
-            <PackageSearch className="w-5 h-5 text-yellow-400" />
+          <div className="w-10 h-10 bg-[#b81d24] text-white rounded-sm flex items-center justify-center shrink-0 shadow-xs">
+            <PackageSearch className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center space-x-2">
@@ -261,6 +261,7 @@ export const LaporanKodeBalView: React.FC<LaporanKodeBalViewProps> = ({
             <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">
               Laporan Kode Bal
             </h1>
+            <p className="text-[11px] text-gray-500">Hanya bal dari kupon yang sudah lunas; bal yang belum dibayar masih kredit.</p>
           </div>
         </div>
         

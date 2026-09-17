@@ -33,6 +33,7 @@ import { downloadElementAsPdf } from '../../utils/printDownload';
 import { downloadExcelReport, periodeInfo, todayStamp } from '../../utils/excelExport';
 import { formatDateHariBulanTahun } from '../../utils/formatters';
 import { hitungModalTransaksi } from '../../utils/finance';
+import { isTransaksiLunas } from '../../utils/statusBayar';
 import { Pagination } from '../common/Pagination';
 
 interface LaporanPetaniViewProps {
@@ -122,12 +123,14 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
       // Calculate Netto Kg
       const totalKg = filteredTxs.reduce((sum, t) => sum + (t.berat_kg || 0), 0);
 
-      // Calculate Total Pembelian Rupiah (setelah potongan)
-      const totalNilaiRp = filteredTxs.reduce((sum, t) => {
+      // Nilai pembelian (setelah potongan) hanya dari kupon yang sudah dibayar;
+      // kupon yang belum dibayar dicatat terpisah sebagai kredit
+      const jumlahBayar = (t: TransaksiPembelian) => {
         const subtotal = hitungModalTransaksi(t);
-        const jmlBayar = t.harga_final !== undefined && t.harga_final !== null ? t.harga_final : (subtotal - Number(t.total_potongan || 0));
-        return sum + jmlBayar;
-      }, 0);
+        return t.harga_final !== undefined && t.harga_final !== null ? t.harga_final : (subtotal - Number(t.total_potongan || 0));
+      };
+      const totalNilaiRp = filteredTxs.filter((t) => isTransaksiLunas(t)).reduce((sum, t) => sum + jumlahBayar(t), 0);
+      const totalKreditRp = filteredTxs.filter((t) => !isTransaksiLunas(t)).reduce((sum, t) => sum + jumlahBayar(t), 0);
 
       // Grade Dominan & Breakdown
       const gradeCountMap: Record<string, number> = {};
@@ -167,6 +170,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
         totalBal,
         totalKg,
         totalNilaiRp,
+        totalKreditRp,
         gradeDominan,
         lastTxDate,
         txList: filteredTxs,
@@ -236,6 +240,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
     const totalBalSetor = filteredPetaniData.reduce((sum, p) => sum + p.totalBal, 0);
     const totalKgSetor = filteredPetaniData.reduce((sum, p) => sum + p.totalKg, 0);
     const totalNilaiRp = filteredPetaniData.reduce((sum, p) => sum + p.totalNilaiRp, 0);
+    const totalKreditRp = filteredPetaniData.reduce((sum, p) => sum + p.totalKreditRp, 0);
     const petaniPenyetorAktif = filteredPetaniData.filter((p) => p.totalBal > 0).length;
     const rataRataKgPerPetani = petaniPenyetorAktif > 0 ? Math.round(totalKgSetor / petaniPenyetorAktif) : 0;
     const rataRataBalPerPetani = petaniPenyetorAktif > 0 ? (totalBalSetor / petaniPenyetorAktif).toFixed(1) : '0';
@@ -246,6 +251,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
       totalBalSetor,
       totalKgSetor,
       totalNilaiRp,
+      totalKreditRp,
       petaniPenyetorAktif,
       rataRataKgPerPetani,
       rataRataBalPerPetani,
@@ -329,7 +335,8 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
           { header: 'Total Transaksi', type: 'integer' },
           { header: 'Total Setoran (Bal)', type: 'integer' },
           { header: 'Total Netto (Kg)', type: 'kg' },
-          { header: 'Total Nilai Beli (Rp)', type: 'rupiah' },
+          { header: 'Nilai Beli Lunas (Rp)', type: 'rupiah' },
+          { header: 'Kredit Belum Dibayar (Rp)', type: 'rupiah' },
           { header: 'Grade Dominan', align: 'center' },
           { header: 'Setoran Terakhir', type: 'date' },
         ],
@@ -344,6 +351,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
           p.totalBal,
           p.totalKg,
           p.totalNilaiRp,
+          p.totalKreditRp,
           p.gradeDominan,
           p.lastTxDate,
         ]),
@@ -353,6 +361,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
           overallKPIs.totalBalSetor,
           overallKPIs.totalKgSetor,
           overallKPIs.totalNilaiRp,
+          overallKPIs.totalKreditRp,
           '', '',
         ],
       },
@@ -366,7 +375,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
           { header: 'Jumlah Petani', type: 'integer' },
           { header: 'Total Setoran (Bal)', type: 'integer' },
           { header: 'Total Netto (Kg)', type: 'kg' },
-          { header: 'Total Nilai Pembelian (Rp)', type: 'rupiah' },
+          { header: 'Nilai Pembelian Lunas (Rp)', type: 'rupiah' },
           { header: 'Kontribusi Pasokan', type: 'percent' },
         ],
         rows: wilayahAggregates.map((w, idx) => [
@@ -548,8 +557,8 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
               <div className="text-sm sm:text-base font-bold font-mono text-[#b81d24] truncate">
                 Rp {overallKPIs.totalNilaiRp.toLocaleString('id-ID')}
               </div>
-              <div className="text-[10px] text-gray-500 font-medium mt-0.5">
-                Dana Dicairkan
+              <div className="text-[10px] text-gray-500 font-medium mt-0.5 truncate">
+                Lunas • Kredit: Rp {overallKPIs.totalKreditRp.toLocaleString('id-ID')}
               </div>
             </div>
           </div>
@@ -685,7 +694,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
           </button>
           <button
             type="submit"
-            className="px-4 py-1 bg-gray-900 hover:bg-black text-white text-xs font-bold rounded-xs transition flex items-center space-x-1 cursor-pointer"
+            className="px-4 py-1 bg-[#b81d24] hover:bg-[#a0181e] text-white text-xs font-bold rounded-sm shadow-xs transition flex items-center space-x-1 cursor-pointer"
           >
             <Search className="w-3.5 h-3.5" />
             <span>Terapkan Filter</span>
@@ -812,7 +821,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
                   <th className="py-2.5 px-3 text-center">Total Transaksi</th>
                   <th className="py-2.5 px-3 text-center">Total Bal</th>
                   <th className="py-2.5 px-3 text-right">Total Netto (Kg)</th>
-                  <th className="py-2.5 px-3 text-right">Total Nilai Beli (Rp)</th>
+                  <th className="py-2.5 px-3 text-right">Nilai Beli Lunas (Rp)</th>
                   <th className="py-2.5 px-3 text-center w-28">Grade Dominan</th>
                   <th className="py-2.5 px-3 text-center">Setoran Terakhir</th>
                   <th className="py-2.5 px-3 text-center w-24">Aksi</th>
@@ -869,6 +878,11 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
                         </td>
                         <td className="py-2.5 px-3 text-right font-mono font-semibold text-slate-900">
                           {p.totalNilaiRp > 0 ? `Rp ${p.totalNilaiRp.toLocaleString('id-ID')}` : 'Rp 0'}
+                          {p.totalKreditRp > 0 && (
+                            <span className="block text-[10px] font-medium text-rose-700">
+                              Kredit: Rp {p.totalKreditRp.toLocaleString('id-ID')}
+                            </span>
+                          )}
                         </td>
                         <td className="py-2.5 px-3 text-center">
                           {p.gradeDominan !== '-' ? (
@@ -1220,7 +1234,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
             <div className="p-3 bg-slate-50 border-t border-slate-200 flex justify-end">
               <button
                 onClick={() => setSelectedPetaniForDetail(null)}
-                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded transition-colors cursor-pointer"
+                className="px-4 py-1.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 text-xs font-semibold rounded-sm shadow-xs transition-colors cursor-pointer"
               >
                 Tutup
               </button>

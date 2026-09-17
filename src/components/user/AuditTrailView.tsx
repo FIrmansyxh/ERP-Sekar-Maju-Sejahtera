@@ -131,14 +131,16 @@ export const AuditTrailView: React.FC = () => {
   return (
     <div className="space-y-4">
       {/* Banner Super Admin */}
-      <div className="bg-slate-900 text-white p-4 rounded-sm border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+      <div className="bg-white p-4 sm:p-5 border border-gray-300 rounded-sm shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded bg-[#b81d24] text-white flex items-center justify-center shrink-0">
-            <ShieldCheck className="w-6 h-6" />
+          <div className="w-10 h-10 rounded-sm bg-[#b81d24] text-white flex items-center justify-center shadow-xs shrink-0">
+            <ShieldCheck className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="font-bold text-sm tracking-wide">Audit Trail & Rekaman Log Aktivitas Sistem</h3>
-            <p className="text-xs text-slate-400">
+            <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">
+              Audit Trail & Rekaman Log Aktivitas Sistem
+            </h1>
+            <p className="text-xs text-gray-500">
               Pencatatan riwayat kronologis otomatis untuk transaksi, koreksi timbangan, perubahan data, dan penghapusan record.
             </p>
           </div>
@@ -147,7 +149,7 @@ export const AuditTrailView: React.FC = () => {
           <button
             type="button"
             onClick={refreshLogs}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded transition flex items-center space-x-1.5 border border-slate-700 cursor-pointer"
+            className="px-3 py-1.5 bg-white hover:bg-gray-50 text-gray-700 text-xs font-semibold rounded-sm transition flex items-center space-x-1.5 border border-gray-300 shadow-2xs cursor-pointer"
           >
             <RefreshCw className="w-3.5 h-3.5" />
             <span>Segarkan</span>
@@ -156,7 +158,7 @@ export const AuditTrailView: React.FC = () => {
             type="button"
             onClick={handleExportExcel}
             disabled={filteredLogs.length === 0}
-            className="px-3 py-1.5 bg-[#b81d24] hover:bg-[#9e161c] text-white text-xs font-semibold rounded transition flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
+            className="px-3 py-1.5 bg-[#b81d24] hover:bg-[#a0181e] text-white text-xs font-semibold rounded-sm shadow-xs transition flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Ekspor Excel</span>

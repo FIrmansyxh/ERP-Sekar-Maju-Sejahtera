@@ -87,20 +87,24 @@ export const BatchSamplePrintModal: React.FC<BatchSamplePrintModalProps> = ({
       >
         
         {/* Header Bar */}
-        <div className="px-5 py-3.5 border-b border-gray-200 bg-[#b81d24] text-white flex items-center justify-between shrink-0 print:hidden">
-          <div className="flex items-center space-x-2.5">
-            <FlaskConical className="w-5 h-5 text-yellow-400" />
-            <div>
-              <h2 className="text-sm font-bold tracking-tight">Dokumen Pengantar & Uji Sample Batch Tembakau</h2>
-              <p className="text-[11px] text-gray-300 font-mono">{batch.kode_batch}</p>
+        <div className="px-5 py-3.5 border-b border-gray-200 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 print:hidden">
+          <div className="flex items-center space-x-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-sm bg-red-50 border border-red-100 flex items-center justify-center shrink-0">
+              <FlaskConical className="w-4 h-4 text-[#b81d24]" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-sm font-bold text-gray-900 tracking-tight truncate">Dokumen Pengantar & Uji Sample Batch Tembakau</h2>
+              <p className="text-[11px] text-gray-500 font-medium">
+                Kode Batch: <span className="font-mono font-bold text-gray-900">{batch.kode_batch}</span>
+              </p>
             </div>
           </div>
 
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2 shrink-0">
             <button
               type="button"
               onClick={handlePrint}
-              className="px-3 py-1.5 text-xs font-semibold text-gray-900 bg-yellow-400 hover:bg-yellow-500 rounded-sm transition flex items-center space-x-1 cursor-pointer shadow-xs"
+              className="px-3.5 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
             >
               <Printer className="w-3.5 h-3.5" />
               <span>Cetak Dokumen</span>
@@ -110,7 +114,7 @@ export const BatchSamplePrintModal: React.FC<BatchSamplePrintModalProps> = ({
               type="button"
               onClick={handleDownloadPdf}
               disabled={isDownloadingPdf}
-              className="px-3.5 py-1.5 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+              className="px-4 py-1.5 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#a0181e] rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs disabled:opacity-50"
             >
               <Download className="w-3.5 h-3.5" />
               <span>{isDownloadingPdf ? 'Mengunduh...' : 'Unduh PDF'}</span>
@@ -119,7 +123,8 @@ export const BatchSamplePrintModal: React.FC<BatchSamplePrintModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 text-gray-400 hover:text-white rounded-sm hover:bg-[#b81d24] transition"
+              className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-sm transition cursor-pointer"
+              title="Tutup"
             >
               <X className="w-4 h-4" />
             </button>
@@ -169,10 +174,6 @@ export const BatchSamplePrintModal: React.FC<BatchSamplePrintModalProps> = ({
                 <div className="flex justify-between">
                   <span className="text-gray-500 font-medium">Tanggal Kirim:</span>
                   <span className="font-semibold">{batch.tanggal_kirim}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500 font-medium">Gudang Asal:</span>
-                  <span className="font-semibold">{batch.sumber_gudang}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500 font-medium">Pengirim:</span>

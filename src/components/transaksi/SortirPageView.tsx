@@ -317,7 +317,6 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
       total_kotor: 0,
       subtotal_bersih: 0,
       status_timbang: 'menunggu_timbang',
-      lokasi_simpan: 'Blok A',
     };
 
     const petugas = petugasSortirNama || 'Petugas Sortir QC';
@@ -349,6 +348,8 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
         harga_final: 0,
         status_transaksi: 'menunggu',
         status_tahap: 'proses_sortir',
+        // Kupon baru selalu kredit sampai dibayar di Kasir
+        status_pembayaran: 'belum_lunas',
         status_nota: 'belum_cetak',
         unduh_nota_count: 0,
         tanggal_transaksi: tanggal,

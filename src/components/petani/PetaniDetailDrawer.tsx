@@ -86,7 +86,7 @@ export const PetaniDetailDrawer: React.FC<PetaniDetailDrawerProps> = ({
 
             <button
               onClick={() => onPrintCard(petani)}
-              className="px-2.5 py-1 text-xs font-bold text-white bg-gray-900 hover:bg-gray-800 rounded-none transition flex items-center space-x-1 cursor-pointer shadow-xs"
+              className="px-2.5 py-1 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#a0181e] rounded-sm transition flex items-center space-x-1 cursor-pointer shadow-xs"
             >
               <Printer className="w-3 h-3" />
               <span>Cetak Kartu</span>
@@ -294,8 +294,10 @@ export const PetaniDetailDrawer: React.FC<PetaniDetailDrawerProps> = ({
                   <button
                     type="button"
                     onClick={() => onToggleStatus(petani)}
-                    className={`px-3 py-2 text-xs font-bold text-white rounded-none flex items-center justify-center space-x-1 cursor-pointer ${
-                      petani.status_aktif ? 'bg-gray-800 hover:bg-gray-900' : 'bg-emerald-700 hover:bg-emerald-800'
+                    className={`px-3 py-2 text-xs font-bold rounded-sm flex items-center justify-center space-x-1 cursor-pointer transition ${
+                      petani.status_aktif
+                        ? 'bg-white border border-red-200 text-[#b81d24] hover:bg-red-50'
+                        : 'bg-emerald-700 hover:bg-emerald-800 text-white'
                     }`}
                   >
                     <span>{petani.status_aktif ? 'Nonaktifkan' : 'Aktifkan'}</span>

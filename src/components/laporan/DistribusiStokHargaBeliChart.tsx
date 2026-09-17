@@ -104,7 +104,7 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
     return map;
   }, [hargaList]);
 
-  // Filter bal sesuai scope dan lokasi gudang
+  // Filter bal sesuai scope stok
   const filteredBarang = useMemo(() => {
     return barangList.filter((b) => {
       // Filter status stok
@@ -422,7 +422,7 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
           </div>
         </div>
 
-        {/* Status Lokasi & Rata-rata */}
+        {/* Status Stok & Rata-rata */}
         <div className="mt-2.5 pt-2 border-t border-slate-800 grid grid-cols-2 gap-1.5 text-[10px]">
           <div className="bg-slate-800 p-1.5 rounded-xs">
             <p className="text-slate-400">Rata-rata/Bal</p>

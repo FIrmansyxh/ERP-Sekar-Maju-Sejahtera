@@ -136,7 +136,6 @@ export interface TransaksiItemBal {
   total_kotor: number; // berat_kg * harga_per_kg
   subtotal_bersih: number; // total_kotor - potongan
   status_timbang?: 'menunggu_timbang' | 'selesai_timbang';
-  lokasi_simpan?: string; // Blok A, Blok B, dll
   sample_label_code?: string; // Kode barcode sample identik
   sample_label_printed?: boolean;
   barang_id?: string;

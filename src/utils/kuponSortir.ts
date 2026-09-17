@@ -129,7 +129,6 @@ export type HasilTimbangBal = Partial<Pick<
   | 'total_kotor'
   | 'subtotal_bersih'
   | 'status_timbang'
-  | 'lokasi_simpan'
 >>;
 
 /** Menerapkan hasil timbang satu bal ke versi kupon terbaru. Null bila bal sudah dihapus Sortir. */

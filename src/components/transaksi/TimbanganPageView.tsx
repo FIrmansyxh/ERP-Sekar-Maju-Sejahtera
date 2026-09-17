@@ -124,7 +124,6 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
   const [beratNettoInput, setBeratNettoInput] = useState<number | string>('');
   const [isNettoManual, setIsNettoManual] = useState<boolean>(false);
   const [potTikarInput, setPotTikarInput] = useState<number | ''>('');
-  const [lokasiBlok, setLokasiBlok] = useState('Blok A (Utara)');
 
   const [scanFeedback, setScanFeedback] = useState<{ text: string; isError: boolean } | null>(null);
   const [antiScanAlert, setAntiScanAlert] = useState<{ text: string; code?: string } | null>(null);
@@ -181,7 +180,6 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
           setBeratBrutoInput(existingActive.berat_bruto_kg && existingActive.berat_bruto_kg > 0 ? existingActive.berat_bruto_kg : '');
           setBeratNettoInput(existingActive.berat_kg && existingActive.berat_kg > 0 ? existingActive.berat_kg : '');
           setIsNettoManual(existingActive.is_netto_manual || false);
-          setLokasiBlok(existingActive.lokasi_simpan || 'Blok A (Utara)');
         }
         return;
       }
@@ -194,7 +192,6 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
         setBeratBrutoInput(targetItem.berat_bruto_kg && targetItem.berat_bruto_kg > 0 ? targetItem.berat_bruto_kg : '');
         setBeratNettoInput(targetItem.berat_kg && targetItem.berat_kg > 0 ? targetItem.berat_kg : '');
         setIsNettoManual(targetItem.is_netto_manual || false);
-        setLokasiBlok(targetItem.lokasi_simpan || 'Blok A (Utara)');
       }
     } else {
       setWorkingItems([]);
@@ -213,7 +210,6 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     setBeratBrutoInput(foundItem.berat_bruto_kg && foundItem.berat_bruto_kg > 0 ? foundItem.berat_bruto_kg : '');
     setBeratNettoInput(foundItem.berat_kg && foundItem.berat_kg > 0 ? foundItem.berat_kg : '');
     setIsNettoManual(foundItem.is_netto_manual || false);
-    setLokasiBlok(foundItem.lokasi_simpan || 'Blok A (Utara)');
     
     const isAlreadyWeighed = (foundItem.berat_kg || 0) > 0;
     setScanFeedback({
@@ -385,7 +381,6 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
   const handleSelectBalItem = (item: TransaksiItemBal) => {
     setActiveItemId(item.item_id);
     setBeratBrutoInput(item.berat_bruto_kg && item.berat_bruto_kg > 0 ? item.berat_bruto_kg : '');
-    setLokasiBlok(item.lokasi_simpan || 'Blok A (Utara)');
     if (item.ganti_tikar && item.potongan_tikar) {
       setPotTikarInput(item.potongan_tikar);
     } else {
@@ -653,7 +648,6 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
       total_kotor: liveTotalKotor,
       subtotal_bersih: liveSubtotalBersih,
       status_timbang: 'selesai_timbang',
-      lokasi_simpan: lokasiBlok,
     });
 
     if (!updatedTx) {
@@ -683,11 +677,11 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
       modul: 'Timbangan Bal',
       aksi: 'TIMBANG_BAL',
       target_id: activeBalItem.no_bal,
-      deskripsi: `Penimbangan bal ${activeBalItem.no_bal} (Kupon: ${currentTx.no_kupon}) - Bruto: ${liveBruto} Kg, Tara: ${liveTara} Kg, Netto: ${liveNetto} Kg, Lokasi: ${lokasiBlok}`,
+      deskripsi: `Penimbangan bal ${activeBalItem.no_bal} (Kupon: ${currentTx.no_kupon}) - Bruto: ${liveBruto} Kg, Tara: ${liveTara} Kg, Netto: ${liveNetto} Kg`,
     });
     
 
-    setSaveSuccessMsg(`✓ Berat Bal "${activeBalItem.no_bal}" (${liveNetto} Kg) berhasil disimpan ke ${lokasiBlok}!`);
+    setSaveSuccessMsg(`✓ Berat Bal "${activeBalItem.no_bal}" (${liveNetto} Kg) berhasil disimpan ke gudang!`);
     setScanFeedback(null);
 
     // Kosongkan input scan agar siap menerima tembakan barcode bal berikutnya
@@ -868,7 +862,6 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
       if (unweighed) {
         setActiveItemId(unweighed.item_id);
         setBeratBrutoInput(unweighed.berat_bruto_kg && unweighed.berat_bruto_kg > 0 ? unweighed.berat_bruto_kg : '');
-        setLokasiBlok(unweighed.lokasi_simpan || 'Blok A (Utara)');
       }
     }
   };
