@@ -303,6 +303,7 @@ export interface PengirimanBarang {
   status: StatusPengiriman;
   sample_id_ref?: string;
   batch_sample_id_ref?: string;
+  nomor_kontrak?: string;
   total_nilai_deal?: number;
   harga_deal_map?: Record<string, number>; // barang_id -> harga_deal_per_kg
   kode_harga_jual_map?: Record<string, string>; // barang_id -> kode_harga_jual

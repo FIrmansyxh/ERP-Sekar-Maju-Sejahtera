@@ -43,6 +43,8 @@ interface TimbanganPageViewProps {
   initialTxId?: string;
   initialBalNo?: string;
   onSaveTransaksi: (newTx: TransaksiPembelian, generatedBarang: Barang | Barang[], meta?: SaveTransaksiMeta) => void;
+  /** Tarik ulang kupon dari server (Sortir di PC lain) lalu kembalikan list terbaru */
+  onRefreshTransaksiList?: () => Promise<TransaksiPembelian[]>;
   onNavigateToKasir: (kuponNo?: string, txId?: string) => void;
   onNavigateToSortir: () => void;
 }
@@ -58,6 +60,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
   initialTxId,
   initialBalNo,
   onSaveTransaksi,
+  onRefreshTransaksiList,
   onNavigateToKasir,
   onNavigateToSortir,
 }) => {
@@ -227,109 +230,105 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     }, 120);
   }, []);
 
-  // Lookup Bal by code across ALL kupons and open that exact bal immediately
-  const lookupBal = useCallback((query: string, isFromScanner: boolean = false) => {
+  // Lookup Bal by code across ALL kupons; bila belum ketemu, tarik ulang dari server (Sortir PC lain)
+  const findBalInList = useCallback((list: TransaksiPembelian[], query: string, preferCurrent?: TransaksiPembelian) => {
+    const cleanQ = query.trim().toLowerCase();
+    const cleanQNormalized = query.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+    if (!cleanQ) return { foundTx: undefined as TransaksiPembelian | undefined, foundItem: undefined as TransaksiItemBal | undefined };
+
+    const matchItem = (it: TransaksiItemBal) => {
+      const bCode = (it.barcode || '').toLowerCase();
+      const nBal = (it.no_bal || '').toLowerCase();
+      const nBalNorm = (it.no_bal || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+      return bCode === cleanQ || nBal === cleanQ || nBalNorm === cleanQNormalized;
+    };
+
+    if (preferCurrent?.items) {
+      const currentMatch = preferCurrent.items.find(matchItem);
+      if (currentMatch) return { foundTx: preferCurrent, foundItem: currentMatch };
+    }
+
+    for (const tx of list) {
+      const match = (tx.items || []).find(matchItem);
+      if (match) return { foundTx: tx, foundItem: match };
+    }
+
+    for (const tx of list) {
+      const match = (tx.items || []).find((it) => {
+        const bCode = (it.barcode || '').toLowerCase();
+        const nBal = (it.no_bal || '').toLowerCase();
+        return (it.berat_kg || 0) <= 0 && (bCode.includes(cleanQ) || nBal.includes(cleanQ));
+      });
+      if (match) return { foundTx: tx, foundItem: match };
+    }
+
+    for (const tx of list) {
+      const match = (tx.items || []).find((it) => {
+        const bCode = (it.barcode || '').toLowerCase();
+        const nBal = (it.no_bal || '').toLowerCase();
+        return bCode.includes(cleanQ) || nBal.includes(cleanQ);
+      });
+      if (match) return { foundTx: tx, foundItem: match };
+    }
+
+    return { foundTx: undefined, foundItem: undefined };
+  }, []);
+
+  const lookupBal = useCallback(async (query: string, isFromScanner: boolean = false) => {
     const q = query.trim();
     if (!q) return;
 
-    // Fill the scanned barcode form field fully
     setScannedBarcode(q);
-
     const cleanQ = q.toLowerCase();
-    const cleanQNormalized = q.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
-    // 1. Search across all transactions for the best matching bal item
-    let foundTx: TransaksiPembelian | undefined;
-    let foundItem: TransaksiItemBal | undefined;
+    let { foundTx, foundItem } = findBalInList(transaksiList, q, currentTx);
 
-    // Check currently selected transaction first
-    if (currentTx && currentTx.items) {
-      const currentMatch = currentTx.items.find((it) => {
-        const bCode = (it.barcode || '').toLowerCase();
-        const nBal = (it.no_bal || '').toLowerCase();
-        const nBalNorm = (it.no_bal || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-        return bCode === cleanQ || nBal === cleanQ || nBalNorm === cleanQNormalized;
+    // Belum ketemu: refresh dari API (kupon Sortir yang baru di PC lain / baru di-commit)
+    if ((!foundTx || !foundItem) && onRefreshTransaksiList) {
+      setScanFeedback({
+        text: `Bal "${q}" belum di cache lokal. Mengambil antrian terbaru dari server...`,
+        isError: false,
       });
-      if (currentMatch) {
-        foundTx = currentTx;
-        foundItem = currentMatch;
+      try {
+        const fresh = await onRefreshTransaksiList();
+        ({ foundTx, foundItem } = findBalInList(fresh, q));
+      } catch (err) {
+        console.warn('Gagal refresh transaksi untuk lookup bal:', err);
       }
     }
 
-    // If not found in current transaction, search across ALL transactions (lintas kupon)
     if (!foundTx || !foundItem) {
-      // Step A: Exact / normalized match across all kupons
-      for (const tx of transaksiList) {
-        const match = (tx.items || []).find((it) => {
-          const bCode = (it.barcode || '').toLowerCase();
-          const nBal = (it.no_bal || '').toLowerCase();
-          const nBalNorm = (it.no_bal || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-          return bCode === cleanQ || nBal === cleanQ || nBalNorm === cleanQNormalized;
-        });
-        if (match) {
-          foundTx = tx;
-          foundItem = match;
-          break;
-        }
-      }
-
-      // Step B: Partial match across all kupons (prioritizing unweighed first)
-      if (!foundTx || !foundItem) {
-        for (const tx of transaksiList) {
-          const match = (tx.items || []).find((it) => {
-            const bCode = (it.barcode || '').toLowerCase();
-            const nBal = (it.no_bal || '').toLowerCase();
-            const isWeighed = (it.berat_kg || 0) > 0;
-            return !isWeighed && (bCode.includes(cleanQ) || nBal.includes(cleanQ));
-          });
-          if (match) {
-            foundTx = tx;
-            foundItem = match;
-            break;
-          }
-        }
-
-        if (!foundTx || !foundItem) {
-          for (const tx of transaksiList) {
-            const match = (tx.items || []).find((it) => {
-              const bCode = (it.barcode || '').toLowerCase();
-              const nBal = (it.no_bal || '').toLowerCase();
-              return bCode.includes(cleanQ) || nBal.includes(cleanQ);
-            });
-            if (match) {
-              foundTx = tx;
-              foundItem = match;
-              break;
-            }
-          }
-        }
-      }
-    }
-
-    // Step C: If still not found, check if they typed a Kupon Number instead!
-    if (!foundTx || !foundItem) {
-      const matchedKupon = transaksiList.find(tx => tx.no_kupon.toLowerCase() === cleanQ || tx.no_kupon.toLowerCase().includes(cleanQ));
+      const matchedKupon = (transaksiList).find(
+        (tx) => tx.no_kupon.toLowerCase() === cleanQ || tx.no_kupon.toLowerCase().includes(cleanQ)
+      );
       if (matchedKupon) {
-        // They typed a Kupon. Just change Kupon!
         handleManualChangeKupon(matchedKupon.transaksi_id);
-        setScannedBarcode(''); // Clear it because it was a Kupon
+        setScannedBarcode('');
         setScanFeedback({ text: `Kupon ${matchedKupon.no_kupon} aktif. Menampilkan daftar bal antrian.`, isError: false });
-        return; // Done!
+        return;
       }
     }
 
     if (foundTx && foundItem) {
       selectBalAndOpen(foundTx, foundItem, isFromScanner ? 'scanner' : 'manual');
     } else {
-      // TIDAK ADA / TIDAK SESUAI: Form tetap terisi dengan nomor yang di-scan, dropdown ditutup, beri info jelas
       setIsDropdownOpen(false);
       setScanFeedback({
-        text: `Nomor bal "${q}" tidak ditemukan dalam antrian timbang aktif. Pastikan nomor bal sudah melalui proses sortir.`,
+        text: `Nomor bal "${q}" tidak ditemukan. Pastikan bal sudah ditambahkan di Sortir (langsung tersimpan, tidak perlu Selesai Sortir dulu).`,
         isError: true,
       });
       barcodeScannerRef.current?.focus();
     }
-  }, [currentTx, transaksiList, selectBalAndOpen]);
+  }, [currentTx, transaksiList, selectBalAndOpen, findBalInList, onRefreshTransaksiList]);
+
+  // Poll ringan: Sortir di PC lain menambah bal → Timbangan ikut melihat tanpa reload manual
+  useEffect(() => {
+    if (!onRefreshTransaksiList) return;
+    const id = window.setInterval(() => {
+      onRefreshTransaksiList().catch(() => undefined);
+    }, 6000);
+    return () => window.clearInterval(id);
+  }, [onRefreshTransaksiList]);
 
   // Focus scanner on mount & Global Scanner listener for barcode guns
   useEffect(() => {

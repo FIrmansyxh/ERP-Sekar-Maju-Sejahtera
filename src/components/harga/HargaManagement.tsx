@@ -38,6 +38,16 @@ export const HargaManagement: React.FC<HargaManagementProps> = ({
   const countInactive = useMemo(() => hargaList.filter((h) => h.status === 'nonaktif').length, [hargaList]);
   
   const canManage = userRole === 'superadmin' || userRole === 'admin_sortir';
+  const availableGradeOptions = useMemo(() => {
+    const set = new Set<string>();
+    hargaList.forEach((h) => {
+      if (h.kode_grade) set.add(h.kode_grade.toUpperCase());
+    });
+    // Tambahkan grade standar bila belum ada
+    ['A', 'B', 'C', '30', '40', '50', '60', '70'].forEach((g) => set.add(g));
+    return Array.from(set).sort();
+  }, [hargaList]);
+
   const [formKode, setFormKode] = useState('');
   const [formHarga, setFormHarga] = useState<number | ''>('');
   const [formTanggalBerlaku, setFormTanggalBerlaku] = useState('');
@@ -97,31 +107,39 @@ export const HargaManagement: React.FC<HargaManagementProps> = ({
       return;
     }
 
-    // Check duplicate code
-    const isDuplicate = hargaList.some(
-      (h) => h.kode_grade.toLowerCase() === formKode.trim().toLowerCase() && h.harga_id !== editingItem?.harga_id
+    // Cari record aktif untuk grade ini jika sudah pernah ada
+    const existingActiveGrade = hargaList.find(
+      (h) => h.kode_grade.toLowerCase() === formKode.trim().toLowerCase() && h.status === 'aktif' && h.harga_id !== editingItem?.harga_id
     );
-    if (isDuplicate) {
-      setErrorMessage(`Kode "${formKode}" sudah terdaftar.`);
-      return;
-    }
+
+    // Hitung nomor urut berikutnya bila offline fallback
+    let maxNum = 0;
+    hargaList.forEach((h) => {
+      if (h.harga_id && h.harga_id.startsWith('HB-')) {
+        const num = Number(h.harga_id.slice(3));
+        if (!isNaN(num) && num < 1000000 && num > maxNum) {
+          maxNum = num;
+        }
+      }
+    });
+    const fallbackNextId = `HB-${(maxNum > 0 ? maxNum : 70) + 1}`;
 
     const newItem: TabelHarga = {
-      harga_id: editingItem ? editingItem.harga_id : `HB-${Date.now()}`,
+      harga_id: editingItem ? editingItem.harga_id : (existingActiveGrade ? existingActiveGrade.harga_id : fallbackNextId),
       kode_grade: formKode.trim().toUpperCase(),
       nama_grade: formKode.trim().toUpperCase(),
-      warna_badge: editingItem?.warna_badge || 'bg-slate-100 text-slate-800',
+      warna_badge: editingItem?.warna_badge || existingActiveGrade?.warna_badge || 'bg-slate-100 text-slate-800',
       harga_per_kg: Number(formHarga),
-            tanggal_berlaku: formTanggalBerlaku,
-      rate_potongan_per_bal: editingItem?.rate_potongan_per_bal || 2000,
-      berat_standar_kg: editingItem?.berat_standar_kg || 50,
+      tanggal_berlaku: formTanggalBerlaku,
+      rate_potongan_per_bal: editingItem?.rate_potongan_per_bal || existingActiveGrade?.rate_potongan_per_bal || 2000,
+      berat_standar_kg: editingItem?.berat_standar_kg || existingActiveGrade?.berat_standar_kg || 50,
       status: formStatusAktif ? 'aktif' : 'nonaktif',
-      dibuat_oleh: editingItem?.dibuat_oleh || 'System',
+      dibuat_oleh: editingItem?.dibuat_oleh || existingActiveGrade?.dibuat_oleh || 'System',
     };
 
-    onSaveNewPrice(newItem, editingItem ? editingItem.harga_id : undefined);
+    onSaveNewPrice(newItem, existingActiveGrade ? existingActiveGrade.harga_id : (editingItem ? editingItem.harga_id : undefined));
     
-    setSuccessToast(editingItem ? 'Data Master Harga Beli berhasil diperbarui' : 'Master Harga Beli baru berhasil ditambahkan');
+    setSuccessToast(editingItem || existingActiveGrade ? 'Data Master Harga Beli berhasil diperbarui' : 'Master Harga Beli baru berhasil ditambahkan');
     setTimeout(() => setSuccessToast(''), 3000);
     
     setIsModalOpen(false);
@@ -424,18 +442,24 @@ return (
               {/* Kode */}
               <div>
                 <label className="block text-gray-700 font-semibold mb-1">
-                  Kode Harga Beli <span className="text-[#b81d24]">*</span>
+                  Kode Grade / Tarif <span className="text-[#b81d24]">*</span>
                 </label>
                 <input
                   type="text"
-                  placeholder="Contoh: A, B, C, A-SUPER"
+                  list="grade-list-options"
+                  placeholder="Pilih atau ketik: A, B, 30, 80..."
                   value={formKode}
                   onChange={(e) => setFormKode(e.target.value)}
                   className="w-full bg-white border border-gray-300 rounded-sm px-3 py-2 text-xs font-mono font-bold uppercase placeholder:normal-case placeholder:font-sans placeholder:font-normal text-gray-900 focus:outline-none focus:border-[#b81d24]"
                   required
                 />
+                <datalist id="grade-list-options">
+                  {availableGradeOptions.map((grade) => (
+                    <option key={grade} value={grade} />
+                  ))}
+                </datalist>
                 <p className="text-[10px] text-gray-500 mt-1">
-                  Kode ini yang dipilih petugas sortir untuk setiap bal.
+                  Kode ini yang dipilih petugas sortir untuk setiap bal. Pilih dari daftar grade yang ada atau ketik grade baru.
                 </p>
               </div>
 

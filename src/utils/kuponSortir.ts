@@ -115,7 +115,74 @@ export function buildBarangDariItem(tx: TransaksiPembelian, item: TransaksiItemB
   };
 }
 
-/** Field hasil timbang yang ditulis Timbangan; field sortir (No Bal, grade, harga) tidak disentuh */
+/** Gabungkan dua versi kupon paralel (Sortir + Timbangan) tanpa kehilangan bal. */
+export function mergeKuponParalel(
+  prev: TransaksiPembelian | undefined,
+  incoming: TransaksiPembelian
+): TransaksiPembelian {
+  if (!prev || prev.transaksi_id !== incoming.transaksi_id) {
+    return hitungUlangKupon(incoming, incoming.items || []);
+  }
+
+  const byNoBal = new Map<string, TransaksiItemBal>();
+  for (const it of prev.items || []) {
+    byNoBal.set(String(it.no_bal).toUpperCase(), it);
+  }
+  for (const it of incoming.items || []) {
+    const key = String(it.no_bal).toUpperCase();
+    const old = byNoBal.get(key);
+    if (!old) {
+      byNoBal.set(key, it);
+      continue;
+    }
+    const oldW = old.berat_kg || 0;
+    const newW = it.berat_kg || 0;
+    if (newW >= oldW) {
+      byNoBal.set(key, {
+        ...old,
+        ...it,
+        item_id: it.item_id || old.item_id,
+        barang_id: it.barang_id || old.barang_id,
+        // Pertahankan hasil timbang yang lebih berat
+        berat_kg: newW > 0 ? it.berat_kg : old.berat_kg,
+        berat_bruto_kg: (it.berat_bruto_kg || 0) > 0 ? it.berat_bruto_kg : old.berat_bruto_kg,
+        potongan_tara_kg: (it.berat_kg || 0) > 0 ? it.potongan_tara_kg : old.potongan_tara_kg,
+        status_timbang: newW > 0 ? it.status_timbang || 'selesai_timbang' : old.status_timbang,
+      });
+    } else {
+      byNoBal.set(key, {
+        ...it,
+        ...old,
+        item_id: old.item_id || it.item_id,
+        barang_id: old.barang_id || it.barang_id,
+        // Field sortir dari incoming jika ada update grade/harga
+        kode_grade: it.kode_grade || old.kode_grade,
+        harga_per_kg: it.harga_per_kg || old.harga_per_kg,
+        ganti_tikar: it.ganti_tikar ?? old.ganti_tikar,
+      });
+    }
+  }
+
+  const rank: Record<string, number> = { proses_sortir: 1, menunggu_timbang: 2, lengkap: 3 };
+  const prevRank = rank[prev.status_tahap] || 0;
+  const incRank = rank[incoming.status_tahap] || 0;
+  const status_tahap =
+    incRank >= prevRank ? incoming.status_tahap : prev.status_tahap;
+
+  return hitungUlangKupon(
+    {
+      ...prev,
+      ...incoming,
+      status_tahap,
+      // Pembayaran lunas dari salah satu sisi menang
+      status_pembayaran:
+        incoming.status_pembayaran === 'lunas' || prev.status_pembayaran === 'lunas'
+          ? 'lunas'
+          : incoming.status_pembayaran || prev.status_pembayaran,
+    },
+    Array.from(byNoBal.values())
+  );
+}
 export type HasilTimbangBal = Partial<Pick<
   TransaksiItemBal,
   | 'berat_bruto_kg'

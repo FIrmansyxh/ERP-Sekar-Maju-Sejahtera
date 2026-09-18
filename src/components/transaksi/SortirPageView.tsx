@@ -75,10 +75,13 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
   );
   const balItems: TransaksiItemBal[] = openTx?.items || [];
 
-  // Kupon ditutup atau dihapus dari tempat lain (tunggu data transaksi selesai dimuat)
+  // Kupon ditutup dari tempat lain: hanya reset jika kupon sudah bukan proses_sortir.
+  // Jangan reset saat kupon belum muncul di list (sedang commit lokal / sync).
   useEffect(() => {
-    if (openTxId && !openTx && transaksiList.length > 0) resetOpenTxId();
-  }, [openTxId, openTx, transaksiList.length]);
+    if (!openTxId || openTx) return;
+    const tx = transaksiList.find((t) => t.transaksi_id === openTxId);
+    if (tx && !isKuponProsesSortir(tx)) resetOpenTxId();
+  }, [openTxId, openTx, transaksiList]);
 
   // Kupon proses sortir lain yang bisa dilanjutkan (mis. setelah browser ditutup)
   const kuponBelumSelesai = useMemo(

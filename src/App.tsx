@@ -37,7 +37,7 @@ import {
   STORAGE_KEY_BARANG,
   STORAGE_KEY_TRANSAKSI
 } from './utils/storage';
-import { normalizeStatusBal, resolveStatusStok } from './utils/kuponSortir';
+import { mergeKuponParalel, normalizeStatusBal, resolveStatusStok } from './utils/kuponSortir';
 import { filterBarangLunas } from './utils/statusBayar';
 import { balTerkirimDariTransaksi, isSuratJalanTerkunci, pesanSuratJalanTerkunci, pesanTransaksiTerkunci } from './utils/kunciHapus';
 import { clearAllDrafts, getDraftRecovery, markDraftCleanExit, touchDraftAlive } from './utils/draftStorage';
@@ -297,6 +297,16 @@ export default function App() {
       ErpApiService.getHargaJualList().then((res) => {
         if (res.fromBackend) {
           setHargaJualList(res.data);
+        }
+      });
+      ErpApiService.getBatchSampleList().then((res) => {
+        if (res.fromBackend) {
+          setBatchSampleList(res.data);
+        }
+      });
+      ErpApiService.getPengirimanList().then((res) => {
+        if (res.fromBackend) {
+          setPengirimanList(res.data);
         }
       });
     }
@@ -749,29 +759,51 @@ export default function App() {
   };
 
   // --- PRD 4.2: Harga Handlers ---
-  const handleSaveNewPrice = (newPrice: TabelHarga, oldPriceIdToArchive?: string) => {
-    let updatedList = [...hargaList];
+  const handleSaveNewPrice = async (newPrice: TabelHarga, oldPriceIdToArchive?: string) => {
+    try {
+      const saved = await ErpApiService.saveHargaBeli(newPrice);
+      const activePrice = saved || newPrice;
 
-    // Check if this is an in-place update of an existing price record
-    const existingIndex = updatedList.findIndex((h) => h.harga_id === newPrice.harga_id);
-
-    if (existingIndex !== -1) {
-      // In-place edit of existing price
-      updatedList[existingIndex] = newPrice;
-    } else {
-      // Archive previous active price if specified and distinct
-      if (oldPriceIdToArchive && oldPriceIdToArchive !== newPrice.harga_id) {
-        updatedList = updatedList.map((h) =>
-          h.harga_id === oldPriceIdToArchive ? { ...h, status: 'nonaktif' as const } : h
+      setHargaList((prev) => {
+        let updatedList = [...prev];
+        const existingIndex = updatedList.findIndex(
+          (h) => h.harga_id === activePrice.harga_id || (h.kode_grade === activePrice.kode_grade && activePrice.status === 'aktif')
         );
-      }
-      // Prepend new price record, ensuring uniqueness
-      updatedList = [newPrice, ...updatedList.filter((h) => h.harga_id !== newPrice.harga_id)];
-    }
 
-    setHargaList(updatedList);
-    saveHargaData(updatedList);
-    showToast(`Tarif baru Grade ${newPrice.kode_grade} (Rp ${newPrice.harga_per_kg.toLocaleString('id-ID')}) aktif!`);
+        if (existingIndex !== -1) {
+          updatedList[existingIndex] = activePrice;
+        } else {
+          if (oldPriceIdToArchive && oldPriceIdToArchive !== activePrice.harga_id) {
+            updatedList = updatedList.map((h) =>
+              h.harga_id === oldPriceIdToArchive ? { ...h, status: 'nonaktif' as const } : h
+            );
+          }
+          updatedList = [activePrice, ...updatedList.filter((h) => h.harga_id !== activePrice.harga_id)];
+        }
+
+        saveHargaData(updatedList);
+        return updatedList;
+      });
+
+      showToast(`Tarif baru Grade ${newPrice.kode_grade} (Rp ${newPrice.harga_per_kg.toLocaleString('id-ID')}) berhasil disimpan ke PostgreSQL!`);
+    } catch (err: any) {
+      console.warn('Gagal sinkron harga ke server backend, disimpan offline:', err);
+      let updatedList = [...hargaList];
+      const existingIndex = updatedList.findIndex((h) => h.harga_id === newPrice.harga_id);
+      if (existingIndex !== -1) {
+        updatedList[existingIndex] = newPrice;
+      } else {
+        if (oldPriceIdToArchive && oldPriceIdToArchive !== newPrice.harga_id) {
+          updatedList = updatedList.map((h) =>
+            h.harga_id === oldPriceIdToArchive ? { ...h, status: 'nonaktif' as const } : h
+          );
+        }
+        updatedList = [newPrice, ...updatedList.filter((h) => h.harga_id !== newPrice.harga_id)];
+      }
+      setHargaList(updatedList);
+      saveHargaData(updatedList);
+      showToast(`Tarif Grade ${newPrice.kode_grade} disimpan secara lokal (Server offline: ${err?.message || 'koneksi error'})`, 'info');
+    }
   };
 
   const handleDeleteHarga = (hargaId: string) => {
@@ -782,8 +814,24 @@ export default function App() {
     showToast(`Tarif Grade "${target?.kode_grade || hargaId}" (Rp ${(target?.harga_per_kg || 0).toLocaleString('id-ID')}) berhasil dihapus dari Master Harga.`);
   };
 
+  // --- PRD 5.6: Barang / Inventaris Handlers ---
+  const handleUpdateBarang = async (updated: Barang) => {
+    if (currentUser?.status_aktif === false) return showToast('Akun Anda dinonaktifkan.', 'info');
+    const list = barangList.map((b) => (b.barang_id === updated.barang_id ? updated : b));
+    setBarangList(list);
+    saveBarangData(list);
+
+    try {
+      await ErpApiService.updateBarang(updated);
+    } catch (err: any) {
+      console.warn('Gagal memperbarui data barang di backend API:', err);
+    }
+
+    showToast(`Data bal ${updated.no_bal} berhasil diperbarui di PostgreSQL.`);
+  };
+
   // ---  Transaksi Pembelian Handlers ---
-  const handleSaveTransaksi = (
+  const handleSaveTransaksi = async (
     newTx: TransaksiPembelian,
     generatedBarang: Barang | Barang[],
     meta: SaveTransaksiMeta = {}
@@ -796,60 +844,63 @@ export default function App() {
     const oldTxRaw = transaksiList.find((t) => t.transaksi_id === newTx.transaksi_id);
     const oldTx = oldTxRaw ? JSON.parse(JSON.stringify(oldTxRaw)) as TransaksiPembelian : undefined;
     const exists = Boolean(oldTx);
-    
-    const updatedTxList = exists
-      ? transaksiList.map((t) => (t.transaksi_id === newTx.transaksi_id ? newTx : t))
-      : [newTx, ...transaksiList];
-    setTransaksiList(updatedTxList);
-    saveTransaksiData(updatedTxList);
-
     const barangsToAdd = Array.isArray(generatedBarang) ? generatedBarang : (generatedBarang ? [generatedBarang] : []);
-    
-    // Always clean up orphaned barangs for this transaction
-    const validRefsForTx = new Set<string>();
-    barangsToAdd.forEach(b => validRefsForTx.add(b.barang_id));
-    newTx.items?.forEach(i => {
-      if (i.barang_id) validRefsForTx.add(i.barang_id);
-      if (i.no_bal) validRefsForTx.add(i.no_bal);
-      if (i.barcode) validRefsForTx.add(i.barcode);
-    });
-    newTx.barang_ids?.forEach(id => validRefsForTx.add(id));
-    
-    let updatedBarangList = barangList;
-    if (exists) {
-      updatedBarangList = barangList.filter((b) => {
-        if (b.transaksi_pembelian_id === newTx.transaksi_id) {
-          // Keep only if it's in the new updated list or still referenced in the transaction items
-          return validRefsForTx.has(b.barang_id) || validRefsForTx.has(b.no_bal);
-        }
-        return true;
-      });
-    }
 
-    if (barangsToAdd.length > 0) {
-      // Gabung dengan data bal lama: status mengikuti hasil timbang, tetapi bal yang
-      // sedang menjadi sample atau sudah dikirim tidak dikembalikan ke gudang.
-      const prevById = new Map<string, Barang>(updatedBarangList.map((b) => [b.barang_id, b]));
-      const mergedById = new Map<string, Barang>(
-        barangsToAdd.map((b): [string, Barang] => {
-          const prev = prevById.get(b.barang_id);
-          return [b.barang_id, { ...prev, ...b, status_stok: resolveStatusStok(prev?.status_stok, b.berat_kg) }];
-        })
-      );
-      const newBarangs = barangsToAdd.filter((b) => !prevById.has(b.barang_id)).map((b) => mergedById.get(b.barang_id)!);
-      updatedBarangList = [
-        ...newBarangs,
-        ...updatedBarangList.map((b) => mergedById.get(b.barang_id) || b),
-      ];
-    }
-    
-    setBarangList(updatedBarangList);
-    saveBarangData(updatedBarangList);
+    /** Commit lokal dulu agar Sortir↔Timbangan paralel langsung melihat bal (tanpa tunggu API). */
+    const commitLocalTx = (incoming: TransaksiPembelian, applyBarang: boolean) => {
+      setTransaksiList((prev) => {
+        const prevTx = prev.find((t) => t.transaksi_id === incoming.transaksi_id);
+        const merged = mergeKuponParalel(prevTx, incoming);
+        const next = prevTx
+          ? prev.map((t) => (t.transaksi_id === merged.transaksi_id ? merged : t))
+          : [merged, ...prev];
+        saveTransaksiData(next);
+        return next;
+      });
+
+      if (!applyBarang) return;
+
+      setBarangList((prev) => {
+        const validRefsForTx = new Set<string>();
+        barangsToAdd.forEach((b) => validRefsForTx.add(b.barang_id));
+        (incoming.items || []).forEach((i) => {
+          if (i.barang_id) validRefsForTx.add(i.barang_id);
+          if (i.no_bal) validRefsForTx.add(i.no_bal);
+          if (i.barcode) validRefsForTx.add(i.barcode);
+        });
+        (incoming.barang_ids || []).forEach((id) => validRefsForTx.add(id));
+
+        let updated = prev;
+        if (exists || prev.some((b) => b.transaksi_pembelian_id === incoming.transaksi_id)) {
+          updated = prev.filter((b) => {
+            if (b.transaksi_pembelian_id === incoming.transaksi_id) {
+              return validRefsForTx.has(b.barang_id) || validRefsForTx.has(b.no_bal);
+            }
+            return true;
+          });
+        }
+
+        if (barangsToAdd.length > 0) {
+          const prevById = new Map<string, Barang>(updated.map((b) => [b.barang_id, b]));
+          const mergedById = new Map<string, Barang>(
+            barangsToAdd.map((b): [string, Barang] => {
+              const p = prevById.get(b.barang_id);
+              return [b.barang_id, { ...p, ...b, status_stok: resolveStatusStok(p?.status_stok, b.berat_kg) }];
+            })
+          );
+          const baru = barangsToAdd.filter((b) => !prevById.has(b.barang_id)).map((b) => mergedById.get(b.barang_id)!);
+          updated = [...baru, ...updated.map((b) => mergedById.get(b.barang_id) || b)];
+        }
+
+        saveBarangData(updated);
+        return updated;
+      });
+    };
+
+    // 1) Optimistic: segera masuk localStorage + state (bisa dipanggil Timbangan)
+    commitLocalTx(newTx, true);
 
     const balCount = newTx.total_bal || (newTx.items ? newTx.items.length : 1);
-    const itemBalList = (newTx.items && newTx.items.length > 0)
-      ? newTx.items.map((i) => i.no_bal || i.barcode).join(', ')
-      : newTx.no_bal || '-';
 
     const updatedPetaniList = petaniList.map((p) => {
       if (p.petani_id === newTx.petani_id) {
@@ -881,7 +932,6 @@ export default function App() {
     setPetaniList(updatedPetaniList);
     savePetaniData(updatedPetaniList);
 
-    // Integrasi Audit Trail Activity Log
     if (meta.audit) {
       recordAuditLog({
         user_nama: currentUser?.nama_lengkap || 'Sistem',
@@ -895,7 +945,6 @@ export default function App() {
     } else if (meta.skipAudit) {
       // Pemanggil sudah mencatat audit sendiri
     } else if (exists && oldTx) {
-      // Cek apakah baru saja dicatat dengan detail kaya oleh TransaksiEditModal
       const isRecentlyLoggedByModal = Boolean(
         newTx.terakhir_diubah_pada &&
         Math.abs(new Date().getTime() - new Date(newTx.terakhir_diubah_pada).getTime()) < 5000
@@ -942,6 +991,51 @@ export default function App() {
 
     if (!meta.silent) {
       showToast(`Kupon ${newTx.no_kupon} (${balCount} Bal, ${newTx.berat_kg} Kg) berhasil disimpan!`);
+    }
+
+    // 2) Sync ke BE di belakang; merge hasil tanpa menghapus bal paralel
+    try {
+      const syncResult = await ErpApiService.syncTransaksi(newTx, oldTx);
+      if (syncResult.fromBackend && syncResult.syncedTx) {
+        const feItems = newTx.items || [];
+        const beItems = syncResult.syncedTx.items || [];
+        const mergedItems = feItems.length
+          ? feItems.map((fe) => {
+              const be = beItems.find((b) => String(b.no_bal) === String(fe.no_bal));
+              if (!be) return fe;
+              const feW = fe.berat_kg || 0;
+              if (feW > 0) {
+                return { ...be, ...fe, item_id: be.item_id || fe.item_id };
+              }
+              return { ...fe, ...be, item_id: be.item_id || fe.item_id };
+            })
+          : [...beItems];
+
+        const feNos = new Set(mergedItems.map((i) => String(i.no_bal).toUpperCase()));
+        for (const be of beItems) {
+          if (!feNos.has(String(be.no_bal).toUpperCase())) mergedItems.push(be);
+        }
+
+        const syncedTx: TransaksiPembelian = {
+          ...newTx,
+          ...syncResult.syncedTx,
+          status_tahap: newTx.status_tahap || syncResult.syncedTx.status_tahap,
+          items: mergedItems,
+        };
+
+        commitLocalTx(syncedTx, false);
+
+        if (syncedTx.status_pembayaran === 'lunas') {
+          try {
+            const barangRes = await ErpApiService.getBarangList();
+            if (barangRes.fromBackend) setBarangList(barangRes.data);
+          } catch (err) {
+            console.warn('Gagal refresh barang setelah bayar:', err);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Gagal sinkronisasi transaksi ke backend API, data lokal tetap dipakai:', err);
     }
   };
 
@@ -1052,29 +1146,57 @@ export default function App() {
   };
 
   // --- PRD 6.1: Pengiriman Barang (DO) Handlers ---
-  const handleSaveNewPengiriman = (newPengiriman: PengirimanBarang, updatedBarangIds: string[]) => {
+  const handleSaveNewPengiriman = async (newPengiriman: PengirimanBarang, updatedBarangIds: string[]) => {
     if (currentUser?.status_aktif === false) return showToast('Akun Anda dinonaktifkan.', 'info');
-    const updatedPengirimanList = [newPengiriman, ...pengirimanList];
+
+    const updatedSet = new Set(updatedBarangIds);
+    let savedPengiriman = newPengiriman;
+    let fromBackend = false;
+
+    try {
+      savedPengiriman = await ErpApiService.savePengiriman(newPengiriman, updatedBarangIds);
+      fromBackend = true;
+    } catch (err: any) {
+      console.warn('Gagal menyimpan pengiriman ke API backend, simpan lokal:', err);
+      fromBackend = false;
+    }
+
+    const updatedPengirimanList = [
+      savedPengiriman,
+      ...pengirimanList.filter(
+        (p) => p.pengiriman_id !== savedPengiriman.pengiriman_id && p.pengiriman_id !== newPengiriman.pengiriman_id
+      ),
+    ];
     setPengirimanList(updatedPengirimanList);
     savePengirimanData(updatedPengirimanList);
 
-    const updatedSet = new Set(updatedBarangIds);
-    const updatedBarangList = barangList.map((b) => {
-      if (updatedSet.has(b.barang_id)) {
-        return {
-          ...b,
-          status_stok: 'keluar' as const,
-          pengiriman_id: newPengiriman.pengiriman_id,
-        };
+    if (fromBackend) {
+      try {
+        const barangRes = await ErpApiService.getBarangList();
+        if (barangRes.fromBackend) {
+          setBarangList(barangRes.data);
+        }
+      } catch (err) {
+        console.warn('Gagal refresh barang setelah DO:', err);
       }
-      return b;
-    });
-    setBarangList(updatedBarangList);
-    saveBarangData(updatedBarangList);
+    } else {
+      const updatedBarangList = barangList.map((b) => {
+        if (updatedSet.has(b.barang_id)) {
+          return {
+            ...b,
+            status_stok: 'keluar' as const,
+            pengiriman_id: savedPengiriman.pengiriman_id,
+          };
+        }
+        return b;
+      });
+      setBarangList(updatedBarangList);
+      saveBarangData(updatedBarangList);
+    }
 
     // If shipment was linked to a Batch Sample, mark those batch items as sent via DO
-    if (newPengiriman.batch_sample_id_ref) {
-      const targetBatchId = newPengiriman.batch_sample_id_ref;
+    if (savedPengiriman.batch_sample_id_ref) {
+      const targetBatchId = savedPengiriman.batch_sample_id_ref;
       const updatedBatches = batchSampleList.map((batch) => {
         if (batch.batch_id === targetBatchId || batch.kode_batch === targetBatchId) {
           const updatedItems = (batch.items || []).map((it) => {
@@ -1094,9 +1216,18 @@ export default function App() {
       });
       setBatchSampleList(updatedBatches);
       saveBatchSampleData(updatedBatches);
+      // Persist flag DO ke BE bila batch sudah ada di server
+      const target = updatedBatches.find((b) => b.batch_id === targetBatchId || b.kode_batch === targetBatchId);
+      if (target) {
+        try {
+          await ErpApiService.updateBatchSample(target);
+        } catch {
+          /* offline / batch lokal */
+        }
+      }
     }
 
-    showToast(`Surat Jalan ${newPengiriman.no_surat_jalan} diterbitkan (${newPengiriman.total_bal} bal keluar)!`);
+    showToast(`Surat Jalan ${savedPengiriman.no_surat_jalan} diterbitkan (${savedPengiriman.total_bal || updatedBarangIds.length} bal keluar)!`);
   };
 
   const handleSaveHargaJual = async (item: MasterHargaJual) => {
@@ -1122,19 +1253,42 @@ export default function App() {
   };
 
 
-  const handleSaveBatchSample = (newBatch: BatchPengirimanSample, updatedBarangs: Barang[]) => {
+  const handleSaveBatchSample = async (newBatch: BatchPengirimanSample, updatedBarangs: Barang[]) => {
     if (currentUser?.status_aktif === false) return showToast('Akun Anda dinonaktifkan.', 'info');
-    const updated = [newBatch, ...batchSampleList];
+
+    let savedBatch = newBatch;
+    let fromBackend = false;
+    try {
+      savedBatch = await ErpApiService.saveBatchSample(newBatch);
+      fromBackend = true;
+    } catch (err: any) {
+      console.warn('Gagal menyimpan batch sample ke API backend, simpan lokal:', err);
+    }
+
+    const updated = [
+      savedBatch,
+      ...batchSampleList.filter((b) => b.batch_id !== savedBatch.batch_id && b.batch_id !== newBatch.batch_id),
+    ];
     setBatchSampleList(updated);
     saveBatchSampleData(updated);
 
-    if (updatedBarangs && updatedBarangs.length > 0) {
+    if (fromBackend) {
+      try {
+        const barangRes = await ErpApiService.getBarangList();
+        if (barangRes.fromBackend) {
+          setBarangList(barangRes.data);
+        }
+      } catch (err) {
+        console.warn('Gagal refresh barang setelah sample:', err);
+      }
+    } else if (updatedBarangs && updatedBarangs.length > 0) {
       const updatedBarangMap = new Map(updatedBarangs.map((b) => [b.barang_id, b]));
       const newBarangList = barangList.map((b) => updatedBarangMap.get(b.barang_id) || b);
       setBarangList(newBarangList);
       saveBarangData(newBarangList);
     }
-    showToast(`Batch Sample ${newBatch.kode_batch} berhasil dikirim ke ${newBatch.tujuan_buyer}!`);
+
+    showToast(`Batch Sample ${savedBatch.kode_batch} berhasil dikirim ke ${savedBatch.tujuan_buyer}!`);
   };
 
 
@@ -1155,19 +1309,26 @@ export default function App() {
     showToast(`Batch ${kodeBatch} berhasil dihapus.`);
   };
 
-  const handleUpdateBatchSample = (updatedBatch: BatchPengirimanSample, updatedBarangs?: Barang[]) => {
-    const list = batchSampleList.map(b => b.batch_id === updatedBatch.batch_id ? updatedBatch : b);
+  const handleUpdateBatchSample = async (updatedBatch: BatchPengirimanSample, updatedBarangs?: Barang[]) => {
+    let savedBatch = updatedBatch;
+    try {
+      savedBatch = await ErpApiService.updateBatchSample(updatedBatch);
+    } catch (err: any) {
+      console.warn('Gagal update batch sample ke API, simpan lokal:', err);
+    }
+
+    const list = batchSampleList.map((b) => (b.batch_id === savedBatch.batch_id ? savedBatch : b));
     setBatchSampleList(list);
     saveBatchSampleData(list);
-    
+
     if (updatedBarangs && updatedBarangs.length > 0) {
       const updatedBarangMap = new Map(updatedBarangs.map((b) => [b.barang_id, b]));
       const newBarangList = barangList.map((b) => updatedBarangMap.get(b.barang_id) || b);
       setBarangList(newBarangList);
       saveBarangData(newBarangList);
     }
-    
-    showToast(`Batch ${updatedBatch.kode_batch} berhasil diperbarui.`);
+
+    showToast(`Batch ${savedBatch.kode_batch} berhasil diperbarui.`);
   };
 
   const handleUpdatePengiriman = (updatedPengiriman: PengirimanBarang) => {
@@ -1509,7 +1670,7 @@ export default function App() {
                 petaniList={petaniList}
                 hargaList={hargaList}
                 barangList={barangList}
-                
+
                 userRole={currentRole}
                 currentUser={currentUser}
                 initialKuponNo={targetKuponNo}
@@ -1518,6 +1679,21 @@ export default function App() {
                 onSaveTransaksi={(newTx, newBarangs, meta) => {
                   handleSaveTransaksi(newTx, newBarangs, { ...meta, silent: true });
                   showToast(`Data timbangan kupon ${newTx.no_kupon} diperbarui!`);
+                }}
+                onRefreshTransaksiList={async () => {
+                  const res = await ErpApiService.getTransaksiList();
+                  if (!res.fromBackend) return loadTransaksiData();
+                  const prev = loadTransaksiData();
+                  const byId = new Map(prev.map((t) => [t.transaksi_id, t]));
+                  const fromServer = res.data.map((incoming) =>
+                    mergeKuponParalel(byId.get(incoming.transaksi_id), incoming)
+                  );
+                  const serverIds = new Set(fromServer.map((t) => t.transaksi_id));
+                  const localOnly = prev.filter((t) => !serverIds.has(t.transaksi_id));
+                  const next = [...fromServer, ...localOnly];
+                  setTransaksiList(next);
+                  saveTransaksiData(next);
+                  return next;
                 }}
                 onNavigateToKasir={(kuponNo, txId) => {
                   setTargetKuponNo(kuponNo);

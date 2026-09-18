@@ -26,7 +26,7 @@ jobs:
 
           echo "=== 3. Install Paket & Build Vite ==="
           npm install
-          npm run build
+          NODE_OPTIONS="--max-old-space-size=2048" npm run build
 
           echo "=== 4. Reload Nginx ==="
           sudo systemctl reload nginx
