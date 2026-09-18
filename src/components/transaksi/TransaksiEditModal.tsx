@@ -26,12 +26,13 @@ import {
   TabelHarga, 
   Barang, 
   TransaksiItemBal, 
-  User as UserType 
+  User as UserType,
+  SaveTransaksiMeta,
 } from '../../types';
-import { recordAuditLog } from '../../utils/storage';
-import { formatRupiah, generateBalId, generateNextUniqueNoBal, normalizeKg } from '../../utils/formatters';
+import { formatRupiah, generateNextUniqueNoBal, normalizeKg } from '../../utils/formatters';
 import { isBalTerkirim } from '../../utils/kunciHapus';
 import { POTONGAN_GANTI_TIKAR, POTONGAN_KULI_PER_BAL, POTONGAN_TALI_PER_BAL } from '../../config/aturanTimbang';
+import { sortTransaksiItemsByInputOrder } from '../../utils/kuponSortir';
 
 interface TransaksiEditModalProps {
   isOpen: boolean;
@@ -41,7 +42,11 @@ interface TransaksiEditModalProps {
   hargaList: TabelHarga[];
   barangList?: Barang[];
   currentUser?: UserType | null;
-  onSaveTransaksi: (newTx: TransaksiPembelian, generatedBarang: Barang | Barang[]) => void;
+  onSaveTransaksi: (
+    newTx: TransaksiPembelian,
+    generatedBarang: Barang | Barang[],
+    meta?: SaveTransaksiMeta
+  ) => void;
   onSuccessToast?: (msg: string) => void;
 }
 
@@ -99,10 +104,10 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
       setAlasanEdit('');
       setValidationError(null);
 
-      // Parse item bal rows
+      // Parse item bal rows — urut waktu input
       if (transaksi.items && transaksi.items.length > 0) {
         setBalRows(
-          transaksi.items.map((it) => ({
+          sortTransaksiItemsByInputOrder(transaksi.items).map((it) => ({
             item_id: it.item_id,
             barang_id: it.barang_id,
             no_bal: it.no_bal,
@@ -140,14 +145,28 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
     }
   }, [isOpen, transaksi]);
 
+  const petaniOptions = useMemo(() => {
+    if (!transaksi) return petaniList.filter((p) => p.status_aktif !== false);
+    const aktif = petaniList.filter((p) => p.status_aktif !== false);
+    const current = petaniList.find((p) => p.petani_id === transaksi.petani_id);
+    const list = [...aktif];
+    if (current && !list.some((p) => p.petani_id === current.petani_id)) {
+      list.unshift(current);
+    }
+    return list;
+  }, [petaniList, transaksi]);
+
   if (!isOpen || !transaksi) return null;
 
-  const currentPetani = petaniList.find((p) => p.petani_id === selectedPetaniId) || {
-    petani_id: transaksi.petani_id,
-    nama_petani: transaksi.nama_petani,
-        no_hp: transaksi.no_hp,
-    desa_kecamatan: transaksi.desa_kecamatan,
-  };
+  const currentPetani =
+    petaniOptions.find((p) => p.petani_id === selectedPetaniId) ||
+    petaniList.find((p) => p.petani_id === selectedPetaniId) || {
+      petani_id: transaksi.petani_id,
+      nama_petani: transaksi.nama_petani,
+      no_hp: transaksi.no_hp,
+      desa_kecamatan: transaksi.desa_kecamatan,
+      alamat: transaksi.desa_kecamatan || '',
+    };
 
   // Helper to get grade price from active master list
   const getGradeTarif = (gradeCode: string): number => {
@@ -265,7 +284,8 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
   const newPetaniNama = currentPetani.nama_petani;
 
   const isTanggalChanged = tanggalTransaksi !== (transaksi.tanggal_transaksi ? transaksi.tanggal_transaksi.split(' ')[0] : '');
-  const isStatusBayarChanged = statusPembayaran !== transaksi.status_pembayaran;
+  const isStatusBayarChanged =
+    statusPembayaran !== (transaksi.status_pembayaran === 'lunas' ? 'lunas' : 'belum_lunas');
   const isBalCountChanged = balRows.length !== (transaksi.total_bal || transaksi.items?.length || 1);
   const isBeratChanged = Math.abs(totalNettoBaru - transaksi.berat_kg) > 0.05;
   const isHargaChanged = totalHargaFinalBaru !== (transaksi.harga_final || transaksi.total_harga_beli);
@@ -282,6 +302,14 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
 
   // Save changes & record audit log
   const handleSave = () => {
+    if (!selectedPetaniId.trim()) {
+      setValidationError('Pilih petani penyetor terlebih dahulu.');
+      return;
+    }
+    if (!petaniOptions.some((p) => p.petani_id === selectedPetaniId) && !petaniList.some((p) => p.petani_id === selectedPetaniId)) {
+      setValidationError('Petani yang dipilih tidak valid. Silakan pilih dari daftar.');
+      return;
+    }
     if (balRows.length === 0) {
       setValidationError('Harap tambahkan minimal 1 bal.');
       return;
@@ -312,7 +340,7 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
     // Construct detailed changes narrative for admin audit trail
     const changesList: string[] = [];
     if (isPetaniChanged) {
-      changesList.push(`Petani diubah dari "${oldPetaniNama}" menjadi "${newPetaniNama}"`);
+      changesList.push(`Petani diubah dari "${oldPetaniNama}" (${transaksi.petani_id}) menjadi "${newPetaniNama}" (${selectedPetaniId})`);
     }
     if (isTanggalChanged) {
       changesList.push(`Tanggal diubah dari "${transaksi.tanggal_transaksi}" menjadi "${tanggalTransaksi}"`);
@@ -330,6 +358,26 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
       const tanda = selisihHarga >= 0 ? `+${formatRupiah(selisihHarga)}` : `-${formatRupiah(Math.abs(selisihHarga))}`;
       changesList.push(`Total nilai akhir diubah dari ${formatRupiah(transaksi.harga_final || transaksi.total_harga_beli)} ke ${formatRupiah(totalHargaFinalBaru)} (${tanda})`);
     }
+    // Diff per-bal grade/berat
+    const oldItems = transaksi.items || [];
+    balRows.forEach((row) => {
+      const old = oldItems.find((i) => i.item_id === row.item_id || i.no_bal === row.no_bal);
+      if (!old) {
+        changesList.push(`Bal baru ditambahkan: ${row.no_bal} (Grade ${row.kode_grade}, ${row.berat_kg} kg)`);
+        return;
+      }
+      if (old.kode_grade !== row.kode_grade) {
+        changesList.push(`Bal ${row.no_bal}: grade ${old.kode_grade} → ${row.kode_grade}`);
+      }
+      if (Math.abs((old.berat_kg || 0) - row.berat_kg) > 0.05) {
+        changesList.push(`Bal ${row.no_bal}: netto ${old.berat_kg} → ${row.berat_kg} kg`);
+      }
+    });
+    oldItems.forEach((old) => {
+      if (!balRows.some((r) => r.item_id === old.item_id || r.no_bal === old.no_bal)) {
+        changesList.push(`Bal dihapus dari kupon: ${old.no_bal}`);
+      }
+    });
     if (changesList.length === 0) {
       changesList.push('Pembaruan data rincian bal / catatan transaksi');
     }
@@ -341,6 +389,7 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
         item_id: row.item_id,
         barang_id: generatedBarangId,
         no_bal: row.no_bal.trim(),
+        barcode: row.no_bal.trim(),
         kode_grade: row.kode_grade,
         harga_per_kg: row.harga_per_kg,
         berat_bruto_kg: row.berat_bruto_kg || row.berat_kg + (row.potongan_tara_kg || 0),
@@ -352,7 +401,7 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
         potongan: row.potongan,
         total_kotor: row.total_kotor,
         subtotal_bersih: row.subtotal_bersih,
-        status_timbang: row.berat_kg > 0 ? 'selesai' : 'menunggu_timbang',
+        status_timbang: row.berat_kg > 0 ? 'selesai_timbang' : 'menunggu_timbang',
         sample_label_code: row.no_bal.trim(),
         sample_label_printed: true,
         catatan: row.catatan || '',
@@ -364,7 +413,7 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
       ...transaksi,
       petani_id: currentPetani.petani_id,
       nama_petani: currentPetani.nama_petani,
-            no_hp: currentPetani.no_hp,
+      no_hp: currentPetani.no_hp,
       desa_kecamatan: (currentPetani.alamat || currentPetani.desa_kecamatan || '') as string,
       no_bal: noBalCombinedBaru,
       kode_grade: primaryGradeBaru,
@@ -381,7 +430,7 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
       metode_pembayaran: statusPembayaran === 'lunas' ? (transaksi.metode_pembayaran || 'cash') : undefined,
       tanggal_transaksi: tanggalTransaksi,
       catatan: catatan.trim(),
-      catatan_kasir: catatanKasir.trim(),
+      catatan_kasir: catatanKasir.trim() || catatan.trim(),
       items: updatedItems,
       barang_ids: updatedItems.map((it) => it.barang_id as string),
       terakhir_diubah_oleh: `${currentUser?.nama_lengkap || 'Admin'} (@${currentUser?.username || 'admin'})`,
@@ -389,58 +438,41 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
       alasan_perubahan_terakhir: alasanEdit.trim(),
     };
 
-    // Prepare updated Barang entities for warehouse inventory sync
-    const updatedBarangs: Barang[] = updatedItems.map((it) => ({
-      barang_id: it.barang_id as string,
-      no_bal: it.no_bal,
-      kode_grade: it.kode_grade,
-      berat_kg: it.berat_kg,
-      harga_per_kg: it.harga_per_kg,
-      total_harga: it.berat_kg * it.harga_per_kg,
-      status_stok: 'di_gudang',
-      petani_id: transaksi.petani_id,
-      nama_petani: transaksi.nama_petani,
-      transaksi_pembelian_id: updatedTx.transaksi_id,
-      tanggal_masuk: tanggalTransaksi,
-      tanggal_keluar: undefined,
-    }));
-
-    // Data Before vs After for Audit Comparison
-    const dataSebelum = JSON.stringify({
-      petani: transaksi.nama_petani,
-      petani_id: transaksi.petani_id,
-      total_bal: transaksi.total_bal || (transaksi.items ? transaksi.items.length : 1),
-      berat_kg: transaksi.berat_kg,
-      total_nilai: transaksi.harga_final || transaksi.total_harga_beli,
-      status_pembayaran: transaksi.status_pembayaran,
-      items: (transaksi.items || []).map((i) => ({ no_bal: i.no_bal, grade: i.kode_grade, berat_kg: i.berat_kg, subtotal: i.subtotal_bersih })),
+    // Prepare updated Barang entities — ikut petani baru, pertahankan status stok lama
+    const updatedBarangs: Barang[] = updatedItems.map((it) => {
+      const prev = barangList.find(
+        (b) => b.barang_id === it.barang_id || b.no_bal === it.no_bal
+      );
+      return {
+        barang_id: it.barang_id as string,
+        no_bal: it.no_bal,
+        kode_grade: it.kode_grade,
+        berat_kg: it.berat_kg,
+        berat_bruto_kg: it.berat_bruto_kg,
+        potongan_tara_kg: it.potongan_tara_kg,
+        harga_per_kg: it.harga_per_kg,
+        total_harga: it.berat_kg * it.harga_per_kg,
+        status_stok: prev?.status_stok && prev.status_stok !== 'proses_sortir'
+          ? prev.status_stok
+          : (it.berat_kg > 0 ? 'di_gudang' : (prev?.status_stok || 'di_gudang')),
+        petani_id: updatedTx.petani_id,
+        nama_petani: updatedTx.nama_petani,
+        desa_kecamatan: updatedTx.desa_kecamatan,
+        transaksi_pembelian_id: updatedTx.transaksi_id,
+        tanggal_masuk: tanggalTransaksi,
+        tanggal_keluar: prev?.tanggal_keluar,
+      };
     });
 
-    const dataSesudah = JSON.stringify({
-      petani: updatedTx.nama_petani,
-      petani_id: updatedTx.petani_id,
-      total_bal: updatedTx.total_bal,
-      berat_kg: updatedTx.berat_kg,
-      total_nilai: updatedTx.harga_final,
-      status_pembayaran: updatedTx.status_pembayaran,
-      items: updatedItems.map((i) => ({ no_bal: i.no_bal, grade: i.kode_grade, berat_kg: i.berat_kg, subtotal: i.subtotal_bersih })),
+    onSaveTransaksi(updatedTx, updatedBarangs, {
+      koreksi: true,
+      silent: false,
+      audit: {
+        aksi: 'UBAH_TRANSAKSI',
+        deskripsi: `Koreksi data transaksi ${updatedTx.no_kupon} (${updatedTx.nama_petani}). Alasan: ${alasanEdit.trim()}`,
+        rincian_perubahan: changesList,
+      },
     });
-
-    // Record Detailed Audit Log
-    recordAuditLog({
-      user_nama: currentUser?.nama_lengkap || 'Admin',
-      user_role: currentUser?.role || 'admin_sortir',
-      modul: 'Koreksi Transaksi',
-      aksi: 'UBAH_TRANSAKSI',
-      target_id: updatedTx.no_kupon,
-      deskripsi: `Koreksi data transaksi ${updatedTx.no_kupon} (${updatedTx.nama_petani}). Alasan: ${alasanEdit.trim()}`,
-      rincian_perubahan: changesList,
-    });
-    // Save transaction state
-    onSaveTransaksi(updatedTx, updatedBarangs);
-    if (onSuccessToast) {
-      onSuccessToast(`Transaksi ${updatedTx.no_kupon} berhasil diperbarui & dicatat ke Audit Trail!`);
-    }
     onClose();
   };
 
@@ -507,10 +539,17 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
                 <span>Petani Penyetor</span>
               </label>
               <SearchableSelect
+                inputId="koreksi-petani-select"
                 value={selectedPetaniId}
-                onChange={(val) => setSelectedPetaniId(val)}
-                options={petaniList.map(p => ({ value: p.petani_id, label: `${p.nama_petani} - ${p.petani_id} (${p.desa_kecamatan || p.alamat || 'Pamekasan'})` }))}
-                placeholder="Pilih Petani..."
+                onChange={(val) => {
+                  setSelectedPetaniId(val);
+                  setValidationError(null);
+                }}
+                options={petaniOptions.map((p) => ({
+                  value: p.petani_id,
+                  label: `${p.nama_petani} - ${p.petani_id} (${p.desa_kecamatan || p.alamat || 'Pamekasan'})`,
+                }))}
+                placeholder="Ketik nama / kode petani..."
               />
               {isPetaniChanged && (
                 <p className="text-[11px] text-amber-700 font-medium">
@@ -657,11 +696,13 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
                       {/* Potongan */}
                       <td className="py-2.5 px-3 text-right">
                         <input
-                          type="text"
-                          value={formatRupiah(row.potongan)}
-                          disabled
-                          className="w-24 text-right font-mono text-xs px-2 py-1 border border-slate-200 rounded bg-slate-50 text-slate-500 cursor-not-allowed ml-auto"
-                          title="Potongan bersifat default (SOP Perusahaan) dan tidak bisa diedit secara manual"
+                          type="number"
+                          min="0"
+                          step="1000"
+                          value={row.potongan}
+                          onChange={(e) => handlePotonganChange(idx, parseInt(e.target.value, 10) || 0)}
+                          className="w-24 text-right font-mono text-xs px-2 py-1 border border-slate-300 rounded focus:ring-1 focus:ring-[#b81d24] focus:outline-none ml-auto"
+                          title="Potongan total per bal (Rp)"
                         />
                       </td>
 

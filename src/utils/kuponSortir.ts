@@ -210,3 +210,39 @@ export function terapkanHasilTimbang(
   const merged = items.map((it) => (it.item_id === itemId ? { ...it, ...hasil } : it));
   return hitungUlangKupon(latestTx, merged);
 }
+
+/**
+ * Urutan tampil detail bal = urutan waktu input.
+ * Prioritas: seq BE `-BAL-nn` → timestamp di `BAL-ITEM-{ts}-n` / `item-{ts}-n` → angka no_bal.
+ */
+function itemInputSortKey(itemId?: string, noBal?: string): [number, number, string] {
+  const id = String(itemId || '');
+  const balSeq = id.match(/-BAL-(\d+)$/i);
+  if (balSeq) {
+    return [0, parseInt(balSeq[1], 10), id];
+  }
+  const feTs = id.match(/^(?:BAL-ITEM|item)-(\d+)(?:-(\d+))?$/i);
+  if (feTs) {
+    const ts = parseInt(feTs[1], 10);
+    const n = feTs[2] ? parseInt(feTs[2], 10) : 0;
+    return [1, ts * 1000 + n, id];
+  }
+  const digits = String(noBal || '').match(/(\d+)/);
+  if (digits) {
+    return [2, parseInt(digits[1], 10), String(noBal || '')];
+  }
+  return [3, 0, String(noBal || id)];
+}
+
+export function sortTransaksiItemsByInputOrder<T extends { item_id?: string; no_bal?: string } = any>(
+  items?: T[] | null
+): T[] {
+  if (!items || !Array.isArray(items) || items.length <= 1) return items ? [...items] : [];
+  return [...items].sort((a, b) => {
+    const ka = itemInputSortKey(a.item_id, a.no_bal);
+    const kb = itemInputSortKey(b.item_id, b.no_bal);
+    if (ka[0] !== kb[0]) return ka[0] - kb[0];
+    if (ka[1] !== kb[1]) return ka[1] - kb[1];
+    return ka[2].localeCompare(kb[2], undefined, { numeric: true, sensitivity: 'base' });
+  });
+}

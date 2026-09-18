@@ -18,6 +18,7 @@ import { downloadElementAsPdf, printHtmlElementDirectly } from '../../utils/prin
 import { openPrintDocument } from '../../utils/openDedicatedPrint';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { NotaTimbangContent } from './NotaTimbangContent';
+import { sortTransaksiItemsByInputOrder } from '../../utils/kuponSortir';
 
 interface TransaksiDetailModalProps {
   isOpen: boolean;
@@ -53,7 +54,7 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
   const isLunas = transaksi.status_pembayaran === 'lunas' || transaksi.metode_pembayaran === 'cash';
 
   const items = transaksi.items && transaksi.items.length > 0 
-    ? transaksi.items 
+    ? sortTransaksiItemsByInputOrder(transaksi.items)
     : [
         {
           item_id: 'item-1',

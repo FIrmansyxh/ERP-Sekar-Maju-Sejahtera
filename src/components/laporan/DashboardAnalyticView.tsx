@@ -53,8 +53,37 @@ interface DashboardAnalyticViewProps {
   pengirimanList: PengirimanBarang[];
   hargaList?: TabelHarga[];
   hargaJualList?: MasterHargaJual[];
+  serverStats?: {
+    transaksi: {
+      total_transaksi: number;
+      total_bal: number;
+      total_berat_kg: number;
+      total_pembelian: number;
+    } | null;
+    stok_valuasi: Array<{
+      gudang_id?: string;
+      kode_grade?: string;
+      bal_di_gudang?: number;
+      kg_di_gudang?: number;
+      valuasi_beli?: number;
+    }>;
+    pengiriman: {
+      total_pengiriman: number;
+      total_bal_terkirim: number;
+      total_berat_terkirim: number;
+      total_nilai_deal: number;
+    } | null;
+    pengiriman_terkirim?: {
+      total_pengiriman: number;
+      total_bal_terkirim: number;
+      total_berat_terkirim: number;
+      total_nilai_deal: number;
+    } | null;
+  } | null;
+  isRefreshing?: boolean;
   userRole: UserRole;
   onNavigateToModule?: (moduleId: string) => void;
+  onRefreshSources?: () => void | Promise<void>;
 }
 
 // Helper pemotongan teks (truncate) untuk label pada sumbu X agar tidak saling bertumpuk
@@ -72,11 +101,27 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
   pengirimanList = [],
   hargaList = [],
   hargaJualList = [],
+  serverStats = null,
+  isRefreshing = false,
   userRole,
   onNavigateToModule,
+  onRefreshSources,
 }) => {
   const isQCOnly = userRole === 'qc_mutu';
 
+  const serverPembelian = Number(serverStats?.transaksi?.total_pembelian || 0);
+  const serverBalPembelian = Number(serverStats?.transaksi?.total_bal || 0);
+  const serverPenjualanAllDo = Number(serverStats?.pengiriman?.total_nilai_deal || 0);
+  const serverBalAllDo = Number(serverStats?.pengiriman?.total_bal_terkirim || 0);
+  const serverDoCount = Number(serverStats?.pengiriman?.total_pengiriman || 0);
+  const serverPenjualanTerkirim = Number(
+    serverStats?.pengiriman_terkirim?.total_nilai_deal ?? serverStats?.pengiriman?.total_nilai_deal ?? 0
+  );
+  const serverBalTerkirim = Number(
+    serverStats?.pengiriman_terkirim?.total_bal_terkirim ?? 0
+  );
+  const serverDoTerkirim = Number(serverStats?.pengiriman_terkirim?.total_pengiriman ?? 0);
+  const hasServerStats = Boolean(serverStats?.transaksi || serverStats?.pengiriman);
   // State Filter Rentang Waktu & Metrik Analisis Tren
   type PeriodeWaktu = 'mingguan' | 'bulanan' | 'kuartalan' | 'tahunan';
   type MetricTren = 'bal' | 'tonase' | 'nilai';
@@ -172,7 +217,7 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
   const qcStats = useMemo(() => {
     const totalSample = sampleList.length;
     const approvedSample = sampleList.filter(s => s.status === 'disetujui' || s.status === 'diterima').length;
-    const rate = totalSample > 0 ? (approvedSample / totalSample) * 100 : 100;
+    const rate = totalSample > 0 ? (approvedSample / totalSample) * 100 : 0;
     return {
       totalSample,
       approvedSample,
@@ -760,14 +805,35 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
           <div className="w-10 h-10 bg-[#b81d24] text-white rounded-sm flex items-center justify-center shadow-xs shrink-0">
             <BarChart3 className="w-5 h-5" />
           </div>
-          <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">
-            Dashboard Laporan & Analytic ERP
-          </h1>
+          <div>
+            <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">
+              Dashboard Laporan & Analytic ERP
+            </h1>
+            <p className="text-[11px] text-gray-500 mt-0.5">
+              {isRefreshing
+                ? 'Menyegarkan data dari server…'
+                : hasServerStats
+                  ? 'Ringkasan server aktif · detail grafik dari data operasional tersinkron'
+                  : 'Data dari list operasional (refresh otomatis saat membuka menu)'}
+            </p>
+          </div>
         </div>
 
         {/* Header Quick Buttons */}
-        {!isQCOnly && (
-          <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2">
+          {onRefreshSources && (
+            <button
+              type="button"
+              onClick={() => void onRefreshSources()}
+              disabled={isRefreshing}
+              className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs disabled:opacity-60"
+            >
+              <Activity className={`w-3.5 h-3.5 text-gray-500 ${isRefreshing ? 'animate-pulse' : ''}`} />
+              <span>{isRefreshing ? 'Refresh…' : 'Refresh Server'}</span>
+            </button>
+          )}
+          {!isQCOnly && (
+            <>
             <button
               onClick={exportBukuKasPembelian}
               className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
@@ -782,9 +848,43 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
               <Download className="w-3.5 h-3.5" />
               <span>Export Inventaris Bal</span>
             </button>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
+
+      {hasServerStats && !isQCOnly && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="bg-slate-50 border border-slate-200 p-3 rounded-sm">
+            <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Server · Pembelian Lunas (modal murni)</div>
+            <div className="text-sm font-bold font-mono text-slate-900 mt-1">
+              Rp {serverPembelian.toLocaleString('id-ID')}
+            </div>
+            <div className="text-[10px] text-slate-500 mt-1">{serverBalPembelian.toLocaleString('id-ID')} bal · harus ≈ kartu Total Pembelian</div>
+          </div>
+          <div className="bg-slate-50 border border-slate-200 p-3 rounded-sm">
+            <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Server · DO terkirim</div>
+            <div className="text-sm font-bold font-mono text-slate-900 mt-1">
+              Rp {serverPenjualanTerkirim.toLocaleString('id-ID')}
+            </div>
+            <div className="text-[10px] text-slate-500 mt-1">
+              {serverBalTerkirim.toLocaleString('id-ID')} bal · {serverDoTerkirim} DO · harus ≈ kartu Penjualan
+            </div>
+          </div>
+          <div className="bg-slate-50 border border-slate-200 p-3 rounded-sm">
+            <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Server · Semua DO (incl. dimuat)</div>
+            <div className="text-sm font-bold font-mono text-slate-900 mt-1">
+              Rp {serverPenjualanAllDo.toLocaleString('id-ID')}
+            </div>
+            <div className="text-[10px] text-slate-500 mt-1">
+              {serverBalAllDo.toLocaleString('id-ID')} bal · {serverDoCount} DO
+              {serverPembelian > 0 && (
+                <> · selisih modal FE {(((totalPembelianRupiah - serverPembelian) / serverPembelian) * 100).toFixed(1)}%</>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 9.1 Summary Cards (FINANCIAL OVERVIEW) */}
       {!isQCOnly && (

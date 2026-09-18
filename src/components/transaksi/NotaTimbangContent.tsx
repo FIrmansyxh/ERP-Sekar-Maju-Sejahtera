@@ -4,6 +4,7 @@ import { formatRupiah, formatAccounting, formatDateHariBulanTahun, terbilangRupi
 import { loadCurrentUser } from '../../utils/storage';
 import { KopSurat } from '../common/KopSurat';
 import { POTONGAN_GANTI_TIKAR, POTONGAN_KULI_PER_BAL, POTONGAN_TALI_PER_BAL } from '../../config/aturanTimbang';
+import { sortTransaksiItemsByInputOrder } from '../../utils/kuponSortir';
 
 export interface NotaTimbangContentProps {
   transaksi: TransaksiPembelian;
@@ -13,7 +14,7 @@ export const NotaTimbangContent: React.FC<NotaTimbangContentProps> = ({ transaks
   const currentUser = loadCurrentUser();
   
   const items = transaksi.items && transaksi.items.length > 0
-    ? transaksi.items
+    ? sortTransaksiItemsByInputOrder(transaksi.items)
     : [
         {
           item_id: 'item-1',

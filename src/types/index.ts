@@ -136,6 +136,7 @@ export interface TransaksiItemBal {
   total_kotor: number; // berat_kg * harga_per_kg
   subtotal_bersih: number; // total_kotor - potongan
   status_timbang?: 'menunggu_timbang' | 'selesai_timbang';
+  lokasi_simpan?: string;
   sample_label_code?: string; // Kode barcode sample identik
   sample_label_printed?: boolean;
   barang_id?: string;
@@ -203,6 +204,8 @@ export interface SaveTransaksiMeta {
   audit?: { aksi: string; deskripsi: string; rincian_perubahan?: string[] };
   /** Audit sudah dicatat sendiri oleh pemanggil */
   skipAudit?: boolean;
+  /** Simpan via PUT /transaksi/{id}/koreksi (Kasir Edit Modal) */
+  koreksi?: boolean;
 }
 
 export type StatusSample ='sample' | 'dikirim' | 'diterima' | 'disetujui' | 'ditolak' | 'nego';

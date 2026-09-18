@@ -16,7 +16,7 @@ import {
   AlertTriangle,
   Lock
 } from 'lucide-react';
-import { TransaksiPembelian, Petani, TabelHarga, Barang, UserRole, User as UserType } from '../../types';
+import { TransaksiPembelian, Petani, TabelHarga, Barang, UserRole, User as UserType, SaveTransaksiMeta } from '../../types';
 import { formatRupiah, formatAccounting, formatDateIndo, formatNoKupon, normalizeKg } from '../../utils/formatters';
 import { TransaksiDetailModal } from './TransaksiDetailModal';
 import { PembayaranKasirModal } from './PembayaranKasirModal';
@@ -37,7 +37,11 @@ interface KasirPageViewProps {
   currentUser?: UserType | null;
   initialKuponNo?: string;
   initialTxId?: string;
-  onSaveTransaksi: (newTx: TransaksiPembelian, generatedBarang: Barang | Barang[]) => void;
+  onSaveTransaksi: (
+    newTx: TransaksiPembelian,
+    generatedBarang: Barang | Barang[],
+    meta?: SaveTransaksiMeta
+  ) => void;
   onDeleteTransaksi?: (transaksiId: string, alasan?: string) => void;
   onNavigateToSortir: () => void;
   onNavigateToTimbangan: (kuponNo?: string, txId?: string) => void;
@@ -1210,11 +1214,12 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
           barangList={barangList}
           
           currentUser={currentUser}
-          onSaveTransaksi={(newTx, generatedBarang) => {
-            onSaveTransaksi(newTx, generatedBarang);
+          onSaveTransaksi={(newTx, generatedBarang, meta) => {
+            onSaveTransaksi(newTx, generatedBarang, meta);
             if (selectedTxForDetail && selectedTxForDetail.transaksi_id === newTx.transaksi_id) {
               setSelectedTxForDetail(newTx);
             }
+            setSelectedTxForEdit(null);
           }}
         />
       )}

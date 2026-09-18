@@ -9,6 +9,7 @@ import {
   Petani, 
   Barang, 
   TransaksiPembelian, 
+  TransaksiItemBal,
   TabelHarga, 
   MasterHargaJual,
   User,
@@ -35,6 +36,7 @@ import {
   saveCurrentUser,
   authenticateUser as authenticateLocalUser
 } from '../utils/storage';
+import { sortTransaksiItemsByInputOrder } from '../utils/kuponSortir';
 
 export class ErpApiService {
   private static isOnlineState: boolean | null = null;
@@ -182,7 +184,9 @@ export class ErpApiService {
 
   // --- TRANSAKSI ---
   public static mapBackendTransaksi(t: any): TransaksiPembelian {
-    const items = Array.isArray(t.items) ? t.items.map((it: any) => ({
+    const items: TransaksiItemBal[] = Array.isArray(t.items)
+      ? sortTransaksiItemsByInputOrder<TransaksiItemBal>(
+          t.items.map((it: any): TransaksiItemBal => ({
       item_id: it.item_id,
       no_bal: String(it.no_bal || ''),
       kode_bal_pembeli: it.kode_bal_pembeli || undefined,
@@ -205,7 +209,9 @@ export class ErpApiService {
       sample_label_code: it.sample_label_code || undefined,
       sample_label_printed: Boolean(it.sample_label_printed),
       catatan: it.catatan || undefined,
-    })) : [];
+    }))
+        )
+      : [];
 
     const totalBal = items.length > 0 ? items.length : (Number(t.total_bal) || 1);
     const balSelesai = items.filter((i: any) => i.status_timbang === 'selesai_timbang').length;
@@ -419,13 +425,63 @@ export class ErpApiService {
     return null;
   }
 
+  public static async koreksiTransaksi(tx: TransaksiPembelian): Promise<TransaksiPembelian | null> {
+    try {
+      const isOnline = await this.isBackendOnline();
+      if (isOnline && tx.transaksi_id) {
+        const payload = {
+          petani_id: tx.petani_id,
+          tanggal_transaksi: (tx.tanggal_transaksi || '').split(' ')[0],
+          status_pembayaran: tx.status_pembayaran === 'lunas' ? 'lunas' : 'belum_lunas',
+          metode_pembayaran: tx.metode_pembayaran === 'cash' || tx.metode_pembayaran === 'kredit'
+            ? tx.metode_pembayaran
+            : (tx.status_pembayaran === 'lunas' ? 'cash' : null),
+          catatan: tx.catatan || '',
+          catatan_kasir: tx.catatan_kasir || '',
+          alasan_perubahan: tx.alasan_perubahan_terakhir || 'Koreksi transaksi kasir',
+          terakhir_diubah_oleh: tx.terakhir_diubah_oleh || null,
+          items: (tx.items || []).map((it) => ({
+            no_bal: it.no_bal,
+            kode_grade: it.kode_grade,
+            harga_per_kg: it.harga_per_kg,
+            berat_bruto_kg: it.berat_bruto_kg || it.berat_kg || 0,
+            potongan_tara_kg: it.potongan_tara_kg || 0,
+            berat_kg: it.berat_kg || 0,
+            potongan_kuli: it.potongan_kuli,
+            potongan_tali: it.potongan_tali,
+            potongan_tikar: it.potongan_tikar,
+            barcode: it.barcode || it.no_bal,
+            catatan: it.catatan || null,
+            lokasi_simpan: it.lokasi_simpan || 'Blok A',
+          })),
+        };
+        const res = await api.put<any>(`/transaksi/${tx.transaksi_id}/koreksi`, payload);
+        if (res.status === 'success' && res.data) {
+          return this.mapBackendTransaksi(res.data);
+        }
+      }
+    } catch (err) {
+      console.warn('Gagal koreksi transaksi ke backend API:', err);
+      throw err;
+    }
+    return null;
+  }
+
   public static async syncTransaksi(
     newTx: TransaksiPembelian, 
-    oldTx?: TransaksiPembelian
+    oldTx?: TransaksiPembelian,
+    options?: { koreksi?: boolean }
   ): Promise<{ syncedTx: TransaksiPembelian; fromBackend: boolean }> {
     try {
       const isOnline = await this.isBackendOnline();
       if (isOnline) {
+        // Koreksi kasir (petani / tanggal / status / bal) — endpoint khusus
+        if (options?.koreksi && oldTx) {
+          const corrected = await this.koreksiTransaksi(newTx);
+          if (corrected) return { syncedTx: corrected, fromBackend: true };
+          throw new Error('Koreksi transaksi gagal disimpan ke server');
+        }
+
         // Kasus 1: Pelunasan Kasir
         if (newTx.status_pembayaran === 'lunas' && (!oldTx || oldTx.status_pembayaran !== 'lunas')) {
           const metode = (newTx.metode_pembayaran === 'cash' || newTx.metode_pembayaran === 'kredit') 
@@ -485,20 +541,58 @@ export class ErpApiService {
       }
     } catch (err) {
       console.warn('Sinkronisasi transaksi ke backend dialihkan ke mode offline:', err);
+      if (options?.koreksi) throw err;
     }
 
     return { syncedTx: newTx, fromBackend: false };
   }
 
   // --- INVENTARIS BARANG / BAL ---
+  /** Flatten nested BE `item` (berat/harga) ke bentuk Barang FE. */
+  public static mapBackendBarang(b: any): Barang {
+    const item = b?.item && typeof b.item === 'object' ? b.item : {};
+    const berat = Number(item.berat_kg ?? b.berat_kg ?? 0);
+    const harga = Number(item.harga_per_kg ?? b.harga_per_kg ?? 0);
+    const bruto = Number(item.berat_bruto_kg ?? b.berat_bruto_kg ?? (berat || 0));
+    const tara = Number(item.potongan_tara_kg ?? b.potongan_tara_kg ?? 0);
+    const tanggalMasuk = b.tanggal_masuk
+      ? String(b.tanggal_masuk).split('T')[0]
+      : '';
+    const tanggalKeluar = b.tanggal_keluar
+      ? String(b.tanggal_keluar).split('T')[0]
+      : undefined;
+
+    return {
+      barang_id: String(b.barang_id || ''),
+      kode_grade: String(b.kode_grade || item.kode_grade || ''),
+      no_bal: String(b.no_bal || item.no_bal || ''),
+      kode_bal_pembeli: item.kode_bal_pembeli || b.kode_bal_pembeli || undefined,
+      berat_kg: berat,
+      harga_per_kg: harga || undefined,
+      total_harga: berat * harga || undefined,
+      berat_bruto_kg: bruto || undefined,
+      potongan_tara_kg: tara || undefined,
+      status_stok: (b.status_stok || 'di_gudang') as Barang['status_stok'],
+      tanggal_masuk: tanggalMasuk,
+      tanggal_keluar: tanggalKeluar,
+      petani_id: String(b.petani_id || ''),
+      transaksi_pembelian_id: b.transaksi_id || b.transaksi_pembelian_id || undefined,
+      nama_petani: b.petani?.nama_petani || b.nama_petani || undefined,
+      desa_kecamatan:
+        b.petani?.alamat || b.petani?.desa_kecamatan || b.desa_kecamatan || undefined,
+      catatan: b.catatan || undefined,
+    };
+  }
+
   public static async getBarangList(): Promise<{ data: Barang[]; fromBackend: boolean }> {
     try {
       const isOnline = await this.isBackendOnline();
       if (isOnline) {
-        const res = await api.get<Barang[]>('/barang');
+        const res = await api.get<any[]>('/barang');
         if (res.status === 'success' && Array.isArray(res.data)) {
-          saveBarangData(res.data);
-          return { data: res.data, fromBackend: true };
+          const mapped = res.data.map((b) => this.mapBackendBarang(b));
+          saveBarangData(mapped);
+          return { data: mapped, fromBackend: true };
         }
       }
     } catch (err) {
@@ -820,6 +914,35 @@ export class ErpApiService {
   }
 
   public static mapBackendPengiriman(p: any): PengirimanBarang {
+    const items = Array.isArray(p.items) ? p.items : [];
+    const barangIds: string[] = [];
+    const hargaDealMap: Record<string, number> = {};
+    const kodeHargaJualMap: Record<string, string> = {};
+    const beratKirimMap: Record<string, number> = {};
+    let totalBerat = 0;
+    let totalNilai = 0;
+
+    for (const it of items) {
+      const barangId = String(it.barang_id || '');
+      if (barangId) barangIds.push(barangId);
+
+      const berat = Number(
+        it.barang?.item?.berat_kg ??
+          it.barang?.berat_kg ??
+          it.berat_kg ??
+          0
+      );
+      const hargaDeal = Number(it.harga_deal_per_kg ?? 0);
+      totalBerat += berat;
+      totalNilai += berat * hargaDeal;
+
+      if (barangId) {
+        beratKirimMap[barangId] = berat;
+        if (hargaDeal > 0) hargaDealMap[barangId] = hargaDeal;
+        if (it.kode_harga_jual) kodeHargaJualMap[barangId] = String(it.kode_harga_jual);
+      }
+    }
+
     return {
       pengiriman_id: p.pengiriman_id,
       no_surat_jalan: p.no_surat_jalan,
@@ -832,10 +955,58 @@ export class ErpApiService {
       nomor_kontrak: p.nomor_kontrak,
       catatan: p.catatan,
       batch_sample_id_ref: p.batch_sample_id_ref,
-      barang_ids: (p.items || []).map((it: any) => it.barang_id),
-      total_bal: (p.items || []).length,
-      total_berat_kg: 0,
+      barang_ids: barangIds,
+      total_bal: Number(p.total_bal) || items.length,
+      total_berat_kg: Number(p.total_berat_kg) || totalBerat,
+      total_nilai_deal: Number(p.total_nilai_deal) || totalNilai,
+      harga_deal_map: Object.keys(hargaDealMap).length ? hargaDealMap : undefined,
+      kode_harga_jual_map: Object.keys(kodeHargaJualMap).length ? kodeHargaJualMap : undefined,
+      berat_kirim_map: Object.keys(beratKirimMap).length ? beratKirimMap : undefined,
     };
+  }
+
+  public static async getDashboardStats(): Promise<{
+    data: {
+      transaksi: {
+        total_transaksi: number;
+        total_bal: number;
+        total_berat_kg: number;
+        total_pembelian: number;
+      } | null;
+      stok_valuasi: Array<{
+        gudang_id?: string;
+        kode_grade?: string;
+        bal_di_gudang?: number;
+        kg_di_gudang?: number;
+        valuasi_beli?: number;
+      }>;
+      pengiriman: {
+        total_pengiriman: number;
+        total_bal_terkirim: number;
+        total_berat_terkirim: number;
+        total_nilai_deal: number;
+      } | null;
+      pengiriman_terkirim?: {
+        total_pengiriman: number;
+        total_bal_terkirim: number;
+        total_berat_terkirim: number;
+        total_nilai_deal: number;
+      } | null;
+    } | null;
+    fromBackend: boolean;
+  }> {
+    try {
+      const isOnline = await this.isBackendOnline();
+      if (isOnline) {
+        const res = await api.get<any>('/dashboard/stats');
+        if (res.status === 'success' && res.data) {
+          return { data: res.data, fromBackend: true };
+        }
+      }
+    } catch (err) {
+      console.warn('Gagal mengambil dashboard stats dari API:', err);
+    }
+    return { data: null, fromBackend: false };
   }
 
   public static async getBatchSampleList(): Promise<{ data: BatchPengirimanSample[]; fromBackend: boolean }> {
