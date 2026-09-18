@@ -746,49 +746,42 @@ export default function App() {
 
   // --- PRD 4.2: Harga Handlers ---
   const handleSaveNewPrice = async (newPrice: TabelHarga, oldPriceIdToArchive?: string) => {
-    try {
-      const saved = await ErpApiService.saveHargaBeli(newPrice);
-      const activePrice = saved || newPrice;
-
+    // Layar diperbarui langsung; sinkron ke server berjalan di belakang
+    const terapkanHarga = (price: TabelHarga) => {
       setHargaList((prev) => {
         let updatedList = [...prev];
         const existingIndex = updatedList.findIndex(
-          (h) => h.harga_id === activePrice.harga_id || (h.kode_grade === activePrice.kode_grade && activePrice.status === 'aktif')
+          (h) =>
+            h.harga_id === price.harga_id ||
+            h.harga_id === newPrice.harga_id ||
+            (h.kode_grade === price.kode_grade && price.status === 'aktif')
         );
 
         if (existingIndex !== -1) {
-          updatedList[existingIndex] = activePrice;
+          updatedList[existingIndex] = price;
         } else {
-          if (oldPriceIdToArchive && oldPriceIdToArchive !== activePrice.harga_id) {
+          if (oldPriceIdToArchive && oldPriceIdToArchive !== price.harga_id) {
             updatedList = updatedList.map((h) =>
               h.harga_id === oldPriceIdToArchive ? { ...h, status: 'nonaktif' as const } : h
             );
           }
-          updatedList = [activePrice, ...updatedList.filter((h) => h.harga_id !== activePrice.harga_id)];
+          updatedList = [price, ...updatedList.filter((h) => h.harga_id !== price.harga_id)];
         }
 
         saveHargaData(updatedList);
         return updatedList;
       });
+    };
 
-      showToast(`Tarif baru Grade ${newPrice.kode_grade} (Rp ${newPrice.harga_per_kg.toLocaleString('id-ID')}) berhasil disimpan ke PostgreSQL!`);
+    terapkanHarga(newPrice);
+    showToast(`Tarif Grade ${newPrice.kode_grade} (Rp ${newPrice.harga_per_kg.toLocaleString('id-ID')}) berhasil disimpan.`);
+
+    try {
+      const saved = await ErpApiService.saveHargaBeli(newPrice);
+      if (saved && saved !== newPrice) terapkanHarga(saved);
     } catch (err: any) {
-      console.warn('Gagal sinkron harga ke server backend, disimpan offline:', err);
-      let updatedList = [...hargaList];
-      const existingIndex = updatedList.findIndex((h) => h.harga_id === newPrice.harga_id);
-      if (existingIndex !== -1) {
-        updatedList[existingIndex] = newPrice;
-      } else {
-        if (oldPriceIdToArchive && oldPriceIdToArchive !== newPrice.harga_id) {
-          updatedList = updatedList.map((h) =>
-            h.harga_id === oldPriceIdToArchive ? { ...h, status: 'nonaktif' as const } : h
-          );
-        }
-        updatedList = [newPrice, ...updatedList.filter((h) => h.harga_id !== newPrice.harga_id)];
-      }
-      setHargaList(updatedList);
-      saveHargaData(updatedList);
-      showToast(`Tarif Grade ${newPrice.kode_grade} disimpan secara lokal (Server offline: ${err?.message || 'koneksi error'})`, 'info');
+      console.warn('Gagal sinkron harga ke server backend, tersimpan lokal:', err);
+      showToast(`Tarif Grade ${newPrice.kode_grade} tersimpan lokal, belum masuk server (${err?.message || 'koneksi error'}).`, 'info');
     }
   };
 
@@ -833,10 +826,11 @@ export default function App() {
     const barangsToAdd = Array.isArray(generatedBarang) ? generatedBarang : (generatedBarang ? [generatedBarang] : []);
 
     /** Commit lokal dulu agar Sortir↔Timbangan paralel langsung melihat bal (tanpa tunggu API). */
-    const commitLocalTx = (incoming: TransaksiPembelian, applyBarang: boolean) => {
+    const commitLocalTx = (incoming: TransaksiPembelian, applyBarang: boolean, timpaPenuh = false) => {
       setTransaksiList((prev) => {
         const prevTx = prev.find((t) => t.transaksi_id === incoming.transaksi_id);
-        const merged = mergeKuponParalel(prevTx, incoming);
+        // Form Edit menyimpan versi utuh kupon, jadi tidak digabung dengan versi sebelumnya
+        const merged = timpaPenuh ? incoming : mergeKuponParalel(prevTx, incoming);
         const next = prevTx
           ? prev.map((t) => (t.transaksi_id === merged.transaksi_id ? merged : t))
           : [merged, ...prev];
@@ -884,7 +878,7 @@ export default function App() {
     };
 
     // 1) Optimistic: segera masuk localStorage + state (bisa dipanggil Timbangan)
-    commitLocalTx(newTx, true);
+    commitLocalTx(newTx, true, Boolean(meta.timpaPenuh));
 
     const balCount = newTx.total_bal || (newTx.items ? newTx.items.length : 1);
 
@@ -990,16 +984,18 @@ export default function App() {
               const be = beItems.find((b) => String(b.no_bal) === String(fe.no_bal));
               if (!be) return fe;
               const feW = fe.berat_kg || 0;
-              if (feW > 0) {
+              // Berat dari perangkat ini menang, termasuk perubahan disengaja (buka kunci = 0)
+              if (feW > 0 || fe.diubah_lokal_pada) {
                 return { ...be, ...fe, item_id: be.item_id || fe.item_id };
               }
               return { ...fe, ...be, item_id: be.item_id || fe.item_id };
             })
           : [...beItems];
 
+        // Bal yang hanya ada di server ikut dimasukkan, kecuali simpanan versi utuh (form Edit)
         const feNos = new Set(mergedItems.map((i) => String(i.no_bal).toUpperCase()));
         for (const be of beItems) {
-          if (!feNos.has(String(be.no_bal).toUpperCase())) mergedItems.push(be);
+          if (!meta.timpaPenuh && !feNos.has(String(be.no_bal).toUpperCase())) mergedItems.push(be);
         }
 
         const syncedTx: TransaksiPembelian = {
@@ -1136,61 +1132,31 @@ export default function App() {
     if (currentUser?.status_aktif === false) return showToast('Akun Anda dinonaktifkan.', 'info');
 
     const updatedSet = new Set(updatedBarangIds);
-    let savedPengiriman = newPengiriman;
-    let fromBackend = false;
 
-    try {
-      savedPengiriman = await ErpApiService.savePengiriman(newPengiriman, updatedBarangIds);
-      fromBackend = true;
-    } catch (err: any) {
-      console.warn('Gagal menyimpan pengiriman ke API backend, simpan lokal:', err);
-      fromBackend = false;
-    }
+    // 1) Langsung tampil: surat jalan baru, bal berstatus keluar, dan tanda DO pada batch sample
+    setPengirimanList((prev) => {
+      const next = [newPengiriman, ...prev.filter((p) => p.pengiriman_id !== newPengiriman.pengiriman_id)];
+      savePengirimanData(next);
+      return next;
+    });
+    setBarangList((prev) => {
+      const next = prev.map((b) =>
+        updatedSet.has(b.barang_id)
+          ? { ...b, status_stok: 'keluar' as const, pengiriman_id: newPengiriman.pengiriman_id }
+          : b
+      );
+      saveBarangData(next);
+      return next;
+    });
 
-    const updatedPengirimanList = [
-      savedPengiriman,
-      ...pengirimanList.filter(
-        (p) => p.pengiriman_id !== savedPengiriman.pengiriman_id && p.pengiriman_id !== newPengiriman.pengiriman_id
-      ),
-    ];
-    setPengirimanList(updatedPengirimanList);
-    savePengirimanData(updatedPengirimanList);
-
-    if (fromBackend) {
-      try {
-        const barangRes = await ErpApiService.getBarangList();
-        if (barangRes.fromBackend) {
-          setBarangList(barangRes.data);
-        }
-      } catch (err) {
-        console.warn('Gagal refresh barang setelah DO:', err);
-      }
-    } else {
-      const updatedBarangList = barangList.map((b) => {
-        if (updatedSet.has(b.barang_id)) {
-          return {
-            ...b,
-            status_stok: 'keluar' as const,
-            pengiriman_id: savedPengiriman.pengiriman_id,
-          };
-        }
-        return b;
-      });
-      setBarangList(updatedBarangList);
-      saveBarangData(updatedBarangList);
-    }
-
-    // If shipment was linked to a Batch Sample, mark those batch items as sent via DO
-    if (savedPengiriman.batch_sample_id_ref) {
-      const targetBatchId = savedPengiriman.batch_sample_id_ref;
+    let batchTerkait: BatchPengirimanSample | undefined;
+    if (newPengiriman.batch_sample_id_ref) {
+      const targetBatchId = newPengiriman.batch_sample_id_ref;
       const updatedBatches = batchSampleList.map((batch) => {
         if (batch.batch_id === targetBatchId || batch.kode_batch === targetBatchId) {
-          const updatedItems = (batch.items || []).map((it) => {
-            if (updatedSet.has(it.barang_id)) {
-              return { ...it, sudah_dikirim_do: true };
-            }
-            return it;
-          });
+          const updatedItems = (batch.items || []).map((it) =>
+            updatedSet.has(it.barang_id) ? { ...it, sudah_dikirim_do: true } : it
+          );
           const allSent = updatedItems.length > 0 && updatedItems.every((it) => it.sudah_dikirim_do || it.status_item === 'ditolak') && updatedItems.some(it => it.sudah_dikirim_do);
           return {
             ...batch,
@@ -1202,32 +1168,62 @@ export default function App() {
       });
       setBatchSampleList(updatedBatches);
       saveBatchSampleData(updatedBatches);
-      // Persist flag DO ke BE bila batch sudah ada di server
-      const target = updatedBatches.find((b) => b.batch_id === targetBatchId || b.kode_batch === targetBatchId);
-      if (target) {
-        try {
-          await ErpApiService.updateBatchSample(target);
-        } catch {
-          /* offline / batch lokal */
-        }
-      }
+      batchTerkait = updatedBatches.find((b) => b.batch_id === targetBatchId || b.kode_batch === targetBatchId);
     }
 
-    showToast(`Surat Jalan ${savedPengiriman.no_surat_jalan} diterbitkan (${savedPengiriman.total_bal || updatedBarangIds.length} bal keluar)!`);
+    showToast(`Surat Jalan ${newPengiriman.no_surat_jalan} diterbitkan (${newPengiriman.total_bal || updatedBarangIds.length} bal keluar)!`);
+
+    // 2) Sinkron ke server di belakang; server hanya menentukan ID, rincian lokal tetap dipakai
+    try {
+      const saved = await ErpApiService.savePengiriman(newPengiriman, updatedBarangIds);
+      const idBaru = saved.pengiriman_id || newPengiriman.pengiriman_id;
+      setPengirimanList((prev) => {
+        const next = prev.map((p) => (p.pengiriman_id === newPengiriman.pengiriman_id ? { ...saved, pengiriman_id: idBaru } : p));
+        savePengirimanData(next);
+        return next;
+      });
+      if (idBaru !== newPengiriman.pengiriman_id) {
+        setBarangList((prev) => {
+          const next = prev.map((b) => (b.pengiriman_id === newPengiriman.pengiriman_id ? { ...b, pengiriman_id: idBaru } : b));
+          saveBarangData(next);
+          return next;
+        });
+      }
+      const barangRes = await ErpApiService.getBarangList();
+      if (barangRes.fromBackend) setBarangList(barangRes.data);
+    } catch (err: any) {
+      console.warn('Gagal menyimpan pengiriman ke API backend, tersimpan lokal:', err);
+    }
+
+    // Persist flag DO ke BE bila batch sudah ada di server
+    if (batchTerkait) {
+      try {
+        await ErpApiService.updateBatchSample(batchTerkait);
+      } catch {
+        /* offline / batch lokal */
+      }
+    }
   };
 
   const handleSaveHargaJual = async (item: MasterHargaJual) => {
+    // Layar diperbarui langsung; sinkron ke server berjalan di belakang
+    const terapkan = (h: MasterHargaJual) => {
+      setHargaJualList((prev) => {
+        const idx = prev.findIndex((x) => x.harga_jual_id === h.harga_jual_id || x.harga_jual_id === item.harga_jual_id);
+        const next = idx >= 0 ? prev.map((x, i) => (i === idx ? h : x)) : [h, ...prev];
+        saveHargaJualData(next);
+        return next;
+      });
+    };
+
+    terapkan(item);
+    showToast(`Harga jual "${item.kode}" berhasil disimpan.`);
+
     try {
       const saved = await ErpApiService.saveHargaJual(item);
-      const exists = hargaJualList.some((h) => h.harga_jual_id === saved.harga_jual_id);
-      const updated = exists 
-        ? hargaJualList.map((h) => h.harga_jual_id === saved.harga_jual_id ? saved : h)
-        : [saved, ...hargaJualList];
-      setHargaJualList(updated);
-      saveHargaJualData(updated);
-      showToast(`Harga jual "${saved.kode}" berhasil disimpan ke PostgreSQL.`);
+      if (saved && saved.harga_jual_id) terapkan(saved);
     } catch (err: any) {
-      showToast(err?.message || 'Gagal menyimpan harga jual ke sistem.', 'info');
+      showToast(err?.message || 'Harga jual tersimpan lokal, belum masuk server.', 'info');
     }
   };
 
@@ -1242,39 +1238,35 @@ export default function App() {
   const handleSaveBatchSample = async (newBatch: BatchPengirimanSample, updatedBarangs: Barang[]) => {
     if (currentUser?.status_aktif === false) return showToast('Akun Anda dinonaktifkan.', 'info');
 
-    let savedBatch = newBatch;
-    let fromBackend = false;
-    try {
-      savedBatch = await ErpApiService.saveBatchSample(newBatch);
-      fromBackend = true;
-    } catch (err: any) {
-      console.warn('Gagal menyimpan batch sample ke API backend, simpan lokal:', err);
-    }
-
-    const updated = [
-      savedBatch,
-      ...batchSampleList.filter((b) => b.batch_id !== savedBatch.batch_id && b.batch_id !== newBatch.batch_id),
-    ];
-    setBatchSampleList(updated);
-    saveBatchSampleData(updated);
-
-    if (fromBackend) {
-      try {
-        const barangRes = await ErpApiService.getBarangList();
-        if (barangRes.fromBackend) {
-          setBarangList(barangRes.data);
-        }
-      } catch (err) {
-        console.warn('Gagal refresh barang setelah sample:', err);
-      }
-    } else if (updatedBarangs && updatedBarangs.length > 0) {
+    // 1) Langsung tampil
+    setBatchSampleList((prev) => {
+      const next = [newBatch, ...prev.filter((b) => b.batch_id !== newBatch.batch_id)];
+      saveBatchSampleData(next);
+      return next;
+    });
+    if (updatedBarangs && updatedBarangs.length > 0) {
       const updatedBarangMap = new Map(updatedBarangs.map((b) => [b.barang_id, b]));
-      const newBarangList = barangList.map((b) => updatedBarangMap.get(b.barang_id) || b);
-      setBarangList(newBarangList);
-      saveBarangData(newBarangList);
+      setBarangList((prev) => {
+        const next = prev.map((b) => updatedBarangMap.get(b.barang_id) || b);
+        saveBarangData(next);
+        return next;
+      });
     }
+    showToast(`Batch Sample ${newBatch.kode_batch} berhasil dikirim ke ${newBatch.tujuan_buyer}!`);
 
-    showToast(`Batch Sample ${savedBatch.kode_batch} berhasil dikirim ke ${savedBatch.tujuan_buyer}!`);
+    // 2) Sinkron ke server di belakang (No. Surat Sample manual tetap dipakai)
+    try {
+      const saved = await ErpApiService.saveBatchSample(newBatch);
+      setBatchSampleList((prev) => {
+        const next = prev.map((b) => (b.batch_id === newBatch.batch_id ? saved : b));
+        saveBatchSampleData(next);
+        return next;
+      });
+      const barangRes = await ErpApiService.getBarangList();
+      if (barangRes.fromBackend) setBarangList(barangRes.data);
+    } catch (err: any) {
+      console.warn('Gagal menyimpan batch sample ke API backend, tersimpan lokal:', err);
+    }
   };
 
 
@@ -1296,25 +1288,33 @@ export default function App() {
   };
 
   const handleUpdateBatchSample = async (updatedBatch: BatchPengirimanSample, updatedBarangs?: Barang[]) => {
-    let savedBatch = updatedBatch;
-    try {
-      savedBatch = await ErpApiService.updateBatchSample(updatedBatch);
-    } catch (err: any) {
-      console.warn('Gagal update batch sample ke API, simpan lokal:', err);
-    }
-
-    const list = batchSampleList.map((b) => (b.batch_id === savedBatch.batch_id ? savedBatch : b));
-    setBatchSampleList(list);
-    saveBatchSampleData(list);
-
+    // 1) Langsung tampil
+    setBatchSampleList((prev) => {
+      const next = prev.map((b) => (b.batch_id === updatedBatch.batch_id ? updatedBatch : b));
+      saveBatchSampleData(next);
+      return next;
+    });
     if (updatedBarangs && updatedBarangs.length > 0) {
       const updatedBarangMap = new Map(updatedBarangs.map((b) => [b.barang_id, b]));
-      const newBarangList = barangList.map((b) => updatedBarangMap.get(b.barang_id) || b);
-      setBarangList(newBarangList);
-      saveBarangData(newBarangList);
+      setBarangList((prev) => {
+        const next = prev.map((b) => updatedBarangMap.get(b.barang_id) || b);
+        saveBarangData(next);
+        return next;
+      });
     }
+    showToast(`Batch ${updatedBatch.kode_batch} berhasil diperbarui.`);
 
-    showToast(`Batch ${savedBatch.kode_batch} berhasil diperbarui.`);
+    // 2) Sinkron ke server di belakang
+    try {
+      const saved = await ErpApiService.updateBatchSample(updatedBatch);
+      setBatchSampleList((prev) => {
+        const next = prev.map((b) => (b.batch_id === updatedBatch.batch_id ? saved : b));
+        saveBatchSampleData(next);
+        return next;
+      });
+    } catch (err: any) {
+      console.warn('Gagal update batch sample ke API, tersimpan lokal:', err);
+    }
   };
 
   const handleUpdatePengiriman = (updatedPengiriman: PengirimanBarang) => {
@@ -1677,6 +1677,8 @@ export default function App() {
                   const serverIds = new Set(fromServer.map((t) => t.transaksi_id));
                   const localOnly = prev.filter((t) => !serverIds.has(t.transaksi_id));
                   const next = [...fromServer, ...localOnly];
+                  // Layar hanya diperbarui bila data memang berubah, agar isian operator tidak terganggu
+                  if (JSON.stringify(next) === JSON.stringify(prev)) return prev;
                   setTransaksiList(next);
                   saveTransaksiData(next);
                   return next;

@@ -47,7 +47,7 @@ export const NotaTimbangContent: React.FC<NotaTimbangContentProps> = ({ transaks
       <KopSurat judul="Surat Bukti Timbang & Nota Pembelian Tembakau" />
 
       {/* Metadata Grid - Bersih & Rapi */}
-      <div className="grid grid-cols-2 gap-6 border-b border-gray-200 pb-3 text-xs">
+      <div className="grid grid-cols-2 gap-6 border-b border-gray-200 pb-3 text-xs avoid-page-break">
         {/* Kolom Kiri: Informasi Transaksi & Pembayaran */}
         <div className="space-y-1.5 pr-2">
           <div className="flex justify-between items-center">
@@ -162,7 +162,7 @@ export const NotaTimbangContent: React.FC<NotaTimbangContentProps> = ({ transaks
       </div>
 
       {/* Rincian Potongan Biaya Table */}
-      <div className="border border-slate-200 rounded-md overflow-hidden mt-3">
+      <div className="border border-slate-200 rounded-md overflow-hidden mt-3 avoid-page-break">
         <table className="w-full text-xs text-left border-collapse">
           <thead>
             <tr className="bg-slate-50/90 border-b border-slate-200 font-semibold text-slate-600 text-xs">
@@ -239,48 +239,50 @@ export const NotaTimbangContent: React.FC<NotaTimbangContentProps> = ({ transaks
         </table>
       </div>
 
-      {/* Total Bersih Dibayar (Grand Total) Summary */}
-      <div className="flex justify-end pt-1">
-        <div className="w-1/2 bg-slate-50 border border-slate-300 p-3 rounded-md flex justify-between items-center">
-          <div>
-            <span className="font-semibold uppercase text-xs tracking-wider text-slate-700 block">
-              Total Bersih Dibayar
-            </span>
-            <span className="text-[11px] text-slate-500 font-normal">
-              (Diterima Petani)
+      {/* Penutup nota: total bersih, terbilang, dan tanda tangan selalu satu halaman */}
+      <div className="space-y-4 avoid-page-break">
+        <div className="flex justify-end pt-1">
+          <div className="w-1/2 bg-slate-50 border border-slate-300 p-3 rounded-md flex justify-between items-center">
+            <div>
+              <span className="font-semibold uppercase text-xs tracking-wider text-slate-700 block">
+                Total Bersih Dibayar
+              </span>
+              <span className="text-[11px] text-slate-500 font-normal">
+                (Diterima Petani)
+              </span>
+            </div>
+            <span className="font-mono font-bold text-base text-slate-900 flex items-center">
+              <span className="text-xs text-slate-500 mr-2 font-sans font-semibold">Rp</span>
+              {formatAccounting(grandTotalRp)}
             </span>
           </div>
-          <span className="font-mono font-bold text-base text-slate-900 flex items-center">
-            <span className="text-xs text-slate-500 mr-2 font-sans font-semibold">Rp</span>
-            {formatAccounting(grandTotalRp)}
+        </div>
+
+        {/* Terbilang Box */}
+        <div className="p-2.5 bg-gray-50 border border-gray-300 text-xs flex items-start space-x-2 rounded-xs">
+          <span className="font-bold text-gray-700 shrink-0">Terbilang:</span>
+          <span className="italic font-medium text-gray-900 capitalize">
+            {terbilangRupiah(grandTotalRp)}
           </span>
         </div>
-      </div>
 
-      {/* Terbilang Box */}
-      <div className="p-2.5 bg-gray-50 border border-gray-300 text-xs flex items-start space-x-2 rounded-xs">
-        <span className="font-bold text-gray-700 shrink-0">Terbilang:</span>
-        <span className="italic font-medium text-gray-900 capitalize">
-          {terbilangRupiah(grandTotalRp)}
-        </span>
-      </div>
-
-      {/* Signature Grid */}
-      <div className="pt-4 grid grid-cols-2 gap-4 text-center text-xs avoid-page-break">
-        <div>
-          <p className="text-gray-600 font-medium">Penjual</p>
-          <div className="h-22 flex items-end justify-center">
-            <span className="font-semibold border-b border-gray-800 pb-0.5 min-w-[130px] inline-block text-gray-900">
-              {transaksi.nama_petani || <>&nbsp;</>}
-            </span>
+        {/* Tanda tangan: label, ruang tanda tangan, dan nama selalu di halaman yang sama */}
+        <div className="pt-4 grid grid-cols-2 gap-4 text-center text-xs avoid-page-break">
+          <div>
+            <p className="text-gray-600 font-medium">Penjual</p>
+            <div className="h-22 flex items-end justify-center">
+              <span className="font-semibold border-b border-gray-800 pb-0.5 min-w-[130px] inline-block text-gray-900">
+                {transaksi.nama_petani || <>&nbsp;</>}
+              </span>
+            </div>
           </div>
-        </div>
-        <div>
-          <p className="text-gray-600 font-medium">Admin / Kasir</p>
-          <div className="h-22 flex items-end justify-center">
-            <span className="font-semibold border-b border-gray-800 pb-0.5 min-w-[130px] inline-block text-gray-900">
-              {currentUser?.nama_lengkap || currentUser?.username || 'Admin'}
-            </span>
+          <div>
+            <p className="text-gray-600 font-medium">Admin / Kasir</p>
+            <div className="h-22 flex items-end justify-center">
+              <span className="font-semibold border-b border-gray-800 pb-0.5 min-w-[130px] inline-block text-gray-900">
+                {currentUser?.nama_lengkap || currentUser?.username || 'Admin'}
+              </span>
+            </div>
           </div>
         </div>
       </div>

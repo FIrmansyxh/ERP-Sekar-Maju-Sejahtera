@@ -7,10 +7,12 @@ barang dan sample ke pabrik rekanan.
 
 | | |
 |---|---|
-| Versi | 3.0.0 (rilis produksi perdana) |
-| Jenis aplikasi | Single Page Application, berjalan penuh di peramban |
-| Teknologi | React 19, TypeScript, Vite 6, Tailwind CSS 4 |
-| Penyimpanan data | `localStorage` peramban, terkompresi LZ-String |
+| Versi | 3.0.0 |
+| Jenis aplikasi | Single Page Application (frontend) yang terhubung ke REST API backend |
+| Teknologi | React 19, TypeScript 5.8, Vite 6, Tailwind CSS 4 |
+| Backend | Laravel dengan basis data PostgreSQL, repositori terpisah |
+| Penyimpanan di peramban | Cache `localStorage` terkompresi LZ-String untuk mode offline |
+| Identitas pada dokumen | S.A Group, Jl. Raya Blumbungan, Dusun Kendal, Desa Trasak, Kec. Larangan, Kab. Pamekasan |
 | Bahasa antarmuka | Indonesia |
 
 ---
@@ -27,24 +29,39 @@ barang dan sample ke pabrik rekanan.
 8. [Pencadangan dan pemulihan data](#pencadangan-dan-pemulihan-data)
 9. [Struktur proyek](#struktur-proyek)
 10. [Catatan keamanan](#catatan-keamanan)
+11. [Dokumen terkait](#dokumen-terkait)
 
 ---
 
 ## Ringkasan arsitektur
 
-Aplikasi ini tidak memerlukan server backend, basis data, maupun layanan pihak ketiga.
-Seluruh data operasional disimpan di `localStorage` peramban pada komputer yang digunakan,
-dalam bentuk JSON terkompresi. Berkas yang dihasilkan proses build adalah aset statis biasa
-sehingga dapat dilayani oleh web server apa pun.
+Repositori ini berisi frontend. Data utama disimpan di backend Laravel + PostgreSQL dan diakses
+melalui REST API. Aplikasi memakai pola **API dulu, cache lokal sebagai cadangan**.
 
-Konsekuensi penting dari arsitektur ini:
+- Saat login dan saat memuat data, aplikasi memeriksa `GET {API}/health`.
+- **Server tersedia:** data diambil dari API, lalu disalin ke `localStorage` sebagai cache.
+- **Server tidak tersedia:** aplikasi berjalan dari cache `localStorage` dan login memakai
+  akun yang tersimpan di peramban tersebut.
 
-- **Data bersifat lokal per komputer dan per peramban.** Dua komputer yang membuka aplikasi
-  tidak berbagi data. Tetapkan satu komputer sebagai mesin operasional utama.
-- **Membersihkan data situs peramban akan menghapus seluruh data ERP.** Lakukan ekspor rutin
-  seperti dijelaskan pada bagian [Pencadangan dan pemulihan data](#pencadangan-dan-pemulihan-data).
-- **Tidak ada sinkronisasi otomatis antar perangkat.** Bila kelak dibutuhkan operasi
-  multi-komputer, aplikasi perlu dilengkapi backend tersendiri.
+Alamat API ditentukan otomatis.
+
+| Aplikasi dibuka dari | Alamat API |
+|---|---|
+| `localhost` atau `127.0.0.1` | `http://localhost:8000/api/v1` |
+| Domain `*.vercel.app` | Tanpa API, aplikasi berjalan penuh dari data peramban |
+| Domain lain (VPS produksi) | `{origin}/api/v1` |
+
+Variabel lingkungan `VITE_API_BASE_URL` saat build mengesampingkan tabel di atas.
+
+Konsekuensi penting:
+
+- **Alamat Vercel hanya untuk demo.** Tanpa `VITE_API_BASE_URL`, akun, petani, dan transaksi
+  yang dibuat di alamat Vercel hanya tersimpan di peramban tempat data itu dibuat dan tidak
+  terlihat di komputer lain.
+- **Operasi harian memakai alamat VPS** agar semua komputer berbagi data yang sama.
+- **Belum semua proses tersinkron penuh ke server.** Jejak audit masih lokal, dan sebagian
+  perubahan status sample, surat jalan, serta penghapusan data masih tersimpan lokal. Rincian
+  per menu dan urutan perbaikannya ada di `RENCANA_PERBAIKAN_ALUR_FE_BE.md`.
 
 ## Modul aplikasi
 
@@ -52,55 +69,56 @@ Konsekuensi penting dari arsitektur ini:
 
 | Modul | Fungsi |
 |---|---|
-| Sortir | Input nomor kupon antrian, pemilihan petani, dan penetapan mutu grade per bal |
+| Sortir | Input nomor kupon, pemilihan petani, penetapan grade dan nomor bal |
 | Timbangan | Input berat bruto, perhitungan tara otomatis, dan penetapan berat netto |
-| Kasir | Rekap nilai pembelian, pencatatan pembayaran, dan cetak nota timbang |
-| Transaksi Pembelian | Riwayat transaksi, koreksi data timbang, dan penelusuran per kupon |
+| Kasir | Rekap pembelian per kupon, pembayaran, detail transaksi, koreksi data timbang, dan cetak nota |
 
 ### Master data
 
 | Modul | Fungsi |
 |---|---|
-| Master Petani | Registrasi petani (nomor HP dan alamat opsional), kartu petani, status keaktifan, impor data, dan ekspor Excel |
-| Master Harga Beli | Kode harga beli per kilogram beserta tanggal berlaku |
-| Master Harga Jual | Kode harga jual per pembeli beserta tanggal berlaku |
+| Master Petani | Registrasi petani (nomor HP dan alamat opsional), kartu petani, status keaktifan, impor daftar nama dari file CSV/TXT, dan ekspor Excel |
+| Master Harga Beli | Kode grade dan harga beli per kilogram beserta tanggal berlaku |
+| Master Harga Jual | Kode dan harga jual per kilogram ke pabrik beserta tanggal berlaku |
 
 ### Pengiriman
 
 | Modul | Fungsi |
 |---|---|
-| Pengiriman Reguler (DO) | Penyusunan muatan per nomor bal, surat jalan, dan status pengiriman |
-| Pengiriman Sample | Pengiriman contoh mutu ke laboratorium pabrik dan hasil ujinya |
-| Status & Detail Batch | Pemantauan batch sortir pembeli dan realisasi delivery order |
+| Pengiriman Sample | Pengiriman contoh bal ke pabrik dengan No. Surat Pengiriman Sample manual, lalu pencatatan hasil uji |
+| Status & Detail Batch | Evaluasi sortir pembeli per bal sample (ACC, nego, tolak) dan harga deal |
+| Pengiriman Reguler (DO) | Penyusunan muatan per nomor bal, No. Surat Jalan manual, harga jual, dan cetak surat jalan |
 
 ### Laporan dan administrasi
 
 | Modul | Fungsi |
 |---|---|
-| Dashboard Analytic | Ringkasan eksekutif, distribusi grade, dan tren pembelian |
-| Laporan Bal, Kode Bal, Mutu Grade | Analisis stok dan valuasi per kategori |
-| Laporan Pembelian, Petani, Pengiriman | Rekapitulasi dengan filter dinamis dan unduhan Excel siap cetak |
-| Manajemen Pengguna | Pembuatan akun staf, penetapan peran, reset kata sandi, dan jejak audit |
+| Dashboard Analytic | Ringkasan eksekutif, pembelian, penjualan, laba, dan valuasi stok |
+| Laporan Bal, Kode Bal, Harga | Analisis stok, kode bal, dan grade per kategori |
+| Laporan Pembelian, Petani, Pengiriman | Rekapitulasi dengan filter dinamis, unduhan Excel, dan cetak PDF berkop surat |
+| Manajemen Pengguna | Pembuatan akun, penetapan peran, reset kata sandi, dan jejak audit |
 
 ## Peran pengguna dan hak akses
 
 Kontrol akses berbasis peran diterapkan pada setiap modul. Pengguna yang membuka modul di luar
 wewenangnya dikembalikan ke beranda disertai pemberitahuan, termasuk ketika modul terakhir
-tersimpan dari sesi sebelumnya.
+tersimpan dari sesi sebelumnya. Definisi lengkap ada di `src/utils/rbac.ts`.
 
-| Peran | Cakupan wewenang |
+| Peran | Modul yang dapat dibuka |
 |---|---|
-| Super Admin | Seluruh modul, termasuk manajemen pengguna dan jejak audit |
-| Admin Sortir | Sortir mutu grade dan pengiriman sample |
-| Admin Timbang | Penimbangan bal dan transaksi pembelian |
-| Admin Kasir | Pembayaran, nota timbang, dan laporan pembelian |
-| Admin Pengiriman | Delivery order, surat jalan, dan status batch |
-| Kepala Gudang | Seluruh laporan, dashboard analitik, dan status batch |
+| Super Admin | Seluruh modul, termasuk Manajemen Pengguna dan jejak audit |
+| Admin Sortir | Sortir, Master Petani, Master Harga Beli, Master Harga Jual, dashboard, dan seluruh laporan |
+| Admin Timbang | Timbangan |
+| Admin Kasir | Sortir, Timbangan, Kasir, dashboard, dan seluruh laporan |
+| Admin Pengiriman | Pengiriman Sample, Status & Detail Batch, Pengiriman Reguler, Master Harga Jual, dan Laporan Pengiriman |
+| Kepala Gudang | Status & Detail Batch, dashboard, dan seluruh laporan |
 
 Berganti akun dilakukan melalui logout lalu login kembali. Tidak tersedia jalur pintas
 pergantian akun tanpa kata sandi.
 
 ## Aturan bisnis utama
+
+**Satu gudang.** Sistem tidak memakai lokasi atau blok gudang.
 
 **Potongan tara berdasarkan berat bruto.** Nilai tara ditentukan bertingkat mengikuti berat
 bruto bal, dengan pengecualian khusus untuk bal bertanda SB.
@@ -113,12 +131,36 @@ bruto bal, dengan pengecualian khusus untuk bal bertanda SB.
 | 60 kg ke atas | 6 kg |
 
 **Potongan biaya per bal.** Kuli Rp 7.000, tali Rp 3.000, dan ganti tikar Rp 75.000 bila
-dipilih pada transaksi.
+dipilih pada transaksi. Tarif ini didefinisikan satu kali di `src/config/aturanTimbang.ts`.
 
 **Berat tidak pernah dibulatkan.** Nilai berat bruto, tara, dan netto disimpan serta
 ditampilkan apa adanya sampai tiga angka di belakang koma. Sistem hanya membersihkan galat
 presisi bilangan pecahan komputer, misalnya hasil pengurangan `15,75 - 3` dicatat tepat
 `12,75` dan bukan `12,749999999999998`.
+
+**Status lunas hanya dari Kasir.** Kupon berstatus lunas setelah dibayar di Kasir. Sebelum itu
+dicatat sebagai kredit. Nilai pembelian, valuasi stok, dan aset hanya menghitung kupon lunas.
+Unduh PDF nota baru terbuka setelah lunas. Nota yang dicetak sebelum lunas menampilkan status
+BELUM LUNAS (KREDIT).
+
+**Netto untuk pembelian, bruto untuk pengiriman.** Harga beli dihitung dari berat netto.
+Surat Jalan, Surat Pengiriman Sample, dan nilai penjualan memakai berat bruto.
+
+**Grade dan harga beli bersifat internal.** Grade adalah acuan harga beli, sehingga tidak
+ditampilkan pada form maupun dokumen pengiriman. Harga pada Surat Jalan diambil dari Master
+Harga Jual, dan surat jalan tidak dapat diterbitkan bila ada bal tanpa harga jual.
+
+**Nomor surat diisi manual dan tidak boleh kembar.** No. Surat Jalan dan No. Surat Pengiriman
+Sample diketik petugas. Nomor yang sudah dipakai ditolak, disertai informasi nomor terakhir
+dan saran nomor berikutnya, misalnya setelah `PJM0001` disarankan `PJM0002`.
+
+**Nomor yang tampil adalah nomor buatan pengguna.** Dokumen dan tabel menampilkan No. Kupon,
+No. Bal, No. Surat Jalan, No. Surat Sample, dan username. ID internal sistem tetap disimpan
+sebagai kunci data tetapi tidak ditampilkan.
+
+**Data yang sudah dikirim tidak dapat dihapus.** Nota pembelian tidak dapat dihapus bila salah
+satu balnya sudah keluar gudang atau tercantum pada surat jalan. Surat jalan hanya dapat
+dihapus selama masih berstatus dimuat. Pengiriman sample tetap dapat dihapus.
 
 **Harga jual boleh di bawah harga beli.** Sistem tidak memblokir penetapan harga jual yang
 lebih rendah dari harga beli, karena kondisi tersebut sah pada kesepakatan khusus atau
@@ -130,9 +172,15 @@ penghabisan stok.
 sortir, sehingga tidak dapat masuk ke antrian timbang. Seluruh riwayat transaksinya tetap
 tersimpan dan tetap muncul pada laporan. Alasan penonaktifan dicatat pada jejak audit.
 
+**Dokumen tanpa data karangan.** Kop surat, nama penandatangan, dan angka pada dokumen hanya
+berasal dari data yang diisi pengguna. Nama petugas pada surat jalan dan laporan diambil dari
+akun yang sedang login.
+
 ## Menjalankan di komputer lokal
 
-Prasyarat: Node.js versi 20 atau lebih baru.
+Prasyarat: Node.js versi 20 atau lebih baru. Backend Laravel dijalankan terpisah pada
+`http://localhost:8000` (`php artisan serve`). Tanpa backend, aplikasi tetap berjalan memakai
+data peramban.
 
 Pasang dependensi.
 
@@ -167,22 +215,32 @@ Hasil build berada di direktori `dist/`. Uji hasilnya secara lokal sebelum diung
 npm run preview
 ```
 
-Unggah seluruh isi `dist/` ke web server atau layanan hosting statis. Karena aplikasi
-menggunakan satu halaman, konfigurasikan server agar setiap permintaan yang tidak cocok dengan
-berkas nyata diarahkan ke `index.html`.
+### VPS (produksi)
 
-Contoh konfigurasi Nginx.
+Setiap push ke branch `main` menjalankan GitHub Actions `.github/workflows/deploy.yml`.
+Workflow masuk ke VPS lewat SSH, menarik kode terbaru di `/var/www/erp-fe/ERP-Sekar-Maju-Sejahtera`,
+menjalankan `npm install` dan `npm run build` dengan `NODE_OPTIONS=--max-old-space-size=2048`,
+lalu memuat ulang Nginx.
+
+Secret repositori yang dibutuhkan: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, dan `VPS_PORT`
+(opsional, bawaan 22).
+
+Konfigurasikan Nginx agar setiap permintaan yang tidak cocok dengan berkas nyata diarahkan ke
+`index.html`, dan rute `/api/` diteruskan ke aplikasi Laravel. Bila `/api/v1/health` tidak
+mengembalikan JSON, aplikasi menganggap server mati dan beralih ke data peramban.
 
 ```nginx
 server {
     listen 80;
     server_name erp.sekarmajusejahtera.co.id;
-    root /var/www/erp/dist;
+    root /var/www/erp-fe/ERP-Sekar-Maju-Sejahtera/dist;
     index index.html;
 
     location / {
         try_files $uri $uri/ /index.html;
     }
+
+    # location /api/ { ... }  arahkan ke aplikasi Laravel backend
 
     location ~* \.(js|css|woff2|png|svg)$ {
         expires 30d;
@@ -191,8 +249,14 @@ server {
 }
 ```
 
-Gunakan HTTPS pada lingkungan produksi. Aplikasi menghitung hash kata sandi memakai Web Crypto
-API yang hanya tersedia pada konteks aman, yaitu HTTPS atau `localhost`.
+Gunakan HTTPS pada lingkungan produksi. Login cadangan tanpa server menghitung hash kata sandi
+memakai Web Crypto API yang hanya tersedia pada konteks aman, yaitu HTTPS atau `localhost`.
+
+### Vercel (demo)
+
+Vercel membangun proyek dengan `npm run build`. Build gagal bila ada kesalahan tipe, termasuk
+sisa penanda konflik merge (`<<<<<<<`). Tanpa `VITE_API_BASE_URL`, deployment Vercel berjalan
+tanpa backend seperti dijelaskan pada [Ringkasan arsitektur](#ringkasan-arsitektur).
 
 ## Penggunaan perdana
 
@@ -205,28 +269,36 @@ dari nol, dan hanya tersedia satu akun bawaan.
 | Kata sandi awal | `Supersekar25` |
 | Peran | Super Admin |
 
-Urutan penyiapan yang disarankan.
+Urutan penyiapan yang disarankan. Lakukan di alamat VPS agar data tersimpan di server.
 
 1. Login memakai akun Super Admin di atas.
 2. **Ganti kata sandi Super Admin** melalui Manajemen Pengguna, menu Reset Kata Sandi.
-3. Buat akun staf sesuai peran masing-masing, satu akun untuk satu orang.
+3. Buat akun staf melalui Manajemen Pengguna, Tambah Pengguna. Yang wajib hanya Username,
+   Kata Sandi (minimal 6 karakter), dan Role. Nama lengkap, email, dan nomor HP boleh kosong.
+   Bila nama kosong, username dipakai sebagai nama pada dokumen. Username disimpan persis
+   seperti diketik, tanpa spasi, dan login tidak membedakan huruf besar dan kecil.
 4. Isi Master Harga Beli dan Master Harga Jual beserta tanggal berlakunya.
-5. Daftarkan petani secara manual atau lewat Import Data (salin tempel dari Excel) pada Master Petani.
+5. Daftarkan petani secara manual atau lewat Master Petani, Import / Export, Import Data.
+   Pilih file CSV/TXT atau tempel daftar nama, satu nama per baris. Judul kolom `Nama` boleh
+   ada. Petani disimpan ke server satu per satu sesuai urutan baris, sehingga baris pertama
+   mendapat ID Petani paling awal. Bila satu baris gagal, impor berhenti di baris itu agar
+   urutan ID tidak loncat, dan sisa daftar dapat diimpor ulang.
 6. Mulai operasi harian dari modul Sortir.
 
-Kata sandi disimpan sebagai hash SHA-256, tidak pernah dalam bentuk teks biasa. Sistem tidak
+Kata sandi disimpan sebagai hash, tidak pernah dalam bentuk teks biasa. Sistem tidak
 menyediakan pemulihan kata sandi mandiri, sehingga reset hanya dapat dilakukan oleh Super Admin.
 
 ## Pencadangan dan pemulihan data
 
-Karena data berada di peramban, pencadangan berkala adalah tanggung jawab operasional dan
-harus dijadwalkan.
+Data yang sudah tersinkron tersimpan di basis data server, sehingga pencadangan utama adalah
+backup PostgreSQL di VPS dan harus dijadwalkan. Data yang masih lokal, misalnya jejak audit,
+tetap berada di peramban masing-masing komputer.
 
 - **Master Petani** menyediakan ekspor Excel melalui tombol Import / Export.
 - **Modul laporan** menyediakan unduhan rekap Excel (.xlsx) untuk keperluan arsip dan audit.
 - Simpan hasil unduhan pada penyimpanan terpisah, misalnya server berkas kantor.
 
-Hal yang menyebabkan data hilang permanen dan perlu dihindari.
+Hal yang menyebabkan data lokal hilang permanen dan perlu dihindari.
 
 - Menghapus data situs atau riwayat peramban pada mesin operasional.
 - Menjalankan aplikasi dalam mode penyamaran atau jendela privat.
@@ -239,7 +311,12 @@ Hal yang menyebabkan data hilang permanen dan perlu dihindari.
 ```
 src/
 ├── App.tsx                  Komposisi aplikasi, routing modul, dan penjagaan sesi
-├── config/appInfo.ts        Identitas rilis: nama, versi, dan nomor build
+├── config/
+│   ├── appInfo.ts           Identitas rilis serta nama dan alamat perusahaan pada dokumen
+│   └── aturanTimbang.ts     Tarif potongan kuli, tali, dan ganti tikar
+├── services/
+│   ├── apiClient.ts         Alamat API, token, health check, dan pemanggil HTTP
+│   └── erpApi.ts            Sinkronisasi data API dengan cache lokal
 ├── components/
 │   ├── auth/                Halaman login
 │   ├── Header.tsx           Bilah atas, profil pengguna, dan logout
@@ -248,19 +325,23 @@ src/
 │   ├── harga/               Master harga beli
 │   ├── harga_jual/          Master harga jual
 │   ├── transaksi/           Sortir, timbang, kasir, nota, dan koreksi transaksi
-│   ├── pengiriman/          Delivery order dan surat jalan
+│   ├── pengiriman/          Delivery order, surat jalan, dan status batch
 │   ├── sample/              Pengiriman sample dan evaluasi mutu
 │   ├── laporan/             Dashboard analitik dan seluruh laporan
 │   ├── user/                Manajemen pengguna, matriks peran, dan jejak audit
 │   ├── print/               Tampilan cetak mandiri
-│   └── common/              Komponen bersama seperti modal dan paginasi
+│   └── common/              Kop surat, ikon urutan, modal, paginasi, dan pilihan tercari
 ├── data/                    Data bawaan instalasi, seluruhnya kosong kecuali akun Super Admin
 ├── hooks/                   Hook khusus, antara lain pemindai barcode
 ├── types/                   Definisi tipe domain
 └── utils/
-    ├── storage.ts           Baca dan tulis localStorage, otentikasi, serta jejak audit
+    ├── storage.ts           Baca dan tulis localStorage, otentikasi lokal, serta jejak audit
     ├── rbac.ts              Definisi peran dan pemeriksaan hak akses
     ├── crypto.ts            Hash kata sandi SHA-256
+    ├── statusBayar.ts       Penentuan status lunas dan kredit
+    ├── nomorDokumen.ts      Validasi nomor surat manual dan saran nomor berikutnya
+    ├── kunciHapus.ts        Aturan data yang tidak boleh dihapus setelah dikirim
+    ├── beratKirim.ts        Berat bruto untuk pengiriman dan penjualan
     ├── formatters.ts        Format angka, tanggal, dan penanganan presisi berat
     ├── financialCalculations.ts  Perhitungan nilai transaksi
     ├── kuponSortir.ts       Aturan kupon terbuka Sortir dan Timbangan
@@ -270,16 +351,27 @@ src/
 
 ## Catatan keamanan
 
-Batasan berikut melekat pada arsitektur aplikasi dan perlu ditutup dengan prosedur operasional.
+Batasan berikut perlu ditutup dengan prosedur operasional.
 
-- **Otorisasi berjalan di sisi klien.** Pengguna dengan akses ke peralatan pengembang peramban
-  dapat membaca dan mengubah data lokal. Batasi akses fisik ke komputer operasional dan
-  kunci sesi sistem operasi saat ditinggalkan.
+- **Otorisasi peran masih berjalan di sisi klien.** Pemeriksaan peran di backend belum
+  diterapkan (lihat `RENCANA_PERBAIKAN_ALUR_FE_BE.md`). Pengguna dengan akses ke peralatan
+  pengembang peramban dapat membaca dan mengubah data lokal. Batasi akses fisik ke komputer
+  operasional dan kunci sesi sistem operasi saat ditinggalkan.
 - **Sesi berakhir otomatis setelah 30 menit tanpa aktivitas.** Pengguna harus login ulang.
 - **Seluruh halaman berada di balik autentikasi,** termasuk tautan cetak mandiri berformat
   `?cetak=...`. Tanpa sesi yang sah, halaman login yang ditampilkan.
-- **Jejak audit mencatat aktivitas penting** dan hanya dapat dibaca oleh Super Admin.
+- **Jejak audit mencatat aktivitas penting** dan hanya dapat dibaca oleh Super Admin. Jejak
+  audit saat ini tersimpan per peramban.
+- **Kata sandi awal Super Admin tercantum di dokumen ini.** Segera ganti setelah login pertama,
+  terutama bila repositori dapat diakses pihak luar.
 - Gunakan satu akun untuk satu orang. Akun bersama membuat jejak audit kehilangan maknanya.
+
+## Dokumen terkait
+
+| Berkas | Isi |
+|---|---|
+| `RENCANA_PERBAIKAN_ALUR_FE_BE.md` | Status sinkronisasi per menu antara frontend, backend, dan cache lokal |
+| `PANDUAN_PENGUJIAN_MANUAL.md` | Langkah pengujian manual integrasi frontend dan backend |
 
 ---
 

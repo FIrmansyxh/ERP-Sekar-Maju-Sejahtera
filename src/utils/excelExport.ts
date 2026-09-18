@@ -32,6 +32,12 @@ export interface ExcelColumn {
 
 export type ExcelCellValue = string | number | Date | null | undefined;
 
+/**
+ * Jenis baris untuk laporan berkelompok: 'group' = baris induk (tebal, berlatar),
+ * 'data' = baris rincian, 'subtotal' = total per kelompok (label digabung ke kanan).
+ */
+export type ExcelRowKind = 'data' | 'group' | 'subtotal';
+
 export interface ExcelSheet {
   /** Nama tab sheet (maks. 31 karakter) */
   name: string;
@@ -40,6 +46,8 @@ export interface ExcelSheet {
   info?: string[];
   columns: ExcelColumn[];
   rows: ExcelCellValue[][];
+  /** Jenis tiap baris pada rows (sejajar indeks). Bila diisi, zebra dan filter kolom dimatikan. */
+  rowKinds?: ExcelRowKind[];
   /** Baris total di bawah tabel, sejajar dengan kolom */
   totalRow?: ExcelCellValue[];
 }
@@ -51,6 +59,8 @@ const COLOR = {
   headerFill: 'FFF3F4F6',
   zebraFill: 'FFF9FAFB',
   totalFill: 'FFE5E7EB',
+  groupFill: 'FFF1F5F9',
+  subtotalFill: 'FFFFFBEB',
   border: 'FFD1D5DB',
   borderStrong: 'FF6B7280',
 };
@@ -242,12 +252,14 @@ function buildSheet(workbook: Workbook, spec: ExcelSheet, sheetName: string, dow
 
   const isEmpty = (v: ExcelCellValue) => v === null || v === undefined || v === '';
 
-  const writeRow = (values: ExcelCellValue[], isTotal: boolean, zebra: boolean) => {
+  const writeRow = (values: ExcelCellValue[], kind: ExcelRowKind | 'total', zebra: boolean) => {
     const row = sheet.addRow([]);
+    const isTotal = kind === 'total';
+    const isBold = kind !== 'data';
 
     // Label total digabung dengan sel kosong di sebelah kanannya, mis. "TOTAL" melebar sampai kolom angka pertama
     let labelSpan = 1;
-    if (isTotal && typeof values[0] === 'string') {
+    if ((isTotal || kind === 'subtotal') && typeof values[0] === 'string') {
       while (labelSpan < spec.columns.length && isEmpty(values[labelSpan])) labelSpan++;
       if (labelSpan === spec.columns.length) labelSpan = 1;
     }
@@ -259,17 +271,21 @@ function buildSheet(workbook: Workbook, spec: ExcelSheet, sheetName: string, dow
       writeValue(cell, value, type);
 
       const isText = typeof cell.value === 'string';
-      cell.font = { name: FONT_NAME, size: 10, bold: isTotal, color: { argb: COLOR.text } };
+      cell.font = { name: FONT_NAME, size: 10, bold: isBold, color: { argb: COLOR.text } };
       cell.alignment = {
         vertical: 'middle',
         horizontal: col.align || (isText && NUMERIC_TYPES.includes(type) ? 'center' : defaultAlign(type)),
         wrapText: type === 'text',
       };
-      cell.border = isTotal
+      cell.border = isTotal || kind === 'group'
         ? { ...thinBorder(), top: { style: 'medium', color: { argb: COLOR.borderStrong } } }
         : thinBorder();
       if (isTotal) {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.totalFill } };
+      } else if (kind === 'group') {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.groupFill } };
+      } else if (kind === 'subtotal') {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.subtotalFill } };
       } else if (zebra) {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.zebraFill } };
       }
@@ -279,11 +295,12 @@ function buildSheet(workbook: Workbook, spec: ExcelSheet, sheetName: string, dow
 
     if (labelSpan > 1) {
       sheet.mergeCells(`A${row.number}:${columnLetter(labelSpan)}${row.number}`);
-      row.getCell(1).alignment = { vertical: 'middle', horizontal: 'left' };
+      row.getCell(1).alignment = { vertical: 'middle', horizontal: kind === 'subtotal' ? 'right' : 'left' };
     }
   };
 
-  spec.rows.forEach((values, idx) => writeRow(values, false, idx % 2 === 1));
+  const grouped = Boolean(spec.rowKinds && spec.rowKinds.length > 0);
+  spec.rows.forEach((values, idx) => writeRow(values, spec.rowKinds?.[idx] || 'data', !grouped && idx % 2 === 1));
   const lastDataRow = headerRow.number + spec.rows.length;
 
   if (spec.rows.length === 0) {
@@ -295,7 +312,7 @@ function buildSheet(workbook: Workbook, spec: ExcelSheet, sheetName: string, dow
     cell.border = thinBorder();
   }
 
-  if (spec.totalRow) writeRow(spec.totalRow, true, false);
+  if (spec.totalRow) writeRow(spec.totalRow, 'total', false);
 
   spec.columns.forEach((col, i) => {
     // Teks panjang (nama, keterangan) dibatasi lalu dibungkus ke baris berikutnya
@@ -305,7 +322,7 @@ function buildSheet(workbook: Workbook, spec: ExcelSheet, sheetName: string, dow
 
   // Header tetap terlihat saat digulir + filter kolom
   sheet.views = [{ state: 'frozen', ySplit: headerRow.number, xSplit: 0 }];
-  if (spec.rows.length > 0) {
+  if (spec.rows.length > 0 && !grouped) {
     sheet.autoFilter = `A${headerRow.number}:${lastCol}${lastDataRow}`;
   }
 

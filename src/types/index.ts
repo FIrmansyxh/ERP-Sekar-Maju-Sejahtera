@@ -136,6 +136,11 @@ export interface TransaksiItemBal {
   total_kotor: number; // berat_kg * harga_per_kg
   subtotal_bersih: number; // total_kotor - potongan
   status_timbang?: 'menunggu_timbang' | 'selesai_timbang';
+  /**
+   * Waktu (ms) perubahan berat yang disengaja di perangkat ini: timbang, buka kunci, atau koreksi.
+   * Dipakai saat menggabungkan data agar perubahan terbaru tidak tertimpa versi lama/server.
+   */
+  diubah_lokal_pada?: number;
   sample_label_code?: string; // Kode barcode sample identik
   sample_label_printed?: boolean;
   barang_id?: string;
@@ -203,6 +208,11 @@ export interface SaveTransaksiMeta {
   audit?: { aksi: string; deskripsi: string; rincian_perubahan?: string[] };
   /** Audit sudah dicatat sendiri oleh pemanggil */
   skipAudit?: boolean;
+  /**
+   * Simpanan ini adalah versi utuh kupon (mis. form Edit di Kasir): menimpa data lama apa adanya,
+   * termasuk bal yang dihapus atau diganti nomornya, tanpa digabung dengan versi sebelumnya.
+   */
+  timpaPenuh?: boolean;
 }
 
 export type StatusSample ='sample' | 'dikirim' | 'diterima' | 'disetujui' | 'ditolak' | 'nego';

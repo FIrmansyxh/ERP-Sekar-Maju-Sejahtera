@@ -1765,7 +1765,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
           )}
 
           {/* Tanda Tangan: pembuat = akun yang mengunduh, lainnya ditandatangani & ditulis manual */}
-          <div className="grid grid-cols-3 gap-4 pt-6 text-center text-[11px]">
+          <div className="grid grid-cols-3 gap-4 pt-6 text-center text-[11px] avoid-page-break">
             <div>
               <p className="text-gray-500">Dibuat Oleh,</p>
               <p className="font-semibold text-gray-700">Petugas Administrasi Bal</p>

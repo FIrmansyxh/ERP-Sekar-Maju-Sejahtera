@@ -26,7 +26,8 @@ import {
   TabelHarga, 
   Barang, 
   TransaksiItemBal, 
-  User as UserType 
+  User as UserType,
+  SaveTransaksiMeta
 } from '../../types';
 import { recordAuditLog } from '../../utils/storage';
 import { formatRupiah, generateBalId, generateNextUniqueNoBal, normalizeKg } from '../../utils/formatters';
@@ -41,7 +42,7 @@ interface TransaksiEditModalProps {
   hargaList: TabelHarga[];
   barangList?: Barang[];
   currentUser?: UserType | null;
-  onSaveTransaksi: (newTx: TransaksiPembelian, generatedBarang: Barang | Barang[]) => void;
+  onSaveTransaksi: (newTx: TransaksiPembelian, generatedBarang: Barang | Barang[], meta?: SaveTransaksiMeta) => void;
   onSuccessToast?: (msg: string) => void;
 }
 
@@ -334,7 +335,8 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
       changesList.push('Pembaruan data rincian bal / catatan transaksi');
     }
 
-    // Prepare updated items
+    // Prepare updated items (ditandai sebagai koreksi terbaru agar tidak tertimpa data lama)
+    const waktuKoreksi = Date.now();
     const updatedItems: TransaksiItemBal[] = balRows.map((row, idx) => {
       const generatedBarangId = row.barang_id || (transaksi.barang_ids?.[idx]) || `BAL-${transaksi.transaksi_id.replace('TRX-', '')}-${String(idx + 1).padStart(2, '0')}`;
       return {
@@ -356,6 +358,7 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
         sample_label_code: row.no_bal.trim(),
         sample_label_printed: true,
         catatan: row.catatan || '',
+        diubah_lokal_pada: waktuKoreksi,
       };
     });
 
@@ -437,7 +440,7 @@ export const TransaksiEditModal: React.FC<TransaksiEditModalProps> = ({
       rincian_perubahan: changesList,
     });
     // Save transaction state
-    onSaveTransaksi(updatedTx, updatedBarangs);
+    onSaveTransaksi(updatedTx, updatedBarangs, { timpaPenuh: true });
     if (onSuccessToast) {
       onSuccessToast(`Transaksi ${updatedTx.no_kupon} berhasil diperbarui & dicatat ke Audit Trail!`);
     }

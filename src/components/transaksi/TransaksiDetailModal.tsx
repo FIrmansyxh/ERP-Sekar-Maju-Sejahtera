@@ -82,7 +82,7 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
       await downloadElementAsPdf(
         receiptRef.current,
         `NOTA_TIMBANG_${transaksi.no_kupon.replace(/\//g, '_')}.pdf`,
-        { orientation: 'portrait' }
+        { orientation: 'portrait', judulLanjutan: `Nota Pembelian ${transaksi.no_kupon}` }
       );
       if (onUpdateNotaStatus) {
         onUpdateNotaStatus(transaksi.transaksi_id);

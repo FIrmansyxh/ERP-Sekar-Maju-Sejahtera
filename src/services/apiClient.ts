@@ -47,6 +47,13 @@ export function setAuthToken(token: string | null): void {
   }
 }
 
+/** Batas waktu satu permintaan API, agar layar tidak menunggu tanpa akhir bila server macet */
+export const API_TIMEOUT_MS = 10000;
+
+/** Waktu (ms) terakhir permintaan gagal karena jaringan / batas waktu; membatalkan cache status server */
+let terakhirGagalJaringan = 0;
+export const getTerakhirGagalJaringan = (): number => terakhirGagalJaringan;
+
 export interface ApiResponse<T = any> {
   status: 'success' | 'error' | 'warning';
   message?: string;
@@ -107,10 +114,24 @@ export async function apiRequest<T = any>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const res = await fetch(url, {
-    ...options,
-    headers,
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...options,
+      headers,
+      signal: controller.signal,
+    });
+  } catch (err) {
+    terakhirGagalJaringan = Date.now();
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error(`Server tidak merespons dalam ${API_TIMEOUT_MS / 1000} detik.`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   const contentType = res.headers.get('content-type') || '';
   if (!contentType.includes('application/json')) {

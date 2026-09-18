@@ -324,7 +324,7 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
             </div>
 
             {/* Official 3-Party Signatures */}
-            <div className="grid grid-cols-3 gap-4 pt-2 border-t border-gray-300 text-center text-xs">
+            <div className="grid grid-cols-3 gap-4 pt-2 border-t border-gray-300 text-center text-xs avoid-page-break">
               <div className="space-y-20">
                 <div>
                   <span className="font-bold text-gray-800 block">Petugas Pengirim (Gudang)</span>

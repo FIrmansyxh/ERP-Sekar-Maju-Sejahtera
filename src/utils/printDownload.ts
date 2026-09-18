@@ -16,7 +16,12 @@ import { toPng } from 'html-to-image';
 export async function downloadElementAsPdf(
   element: HTMLElement | null,
   filename: string,
-  options: { orientation?: 'portrait' | 'landscape'; format?: string } = {}
+  options: {
+    orientation?: 'portrait' | 'landscape';
+    format?: string;
+    /** Judul singkat dokumen, ditulis di atas halaman ke-2 dst. sebagai penanda lanjutan */
+    judulLanjutan?: string;
+  } = {}
 ): Promise<void> {
   if (!element) {
     console.error('downloadElementAsPdf: Element target is null');
@@ -166,12 +171,29 @@ export async function downloadElementAsPdf(
       }
     });
 
-    const safeBreaksImg = Array.from(new Set(safeBreaksDom))
+    const maxSliceHeightPx = Math.floor(pageAvailableHeightMm * (imgWidthPx / imgWidthMm));
+
+    // Blok yang tidak boleh terbelah halaman ([data-pdf-keep] / .avoid-page-break), mis. tanda
+    // tangan beserta namanya atau satu kupon di laporan. Titik potong di dalam blok dibuang dan
+    // diganti titik potong tepat di atas blok, sehingga blok pindah utuh ke halaman berikutnya.
+    // Blok yang lebih tinggi dari satu halaman tetap boleh dipotong di antara barisnya.
+    const keepRangesDom: Array<[number, number]> = [];
+    clone.querySelectorAll('[data-pdf-keep], .avoid-page-break').forEach((el) => {
+      const rect = el.getBoundingClientRect();
+      const top = rect.top - cloneRect.top;
+      const bottom = rect.bottom - cloneRect.top;
+      const heightPx = (bottom - top) * scale;
+      if (heightPx > 0 && heightPx <= maxSliceHeightPx * 0.85) {
+        keepRangesDom.push([top, bottom]);
+        if (top > 0) safeBreaksDom.push(top);
+      }
+    });
+    const isInsideKeep = (y: number) => keepRangesDom.some(([top, bottom]) => y > top + 0.5 && y < bottom - 0.5);
+
+    const safeBreaksImg = Array.from(new Set(safeBreaksDom.filter((y) => !isInsideKeep(y))))
       .map((y) => Math.round(y * scale))
       .filter((y) => y > 0 && y < imgHeightPx)
       .sort((a, b) => a - b);
-
-    const maxSliceHeightPx = Math.floor(pageAvailableHeightMm * (imgWidthPx / imgWidthMm));
 
     let currentY = 0;
     const pageCanvases: HTMLCanvasElement[] = [];
@@ -256,6 +278,13 @@ export async function downloadElementAsPdf(
       const sliceHeightMm = (pCanvas.height * imgWidthMm) / imgWidthPx;
 
       pdf.addImage(pImgData, 'PNG', margin, margin, imgWidthMm, sliceHeightMm, undefined, 'FAST');
+
+      // Penanda halaman lanjutan agar batas antarhalaman jelas
+      if (i > 0 && options.judulLanjutan) {
+        pdf.setFontSize(8);
+        pdf.setTextColor(140, 140, 140);
+        pdf.text(`${options.judulLanjutan} (lanjutan)`, margin, 5);
+      }
 
       // Add subtle footer page number for multi-page documents
       if (totalPages > 1) {

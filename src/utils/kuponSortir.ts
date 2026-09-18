@@ -116,6 +116,12 @@ export function buildBarangDariItem(tx: TransaksiPembelian, item: TransaksiItemB
 }
 
 /** Gabungkan dua versi kupon paralel (Sortir + Timbangan) tanpa kehilangan bal. */
+/**
+ * Lama perlindungan perubahan berat lokal: selama jangka ini data dari server/versi lama
+ * yang belum memuat perubahan tersebut tidak boleh menimpanya.
+ */
+export const BATAS_PERUBAHAN_LOKAL_MS = 5 * 60 * 1000;
+
 export function mergeKuponParalel(
   prev: TransaksiPembelian | undefined,
   incoming: TransaksiPembelian
@@ -135,6 +141,31 @@ export function mergeKuponParalel(
       byNoBal.set(key, it);
       continue;
     }
+    // Perubahan berat yang disengaja (timbang, buka kunci, koreksi) memakai tanda waktu:
+    // yang paling baru menang, termasuk berat turun atau kembali 0 saat kunci dibuka.
+    const stampOld = old.diubah_lokal_pada || 0;
+    const stampNew = it.diubah_lokal_pada || 0;
+    if (stampNew > stampOld) {
+      byNoBal.set(key, {
+        ...old,
+        ...it,
+        item_id: it.item_id || old.item_id,
+        barang_id: it.barang_id || old.barang_id,
+      });
+      continue;
+    }
+    if (stampOld > stampNew && Date.now() - stampOld < BATAS_PERUBAHAN_LOKAL_MS) {
+      byNoBal.set(key, {
+        ...it,
+        ...old,
+        item_id: old.item_id || it.item_id,
+        barang_id: old.barang_id || it.barang_id,
+        kode_grade: it.kode_grade || old.kode_grade,
+        harga_per_kg: it.harga_per_kg || old.harga_per_kg,
+      });
+      continue;
+    }
+
     const oldW = old.berat_kg || 0;
     const newW = it.berat_kg || 0;
     if (newW >= oldW) {
@@ -197,6 +228,7 @@ export type HasilTimbangBal = Partial<Pick<
   | 'total_kotor'
   | 'subtotal_bersih'
   | 'status_timbang'
+  | 'diubah_lokal_pada'
 >>;
 
 /** Menerapkan hasil timbang satu bal ke versi kupon terbaru. Null bila bal sudah dihapus Sortir. */

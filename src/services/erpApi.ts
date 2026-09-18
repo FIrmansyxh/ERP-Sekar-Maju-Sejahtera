@@ -3,8 +3,9 @@
  * Mengimplementasikan pola "API-First with Offline LocalStorage Fallback".
  */
 
-import { api, checkBackendHealth, setAuthToken } from './apiClient';
+import { api, checkBackendHealth, setAuthToken, getTerakhirGagalJaringan } from './apiClient';
 import { hashPassword } from '../utils/crypto';
+import { beratBrutoItemSample } from '../utils/beratKirim';
 import { 
   Petani, 
   Barang, 
@@ -38,14 +39,37 @@ import {
 
 export class ErpApiService {
   private static isOnlineState: boolean | null = null;
+  private static cekServerTerakhir: { online: boolean; pada: number } | null = null;
+  private static cekServerBerjalan: Promise<boolean> | null = null;
+  /** Status server disimpan sebentar agar setiap klik tidak menunggu cek server (maks. 3 detik) lagi */
+  private static readonly MASA_BERLAKU_ONLINE_MS = 60000;
+  private static readonly MASA_BERLAKU_OFFLINE_MS = 10000;
 
   /**
-   * Cek status konektivitas server backend Laravel
+   * Cek status konektivitas server backend Laravel.
+   * Hasil disimpan sementara dan pengecekan yang berjalan bersamaan digabung menjadi satu.
    */
   public static async isBackendOnline(): Promise<boolean> {
-    const online = await checkBackendHealth();
-    this.isOnlineState = online;
-    return online;
+    const cache = this.cekServerTerakhir;
+    if (
+      cache &&
+      Date.now() - cache.pada < (cache.online ? this.MASA_BERLAKU_ONLINE_MS : this.MASA_BERLAKU_OFFLINE_MS) &&
+      getTerakhirGagalJaringan() <= cache.pada
+    ) {
+      return cache.online;
+    }
+    if (!this.cekServerBerjalan) {
+      this.cekServerBerjalan = checkBackendHealth()
+        .then((online) => {
+          this.cekServerTerakhir = { online, pada: Date.now() };
+          this.isOnlineState = online;
+          return online;
+        })
+        .finally(() => {
+          this.cekServerBerjalan = null;
+        });
+    }
+    return this.cekServerBerjalan;
   }
 
   public static getCachedOnlineStatus(): boolean {
@@ -820,7 +844,16 @@ export class ErpApiService {
   }
 
   public static mapBackendPengiriman(p: any): PengirimanBarang {
+    const hargaDeal: Record<string, number> = {};
+    const kodeHarga: Record<string, string> = {};
+    (p.items || []).forEach((it: any) => {
+      if (!it.barang_id) return;
+      if (Number(it.harga_deal_per_kg) > 0) hargaDeal[it.barang_id] = Number(it.harga_deal_per_kg);
+      if (it.kode_harga_jual) kodeHarga[it.barang_id] = String(it.kode_harga_jual);
+    });
     return {
+      ...(Object.keys(hargaDeal).length > 0 ? { harga_deal_map: hargaDeal } : {}),
+      ...(Object.keys(kodeHarga).length > 0 ? { kode_harga_jual_map: kodeHarga } : {}),
       pengiriman_id: p.pengiriman_id,
       no_surat_jalan: p.no_surat_jalan,
       tujuan: p.tujuan,
@@ -834,7 +867,79 @@ export class ErpApiService {
       batch_sample_id_ref: p.batch_sample_id_ref,
       barang_ids: (p.items || []).map((it: any) => it.barang_id),
       total_bal: (p.items || []).length,
-      total_berat_kg: 0,
+      total_berat_kg: Number(p.total_berat_kg) || 0,
+    };
+  }
+
+  /**
+   * Gabungkan data DO dari server ke data lokal. Server menjadi acuan untuk ID, status, dan
+   * nilai yang dikirimnya; rincian yang tidak disimpan server (berat kirim per bal, total berat,
+   * petugas, rincian grade) tetap memakai data lokal. Nilai kosong / 0 dari server diabaikan.
+   */
+  public static gabungPengirimanServer(
+    lokal: PengirimanBarang | undefined,
+    server: PengirimanBarang
+  ): PengirimanBarang {
+    if (!lokal) return server;
+    const hasil = { ...lokal } as PengirimanBarang;
+    (Object.keys(server) as (keyof PengirimanBarang)[]).forEach((k) => {
+      const v = server[k];
+      const kosong =
+        v === undefined || v === null || v === '' ||
+        (typeof v === 'number' && v === 0) ||
+        (Array.isArray(v) && v.length === 0);
+      if (!kosong) (hasil as any)[k] = v;
+    });
+    return hasil;
+  }
+
+  /**
+   * Gabungkan batch sample dari server ke data lokal. Server menjadi acuan untuk ID dan hasil
+   * evaluasi pabrik; No. Surat Sample yang diketik manual serta rincian bal tetap dari data lokal.
+   */
+  public static gabungBatchServer(
+    lokal: BatchPengirimanSample | undefined,
+    server: BatchPengirimanSample
+  ): BatchPengirimanSample {
+    if (!lokal) return server;
+    const itemsLokal = lokal.items || [];
+    const sumber = server.items && server.items.length > 0 ? server.items : itemsLokal;
+    const items = sumber.map((sv) => {
+      const lk = itemsLokal.find(
+        (l) => (sv.barang_id && l.barang_id === sv.barang_id) || (sv.sample_item_id && l.sample_item_id === sv.sample_item_id)
+      );
+      if (!lk || lk === sv) return sv;
+      return {
+        ...lk,
+        sample_item_id: sv.sample_item_id || lk.sample_item_id,
+        status_item: sv.status_item || lk.status_item,
+        harga_tawaran_kg: sv.harga_tawaran_kg || lk.harga_tawaran_kg,
+        harga_deal_kg: sv.harga_deal_kg ?? lk.harga_deal_kg,
+        kode_harga_jual: sv.kode_harga_jual || lk.kode_harga_jual,
+        alasan_tolak: sv.alasan_tolak ?? lk.alasan_tolak,
+        catatan_nego: sv.catatan_nego ?? lk.catatan_nego,
+        tanggal_evaluasi: sv.tanggal_evaluasi ?? lk.tanggal_evaluasi,
+        sudah_dikirim_do: Boolean(sv.sudah_dikirim_do || lk.sudah_dikirim_do),
+      };
+    });
+    const disetujui = items.filter((it) => it.status_item === 'disetujui');
+    return {
+      ...lokal,
+      batch_id: server.batch_id || lokal.batch_id,
+      status: server.status || lokal.status,
+      tanggal_respon: server.tanggal_respon || lokal.tanggal_respon,
+      petugas_qc_pabrik: server.petugas_qc_pabrik || lokal.petugas_qc_pabrik,
+      catatan: server.catatan || lokal.catatan,
+      items,
+      total_sample_bal: items.length,
+      total_bal_disetujui: disetujui.length,
+      total_bal_ditolak: items.filter((it) => it.status_item === 'ditolak').length,
+      total_bal_nego: items.filter((it) => it.status_item === 'nego').length,
+      total_estimasi_nilai: items.reduce((s, it) => s + beratBrutoItemSample(it) * (it.harga_tawaran_kg || 0), 0),
+      total_nilai_deal: disetujui.reduce(
+        (s, it) => s + beratBrutoItemSample(it) * (it.harga_deal_kg || it.harga_tawaran_kg || 0),
+        0
+      ),
     };
   }
 
@@ -844,7 +949,12 @@ export class ErpApiService {
       if (isOnline) {
         const res = await api.get<any[]>('/sample-batch');
         if (res.status === 'success' && Array.isArray(res.data)) {
-          const mapped = res.data.map((b: any) => this.mapBackendBatchSample(b));
+          const lokal = loadBatchSampleData();
+          const mapped = res.data.map((b: any) => {
+            const server = this.mapBackendBatchSample(b);
+            const cocok = lokal.find((l) => l.batch_id === server.batch_id || l.kode_batch === server.kode_batch);
+            return this.gabungBatchServer(cocok, server);
+          });
           saveBatchSampleData(mapped);
           return { data: mapped, fromBackend: true };
         }
@@ -860,6 +970,8 @@ export class ErpApiService {
       const isOnline = await this.isBackendOnline();
       if (isOnline) {
         const payload = {
+          kode_batch: batch.kode_batch,
+          dikirim_oleh: batch.dikirim_oleh,
           tujuan_buyer: batch.tujuan_buyer,
           permintaan_buyer: batch.permintaan_buyer,
           tanggal_kirim: batch.tanggal_kirim || new Date().toISOString().split('T')[0],
@@ -873,7 +985,7 @@ export class ErpApiService {
         };
         const res = await api.post<any>('/sample-batch', payload);
         if (res.data) {
-          const savedBatch = this.mapBackendBatchSample(res.data);
+          const savedBatch = this.gabungBatchServer(batch as BatchPengirimanSample, this.mapBackendBatchSample(res.data));
           const list = loadBatchSampleData();
           saveBatchSampleData([savedBatch, ...list.filter(b => b.batch_id !== savedBatch.batch_id && b.batch_id !== batch.batch_id)]);
           return savedBatch;
@@ -913,8 +1025,8 @@ export class ErpApiService {
         };
         const res = await api.put<any>(`/sample-batch/${batch.batch_id}`, payload);
         if (res.data) {
-          const saved = this.mapBackendBatchSample(res.data);
-          const list = loadBatchSampleData().map((b) => (b.batch_id === saved.batch_id ? saved : b));
+          const saved = this.gabungBatchServer(batch, this.mapBackendBatchSample(res.data));
+          const list = loadBatchSampleData().map((b) => (b.batch_id === saved.batch_id || b.batch_id === batch.batch_id ? saved : b));
           saveBatchSampleData(list);
           return saved;
         }
@@ -933,7 +1045,14 @@ export class ErpApiService {
       if (isOnline) {
         const res = await api.get<any[]>('/pengiriman');
         if (res.status === 'success' && Array.isArray(res.data)) {
-          const mapped = res.data.map((p: any) => this.mapBackendPengiriman(p));
+          const lokal = loadPengirimanData();
+          const mapped = res.data.map((p: any) => {
+            const server = this.mapBackendPengiriman(p);
+            const cocok = lokal.find(
+              (l) => l.pengiriman_id === server.pengiriman_id || (server.no_surat_jalan && l.no_surat_jalan === server.no_surat_jalan)
+            );
+            return this.gabungPengirimanServer(cocok, server);
+          });
           savePengirimanData(mapped);
           return { data: mapped, fromBackend: true };
         }
@@ -969,11 +1088,7 @@ export class ErpApiService {
         };
         const res = await api.post<any>('/pengiriman', payload);
         if (res.data) {
-          const saved = {
-            ...this.mapBackendPengiriman(res.data),
-            kode_harga_jual_map: pengiriman.kode_harga_jual_map,
-            harga_deal_map: pengiriman.harga_deal_map,
-          } as PengirimanBarang;
+          const saved = this.gabungPengirimanServer(pengiriman as PengirimanBarang, this.mapBackendPengiriman(res.data));
           const list = loadPengirimanData();
           savePengirimanData([
             saved,

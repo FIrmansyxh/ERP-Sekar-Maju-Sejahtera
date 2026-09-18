@@ -178,7 +178,11 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
           ? `NOTA_TIMBANG_${foundTransaksi.no_kupon.replace(/[/\\?%*:|"<>]/g, '_')}.pdf`
           : `SURAT_JALAN_${(foundPengiriman?.no_surat_jalan || id).replace(/[/\\?%*:|"<>]/g, '_')}.pdf`;
 
-      await downloadElementAsPdf(printAreaRef.current, filename, { orientation: 'portrait' });
+      const judulLanjutan =
+        type === 'nota' && foundTransaksi
+          ? `Nota Pembelian ${foundTransaksi.no_kupon}`
+          : `Surat Jalan ${foundPengiriman?.no_surat_jalan || ''}`.trim();
+      await downloadElementAsPdf(printAreaRef.current, filename, { orientation: 'portrait', judulLanjutan });
     } catch (err) {
       console.error('PDF download error:', err);
       // Fallback to browser print dialog if html2canvas/jspdf fails

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useDeferredValue } from 'react';
 import { 
   FileText, 
   Search, 
@@ -23,15 +23,16 @@ import {
 
 import { TransaksiPembelian, Petani } from '../../types';
 import { downloadElementAsPdf } from '../../utils/printDownload';
-import { downloadExcelReport, periodeInfo, todayStamp } from '../../utils/excelExport';
+import { downloadExcelReport, periodeInfo, todayStamp, ExcelCellValue, ExcelRowKind } from '../../utils/excelExport';
 import { isTransaksiLunas, labelStatusBayar } from '../../utils/statusBayar';
 import { KopSurat } from '../common/KopSurat';
 import { SortIcon } from '../common/SortIcon';
 import { loadCurrentUser } from '../../utils/storage';
 import { formatDateHariBulanTahun } from '../../utils/formatters';
 import { hitungNilaiBal, hitungModalTransaksi } from '../../utils/finance';
+import { POTONGAN_GANTI_TIKAR } from '../../config/aturanTimbang';
 
-export type SortField = 'default' | 'tanggal' | 'kupon' | 'petani' | 'no_bal' | 'kode_beli' | 'bruto' | 'netto' | 'potongan_kuli' | 'potongan_tikar' | 'total_harga' | 'jumlah_bayar';
+export type SortField = 'default' | 'tanggal' | 'kupon' | 'petani' | 'bruto' | 'netto' | 'potongan_tali' | 'potongan_kuli' | 'potongan_tikar' | 'total_harga' | 'jumlah_bayar';
 
 interface LaporanPembelianBarangViewProps {
   transaksiList: TransaksiPembelian[];
@@ -89,21 +90,89 @@ const SortableHeader: React.FC<SortableHeaderProps> = ({
   );
 };
 
-const ExpandableNoBal: React.FC<{ items: any[], defaultNoBal?: string }> = ({ items, defaultNoBal }) => {
-  const [expanded, setExpanded] = useState(false);
-  const text = (items && items.length > 0) ? items.map(it => it.no_bal || it.barcode || it.sample_label_code).filter(Boolean).join(", ") : (defaultNoBal || "-");
-  if (text.length <= 15) {
-    return <div className="break-words whitespace-normal leading-tight text-center">{text}</div>;
-  }
-  return (
-    <div className="cursor-pointer group flex flex-col items-center justify-center text-center" onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}>
-      <div className={`leading-tight transition-all duration-200 ${expanded ? "break-words whitespace-normal" : "truncate max-w-[100px]"}`}>{text}</div>
-      <div className={`text-[9px] font-bold text-blue-600 mt-0.5 transition-opacity ${expanded ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
-        {expanded ? "Sembunyikan" : "Lihat Semua"}
-      </div>
-    </div>
-  );
-};
+interface RincianBal {
+  key: string;
+  noBal: string;
+  hargaBeli: number;
+  bruto: number;
+  netto: number;
+  tikar: number;
+  nilaiBeli: number;
+}
+
+interface RingkasanKupon {
+  rincian: RincianBal[];
+  jumlahBal: number;
+  bruto: number;
+  netto: number;
+  tali: number;
+  kuli: number;
+  tikar: number;
+  nilaiBeli: number;
+  jumlahBayar: number;
+}
+
+/**
+ * Rincian setiap bal dan subtotal satu kupon. Potongan kupon memakai nilai yang
+ * tercatat di transaksi (yang dibayar Kasir), sedangkan berat dan nilai beli
+ * dijumlahkan dari rincian bal agar subtotal selalu sama dengan baris detailnya.
+ */
+function ringkasKupon(row: TransaksiPembelian): RingkasanKupon {
+  const items = row.items || [];
+  const rincian: RincianBal[] = items.length > 0
+    ? items.map((it, i) => {
+        const netto = Number(it.berat_kg || 0);
+        const hargaBeli = Number(it.harga_per_kg || 0);
+        return {
+          key: it.item_id || `${row.transaksi_id}-${i}`,
+          noBal: it.no_bal || it.barcode || it.sample_label_code || '-',
+          hargaBeli,
+          bruto: Number(it.berat_bruto_kg || 0) || (netto > 0 ? netto + Number(it.potongan_tara_kg || 0) : 0),
+          netto,
+          tikar: Number(it.potongan_tikar ?? (it.ganti_tikar ? POTONGAN_GANTI_TIKAR : 0)),
+          nilaiBeli: hitungNilaiBal({ berat_kg: netto, harga_per_kg: hargaBeli }),
+        };
+      })
+    : [{
+        key: row.transaksi_id,
+        noBal: row.no_bal || '-',
+        hargaBeli: Number(row.harga_per_kg || 0),
+        bruto: row.jenis_timbang === 'bruto'
+          ? Number(row.berat_terukur_kg || 0)
+          : (row.berat_kg ? Number(row.berat_kg) + Number(row.potongan_tara_kg || 0) : 0),
+        netto: Number(row.berat_kg || 0),
+        tikar: Number(row.potongan_tikar || 0),
+        nilaiBeli: hitungModalTransaksi(row),
+      }];
+
+  const kuli = Number(row.potongan_kuli || 0);
+  const tali = Number(row.potongan_tali ?? items.reduce((s, it) => s + Number(it.potongan_tali || 0), 0));
+  const tikar = Number(row.potongan_tikar || 0);
+  const nilaiBeli = rincian.reduce((s, b) => s + b.nilaiBeli, 0);
+  const totalPotongan = Number(row.total_potongan ?? (kuli + tali + tikar));
+  const jumlahBayar = row.harga_final !== undefined && row.harga_final !== null
+    ? Number(row.harga_final)
+    : nilaiBeli - totalPotongan;
+
+  return {
+    rincian,
+    jumlahBal: items.length > 0 ? items.length : (row.total_bal || 1),
+    bruto: rincian.reduce((s, b) => s + b.bruto, 0),
+    netto: rincian.reduce((s, b) => s + b.netto, 0),
+    tali,
+    kuli,
+    tikar,
+    nilaiBeli,
+    jumlahBayar,
+  };
+}
+
+/** Berat tampil apa adanya sampai 3 desimal, kosong ditandai "-" */
+const formatKg = (n: number) =>
+  n > 0 ? n.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 3 }) : '-';
+
+/** Rupiah tanpa simbol untuk isi tabel, nol ditandai "-" */
+const formatRp = (n: number) => (n ? Math.round(n).toLocaleString('id-ID') : '-');
 
 export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProps> = ({
   transaksiList = [],
@@ -190,13 +259,20 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
   };
 
   const handleDownloadPdf = async () => {
-    if (!printReportRef.current) return;
+    // Tabel PDF baru dibangun saat diunduh (tidak ikut dirender setiap kali laporan dibuka)
     setIsGeneratingPdf(true);
+    for (let i = 0; i < 20 && !printReportRef.current; i++) {
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    if (!printReportRef.current) {
+      setIsGeneratingPdf(false);
+      return;
+    }
     try {
       await downloadElementAsPdf(
         printReportRef.current,
         `Laporan_Pembelian_Barang_${new Date().toISOString().slice(0, 10)}.pdf`,
-        { orientation: 'landscape' }
+        { orientation: 'landscape', judulLanjutan: 'Laporan Rekapitulasi Pembelian Barang' }
       );
     } finally {
       setIsGeneratingPdf(false);
@@ -368,6 +444,13 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
     });
   }, [transaksiList, appliedFilters]);
 
+  // Rincian bal & subtotal per kupon, dipakai tabel, urutan, total, Excel, dan PDF
+  const ringkasanMap = useMemo(
+    () => new Map(filteredData.map((row) => [row, ringkasKupon(row)] as const)),
+    [filteredData]
+  );
+  const ringkasan = (row: TransaksiPembelian): RingkasanKupon => ringkasanMap.get(row) ?? ringkasKupon(row);
+
   // Sorted Transaksi Data
   const sortedData = useMemo(() => {
     if (sortConfigs.length === 0) {
@@ -396,65 +479,27 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
             comparison = pA.localeCompare(pB, undefined, { numeric: true, sensitivity: 'base' });
             break;
           }
-          case 'no_bal': {
-            const bA = a.no_bal || '';
-            const bB = b.no_bal || '';
-            comparison = bA.localeCompare(bB, undefined, { numeric: true, sensitivity: 'base' });
+          case 'bruto':
+            comparison = ringkasan(a).bruto - ringkasan(b).bruto;
             break;
-          }
-          case 'kode_beli': {
-            const getUniqueStr = (t: TransaksiPembelian) => {
-              const rowGrades = Array.from(new Set(t.items?.map(i => i.kode_grade?.toUpperCase()) || [])).filter(Boolean);
-              if (rowGrades.length > 0) return rowGrades.sort().join(',');
-              return t.kode_grade || '';
-            };
-            const kA = getUniqueStr(a);
-            const kB = getUniqueStr(b);
-            comparison = kA.localeCompare(kB, undefined, { numeric: true, sensitivity: 'base' });
+          case 'netto':
+            comparison = ringkasan(a).netto - ringkasan(b).netto;
             break;
-          }
-          case 'bruto': {
-            const brA = a.jenis_timbang === 'bruto' ? (a.berat_terukur_kg || a.berat_kg + 2) : 0;
-            const brB = b.jenis_timbang === 'bruto' ? (b.berat_terukur_kg || b.berat_kg + 2) : 0;
-            comparison = brA - brB;
+          case 'potongan_tali':
+            comparison = ringkasan(a).tali - ringkasan(b).tali;
             break;
-          }
-          case 'netto': {
-            const ntA = a.berat_kg || 0;
-            const ntB = b.berat_kg || 0;
-            comparison = ntA - ntB;
+          case 'potongan_kuli':
+            comparison = ringkasan(a).kuli - ringkasan(b).kuli;
             break;
-          }
-          case 'potongan_kuli': {
-            const ptA = Number(a.potongan_kuli || 0);
-            const ptB = Number(b.potongan_kuli || 0);
-            comparison = ptA - ptB;
+          case 'potongan_tikar':
+            comparison = ringkasan(a).tikar - ringkasan(b).tikar;
             break;
-          }
-          case 'potongan_tikar': {
-            const ptA = Number(a.potongan_tikar || 0);
-            const ptB = Number(b.potongan_tikar || 0);
-            comparison = ptA - ptB;
+          case 'total_harga':
+            comparison = ringkasan(a).nilaiBeli - ringkasan(b).nilaiBeli;
             break;
-          }
-          case 'total_harga': {
-            const thA = hitungModalTransaksi(a);
-            const thB = hitungModalTransaksi(b);
-            comparison = thA - thB;
+          case 'jumlah_bayar':
+            comparison = ringkasan(a).jumlahBayar - ringkasan(b).jumlahBayar;
             break;
-          }
-          case 'jumlah_bayar': {
-            const thA = hitungModalTransaksi(a);
-            const ptA = Number(a.total_potongan || 0);
-            const jA = a.harga_final !== undefined && a.harga_final !== null ? a.harga_final : (thA - ptA);
-            
-            const thB = hitungModalTransaksi(b);
-            const ptB = Number(b.total_potongan || 0);
-            const jB = b.harga_final !== undefined && b.harga_final !== null ? b.harga_final : (thB - ptB);
-            
-            comparison = jA - jB;
-            break;
-          }
         }
         
         if (comparison !== 0) {
@@ -463,12 +508,13 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
       }
       return 0;
     });
-  }, [filteredData, sortConfigs]);
+  }, [filteredData, sortConfigs, ringkasanMap]);
 
-  // Real-time table search within sorted results
+  // Real-time table search within sorted results (ditunda agar ketikan tetap lancar pada data besar)
+  const tableSearchTertunda = useDeferredValue(tableSearch);
   const searchedData = useMemo(() => {
-    if (!tableSearch.trim()) return sortedData;
-    const q = tableSearch.toLowerCase().trim();
+    if (!tableSearchTertunda.trim()) return sortedData;
+    const q = tableSearchTertunda.toLowerCase().trim();
     return sortedData.filter((row) => {
       const matchKupon = (row.no_kupon || '').toLowerCase().includes(q);
       const matchPetani = (row.nama_petani || '').toLowerCase().includes(q);
@@ -479,49 +525,37 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
       );
       return matchKupon || matchPetani || matchNoBal || matchGrade || matchItems;
     });
-  }, [sortedData, tableSearch]);
+  }, [sortedData, tableSearchTertunda]);
 
-  // Totals Calculation 
+  // Totals Calculation
   const totals = useMemo(() => {
     let totalBal = 0;
     let totalBruto = 0;
     let totalNetto = 0;
-    let totalHargaBeliRate = 0;
+    let totalPotonganTali = 0;
     let totalPotonganKuli = 0;
     let totalPotonganTikar = 0;
-    let totalPotonganAll = 0;
     let totalNilaiHargaBeli = 0;
     let totalJumlahBayar = 0;
     let totalJumlahBayarLunas = 0;
     let totalJumlahBayarKredit = 0;
 
     sortedData.forEach((row) => {
-      const balCount = row.total_bal || (row.items && row.items.length > 0 ? row.items.length : 1);
-      const bruto = row.jenis_timbang === 'bruto' ? (row.berat_terukur_kg || row.berat_kg + 2) : 0;
-      const netto = row.berat_kg || 0;
-      const hrgBeli = row.harga_per_kg || 0;
-      const potKuli = Number(row.potongan_kuli || 0);
-      const potTikar = Number(row.potongan_tikar || 0);
-      const potTotal = Number(row.total_potongan !== undefined ? row.total_potongan : (potKuli + potTikar));
-      // Hitung murni modal tembakau (Netto * Harga Beli) menggunakan helper terpusat
-      const subtotalHrgBeli = hitungModalTransaksi(row);
-      const jmlBayar = row.harga_final !== undefined && row.harga_final !== null ? row.harga_final : (subtotalHrgBeli - potTotal);
-
-      totalBal += balCount;
-      totalBruto += bruto;
-      totalNetto += netto;
-      totalHargaBeliRate += hrgBeli;
-      totalPotonganKuli += potKuli;
-      totalPotonganTikar += potTikar;
-      totalPotonganAll += potTotal;
-      totalNilaiHargaBeli += subtotalHrgBeli;
-      totalJumlahBayar += jmlBayar;
+      const r = ringkasan(row);
+      totalBal += r.jumlahBal;
+      totalBruto += r.bruto;
+      totalNetto += r.netto;
+      totalPotonganTali += r.tali;
+      totalPotonganKuli += r.kuli;
+      totalPotonganTikar += r.tikar;
+      totalNilaiHargaBeli += r.nilaiBeli;
+      totalJumlahBayar += r.jumlahBayar;
 
       // Kupon yang belum dibayar di Kasir (termasuk status kosong) masih kredit
       if (isTransaksiLunas(row)) {
-        totalJumlahBayarLunas += jmlBayar;
+        totalJumlahBayarLunas += r.jumlahBayar;
       } else {
-        totalJumlahBayarKredit += jmlBayar;
+        totalJumlahBayarKredit += r.jumlahBayar;
       }
     });
 
@@ -529,17 +563,16 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
       totalBal,
       totalBruto,
       totalNetto,
-      totalHargaBeliRate,
+      totalPotonganTali,
       totalPotonganKuli,
       totalPotonganTikar,
-      totalPotonganAll,
       totalNilaiHargaBeli,
       totalJumlahBayar,
       totalJumlahBayarLunas,
       totalJumlahBayarKredit,
       count: sortedData.length,
     };
-  }, [sortedData]);
+  }, [sortedData, ringkasanMap]);
 
 
   // Export Excel
@@ -557,32 +590,18 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
       ].filter(Boolean).join(' · '),
     ];
 
-    const rows = sortedData.map((row, idx) => {
-      const bruto = row.jenis_timbang === 'bruto' ? (row.berat_terukur_kg || row.berat_kg + 2) : 0;
-      const subtotalHrgBeli = hitungModalTransaksi(row);
-      const potKuli = Number(row.potongan_kuli || 0);
-      const potTikar = Number(row.potongan_tikar || 0);
-      const totalPot = Number(row.total_potongan !== undefined ? row.total_potongan : (potKuli + potTikar));
-      const jmlBayar = row.harga_final !== undefined && row.harga_final !== null ? row.harga_final : (subtotalHrgBeli - totalPot);
-      const rowGrades = getTransactionUniqueGrades(row);
-      const balCount = row.total_bal || (row.items && row.items.length > 0 ? row.items.length : 1);
-
-      return [
-        idx + 1,
-        row.tanggal_transaksi,
-        row.no_kupon || '-',
-        row.nama_petani || '-',
-        balCount,
-        (row.items && row.items.length > 0) ? row.items.map(it => it.no_bal || it.barcode || it.sample_label_code).filter(Boolean).join(', ') : (row.no_bal || '-'),
-        rowGrades.length > 0 ? rowGrades.join(', ') : (row.kode_grade || '-'),
-        bruto > 0 ? bruto : '-',
-        row.berat_kg || 0,
-        potKuli,
-        potTikar,
-        subtotalHrgBeli,
-        jmlBayar,
-        labelStatusBayar(row),
-      ];
+    const rows: ExcelCellValue[][] = [];
+    const rowKinds: ExcelRowKind[] = [];
+    sortedData.forEach((row, idx) => {
+      const r = ringkasan(row);
+      rows.push([idx + 1, row.tanggal_transaksi, row.no_kupon || '-', row.nama_petani || '-', '', '', '', '', '', '', '', '', '', labelStatusBayar(row)]);
+      rowKinds.push('group');
+      r.rincian.forEach((bal) => {
+        rows.push(['', '', '', '', bal.noBal, bal.hargaBeli, bal.bruto || '', bal.netto || '', '', '', bal.tikar || '', bal.nilaiBeli, '', '']);
+        rowKinds.push('data');
+      });
+      rows.push([`Total ${row.no_kupon || 'Kupon'} (${r.jumlahBal} bal)`, '', '', '', '', '', r.bruto, r.netto, r.tali, r.kuli, r.tikar, r.nilaiBeli, r.jumlahBayar, '']);
+      rowKinds.push('subtotal');
     });
 
     downloadExcelReport(`Laporan_Pembelian_Barang_${todayStamp()}`, [
@@ -595,23 +614,24 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
           { header: 'Tanggal', type: 'date' },
           { header: 'Kupon', align: 'center' },
           { header: 'Petani' },
-          { header: 'Jumlah Bal', type: 'integer', align: 'center' },
-          { header: 'No Bal', width: 28 },
-          { header: 'Kode Beli', align: 'center' },
+          { header: 'No Bal', align: 'center' },
+          { header: 'Harga Beli (Rp/Kg)', type: 'rupiah' },
           { header: 'Bruto (Kg)', type: 'kg' },
           { header: 'Netto (Kg)', type: 'kg' },
-          { header: 'Potongan Kuli (Rp)', type: 'rupiah' },
-          { header: 'Potongan Tikar (Rp)', type: 'rupiah' },
-          { header: 'Total Harga Beli (Rp)', type: 'rupiah' },
+          { header: 'Tali (Rp)', type: 'rupiah' },
+          { header: 'Kuli (Rp)', type: 'rupiah' },
+          { header: 'Tikar (Rp)', type: 'rupiah' },
+          { header: 'Nilai Beli (Rp)', type: 'rupiah' },
           { header: 'Jumlah Bayar (Rp)', type: 'rupiah' },
           { header: 'Status Bayar', align: 'center' },
         ],
         rows,
+        rowKinds,
         totalRow: [
-          `TOTAL (${totals.count} transaksi)`, '', '', '',
-          totals.totalBal, '', '',
+          `TOTAL (${totals.count} kupon, ${totals.totalBal} bal)`, '', '', '', '', '',
           totals.totalBruto,
           totals.totalNetto,
+          totals.totalPotonganTali,
           totals.totalPotonganKuli,
           totals.totalPotonganTikar,
           totals.totalNilaiHargaBeli,
@@ -621,6 +641,152 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
       },
     ]);
   };
+
+  // Tabel utama dibangun ulang hanya bila data, urutan, atau total berubah (bukan setiap ketikan di kotak cari)
+  const tabelUtama = useMemo(() => (
+    <table className="no-zebra w-full min-w-[960px] table-fixed text-left text-xs border-collapse">
+      {/* Lebar kolom proporsional sesuai isi, agar kolom Petani tidak menelan sisa ruang */}
+      <colgroup>
+        <col className="w-[4%]" />
+        <col className="w-[8%]" />
+        <col className="w-[7%]" />
+        <col className="w-[12%]" />
+        <col className="w-[8%]" />
+        <col className="w-[8%]" />
+        <col className="w-[7%]" />
+        <col className="w-[7%]" />
+        <col className="w-[6%]" />
+        <col className="w-[6%]" />
+        <col className="w-[6%]" />
+        <col className="w-[10%]" />
+        <col className="w-[11%]" />
+      </colgroup>
+      <thead className="bg-gray-100 sticky top-0 z-20 shadow-sm">
+        <tr className="text-gray-700 font-bold border-b border-gray-200 uppercase text-[10px] tracking-wider">
+          <th
+            className="py-2 px-2 text-center border-r border-gray-200 cursor-pointer hover:bg-gray-200/80 transition select-none w-px whitespace-nowrap"
+            onClick={() => {
+              setSortConfigs([]);
+            }}
+            title="Klik untuk reset urutan default"
+          >
+            <div className="flex items-center justify-center space-x-1">
+              <span>No</span>
+              {sortConfigs.length > 0 && renderSortIndicator('default')}
+            </div>
+          </th>
+          <SortableHeader title="Tanggal" widthClass="" sortField="tanggal" sortConfigs={sortConfigs} onSort={handleSort} />
+          <SortableHeader title="Kupon" widthClass="" sortField="kupon" sortConfigs={sortConfigs} onSort={handleSort} />
+          <SortableHeader title="Petani" widthClass="" sortField="petani" sortConfigs={sortConfigs} onSort={handleSort} />
+          <SortableHeader title="No Bal" widthClass="" align="center" />
+          <SortableHeader title="Harga Beli (Rp/Kg)" widthClass="" align="right" />
+          <SortableHeader title="Bruto (Kg)" widthClass="" align="right" sortField="bruto" sortConfigs={sortConfigs} onSort={handleSort} />
+          <SortableHeader title="Netto (Kg)" widthClass="" align="right" sortField="netto" sortConfigs={sortConfigs} onSort={handleSort} />
+          <SortableHeader title="Tali (Rp)" widthClass="" align="right" sortField="potongan_tali" sortConfigs={sortConfigs} onSort={handleSort} />
+          <SortableHeader title="Kuli (Rp)" widthClass="" align="right" sortField="potongan_kuli" sortConfigs={sortConfigs} onSort={handleSort} />
+          <SortableHeader title="Tikar (Rp)" widthClass="" align="right" sortField="potongan_tikar" sortConfigs={sortConfigs} onSort={handleSort} />
+          <SortableHeader title="Nilai Beli (Rp)" widthClass="" align="right" sortField="total_harga" sortConfigs={sortConfigs} onSort={handleSort} />
+          <SortableHeader title="Jumlah Bayar (Rp)" widthClass="" align="right" className="bg-red-50/50 font-extrabold text-[#b81d24]" sortField="jumlah_bayar" sortConfigs={sortConfigs} onSort={handleSort} />
+        </tr>
+      </thead>
+
+      {searchedData.length === 0 ? (
+        <tbody>
+          <tr>
+            <td colSpan={13} className="py-10 text-center text-gray-500">
+              <FileText className="w-8 h-8 mx-auto text-gray-300 mb-2" />
+              <p className="font-semibold">Tidak ada data transaksi yang cocok dengan pencarian.</p>
+              <p className="text-[11px] text-gray-400 mt-1">Coba periksa kata kunci pencarian atau bersihkan kolom pencarian.</p>
+            </td>
+          </tr>
+        </tbody>
+      ) : (
+        searchedData.map((row, idx) => {
+          const r = ringkasan(row);
+          const lunas = isTransaksiLunas(row);
+
+          return (
+            <tbody key={row.transaksi_id || idx} className="border-t-2 border-gray-300">
+              {/* 1. Baris kupon */}
+              <tr className="bg-slate-100 text-gray-900">
+                <td className="py-2 px-2 text-center font-mono text-[11px] font-bold text-gray-600 whitespace-nowrap">{idx + 1}</td>
+                <td className="py-2 px-2 font-mono text-[11px] text-gray-700 whitespace-nowrap">{formatDateHariBulanTahun(row.tanggal_transaksi)}</td>
+                <td className="py-2 px-2 whitespace-nowrap">
+                  <span className="bg-white border border-gray-200 px-2 py-0.5 rounded text-[11px] font-mono font-bold text-[#b81d24]">
+                    {row.no_kupon || '-'}
+                  </span>
+                </td>
+                <td
+                  className="py-2 px-2.5 font-bold text-gray-900 whitespace-nowrap truncate"
+                  title={row.petani_id ? `${row.nama_petani} (${row.petani_id})` : row.nama_petani}
+                >
+                  {row.nama_petani || '-'}
+                </td>
+                <td colSpan={9} className="py-2 px-2.5 text-[11px] text-gray-500 whitespace-nowrap">
+                  <span className="font-semibold text-gray-700">{r.jumlahBal} bal</span>
+                  <span
+                    className={`ml-2 px-1.5 py-0.5 rounded-xs text-[10px] font-bold border ${
+                      lunas ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-[#b81d24] border-red-200'
+                    }`}
+                  >
+                    {labelStatusBayar(row)}
+                  </span>
+                </td>
+              </tr>
+
+              {/* 2. Rincian setiap bal */}
+              {r.rincian.map((bal) => (
+                <tr key={bal.key} className="bg-white hover:bg-amber-50/40 transition-colors">
+                  <td colSpan={4} className="bg-white"></td>
+                  <td className="py-1.5 px-2.5 text-center font-mono font-semibold text-gray-800 whitespace-nowrap">{bal.noBal}</td>
+                  <td className="py-1.5 px-2 text-right font-mono text-gray-700 whitespace-nowrap">{formatRp(bal.hargaBeli)}</td>
+                  <td className="py-1.5 px-2 text-right font-mono text-gray-700 whitespace-nowrap">{formatKg(bal.bruto)}</td>
+                  <td className="py-1.5 px-2 text-right font-mono font-semibold text-gray-900 bg-blue-50/20 whitespace-nowrap">{formatKg(bal.netto)}</td>
+                  <td></td>
+                  <td></td>
+                  <td className="py-1.5 px-2 text-right font-mono text-amber-800 whitespace-nowrap">{formatRp(bal.tikar)}</td>
+                  <td className="py-1.5 px-2 text-right font-mono font-semibold text-gray-900 whitespace-nowrap">{formatRp(bal.nilaiBeli)}</td>
+                  <td></td>
+                </tr>
+              ))}
+
+              {/* 3. Total per kupon */}
+              <tr className="bg-amber-50/70 font-bold text-gray-900 border-t border-amber-200">
+                <td colSpan={6} className="py-2 px-3 text-right text-[11px] uppercase tracking-wide text-amber-900 whitespace-nowrap">
+                  Total {row.no_kupon || 'Kupon'} ({r.jumlahBal} bal)
+                </td>
+                <td className="py-2 px-2 text-right font-mono whitespace-nowrap">{formatKg(r.bruto)}</td>
+                <td className="py-2 px-2 text-right font-mono text-blue-950 whitespace-nowrap">{formatKg(r.netto)}</td>
+                <td className="py-2 px-2 text-right font-mono text-amber-900 whitespace-nowrap">{formatRp(r.tali)}</td>
+                <td className="py-2 px-2 text-right font-mono text-amber-900 whitespace-nowrap">{formatRp(r.kuli)}</td>
+                <td className="py-2 px-2 text-right font-mono text-amber-900 whitespace-nowrap">{formatRp(r.tikar)}</td>
+                <td className="py-2 px-2 text-right font-mono whitespace-nowrap">{formatRp(r.nilaiBeli)}</td>
+                <td className="py-2 px-2.5 text-right font-mono text-[#b81d24] bg-red-50/60 whitespace-nowrap">{formatRp(r.jumlahBayar)}</td>
+              </tr>
+            </tbody>
+          );
+        })
+      )}
+
+      {/* Footer Totals  */}
+      {sortedData.length > 0 && (
+        <tfoot className="border-t-2 border-gray-400">
+          <tr className="bg-slate-200/90 text-gray-950 font-extrabold text-xs">
+            <td colSpan={6} className="py-3 px-3 text-right uppercase tracking-wider whitespace-nowrap">
+              Total Keseluruhan ({totals.count} kupon, {totals.totalBal} bal)
+            </td>
+            <td className="py-3 px-2 text-right font-mono whitespace-nowrap">{formatKg(totals.totalBruto)}</td>
+            <td className="py-3 px-2 text-right font-mono text-blue-950 whitespace-nowrap">{formatKg(totals.totalNetto)}</td>
+            <td className="py-3 px-2 text-right font-mono text-amber-950 whitespace-nowrap">{formatRp(totals.totalPotonganTali)}</td>
+            <td className="py-3 px-2 text-right font-mono text-amber-950 whitespace-nowrap">{formatRp(totals.totalPotonganKuli)}</td>
+            <td className="py-3 px-2 text-right font-mono text-amber-950 whitespace-nowrap">{formatRp(totals.totalPotonganTikar)}</td>
+            <td className="py-3 px-2 text-right font-mono whitespace-nowrap">{formatRp(totals.totalNilaiHargaBeli)}</td>
+            <td className="py-3 px-2.5 text-right font-mono text-[#b81d24] bg-red-100 font-black text-sm whitespace-nowrap">{formatRp(totals.totalJumlahBayar)}</td>
+          </tr>
+        </tfoot>
+      )}
+    </table>
+  ), [searchedData, sortedData.length, sortConfigs, totals, ringkasanMap]);
 
   return (
     <div className="space-y-4 font-sans text-gray-800">
@@ -662,9 +828,9 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-white p-3 border border-gray-200 shadow-xs flex items-center justify-between">
           <div>
-            <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Total Baris & Bal</p>
+            <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Total Kupon & Bal</p>
             <p className="text-lg font-black text-gray-900 font-mono mt-0.5">
-              {sortedData.length} <span className="text-sm font-medium text-gray-500 font-sans">Baris</span> <span className="text-gray-300 mx-1">|</span> {totals.totalBal} <span className="text-sm font-medium text-gray-500 font-sans">Bal</span>
+              {sortedData.length} <span className="text-sm font-medium text-gray-500 font-sans">Kupon</span> <span className="text-gray-300 mx-1">|</span> {totals.totalBal} <span className="text-sm font-medium text-gray-500 font-sans">Bal</span>
             </p>
           </div>
           <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center border border-blue-100">
@@ -851,15 +1017,21 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
       </div>
 
       {/* Quick Summary Pill Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs">
         <div className="bg-white p-2.5 border border-gray-200">
           <div className="text-gray-500 text-[11px]">Total Data Ditemukan</div>
-          <div className="text-base font-bold text-gray-900 mt-0.5">{totals.count} Transaksi Bal</div>
+          <div className="text-base font-bold text-gray-900 mt-0.5">{totals.count} Kupon</div>
         </div>
         <div className="bg-white p-2.5 border border-gray-200">
           <div className="text-gray-500 text-[11px]">Total Netto Timbang</div>
           <div className="text-base font-bold text-blue-900 mt-0.5">
             {totals.totalNetto.toLocaleString('id-ID')} <span className="text-xs font-normal text-gray-500">kg</span>
+          </div>
+        </div>
+        <div className="bg-white p-2.5 border border-gray-200">
+          <div className="text-gray-500 text-[11px]">Total Potongan Tali</div>
+          <div className="text-base font-bold text-amber-700 mt-0.5">
+            Rp {Math.round(totals.totalPotonganTali).toLocaleString('id-ID')}
           </div>
         </div>
         <div className="bg-white p-2.5 border border-gray-200">
@@ -891,9 +1063,9 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
             </span>
             <span className="text-[11px] text-gray-500 font-medium">
               {tableSearch.trim() ? (
-                <>Ditemukan: <strong className="text-gray-900">{searchedData.length}</strong> dari {sortedData.length} baris</>
+                <>Ditemukan: <strong className="text-gray-900">{searchedData.length}</strong> dari {sortedData.length} kupon</>
               ) : (
-                <>Total: <strong className="text-gray-900">{sortedData.length}</strong> baris data ({totals.totalBal} Bal • {totals.totalNetto.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg Netto)</>
+                <>Total: <strong className="text-gray-900">{sortedData.length}</strong> kupon ({totals.totalBal} Bal • {totals.totalNetto.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg Netto)</>
               )}
             </span>
           </div>
@@ -928,222 +1100,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
         </div>
 
         <div className="overflow-x-auto overflow-y-auto max-h-[60vh] border border-gray-200 shadow-sm relative scrollbar-thin">
-          <table className="w-full text-left text-xs border-collapse min-w-full">
-            <thead className="bg-gray-100 sticky top-0 z-20 shadow-sm">
-              <tr className="text-gray-700 font-bold border-b border-gray-200 uppercase text-[10px] tracking-wider">
-                <th 
-                  className="py-2 px-2 text-center border-r border-gray-200 cursor-pointer hover:bg-gray-200/80 transition select-none w-px whitespace-nowrap"
-                  onClick={() => {
-                    setSortConfigs([]);
-                  }}
-                  title="Klik untuk reset urutan default"
-                >
-                  <div className="flex items-center justify-center space-x-1">
-                    <span>No</span>
-                    {sortConfigs.length > 0 && renderSortIndicator('default')}
-                  </div>
-                </th>
-                <SortableHeader title="Tanggal" widthClass="w-px whitespace-nowrap" sortField="tanggal" sortConfigs={sortConfigs} onSort={handleSort} />
-                <SortableHeader title="Kupon" widthClass="w-px whitespace-nowrap" sortField="kupon" sortConfigs={sortConfigs} onSort={handleSort} />
-                <SortableHeader title="Petani" widthClass="w-px whitespace-nowrap" sortField="petani" sortConfigs={sortConfigs} onSort={handleSort} />
-                <SortableHeader title="No Bal" widthClass="w-auto" align="center" sortField="no_bal" sortConfigs={sortConfigs} onSort={handleSort} />
-                <SortableHeader title="Kode Beli" widthClass="w-px whitespace-nowrap" align="center" sortField="kode_beli" sortConfigs={sortConfigs} onSort={handleSort} />
-                <SortableHeader title="Bruto (kg)" widthClass="w-px whitespace-nowrap" align="right" sortField="bruto" sortConfigs={sortConfigs} onSort={handleSort} />
-                <SortableHeader title="Netto (kg)" widthClass="w-px whitespace-nowrap" align="right" sortField="netto" sortConfigs={sortConfigs} onSort={handleSort} />
-                <SortableHeader title="Pot. Kuli" widthClass="w-px whitespace-nowrap" align="right" sortField="potongan_kuli" sortConfigs={sortConfigs} onSort={handleSort} />
-                <SortableHeader title="Pot. Tikar" widthClass="w-px whitespace-nowrap" align="right" sortField="potongan_tikar" sortConfigs={sortConfigs} onSort={handleSort} />
-                <SortableHeader title="Total Harga Beli" widthClass="w-px whitespace-nowrap" align="right" sortField="total_harga" sortConfigs={sortConfigs} onSort={handleSort} />
-                <SortableHeader title="Jumlah Bayar" widthClass="w-px whitespace-nowrap" align="right" className="bg-red-50/50 font-extrabold text-[#b81d24]" sortField="jumlah_bayar" sortConfigs={sortConfigs} onSort={handleSort} />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {searchedData.length === 0 ? (
-                <tr>
-                  <td colSpan={12} className="py-10 text-center text-gray-500">
-                    <FileText className="w-8 h-8 mx-auto text-gray-300 mb-2" />
-                    <p className="font-semibold">Tidak ada data transaksi yang cocok dengan pencarian.</p>
-                    <p className="text-[11px] text-gray-400 mt-1">Coba periksa kata kunci pencarian atau bersihkan kolom pencarian.</p>
-                  </td>
-                </tr>
-              ) : (
-                searchedData.map((row, idx) => {
-                  const bruto = row.jenis_timbang === 'bruto' ? (row.berat_terukur_kg || row.berat_kg + 2) : 0;
-                  const netto = row.berat_kg || 0;
-                  const hrgBeli = row.harga_per_kg || 0;
-                  const potonganKuliRow = Number(row.potongan_kuli || 0);
-                  const potonganTikarRow = Number(row.potongan_tikar || 0);
-                  const totalPotonganRow = Number(row.total_potongan !== undefined ? row.total_potongan : (potonganKuliRow + potonganTikarRow));
-                  const totalHargaBeliRow = hitungModalTransaksi(row);
-                  const jumlahBayarRow = row.harga_final !== undefined && row.harga_final !== null ? row.harga_final : (totalHargaBeliRow - totalPotonganRow);
-                  const tglDisplay = formatDateHariBulanTahun(row.tanggal_transaksi);
-
-                  return (
-                    <tr 
-                      key={row.transaksi_id || idx}
-                      className={`transition-colors hover:bg-amber-50/60 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'}`}
-                    >
-                      {/* 1. No */}
-                      <td className="py-2 px-2 text-center text-gray-500 font-mono text-[11px] border-r border-gray-100 whitespace-nowrap w-px">
-                        <div>{idx + 1}</div>
-                      </td>
-
-                      {/* 2. Tanggal (YYYY-MM-DD) */}
-                      <td className="py-2 px-2 text-gray-700 font-mono text-[11px] border-r border-gray-100 whitespace-nowrap w-px">
-                        <div>{tglDisplay}</div>
-                      </td>
-
-                      {/* 3. Kupon (Full 1 row, never truncated) */}
-                      <td className="py-2 px-2 font-mono text-gray-900 font-bold border-r border-gray-100 whitespace-nowrap w-px">
-                        <div>
-                          <span className="bg-gray-100 px-2 py-0.5 rounded text-[11px] whitespace-nowrap font-mono font-bold text-[#b81d24]">
-                            {row.no_kupon || '-'}
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* 4. Petani */}
-                      <td 
-                        className="py-2 px-2.5 text-gray-900 font-medium border-r border-gray-100 whitespace-nowrap w-px"
-                        title={row.petani_id ? `${row.nama_petani} (${row.petani_id})` : row.nama_petani}
-                      >
-                        <div className="font-semibold text-gray-800 whitespace-nowrap">{row.nama_petani}</div>
-                      </td>
-
-                      {/* 5. No Ball (sisa lebarnya) */}
-                      <td className="py-2 px-2.5 text-center font-mono font-semibold text-gray-800 border-r border-gray-100 w-auto">
-                        <ExpandableNoBal items={row.items || []} defaultNoBal={row.no_bal || ''} />
-                      </td>
-
-                      {/* 6. Kode Beli (Maksimal 3 kode per baris, lanjut dibawahnya) */}
-                      <td className="py-2 px-2 text-center border-r border-gray-100 whitespace-nowrap w-px">
-                        <div>
-                        {(() => {
-                          const rowGrades = getTransactionUniqueGrades(row);
-                          if (rowGrades.length === 0) {
-                            return (
-                              <span className="text-gray-400 font-mono text-[10px]">-</span>
-                            );
-                          }
-                          const chunkedGrades: string[][] = [];
-                          for (let i = 0; i < rowGrades.length; i += 3) {
-                            chunkedGrades.push(rowGrades.slice(i, i + 3));
-                          }
-                          return (
-                            <div className="flex flex-col items-center gap-1 my-0.5">
-                              {chunkedGrades.map((chunk, rowIdx) => (
-                                <div key={rowIdx} className="flex items-center justify-center gap-1">
-                                  {chunk.map((g) => (
-                                    <span
-                                      key={g}
-                                      className={`inline-block min-w-[20px] px-1 py-0.5 text-[10px] font-bold rounded-xs text-center ${
-                                        g === 'A' ? 'bg-zinc-900 text-white' :
-                                        g === 'B' ? 'bg-zinc-800 text-zinc-100' :
-                                        g === 'C' ? 'bg-blue-100 text-blue-900 font-bold' :
-                                        g === 'D' ? 'bg-purple-100 text-purple-900 font-bold' :
-                                        g === 'E' ? 'bg-gray-200 text-gray-800 font-bold' :
-                                        'bg-red-100 text-red-900 font-bold'
-                                      }`}
-                                      title={`Kode Beli ${g}`}
-                                    >
-                                      {g}
-                                    </span>
-                                  ))}
-                                </div>
-                              ))}
-                            </div>
-                          );
-                        })()}
-                        </div>
-                      </td>
-
-                      {/* 7. Bruto */}
-                      <td className="py-2 px-2 text-right font-mono text-gray-700 border-r border-gray-100 whitespace-nowrap w-px">
-                        <div>{bruto > 0 ? bruto.toFixed(1) : '-'}</div>
-                      </td>
-
-                      {/* 8. Netto */}
-                      <td className="py-2 px-2 text-right font-mono font-bold text-gray-900 border-r border-gray-100 bg-blue-50/20 whitespace-nowrap w-px">
-                        <div>{netto.toFixed(1)}</div>
-                      </td>
-
-                      {/* 9. Potongan Kuli */}
-                      <td className="py-2 px-2 text-right font-mono text-amber-800 border-r border-gray-100 whitespace-nowrap w-px">
-                        <div>{potonganKuliRow > 0 ? Math.round(potonganKuliRow).toLocaleString('id-ID') : '-'}</div>
-                      </td>
-
-                      {/* 10. Potongan Tikar */}
-                      <td className="py-2 px-2 text-right font-mono text-amber-800 border-r border-gray-100 whitespace-nowrap w-px">
-                        <div>{potonganTikarRow > 0 ? Math.round(potonganTikarRow).toLocaleString('id-ID') : '-'}</div>
-                      </td>
-
-                      {/* 11. Total Harga Beli */}
-                      <td className="py-2 px-2 text-right font-mono font-semibold text-gray-900 border-r border-gray-100 whitespace-nowrap w-px">
-                        <div>{Math.round(totalHargaBeliRow).toLocaleString('id-ID')}</div>
-                      </td>
-
-                      {/* 12. Jumlah Bayar */}
-                      <td className="py-2 px-2.5 text-right font-mono font-bold text-[#b81d24] bg-red-50/30 whitespace-nowrap w-px">
-                        <div>{Math.round(jumlahBayarRow).toLocaleString('id-ID')}</div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-
-            {/* Footer Totals  */}
-            {sortedData.length > 0 && (
-              <tfoot className="bg-gray-100 text-gray-900 font-bold border-t-2 border-gray-300">
-                {/* Baris Total Potongan Out */}
-                <tr className="bg-amber-50/70 border-b border-amber-200/60 text-[11px]">
-                  <td colSpan={8} className="py-2 px-3 text-right font-semibold text-amber-900 border-r border-gray-300 whitespace-nowrap">
-                    Total Potongan Kuli Operasional (Rp 7.000 × {totals.totalBal} bal):
-                  </td>
-                  <td className="py-2 px-2.5 text-right font-mono text-amber-900 font-bold border-r border-gray-300 whitespace-nowrap">
-                    Rp {Math.round(totals.totalPotonganKuli).toLocaleString('id-ID')}
-                  </td>
-                  <td colSpan={3} className="py-2 px-3 bg-gray-50/30 border-b border-gray-200"></td>
-                </tr>
-
-                {/* Baris Total Potongan Ganti Tikar */}
-                <tr className="bg-amber-50/70 border-b border-amber-200/60 text-[11px]">
-                  <td colSpan={8} className="py-2 px-3 text-right font-semibold text-amber-900 border-r border-gray-300 whitespace-nowrap">
-                    Total Potongan Ganti Tikar:
-                  </td>
-                  <td className="py-2 px-3 bg-gray-50/30 border-b border-gray-200 border-r border-gray-300"></td>
-                  <td className="py-2 px-2.5 text-right font-mono text-amber-900 font-bold border-r border-gray-300 whitespace-nowrap">
-                    Rp {Math.round(totals.totalPotonganTikar).toLocaleString('id-ID')}
-                  </td>
-                  <td colSpan={2} className="py-2 px-3 bg-gray-50/30 border-b border-gray-200"></td>
-                </tr>
-
-                {/* Baris Total Akumulasi Utama */}
-                <tr className="bg-slate-200/90 text-gray-950 font-extrabold text-xs">
-                  <td colSpan={6} className="py-3 px-3 text-right uppercase tracking-wider border-r border-gray-300 bg-gray-200/80 whitespace-nowrap">
-                    TOTAL KESELURUHAN ({totals.totalBal} BAL):
-                  </td>
-                  <td className="py-3 px-2.5 text-right font-mono border-r border-gray-300 whitespace-nowrap bg-gray-100 font-bold text-gray-800">
-                    {totals.totalBruto.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg
-                  </td>
-                  <td className="py-3 px-2.5 text-right font-mono text-blue-950 border-r border-gray-300 whitespace-nowrap bg-blue-50/70 font-bold">
-                    {totals.totalNetto.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg
-                  </td>
-                  <td className="py-3 px-2.5 text-right font-mono text-amber-950 border-r border-gray-300 whitespace-nowrap bg-amber-50/70 font-bold">
-                    Rp {Math.round(totals.totalPotonganKuli).toLocaleString('id-ID')}
-                  </td>
-                  <td className="py-3 px-2.5 text-right font-mono text-amber-950 border-r border-gray-300 whitespace-nowrap bg-amber-50/70 font-bold">
-                    Rp {Math.round(totals.totalPotonganTikar).toLocaleString('id-ID')}
-                  </td>
-                  <td className="py-3 px-3 text-right font-mono border-r border-gray-300 whitespace-nowrap bg-gray-100 font-bold text-gray-900">
-                    Rp {Math.round(totals.totalNilaiHargaBeli).toLocaleString('id-ID')}
-                  </td>
-                  <td className="py-3 px-3 text-right font-mono text-[#b81d24] bg-red-100 font-black text-sm whitespace-nowrap border-l border-red-200">
-                    Rp {Math.round(totals.totalJumlahBayar).toLocaleString('id-ID')}
-                  </td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
+          {tabelUtama}
         </div>
       </div>
 
@@ -1173,7 +1130,8 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
         </button>
       </div>
 
-      {/* Hidden Container for Direct PDF Export */}
+      {/* Hidden Container for Direct PDF Export (hanya dibangun saat mengunduh PDF) */}
+      {isGeneratingPdf && (
       <div className="hidden">
         <div 
           ref={printReportRef} 
@@ -1206,8 +1164,8 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
             </div>
           </div>
 
-          {/* Print Table */}
-          <table className="w-full text-left border-collapse border border-gray-300 text-[10px] mb-4">
+          {/* Print Table: satu kupon = baris kupon, rincian bal, dan total kupon (tidak terbelah halaman) */}
+          <table className="no-zebra w-full text-left border-collapse border border-gray-300 text-[10px] mb-4">
             <thead>
               <tr className="bg-gray-100 text-gray-900 font-bold border-b border-gray-300 uppercase">
                 <th className="p-1 border border-gray-300 text-center">No</th>
@@ -1215,63 +1173,71 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
                 <th className="p-1 border border-gray-300">Kupon</th>
                 <th className="p-1 border border-gray-300">Petani</th>
                 <th className="p-1 border border-gray-300 text-center">No Bal</th>
-                <th className="p-1 border border-gray-300 text-center">Kode Beli</th>
-                <th className="p-1 border border-gray-300 text-right">Bruto (kg)</th>
-                <th className="p-1 border border-gray-300 text-right">Netto (kg)</th>
-                <th className="p-1 border border-gray-300 text-right">Potongan (Rp)</th>
-                <th className="p-1 border border-gray-300 text-right">Total Harga</th>
-                <th className="p-1 border border-gray-300 text-right font-bold">Jumlah Bayar</th>
+                <th className="p-1 border border-gray-300 text-right">Harga Beli (Rp/Kg)</th>
+                <th className="p-1 border border-gray-300 text-right">Bruto (Kg)</th>
+                <th className="p-1 border border-gray-300 text-right">Netto (Kg)</th>
+                <th className="p-1 border border-gray-300 text-right">Tali (Rp)</th>
+                <th className="p-1 border border-gray-300 text-right">Kuli (Rp)</th>
+                <th className="p-1 border border-gray-300 text-right">Tikar (Rp)</th>
+                <th className="p-1 border border-gray-300 text-right">Nilai Beli (Rp)</th>
+                <th className="p-1 border border-gray-300 text-right">Jumlah Bayar (Rp)</th>
               </tr>
             </thead>
-            <tbody>
-              {sortedData.map((row, idx) => {
-                const bruto = row.jenis_timbang === 'bruto' ? (row.berat_terukur_kg || row.berat_kg + 2) : 0;
-                const netto = row.berat_kg || 0;
-                const hrgBeli = row.harga_per_kg || 0;
-                const totalPotonganRow = Number(row.total_potongan !== undefined ? row.total_potongan : ((row.potongan_kuli || 0) + (row.potongan_tikar || 0)));
-                const totalHargaBeliRow = hitungModalTransaksi(row);
-                const jumlahBayarRow = row.harga_final !== undefined && row.harga_final !== null ? row.harga_final : (totalHargaBeliRow - totalPotonganRow);
-                const tglDisplay = formatDateHariBulanTahun(row.tanggal_transaksi);
-
-                return (
-                  <tr key={idx} className="border-b border-gray-200">
+            {sortedData.map((row, idx) => {
+              const r = ringkasan(row);
+              return (
+                <tbody key={row.transaksi_id || idx} data-pdf-keep="true">
+                  <tr className="bg-gray-100 font-bold">
                     <td className="p-1 border border-gray-300 text-center">{idx + 1}</td>
-                    <td className="p-1 border border-gray-300 font-mono">{tglDisplay}</td>
+                    <td className="p-1 border border-gray-300 font-mono whitespace-nowrap">{formatDateHariBulanTahun(row.tanggal_transaksi)}</td>
                     <td className="p-1 border border-gray-300 font-mono">{row.no_kupon || '-'}</td>
-                    <td className="p-1 border border-gray-300 font-medium">{row.nama_petani}</td>
-                    <td className="p-1 border border-gray-300 text-center font-mono max-w-[150px] break-words whitespace-normal">{(row.items && row.items.length > 0) ? row.items.map(it => it.no_bal || it.barcode || it.sample_label_code).filter(Boolean).join(', ') : (row.no_bal || '-')}</td>
-                    <td className="p-1 border border-gray-300 text-center font-bold">
-                      {(() => {
-                        const rowGrades = getTransactionUniqueGrades(row);
-                        return rowGrades.length > 0 ? rowGrades.join(', ') : (row.kode_grade || '-');
-                      })()}
-                    </td>
-                    <td className="p-1 border border-gray-300 text-right font-mono">{bruto > 0 ? bruto.toFixed(1) : '-'}</td>
-                    <td className="p-1 border border-gray-300 text-right font-mono font-semibold">{netto.toFixed(1)}</td>
-                    <td className="p-1 border border-gray-300 text-right font-mono">{Math.round(totalPotonganRow).toLocaleString('id-ID')}</td>
-                    <td className="p-1 border border-gray-300 text-right font-mono">{Math.round(totalHargaBeliRow).toLocaleString('id-ID')}</td>
-                    <td className="p-1 border border-gray-300 text-right font-mono font-bold text-gray-950">
-                      {Math.round(jumlahBayarRow).toLocaleString('id-ID')}
+                    <td className="p-1 border border-gray-300">{row.nama_petani || '-'}</td>
+                    <td colSpan={9} className="p-1 border border-gray-300 font-normal text-gray-600">
+                      {r.jumlahBal} bal · {labelStatusBayar(row)}
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
+                  {r.rincian.map((bal) => (
+                    <tr key={bal.key}>
+                      <td colSpan={4} className="p-1 border border-gray-300"></td>
+                      <td className="p-1 border border-gray-300 text-center font-mono">{bal.noBal}</td>
+                      <td className="p-1 border border-gray-300 text-right font-mono">{formatRp(bal.hargaBeli)}</td>
+                      <td className="p-1 border border-gray-300 text-right font-mono">{formatKg(bal.bruto)}</td>
+                      <td className="p-1 border border-gray-300 text-right font-mono font-semibold">{formatKg(bal.netto)}</td>
+                      <td className="p-1 border border-gray-300"></td>
+                      <td className="p-1 border border-gray-300"></td>
+                      <td className="p-1 border border-gray-300 text-right font-mono">{formatRp(bal.tikar)}</td>
+                      <td className="p-1 border border-gray-300 text-right font-mono">{formatRp(bal.nilaiBeli)}</td>
+                      <td className="p-1 border border-gray-300"></td>
+                    </tr>
+                  ))}
+                  <tr className="bg-amber-50 font-bold">
+                    <td colSpan={6} className="p-1 border border-gray-300 text-right">Total {row.no_kupon || 'Kupon'} ({r.jumlahBal} bal)</td>
+                    <td className="p-1 border border-gray-300 text-right font-mono">{formatKg(r.bruto)}</td>
+                    <td className="p-1 border border-gray-300 text-right font-mono">{formatKg(r.netto)}</td>
+                    <td className="p-1 border border-gray-300 text-right font-mono">{formatRp(r.tali)}</td>
+                    <td className="p-1 border border-gray-300 text-right font-mono">{formatRp(r.kuli)}</td>
+                    <td className="p-1 border border-gray-300 text-right font-mono">{formatRp(r.tikar)}</td>
+                    <td className="p-1 border border-gray-300 text-right font-mono">{formatRp(r.nilaiBeli)}</td>
+                    <td className="p-1 border border-gray-300 text-right font-mono font-black">{formatRp(r.jumlahBayar)}</td>
+                  </tr>
+                </tbody>
+              );
+            })}
             <tfoot className="bg-gray-100 font-bold">
               <tr>
-                <td colSpan={6} className="p-1.5 border border-gray-300 text-right">TOTAL KESELURUHAN ({totals.totalBal} BAL):</td>
-                <td className="p-1.5 border border-gray-300 text-right font-mono">{totals.totalBruto.toFixed(1)} kg</td>
-                <td className="p-1.5 border border-gray-300 text-right font-mono">{totals.totalNetto.toFixed(1)} kg</td>
-                <td className="p-1.5 border border-gray-300 text-right font-mono">Rp {Math.round(totals.totalPotonganAll).toLocaleString('id-ID')}</td>
-                <td className="p-1.5 border border-gray-300 text-right font-mono">Rp {Math.round(totals.totalNilaiHargaBeli).toLocaleString('id-ID')}</td>
-                <td className="p-1.5 border border-gray-300 text-right font-mono text-black font-black">
-                  Rp {Math.round(totals.totalJumlahBayar).toLocaleString('id-ID')}
-                </td>
+                <td colSpan={6} className="p-1.5 border border-gray-300 text-right">TOTAL KESELURUHAN ({totals.count} KUPON, {totals.totalBal} BAL):</td>
+                <td className="p-1.5 border border-gray-300 text-right font-mono">{formatKg(totals.totalBruto)}</td>
+                <td className="p-1.5 border border-gray-300 text-right font-mono">{formatKg(totals.totalNetto)}</td>
+                <td className="p-1.5 border border-gray-300 text-right font-mono">{formatRp(totals.totalPotonganTali)}</td>
+                <td className="p-1.5 border border-gray-300 text-right font-mono">{formatRp(totals.totalPotonganKuli)}</td>
+                <td className="p-1.5 border border-gray-300 text-right font-mono">{formatRp(totals.totalPotonganTikar)}</td>
+                <td className="p-1.5 border border-gray-300 text-right font-mono">{formatRp(totals.totalNilaiHargaBeli)}</td>
+                <td className="p-1.5 border border-gray-300 text-right font-mono text-black font-black">{formatRp(totals.totalJumlahBayar)}</td>
               </tr>
             </tfoot>
           </table>
           {/* Tanda Tangan: pembuat = akun yang mengunduh, lainnya ditandatangani & ditulis manual */}
-          <div className="grid grid-cols-3 gap-4 pt-6 text-center text-[11px]">
+          <div data-pdf-keep="true" className="grid grid-cols-3 gap-4 pt-6 text-center text-[11px]">
             <div>
               <p className="text-gray-500">Dibuat Oleh,</p>
               <p className="font-semibold text-gray-700">Operator Loket Timbang</p>
@@ -1293,6 +1259,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
           </div>
         </div>
       </div>
+      )}
 
   </div>
 );

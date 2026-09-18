@@ -1588,7 +1588,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
           </table>
 
           {/* Formal Signatures */}
-          <div className="grid grid-cols-3 gap-8 pt-6 text-center text-xs">
+          <div className="grid grid-cols-3 gap-8 pt-6 text-center text-xs avoid-page-break">
             <div>
               <div className="text-gray-500">Petugas Logistik / Pengirim,</div>
               <div className="font-bold text-gray-900 mt-0.5">Staff Ekspedisi</div>
