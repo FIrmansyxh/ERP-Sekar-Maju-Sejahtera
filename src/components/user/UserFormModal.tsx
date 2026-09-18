@@ -68,10 +68,9 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
       setStatusAktif(editingUser.status_aktif);
       setError(null);
     } else {
-      // Auto-generate next user ID
-      const nextNum = existingUsers.length + 1;
-      setUsername(`staf_${nextNum}`);
-      setPassword('123456');
+      // Akun baru dimulai kosong: username & kata sandi diisi sendiri oleh admin
+      setUsername('');
+      setPassword('');
       setNamaLengkap('');
       setRole('admin_sortir');
       setEmail('');
@@ -86,52 +85,47 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    const cleanUsername = username.trim().toLowerCase();
+    // Username disimpan persis seperti diketik (login tidak membedakan huruf besar/kecil)
+    const cleanUsername = username.trim();
     if (!cleanUsername) {
       setError('Username wajib diisi.');
       return;
     }
-    if (!namaLengkap.trim()) {
-      setError('Nama lengkap pengguna wajib diisi.');
+    if (/\s/.test(cleanUsername)) {
+      setError('Username tidak boleh mengandung spasi.');
       return;
     }
 
     // Check username uniqueness
     const duplicate = existingUsers.find(
-      (u) => u.username.toLowerCase() === cleanUsername && u.user_id !== editingUser?.user_id
+      (u) => u.username.toLowerCase() === cleanUsername.toLowerCase() && u.user_id !== editingUser?.user_id
     );
     if (duplicate) {
       setError(`Username "${cleanUsername}" sudah digunakan oleh pengguna lain.`);
       return;
     }
 
-    let finalPassword = password.trim();
-    if (!isEdit) {
-      if (!finalPassword) {
-        finalPassword = '123456';
-      } else if (finalPassword.length < 6) {
-        setError('Kata sandi awal minimal 6 karakter untuk keamanan akun pengguna baru.');
-        return;
-      }
-    } else {
-      if (finalPassword && finalPassword.length < 6) {
-        setError('Kata sandi baru minimal 6 karakter.');
-        return;
-      }
-      if (!finalPassword && editingUser) {
-        finalPassword = editingUser.password || '';
-      }
+    const finalPassword = password.trim();
+    if (!isEdit && !finalPassword) {
+      setError('Kata sandi wajib diisi untuk akun baru.');
+      return;
+    }
+    if (finalPassword && finalPassword.length < 6) {
+      setError(isEdit ? 'Kata sandi baru minimal 6 karakter.' : 'Kata sandi minimal 6 karakter.');
+      return;
     }
 
     const userData: User = {
       user_id: editingUser ? editingUser.user_id : generateNextUserId(existingUsers),
       username: cleanUsername,
-      password: finalPassword,
-      nama_lengkap: namaLengkap.trim(),
+      // Kata sandi hanya dikirim bila diisi; saat edit dikosongkan = tidak berubah
+      ...(finalPassword ? { password: finalPassword } : {}),
+      // Nama tampilan opsional: bila kosong memakai username
+      nama_lengkap: namaLengkap.trim() || cleanUsername,
       role,
       email: email.trim() || undefined,
       no_hp: noHp.trim() || undefined,
-      unit_penugasan: editingUser?.unit_penugasan || 'Gudang Utama Pamekasan',
+      unit_penugasan: editingUser?.unit_penugasan || '',
       status_aktif: statusAktif,
       dibuat_pada: editingUser?.dibuat_pada || new Date().toISOString(),
       terakhir_login: editingUser?.terakhir_login,
@@ -197,16 +191,17 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                   setError(null);
                 }}
                 placeholder="misal: sitirahayu"
-                className="w-full px-3 py-2 border border-gray-300 rounded-sm focus:ring-1 focus:ring-red-500 focus:border-red-500 text-xs font-mono lowercase"
+                className="w-full px-3 py-2 border border-gray-300 rounded-sm focus:ring-1 focus:ring-red-500 focus:border-red-500 text-xs font-mono"
                 required
+                autoComplete="off"
               />
-              <p className="text-[10px] text-gray-500 mt-0.5">Digunakan untuk login (huruf kecil tanpa spasi)</p>
+              <p className="text-[10px] text-gray-500 mt-0.5">Digunakan untuk login (tanpa spasi)</p>
             </div>
 
             {/* Password */}
             <div>
               <label className="block font-semibold text-gray-700 mb-1">
-                {isEdit ? 'Kata Sandi Baru (Opsional)' : 'Kata Sandi Awal *'}
+                {isEdit ? 'Kata Sandi Baru (Opsional)' : <>Kata Sandi <span className="text-red-500">*</span></>}
               </label>
               <div className="relative">
                 <input
@@ -219,6 +214,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                   placeholder={isEdit ? 'Kosongkan jika tidak diubah' : 'Minimal 6 karakter'}
                   className="w-full px-3 py-2 pr-9 border border-gray-300 rounded-sm focus:ring-1 focus:ring-red-500 focus:border-red-500 text-xs"
                   required={!isEdit}
+                  autoComplete="new-password"
                 />
                 <button
                   type="button"
@@ -233,7 +229,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
             {/* Nama Lengkap */}
             <div className="sm:col-span-2">
               <label className="block font-semibold text-gray-700 mb-1">
-                Nama Lengkap & Gelar <span className="text-red-500">*</span>
+                Nama Lengkap (Opsional)
               </label>
               <input
                 type="text"
@@ -242,10 +238,9 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                   setNamaLengkap(e.target.value);
                   setError(null);
                 }}
-                placeholder="misal: Siti Rahayu, S.E."
                 className="w-full px-3 py-2 border border-gray-300 rounded-sm focus:ring-1 focus:ring-red-500 focus:border-red-500 text-xs"
-                required
               />
+              <p className="text-[10px] text-gray-500 mt-0.5">Boleh dikosongkan. Bila kosong, username dipakai sebagai nama di dokumen.</p>
             </div>
 
             {/* Role RBAC Selector */}

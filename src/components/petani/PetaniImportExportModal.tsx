@@ -11,13 +11,13 @@ import {
   ArrowLeft
 , AlertTriangle } from 'lucide-react';
 import { Petani } from '../../types';
-import { generatePetaniId } from '../../utils/formatters';
 import { downloadExcelReport, todayStamp } from '../../utils/excelExport';
 
 // Judul kolom dari file Excel ekspor dipetakan ke nama kolom impor
 const HEADER_ALIAS: Record<string, string> = {
   'id petani': 'petani_id',
   'nama petani': 'nama_petani',
+  'nama': 'nama_petani',
   'no hp': 'no_hp',
   'desa / kecamatan': 'desa_kecamatan',
   'desa': 'desa_kecamatan',
@@ -86,11 +86,7 @@ export const PetaniImportExportModal: React.FC<PetaniImportExportModalProps> = (
       return;
     }
 
-    const lines = csvText.trim().split(/\r?\n/);
-    if (lines.length < 2) {
-      setImportErrors(['Data membutuhkan baris judul kolom dan minimal 1 baris data.']);
-      return;
-    }
+    const lines = csvText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
 
     // Salinan dari Excel dipisah tab, teks CSV dipisah koma
     const delimiter = lines[0].includes('\t') ? '\t' : ',';
@@ -98,18 +94,13 @@ export const PetaniImportExportModal: React.FC<PetaniImportExportModalProps> = (
       const key = h.replace(/^"|"$/g, '').trim().toLowerCase();
       return HEADER_ALIAS[key] || key;
     });
-    const cardIdx = headers.indexOf('petani_id');
     const nameIdx = headers.indexOf('nama_petani');
     const desaIdx = headers.indexOf('desa_kecamatan');
     const hpIdx = headers.indexOf('no_hp');
     const alamatIdx = headers.indexOf('alamat');
 
-    if (cardIdx === -1 || nameIdx === -1) {
-      setImportErrors([
-        'Kolom wajib "ID Petani" (petani_id) dan "Nama Petani" (nama_petani) tidak ditemukan pada baris judul kolom.',
-      ]);
-      return;
-    }
+    // Tanpa judul kolom "Nama Petani": setiap baris dianggap satu nama petani
+    const hanyaNama = nameIdx === -1;
 
     // Nilai "-" dari file ekspor dianggap kosong
     const cell = (cols: string[], idx: number) => {
@@ -119,41 +110,35 @@ export const PetaniImportExportModal: React.FC<PetaniImportExportModalProps> = (
 
     const importedPetani: Petani[] = [];
     const errors: string[] = [];
-    const existingCards = new Set(petaniList.map((p) => p.petani_id.toUpperCase()));
 
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
+    // ID Petani selalu diterbitkan sistem sesuai urutan baris
+    for (let i = hanyaNama ? 0 : 1; i < lines.length; i++) {
+      const line = lines[i];
+      let nama: string;
+      let cols: string[] = [];
 
-      const cols = line.split(delimiter).map((c) => c.replace(/^"|"$/g, '').trim());
-      const cardNumber = cell(cols, cardIdx).toUpperCase();
-      const nama = cell(cols, nameIdx);
-      const desa = cell(cols, desaIdx);
+      if (hanyaNama) {
+        // Buang penanda daftar seperti "* ", "- ", "1. " di awal baris
+        nama = line.replace(/^"|"$/g, '').replace(/^([*•-]|[0-9]+[.)])\s+/, '').trim();
+      } else {
+        cols = line.split(delimiter).map((c) => c.replace(/^"|"$/g, '').trim());
+        nama = cell(cols, nameIdx);
+      }
 
-      if (!cardNumber || !nama) {
-        errors.push(`Baris ${i + 1}: ID Petani dan nama tidak boleh kosong.`);
+      if (!nama) {
+        errors.push(`Baris ${i + 1}: nama petani kosong, dilewati.`);
         continue;
       }
 
-      if (existingCards.has(cardNumber)) {
-        errors.push(`Baris ${i + 1}: ID Petani "${cardNumber}" sudah terdaftar.`);
-        continue;
-      }
-
-      existingCards.add(cardNumber);
-
-      const newPetani: Petani = {
-        petani_id: generatePetaniId([...petaniList, ...importedPetani]),
-
+      importedPetani.push({
+        petani_id: '',
         nama_petani: nama,
-        no_hp: cell(cols, hpIdx),
-        alamat: cell(cols, alamatIdx),
-        desa_kecamatan: desa || undefined,
+        no_hp: hanyaNama ? '' : cell(cols, hpIdx),
+        alamat: hanyaNama ? '' : cell(cols, alamatIdx),
+        desa_kecamatan: (hanyaNama ? '' : cell(cols, desaIdx)) || undefined,
         status_aktif: true,
         tanggal_daftar: new Date().toISOString().split('T')[0],
-      };
-
-      importedPetani.push(newPetani);
+      });
     }
 
     if (errors.length > 0) {
@@ -245,14 +230,35 @@ export const PetaniImportExportModal: React.FC<PetaniImportExportModalProps> = (
           ) : (
             <div className="space-y-3.5">
               <p className="text-xs text-gray-600 leading-relaxed">
-                Salin baris dari Excel / Google Sheets (mulai dari baris judul kolom) lalu tempel di bawah ini. Minimal memuat kolom ID Petani dan Nama Petani; No HP, Alamat, dan Desa / Kecamatan boleh dikosongkan.
+                Pilih file CSV atau tempel daftar nama petani, satu nama per baris. Bisa juga salinan dari Excel dengan baris judul kolom (minimal kolom Nama Petani; No HP, Alamat, dan Desa / Kecamatan boleh kosong). ID Petani diterbitkan sistem berurutan sesuai urutan baris: baris pertama mendapat ID paling awal.
               </p>
+
+              <label className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-sm cursor-pointer shadow-xs">
+                <FileSpreadsheet className="w-3.5 h-3.5 text-[#b81d24]" />
+                <span>Pilih File CSV / TXT</span>
+                <input
+                  type="file"
+                  accept=".csv,.txt,text/csv,text/plain"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = '';
+                    if (!file) return;
+                    // Isi file ditampilkan dulu di kotak teks agar bisa diperiksa sebelum diproses
+                    file.text().then((isi) => {
+                      setCsvText(isi.replace(/^\uFEFF/, ''));
+                      setImportErrors([]);
+                      setSuccessCount(null);
+                    });
+                  }}
+                />
+              </label>
 
               <textarea
                 rows={6}
                 value={csvText}
                 onChange={(e) => setCsvText(e.target.value)}
-                placeholder="petani_id,nama_petani,desa_kecamatan&#10;PTN-WRA-2001,Bpk. Ahmad Fauzi,Ds. Wringin Anom&#10;PTN-WRA-2002,Bpk. Hendro,Ds. Besuki"
+                placeholder="Satu nama petani per baris"
                 className="w-full font-mono text-xs p-2.5 border border-[#ced4da] rounded-sm focus:border-[#b81d24] focus:outline-none bg-white text-gray-900"
               />
 

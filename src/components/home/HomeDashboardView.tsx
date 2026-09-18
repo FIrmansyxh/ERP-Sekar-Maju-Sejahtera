@@ -62,12 +62,12 @@ export const HomeDashboardView: React.FC<HomeDashboardViewProps> = ({
         <div className="bg-white border border-gray-200 p-4 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-full bg-[#b81d24] text-white font-bold flex items-center justify-center text-sm shrink-0 shadow-xs">
-              {currentUser.nama_lengkap.split(' ').map((n) => n[0]).slice(0, 2).join('')}
+              {(currentUser.nama_lengkap || currentUser.username || '').split(/[\s_]+/).filter(Boolean).map((n) => n[0]).slice(0, 2).join('').toUpperCase()}
             </div>
             <div>
               <div className="flex items-center space-x-2">
                 <span className="text-sm font-bold text-gray-900">
-                  Selamat Datang, {currentUser.nama_lengkap}
+                  Selamat Datang, {currentUser.nama_lengkap || currentUser.username}
                 </span>
                 {roleInfo && (
                   <span className={`px-2 py-0.5 text-[10px] font-bold rounded-xs border ${roleInfo.badgeBg} ${roleInfo.badgeText} ${roleInfo.badgeBorder}`}>
@@ -76,7 +76,10 @@ export const HomeDashboardView: React.FC<HomeDashboardViewProps> = ({
                 )}
               </div>
               <p className="text-xs text-gray-500 mt-0.5">
-                Unit Penugasan: <strong className="text-gray-700">{currentUser.unit_penugasan || 'Gudang Utama Pamekasan'}</strong> • Akun: <code className="text-gray-600">@{currentUser.username}</code>
+                {currentUser.unit_penugasan && (
+                  <>Unit Penugasan: <strong className="text-gray-700">{currentUser.unit_penugasan}</strong> • </>
+                )}
+                Akun: <code className="text-gray-600">@{currentUser.username}</code>
               </p>
             </div>
           </div>

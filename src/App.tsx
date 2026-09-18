@@ -1,3 +1,4 @@
+<<<<<<< Updated upstream
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Petani, 
@@ -1911,3 +1912,1728 @@ export default function App() {
     </div>
   );
 }
+=======
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { 
+  Petani, 
+  Barang, 
+  TabelHarga, 
+  TransaksiPembelian, 
+  PengirimanSample, 
+  PengirimanBarang,
+  User,
+  UserRole,
+  MasterHargaJual,
+  BatchPengirimanSample,
+  SaveTransaksiMeta
+} from './types';
+import { 
+  loadPetaniData, 
+  savePetaniData, 
+  loadBarangData, 
+  saveBarangData,
+  loadHargaData, 
+  saveHargaData,
+  loadHargaJualData,
+  saveHargaJualData,
+  loadTransaksiData, 
+  saveTransaksiData,
+  loadSampleData, 
+  saveSampleData,
+  loadBatchSampleData,
+  saveBatchSampleData,
+  loadPengirimanData, 
+  savePengirimanData,
+  loadUserData, 
+  saveUserData,
+  loadCurrentUser, 
+  saveCurrentUser,
+  recordAuditLog,
+  STORAGE_KEY_BARANG,
+  STORAGE_KEY_TRANSAKSI
+} from './utils/storage';
+import { normalizeStatusBal, resolveStatusStok } from './utils/kuponSortir';
+import { filterBarangLunas } from './utils/statusBayar';
+import { balTerkirimDariTransaksi, isSuratJalanTerkunci, pesanSuratJalanTerkunci, pesanTransaksiTerkunci } from './utils/kunciHapus';
+import { clearAllDrafts, getDraftRecovery, markDraftCleanExit, touchDraftAlive } from './utils/draftStorage';
+import { hasModuleAccess } from './utils/rbac';
+import { normalizeKg } from './utils/formatters';
+import { hashPassword } from './utils/crypto';
+import { Header } from './components/Header';
+import { Sidebar } from './components/Sidebar';
+
+// Auth Login View
+import { LoginView } from './components/auth/LoginView';
+import { ErpApiService } from './services/erpApi';
+
+// User Management 
+import { UserManagement } from './components/user/UserManagement';
+
+// Home Dashboard 
+import { HomeDashboardView } from './components/home/HomeDashboardView';
+
+//  Dashboard Laporan & Analytic ERP
+import { DashboardAnalyticView } from './components/laporan/DashboardAnalyticView';
+
+// Laporan Bal Tembakau
+import { LaporanBalView } from './components/laporan/LaporanBalView';
+
+// Laporan Detail Bal Tembakau
+import { LaporanKodeBalView } from './components/laporan/LaporanKodeBalView';
+
+// Laporan Mutu Grade & Analisis Stok Inventaris
+import { LaporanGradeView } from './components/laporan/LaporanGradeView';
+
+//  Laporan Pembelian Barang
+import { LaporanPembelianBarangView } from './components/laporan/LaporanPembelianBarangView';
+
+// Laporan Petani & Rekapitulasi Setoran
+import { LaporanPetaniView } from './components/laporan/LaporanPetaniView';
+
+// Laporan Pengiriman & Distribusi Tembakau
+import { LaporanPengirimanView } from './components/laporan/LaporanPengirimanView';
+
+// PRD 4.1: Master Petani
+import { PetaniTable } from './components/petani/PetaniTable';
+import { PetaniFormModal } from './components/petani/PetaniFormModal';
+import { PetaniCardPrintModal } from './components/petani/PetaniCardPrintModal';
+import { PetaniDetailDrawer } from './components/petani/PetaniDetailDrawer';
+import { PetaniDeactivateModal } from './components/petani/PetaniDeactivateModal';
+import { PetaniResetCardModal } from './components/petani/PetaniResetCardModal';
+import { PetaniImportExportModal } from './components/petani/PetaniImportExportModal';
+
+// PRD 4.2: Master Harga Beli
+import { HargaManagement } from './components/harga/HargaManagement';
+
+//  Transaksi Pembelian Timbang & Kupon (3 Sub-menus: Sortir, Timbangan, Kasir)
+import { SortirPageView } from './components/transaksi/SortirPageView';
+import { TimbanganPageView } from './components/transaksi/TimbanganPageView';
+import { KasirPageView } from './components/transaksi/KasirPageView';
+
+// PRD 6.1: Pengiriman Reguler (DO Luar)
+import { PengirimanManagement } from './components/pengiriman/PengirimanManagement';
+
+// PRD 6.2: Pengiriman Sample
+import { SampleManagement } from './components/sample/SampleManagement';
+
+import { StatusBatchPengirimanManagement } from './components/pengiriman/StatusBatchPengirimanManagement';
+import { HargaJualManagement } from './components/harga_jual/HargaJualManagement';
+import { DedicatedPrintView } from './components/print/DedicatedPrintView';
+
+import { CheckCircle2 } from 'lucide-react';
+
+export default function App() {
+  // Check URL params for standalone print route (e.g. ?cetak=nota&id=... or ?cetak=surat_jalan&id=...)
+  const [printParam, setPrintParam] = useState<{
+    type: 'nota' | 'surat_jalan' | 'sample' | 'bon_produksi';
+    id: string;
+  } | null>(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const cetakType = urlParams.get('cetak');
+      const id = urlParams.get('id') || urlParams.get('no_transaksi');
+      if (
+        (cetakType === 'nota' ||
+          cetakType === 'surat_jalan' ||
+          cetakType === 'sample' ||
+          cetakType === 'bon_produksi') &&
+        id
+      ) {
+        return { type: cetakType, id };
+      }
+    } catch {}
+    return null;
+  });
+
+  // State for in-app fallback print view (when window.open is blocked by browser iframe)
+  const [embeddedPrintDoc, setEmbeddedPrintDoc] = useState<{
+    type: 'nota' | 'surat_jalan' | 'sample' | 'bon_produksi';
+    id: string;
+  } | null>(null);
+
+  // Global event listener for print requests across modules
+  useEffect(() => {
+    const handlePrintEvent = (e: Event) => {
+      const customEvt = e as CustomEvent<{
+        type: 'nota' | 'surat_jalan' | 'sample' | 'bon_produksi';
+        id: string;
+      }>;
+      if (customEvt.detail) {
+        setEmbeddedPrintDoc(customEvt.detail);
+      }
+    };
+    window.addEventListener('erp-open-print-doc', handlePrintEvent);
+    return () => window.removeEventListener('erp-open-print-doc', handlePrintEvent);
+  }, []);
+
+  // User Authentication & RBAC States
+  const [currentUser, setCurrentUser] = useState<User | null>(() => loadCurrentUser());
+  const [userList, setUserList] = useState<User[]>(() => loadUserData());
+
+  // Navigation Menu Focus Mode (Hide / Show Sidebar)
+  const [isSidebarHidden, setIsSidebarHidden] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('sms_sidebar_hidden');
+      return saved === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  // Reaktif simpan status isSidebarHidden ke localStorage setiap kali state berubah
+  useEffect(() => {
+    try {
+      localStorage.setItem('sms_sidebar_hidden', isSidebarHidden ? 'true' : 'false');
+    } catch (err) {
+      console.warn('Gagal menyimpan status sidebar ke localStorage:', err);
+    }
+  }, [isSidebarHidden]);
+
+  // Listener untuk sinkronisasi antar tab/window secara otomatis
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'sms_sidebar_hidden' && e.newValue !== null) {
+        setIsSidebarHidden(e.newValue === 'true');
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  const [isHoverPeek, setIsHoverPeek] = useState<boolean>(false);
+  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const clearHoverTimeout = () => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+  };
+
+  const handleMouseEnterToggle = () => {
+    if (isSidebarHidden) {
+      clearHoverTimeout();
+      setIsHoverPeek(true);
+    }
+  };
+
+  const handleMouseLeaveToggle = () => {
+    if (isSidebarHidden) {
+      clearHoverTimeout();
+      hoverTimeoutRef.current = setTimeout(() => {
+        setIsHoverPeek(false);
+      }, 300);
+    }
+  };
+
+  const handleMouseEnterSidebar = () => {
+    if (isSidebarHidden) {
+      clearHoverTimeout();
+      setIsHoverPeek(true);
+    }
+  };
+
+  const handleMouseLeaveSidebar = () => {
+    if (isSidebarHidden) {
+      clearHoverTimeout();
+      hoverTimeoutRef.current = setTimeout(() => {
+        setIsHoverPeek(false);
+      }, 250);
+    }
+  };
+
+  const handleToggleSidebar = () => {
+    clearHoverTimeout();
+    setIsHoverPeek(false);
+    setIsSidebarHidden((prev) => !prev);
+  };
+
+  // ERP State collections
+  const [petaniList, setPetaniList] = useState<Petani[]>(() => loadPetaniData());
+  const [barangList, setBarangList] = useState<Barang[]>(() => loadBarangData());
+  const [hargaList, setHargaList] = useState<TabelHarga[]>(() => loadHargaData());
+  const [transaksiList, setTransaksiList] = useState<TransaksiPembelian[]>(() => loadTransaksiData());
+  const [sampleList, setSampleList] = useState<PengirimanSample[]>(() => loadSampleData());
+  const [pengirimanList, setPengirimanList] = useState<PengirimanBarang[]>(() => loadPengirimanData());
+
+  
+  const [hargaJualList, setHargaJualList] = useState<MasterHargaJual[]>(() => loadHargaJualData());
+  const [batchSampleList, setBatchSampleList] = useState<BatchPengirimanSample[]>(() => loadBatchSampleData());
+  const [selectedBatchIdForShipment, setSelectedBatchIdForShipment] = useState<string>('');
+  
+
+  const [activeModuleId, setActiveModuleId] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('erp_tembakau_active_module');
+      return saved || 'modul-home';
+    } catch {
+      return 'modul-home';
+    }
+  });
+
+  useEffect(() => {
+    try {
+      if (activeModuleId) {
+        localStorage.setItem('erp_tembakau_active_module', activeModuleId);
+      }
+    } catch {
+      // ignore
+    }
+  }, [activeModuleId]);
+
+  // Sinkronisasi data riil dari backend PostgreSQL saat user terautentikasi
+  useEffect(() => {
+    if (currentUser) {
+      ErpApiService.getPetaniList().then((res) => {
+        if (res.fromBackend) {
+          setPetaniList(res.data);
+        }
+      });
+      ErpApiService.getBarangList().then((res) => {
+        if (res.fromBackend) {
+          setBarangList(normalizeStatusBal(res.data));
+        }
+      });
+      ErpApiService.getTransaksiList().then((res) => {
+        if (res.fromBackend) {
+          setTransaksiList(res.data);
+        }
+      });
+      ErpApiService.getHargaList().then((res) => {
+        if (res.fromBackend) {
+          setHargaList(res.data);
+        }
+      });
+      ErpApiService.getUserList().then((res) => {
+        if (res.fromBackend) {
+          setUserList(res.data);
+        }
+      });
+      ErpApiService.getHargaJualList().then((res) => {
+        if (res.fromBackend) {
+          setHargaJualList(res.data);
+        }
+      });
+    }
+  }, [currentUser]);
+
+  // Modul terakhir yang dibuka disimpan di peramban. Saat halaman dimuat ulang
+  // hak aksesnya diperiksa ulang agar pengguna tidak masuk ke modul terlarang.
+  useEffect(() => {
+    if (!currentUser) return;
+    const isBlocked =
+      currentUser.status_aktif === false || !hasModuleAccess(currentUser.role, activeModuleId);
+    if (isBlocked && activeModuleId !== 'modul-home') {
+      setActiveModuleId('modul-home');
+    }
+  }, [currentUser, activeModuleId]);
+  const [targetKuponNo, setTargetKuponNo] = useState<string | undefined>(undefined);
+  const [targetTxId, setTargetTxId] = useState<string | undefined>(undefined);
+  const [targetBalNo, setTargetBalNo] = useState<string | undefined>(undefined);
+  const currentRole: UserRole = currentUser?.role || 'superadmin';
+
+  // Petani Modals & Drawers
+  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+  const [editingPetani, setEditingPetani] = useState<Petani | null>(null);
+  const [viewingPetani, setViewingPetani] = useState<Petani | null>(null);
+  const [printingPetani, setPrintingPetani] = useState<Petani | null>(null);
+  const [deactivatingPetani, setDeactivatingPetani] = useState<Petani | null>(null);
+  const [resettingCardPetani, setResettingCardPetani] = useState<Petani | null>(null);
+  const [isImportExportOpen, setIsImportExportOpen] = useState(false);
+
+  // Toast Notification
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'info' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  // Initial Load from localStorage
+  useEffect(() => {
+    setUserList(loadUserData());
+    setPetaniList(loadPetaniData());
+    setBarangList(normalizeStatusBal(loadBarangData()));
+    setHargaList(loadHargaData());
+    setTransaksiList(loadTransaksiData());
+    setSampleList(loadSampleData());
+    setPengirimanList(loadPengirimanData());
+    setHargaJualList(loadHargaJualData());
+    setBatchSampleList(loadBatchSampleData());
+
+  }, []);
+
+  // Kupon yang dikerjakan paralel (mis. Sortir dan Timbangan di tab/jendela lain)
+  // langsung ikut diperbarui begitu tab lain menyimpan perubahan.
+  useEffect(() => {
+    const handleDataChange = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEY_TRANSAKSI) {
+        setTransaksiList(loadTransaksiData());
+      } else if (e.key === STORAGE_KEY_BARANG) {
+        setBarangList(normalizeStatusBal(loadBarangData()));
+      }
+    };
+    window.addEventListener('storage', handleDataChange);
+    return () => window.removeEventListener('storage', handleDataChange);
+  }, []);
+
+  // Check RBAC module access whenever activeModuleId or currentUser changes
+  const handleSelectModule = (moduleId: string) => {
+    if (!currentUser) return;
+
+    if (currentUser.status_aktif === false && moduleId !== 'modul-home') {
+      showToast('Akun Anda dinonaktifkan. Silakan hubungi Administrator.', 'info');
+      setActiveModuleId('modul-home');
+      return;
+    }
+
+    if (hasModuleAccess(currentUser.role, moduleId)) {
+      setActiveModuleId(moduleId);
+    } else {
+      showToast(`Akses Ditolak: Role "${currentUser.role}" tidak memiliki wewenang untuk membuka modul ini.`, 'info');
+      setActiveModuleId('modul-home');
+    }
+  };
+
+  const handleSidebarClick = (moduleId: string) => {
+    setSelectedBatchIdForShipment('');
+    setTargetKuponNo(undefined);
+    setTargetTxId(undefined);
+    setTargetBalNo(undefined);
+    if (isSidebarHidden) {
+      clearHoverTimeout();
+      setIsHoverPeek(false);
+    }
+    handleSelectModule(moduleId);
+  };
+
+  // --- Auth Handlers ---
+  const handleLoginSuccess = (user: User) => {
+    setCurrentUser(user);
+    saveCurrentUser(user);
+    setUserList(loadUserData());
+    setActiveModuleId('modul-home');
+    showToast(`Selamat Datang, ${user.nama_lengkap}! Login berhasil.`);
+  };
+
+  const handleLogout = (autoLogout: boolean = false) => {
+    setCurrentUser(null);
+    saveCurrentUser(null);
+    clearAllDrafts();
+    if (autoLogout === true) {
+      showToast('Sesi berakhir otomatis karena tidak ada aktivitas selama 30 menit demi keamanan.', 'info');
+    } else {
+      showToast('Anda telah berhasil keluar dari sistem.', 'info');
+    }
+  };
+
+  // --- Penjaga Draf: Denyut Hidup & Penanda Penutupan ---
+  // Selama aplikasi terbuka, denyut ini memperbarui waktu 'masih hidup' dan
+  // membatalkan penanda penutupan yang mungkin ditinggalkan tab lain. Saat
+  // halaman ditinggalkan secara wajar, penandanya ditulis sehingga draf
+  // cadangan tidak ikut dipulihkan pada pembukaan berikutnya.
+  useEffect(() => {
+    if (!currentUser) return;
+
+    touchDraftAlive();
+    const heartbeat = setInterval(touchDraftAlive, 15 * 1000);
+    const handlePageHide = () => markDraftCleanExit();
+    window.addEventListener('pagehide', handlePageHide);
+
+    return () => {
+      clearInterval(heartbeat);
+      window.removeEventListener('pagehide', handlePageHide);
+    };
+  }, [currentUser]);
+
+  // Beri tahu operator bila isian yang belum sempat disimpan berhasil kembali.
+  const recoveryNotified = useRef(false);
+  useEffect(() => {
+    if (!currentUser || recoveryNotified.current) return;
+    const { restored } = getDraftRecovery();
+    if (restored > 0) {
+      recoveryNotified.current = true;
+      showToast('Isian yang belum sempat disimpan berhasil dipulihkan setelah sesi sebelumnya terputus.', 'info');
+    }
+  }, [currentUser]);
+
+  // --- Auto Logout (Idle Timer) ---
+  useEffect(() => {
+    if (!currentUser) return; // Only track idle if logged in
+
+    let idleTimer: ReturnType<typeof setTimeout>;
+    let isThrottled = false;
+
+    const resetIdleTimer = () => {
+      clearTimeout(idleTimer);
+      // Set to 30 minutes (30 * 60 * 1000 ms)
+      idleTimer = setTimeout(() => {
+        handleLogout(true);
+      }, 30 * 60 * 1000);
+    };
+
+    const handleUserActivity = () => {
+      // Throttle timer reset to at most once per second for performance (e.g. mousemove)
+      if (!isThrottled) {
+        resetIdleTimer();
+        isThrottled = true;
+        setTimeout(() => { isThrottled = false; }, 1000);
+      }
+    };
+
+    // Initial setup
+    resetIdleTimer();
+
+    // Listen to standard activity events
+    const activityEvents = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'];
+    activityEvents.forEach((eventName) => {
+      window.addEventListener(eventName, handleUserActivity);
+    });
+
+    return () => {
+      clearTimeout(idleTimer);
+      activityEvents.forEach((eventName) => {
+        window.removeEventListener(eventName, handleUserActivity);
+      });
+    };
+  }, [currentUser]);
+
+  // --- User Management Handlers ---
+  const handleSaveUser = async (savedUser: User) => {
+    const existingUser = userList.find((u) => u.user_id === savedUser.user_id);
+    const exists = Boolean(existingUser);
+    
+    try {
+      const saved = await ErpApiService.saveUser(savedUser, exists);
+      let updated: User[];
+      if (exists) {
+        updated = userList.map((u) => u.user_id === saved.user_id ? saved : u);
+        showToast(`Data akun pengguna "${saved.nama_lengkap}" berhasil diperbarui.`);
+        if (currentUser?.user_id === saved.user_id) {
+          setCurrentUser(saved);
+          saveCurrentUser(saved);
+        }
+      } else {
+        updated = [saved, ...userList.filter(u => u.user_id !== saved.user_id)];
+        showToast(`Akun "${saved.username}" berhasil didaftarkan.`);
+      }
+      setUserList(updated);
+      saveUserData(updated);
+    } catch (err: any) {
+      showToast(err?.message || 'Gagal menyimpan data pengguna ke sistem.', 'info');
+    }
+  };
+
+  const handleDeleteUser = (userId: string) => {
+    const target = userList.find((u) => u.user_id === userId);
+    const updated = userList.filter((u) => u.user_id !== userId);
+    setUserList(updated);
+    saveUserData(updated);
+    showToast(`Akun pengguna "${target?.nama_lengkap || userId}" berhasil dihapus dari sistem.`);
+  };
+
+  const handleToggleUserStatus = async (userId: string) => {
+    const target = userList.find((u) => u.user_id === userId);
+    if (!target) return;
+    const nextStatus = !target.status_aktif;
+
+    try {
+      await ErpApiService.toggleUserStatus(userId, nextStatus);
+    } catch (err: any) {
+      console.warn('Gagal mengubah status pengguna di backend:', err);
+    }
+
+    const updated = userList.map((u) => {
+      if (u.user_id === userId) {
+        return { ...u, status_aktif: nextStatus };
+      }
+      return u;
+    });
+    setUserList(updated);
+    saveUserData(updated);
+    showToast(`Akun "${target.nama_lengkap}" sekarang ${nextStatus ? 'AKTIF' : 'NONAKTIF'}.`);
+  };
+
+  const handleResetUserPassword = async (userId: string, newPass: string) => {
+    try {
+      await ErpApiService.resetUserPassword(userId, newPass);
+    } catch (err: any) {
+      console.warn('Gagal mereset kata sandi di backend:', err);
+    }
+    const hashedPass = await hashPassword(newPass);
+    const updated = userList.map((u) => u.user_id === userId ? { ...u, password: hashedPass } : u);
+    setUserList(updated);
+    saveUserData(updated);
+    const target = userList.find((u) => u.user_id === userId);
+    showToast(`Kata sandi untuk pengguna "${target?.nama_lengkap}" berhasil direset.`);
+  };
+
+  // --- PRD 4.1: Petani Handlers ---
+  const handleSavePetani = async (petaniData: Petani) => {
+    const exists = Boolean(editingPetani);
+
+    try {
+      const saved = await ErpApiService.savePetani(petaniData, exists);
+
+      let updated: Petani[];
+      if (exists) {
+        updated = petaniList.map((p) =>
+          p.petani_id === saved.petani_id ? saved : p
+        );
+        showToast(`Data petani "${saved.nama_petani}" berhasil diperbarui.`);
+      } else {
+        updated = [saved, ...petaniList.filter((p) => p.petani_id !== saved.petani_id)];
+        showToast(`Petani baru "${saved.nama_petani}" (${saved.petani_id}) berhasil disimpan ke PostgreSQL!`);
+      }
+
+      setPetaniList(updated);
+      savePetaniData(updated);
+      setIsFormModalOpen(false);
+      setEditingPetani(null);
+    } catch (err: any) {
+      showToast(err?.message || 'Gagal menyimpan data petani ke PostgreSQL.', 'info');
+    }
+  };
+
+  const handleConfirmStatusToggle = async (petaniId: string, reason: string) => {
+    const target = petaniList.find((p) => p.petani_id === petaniId);
+    if (!target) {
+      setDeactivatingPetani(null);
+      showToast('Data petani tidak ditemukan. Muat ulang halaman lalu coba lagi.', 'info');
+      return;
+    }
+
+    const isNowActive = !target.status_aktif;
+
+    try {
+      await ErpApiService.savePetani({
+        petani_id: petaniId,
+        status_aktif: isNowActive,
+        alasan_nonaktif: isNowActive ? undefined : reason,
+      }, true);
+    } catch (err) {
+      console.warn('Gagal sync status petani ke PostgreSQL:', err);
+    }
+
+    const updated = petaniList.map((p) =>
+      p.petani_id === petaniId
+        ? { ...p, status_aktif: isNowActive, alasan_nonaktif: isNowActive ? undefined : reason }
+        : p,
+    );
+
+    setPetaniList(updated);
+    savePetaniData(updated);
+    setDeactivatingPetani(null);
+
+    recordAuditLog({
+      user_nama: currentUser?.nama_lengkap || 'Sistem',
+      user_role: currentRole,
+      modul: 'Master Petani',
+      aksi: isNowActive ? 'AKTIFKAN_PETANI' : 'NONAKTIFKAN_PETANI',
+      target_id: petaniId,
+      deskripsi: isNowActive
+        ? `Mengaktifkan kembali petani ${target.nama_petani} (${petaniId})`
+        : `Menonaktifkan petani ${target.nama_petani} (${petaniId})`,
+      rincian_perubahan: reason ? [`Alasan: ${reason}`] : undefined,
+    });
+
+    showToast(
+      isNowActive
+        ? `Petani "${target.nama_petani}" kembali aktif dan dapat dipilih di loket sortir.`
+        : `Petani "${target.nama_petani}" dinonaktifkan dan tidak lagi muncul di pilihan sortir.`,
+    );
+  };
+
+  const handleConfirmResetCardNumber = (petaniId: string, newCardNumber: string) => {
+    const updated = petaniList.map((p) => {
+      if (p.petani_id === petaniId) {
+        return {
+          ...p,
+          petani_id: newCardNumber,
+        };
+      }
+      return p;
+    });
+
+    setPetaniList(updated);
+    savePetaniData(updated);
+
+    // Sinkronisasi id petani pada data transaksi jika ada
+    const updatedTx = transaksiList.map((t) => {
+      if (t.petani_id === petaniId) {
+        return { ...t, petani_id: newCardNumber };
+      }
+      return t;
+    });
+    setTransaksiList(updatedTx);
+    saveTransaksiData(updatedTx);
+
+    // Sinkronisasi id petani pada data barang jika ada
+    const updatedBarang = barangList.map((b) => {
+      if (b.petani_id === petaniId) {
+        return { ...b, petani_id: newCardNumber };
+      }
+      return b;
+    });
+    setBarangList(updatedBarang);
+    saveBarangData(updatedBarang);
+
+    setResettingCardPetani(null);
+    showToast(`ID Petani berhasil diubah menjadi ${newCardNumber}`);
+  };
+
+  // Impor petani disimpan satu per satu ke server sesuai urutan daftar,
+  // sehingga ID Petani terbit berurutan (baris pertama = ID terkecil)
+  const handleImportSuccess = async (imported: Petani[]) => {
+    const daftar = (Array.isArray(imported) ? imported : [])
+      .filter((p) => p && typeof p.nama_petani === 'string' && p.nama_petani.trim());
+    if (daftar.length === 0) {
+      showToast('Gagal impor: tidak ada nama petani yang valid.', 'info');
+      return;
+    }
+
+    setIsImportExportOpen(false);
+    showToast(`Menyimpan ${daftar.length} petani...`);
+
+    const tersimpan: Petani[] = [];
+    let pesanGagal = '';
+    for (let i = 0; i < daftar.length; i++) {
+      const p = daftar[i];
+      try {
+        const hasil = await ErpApiService.savePetani({
+          nama_petani: p.nama_petani.trim(),
+          no_hp: p.no_hp || '',
+          alamat: p.alamat || '',
+          desa_kecamatan: p.desa_kecamatan || undefined,
+          status_aktif: true,
+          tanggal_daftar: new Date().toISOString().split('T')[0],
+        }, false);
+        tersimpan.push(hasil);
+      } catch (err: any) {
+        // Berhenti agar urutan ID tidak loncat; sisa daftar bisa diimpor ulang
+        pesanGagal = `Berhenti di baris ${i + 1} (${p.nama_petani}): ${err?.message || 'gagal disimpan'}`;
+        break;
+      }
+    }
+
+    if (tersimpan.length > 0) {
+      const idBaru = new Set(tersimpan.map((p) => p.petani_id));
+      const combined = [...tersimpan.slice().reverse(), ...petaniList.filter((p) => !idBaru.has(p.petani_id))];
+      setPetaniList(combined);
+      savePetaniData(combined);
+    }
+
+    if (pesanGagal) {
+      showToast(`${tersimpan.length} dari ${daftar.length} petani tersimpan. ${pesanGagal}`, 'info');
+    } else {
+      showToast(`${tersimpan.length} petani berhasil diimpor.`);
+    }
+  };
+
+  const handleDeletePetani = async (petaniId: string) => {
+    const target = petaniList.find((p) => p.petani_id === petaniId);
+    try {
+      await ErpApiService.deletePetani(petaniId);
+    } catch (err: any) {
+      console.warn('Gagal menonaktifkan petani di backend API:', err);
+    }
+
+    const updated = petaniList.map((p) =>
+      p.petani_id === petaniId
+        ? { ...p, status_aktif: false, alasan_nonaktif: 'Dinonaktifkan oleh pengguna' }
+        : p
+    );
+    setPetaniList(updated);
+    savePetaniData(updated);
+    setViewingPetani(null);
+    showToast(`Data petani "${target?.nama_petani || petaniId}" (${target?.petani_id || ''}) berhasil dinonaktifkan.`);
+  };
+
+  // --- PRD 4.2: Harga Handlers ---
+  const handleSaveNewPrice = (newPrice: TabelHarga, oldPriceIdToArchive?: string) => {
+    let updatedList = [...hargaList];
+
+    // Check if this is an in-place update of an existing price record
+    const existingIndex = updatedList.findIndex((h) => h.harga_id === newPrice.harga_id);
+
+    if (existingIndex !== -1) {
+      // In-place edit of existing price
+      updatedList[existingIndex] = newPrice;
+    } else {
+      // Archive previous active price if specified and distinct
+      if (oldPriceIdToArchive && oldPriceIdToArchive !== newPrice.harga_id) {
+        updatedList = updatedList.map((h) =>
+          h.harga_id === oldPriceIdToArchive ? { ...h, status: 'nonaktif' as const } : h
+        );
+      }
+      // Prepend new price record, ensuring uniqueness
+      updatedList = [newPrice, ...updatedList.filter((h) => h.harga_id !== newPrice.harga_id)];
+    }
+
+    setHargaList(updatedList);
+    saveHargaData(updatedList);
+    showToast(`Tarif baru Grade ${newPrice.kode_grade} (Rp ${newPrice.harga_per_kg.toLocaleString('id-ID')}) aktif!`);
+  };
+
+  const handleDeleteHarga = (hargaId: string) => {
+    const target = hargaList.find((h) => h.harga_id === hargaId);
+    const updated = hargaList.filter((h) => h.harga_id !== hargaId);
+    setHargaList(updated);
+    saveHargaData(updated);
+    showToast(`Tarif Grade "${target?.kode_grade || hargaId}" (Rp ${(target?.harga_per_kg || 0).toLocaleString('id-ID')}) berhasil dihapus dari Master Harga.`);
+  };
+
+  // ---  Transaksi Pembelian Handlers ---
+  const handleSaveTransaksi = (
+    newTx: TransaksiPembelian,
+    generatedBarang: Barang | Barang[],
+    meta: SaveTransaksiMeta = {}
+  ) => {
+    if (currentUser?.status_aktif === false) {
+      showToast('Akun Anda dinonaktifkan. Aksi tidak dapat dilakukan.', 'info');
+      return;
+    }
+
+    const oldTxRaw = transaksiList.find((t) => t.transaksi_id === newTx.transaksi_id);
+    const oldTx = oldTxRaw ? JSON.parse(JSON.stringify(oldTxRaw)) as TransaksiPembelian : undefined;
+    const exists = Boolean(oldTx);
+    
+    const updatedTxList = exists
+      ? transaksiList.map((t) => (t.transaksi_id === newTx.transaksi_id ? newTx : t))
+      : [newTx, ...transaksiList];
+    setTransaksiList(updatedTxList);
+    saveTransaksiData(updatedTxList);
+
+    const barangsToAdd = Array.isArray(generatedBarang) ? generatedBarang : (generatedBarang ? [generatedBarang] : []);
+    
+    // Always clean up orphaned barangs for this transaction
+    const validRefsForTx = new Set<string>();
+    barangsToAdd.forEach(b => validRefsForTx.add(b.barang_id));
+    newTx.items?.forEach(i => {
+      if (i.barang_id) validRefsForTx.add(i.barang_id);
+      if (i.no_bal) validRefsForTx.add(i.no_bal);
+      if (i.barcode) validRefsForTx.add(i.barcode);
+    });
+    newTx.barang_ids?.forEach(id => validRefsForTx.add(id));
+    
+    let updatedBarangList = barangList;
+    if (exists) {
+      updatedBarangList = barangList.filter((b) => {
+        if (b.transaksi_pembelian_id === newTx.transaksi_id) {
+          // Keep only if it's in the new updated list or still referenced in the transaction items
+          return validRefsForTx.has(b.barang_id) || validRefsForTx.has(b.no_bal);
+        }
+        return true;
+      });
+    }
+
+    if (barangsToAdd.length > 0) {
+      // Gabung dengan data bal lama: status mengikuti hasil timbang, tetapi bal yang
+      // sedang menjadi sample atau sudah dikirim tidak dikembalikan ke gudang.
+      const prevById = new Map<string, Barang>(updatedBarangList.map((b) => [b.barang_id, b]));
+      const mergedById = new Map<string, Barang>(
+        barangsToAdd.map((b): [string, Barang] => {
+          const prev = prevById.get(b.barang_id);
+          return [b.barang_id, { ...prev, ...b, status_stok: resolveStatusStok(prev?.status_stok, b.berat_kg) }];
+        })
+      );
+      const newBarangs = barangsToAdd.filter((b) => !prevById.has(b.barang_id)).map((b) => mergedById.get(b.barang_id)!);
+      updatedBarangList = [
+        ...newBarangs,
+        ...updatedBarangList.map((b) => mergedById.get(b.barang_id) || b),
+      ];
+    }
+    
+    setBarangList(updatedBarangList);
+    saveBarangData(updatedBarangList);
+
+    const balCount = newTx.total_bal || (newTx.items ? newTx.items.length : 1);
+    const itemBalList = (newTx.items && newTx.items.length > 0)
+      ? newTx.items.map((i) => i.no_bal || i.barcode).join(', ')
+      : newTx.no_bal || '-';
+
+    const updatedPetaniList = petaniList.map((p) => {
+      if (p.petani_id === newTx.petani_id) {
+        let totalBalDelta = balCount;
+        let totalKgDelta = newTx.berat_kg || 0;
+
+        if (exists && oldTx) {
+          const oldBalCount = oldTx.total_bal || (oldTx.items ? oldTx.items.length : 1);
+          totalBalDelta -= oldBalCount;
+          totalKgDelta -= (oldTx.berat_kg || 0);
+        }
+
+        const totalBal = Math.max(0, (p.statistik?.total_setoran_bal || 0) + totalBalDelta);
+        const totalKg = Math.max(0, (p.statistik?.total_berat_kg || 0) + totalKgDelta);
+
+        return {
+          ...p,
+          statistik: {
+            ...p.statistik,
+            total_setoran_bal: totalBal,
+            total_berat_kg: totalKg,
+            kunjungan_terakhir: (newTx.tanggal_transaksi ? newTx.tanggal_transaksi.split(' ')[0] : '') || new Date().toISOString().split('T')[0],
+            grade_dominan: `Grade ${newTx.kode_grade}`,
+          },
+        };
+      }
+      return p;
+    });
+    setPetaniList(updatedPetaniList);
+    savePetaniData(updatedPetaniList);
+
+    // Integrasi Audit Trail Activity Log
+    if (meta.audit) {
+      recordAuditLog({
+        user_nama: currentUser?.nama_lengkap || 'Sistem',
+        user_role: currentRole,
+        modul: 'Transaksi Pembelian',
+        aksi: meta.audit.aksi,
+        target_id: newTx.no_kupon,
+        deskripsi: meta.audit.deskripsi,
+        rincian_perubahan: meta.audit.rincian_perubahan,
+      });
+    } else if (meta.skipAudit) {
+      // Pemanggil sudah mencatat audit sendiri
+    } else if (exists && oldTx) {
+      // Cek apakah baru saja dicatat dengan detail kaya oleh TransaksiEditModal
+      const isRecentlyLoggedByModal = Boolean(
+        newTx.terakhir_diubah_pada &&
+        Math.abs(new Date().getTime() - new Date(newTx.terakhir_diubah_pada).getTime()) < 5000
+      );
+
+      if (!isRecentlyLoggedByModal) {
+        const diffSummary: string[] = [];
+        if (oldTx.nama_petani !== newTx.nama_petani) {
+          diffSummary.push(`Petani: "${oldTx.nama_petani}" -> "${newTx.nama_petani}"`);
+        }
+        if (oldTx.kode_grade !== newTx.kode_grade) {
+          diffSummary.push(`Grade: ${oldTx.kode_grade} -> ${newTx.kode_grade}`);
+        }
+        if (oldTx.berat_kg !== newTx.berat_kg) {
+          diffSummary.push(`Netto: ${oldTx.berat_kg} Kg -> ${newTx.berat_kg} Kg (Δ ${normalizeKg(newTx.berat_kg - oldTx.berat_kg)} Kg)`);
+        }
+        if ((oldTx.harga_final || oldTx.total_harga_beli) !== (newTx.harga_final || newTx.total_harga_beli)) {
+          diffSummary.push(`Nilai: Rp ${(oldTx.harga_final || oldTx.total_harga_beli).toLocaleString('id-ID')} -> Rp ${(newTx.harga_final || newTx.total_harga_beli).toLocaleString('id-ID')}`);
+        }
+        if (oldTx.status_pembayaran !== newTx.status_pembayaran) {
+          diffSummary.push(`Status bayar: ${oldTx.status_pembayaran} -> ${newTx.status_pembayaran}`);
+        }
+
+        recordAuditLog({
+          user_nama: currentUser?.nama_lengkap || 'Sistem',
+          user_role: currentRole,
+          modul: 'Transaksi Pembelian',
+          aksi: 'UBAH_TRANSAKSI',
+          target_id: newTx.no_kupon,
+          deskripsi: `Koreksi data kupon ${newTx.no_kupon} (${newTx.nama_petani})`,
+          rincian_perubahan: diffSummary.length > 0 ? diffSummary : ['Pembaruan rincian timbang/status'],
+        });
+      }
+    } else {
+      recordAuditLog({
+        user_nama: currentUser?.nama_lengkap || 'Sistem',
+        user_role: currentRole,
+        modul: 'Transaksi Pembelian',
+        aksi: 'TAMBAH_TRANSAKSI',
+        target_id: newTx.no_kupon,
+        deskripsi: `Pencatatan kupon baru ${newTx.no_kupon} (Petani: ${newTx.nama_petani}, ${balCount} Bal)`,
+      });
+    }
+
+    if (!meta.silent) {
+      showToast(`Kupon ${newTx.no_kupon} (${balCount} Bal, ${newTx.berat_kg} Kg) berhasil disimpan!`);
+    }
+  };
+
+  const handleDeleteTransaksi = (transaksiId: string, alasanHapus?: string) => {
+    if (currentUser?.status_aktif === false) {
+      showToast('Akun Anda dinonaktifkan. Aksi tidak dapat dilakukan.', 'info');
+      return;
+    }
+
+    const txToDelete = transaksiList.find((t) => t.transaksi_id === transaksiId);
+    if (!txToDelete) return;
+
+    // Kupon yang balnya sudah dikirim lewat Surat Jalan tidak boleh dihapus
+    const noBalTerkirim = balTerkirimDariTransaksi(txToDelete, barangList, pengirimanList);
+    if (noBalTerkirim.length > 0) {
+      showToast(pesanTransaksiTerkunci(txToDelete, noBalTerkirim), 'info');
+      return;
+    }
+
+    recordAuditLog({
+      user_nama: currentUser?.nama_lengkap || 'Sistem',
+      user_role: currentRole,
+      modul: 'Transaksi Pembelian',
+      aksi: 'HAPUS_TRANSAKSI',
+      target_id: txToDelete.no_kupon,
+      deskripsi: `Penghapusan kupon ${txToDelete.no_kupon} (Petani: ${txToDelete.nama_petani}). Alasan: ${alasanHapus || 'Tanpa keterangan'}`,
+      rincian_perubahan: [`Alasan: ${alasanHapus || '-'}`],
+    });
+
+    // 1. Remove from transaksiList
+    const updatedTxList = transaksiList.filter((t) => t.transaksi_id !== transaksiId);
+    setTransaksiList(updatedTxList);
+    saveTransaksiData(updatedTxList);
+
+    // 2. Remove generated bal from barangList
+    const txItemBalIds = new Set(
+      (txToDelete.items || []).map((i) => i.barang_id || i.no_bal)
+    );
+    const updatedBarangList = barangList.filter((b) => {
+      if (b.transaksi_pembelian_id === transaksiId || (b as any).transaksi_id === transaksiId) return false;
+      if (b.barang_id && txItemBalIds.has(b.barang_id)) return false;
+      if (b.no_bal && (b.no_bal === txToDelete.no_bal || txItemBalIds.has(b.no_bal))) return false;
+      return true;
+    });
+    setBarangList(updatedBarangList);
+    saveBarangData(updatedBarangList);
+
+    // 3. Recalculate Petani statistics
+    const balCount = txToDelete.total_bal || (txToDelete.items ? txToDelete.items.length : 1);
+    const updatedPetaniList = petaniList.map((p) => {
+      if (p.petani_id === txToDelete.petani_id) {
+        const totalBal = Math.max(0, (p.statistik?.total_setoran_bal || 0) - balCount);
+        const totalKg = Math.max(0, (p.statistik?.total_berat_kg || 0) - txToDelete.berat_kg);
+        return {
+          ...p,
+          statistik: {
+            ...p.statistik,
+            total_setoran_bal: totalBal,
+            total_berat_kg: totalKg,
+          },
+        };
+      }
+      return p;
+    });
+    setPetaniList(updatedPetaniList);
+    savePetaniData(updatedPetaniList);
+
+    // 4. Record Detailed Audit Log for Deletion
+    const itemBalList = (txToDelete.items && txToDelete.items.length > 0)
+      ? txToDelete.items.map((i) => i.no_bal || i.barcode).join(', ')
+      : txToDelete.no_bal || '-';
+    const totalNilai = txToDelete.harga_final || txToDelete.total_harga_beli || 0;
+
+    
+
+    
+    showToast(`Transaksi ${transaksiId} dan data bal terkait berhasil dihapus.`);
+  };
+
+  // --- PRD 6.2: Pengiriman Sample Handlers ---
+  const handleSaveNewSample = (sample: PengirimanSample) => {
+    if (currentUser?.status_aktif === false) return showToast('Akun Anda dinonaktifkan.', 'info');
+    const updated = [sample, ...sampleList];
+    setSampleList(updated);
+    saveSampleData(updated);
+    showToast(`Sample bal ${sample.no_bal || "-"} berhasil dikirim.`);
+  };
+
+  const handleSaveBatchSamples = (newSamples: PengirimanSample[], updatedBarangs: Barang[]) => {
+    if (currentUser?.status_aktif === false) return showToast('Akun Anda dinonaktifkan.', 'info');
+    const updatedSampleList = [...newSamples, ...sampleList];
+    setSampleList(updatedSampleList);
+    saveSampleData(updatedSampleList);
+
+    const updatedBarangMap = new Map(updatedBarangs.map((b) => [b.barang_id, b]));
+    const updatedBarangList = barangList.map((b) => updatedBarangMap.get(b.barang_id) || b);
+    setBarangList(updatedBarangList);
+    saveBarangData(updatedBarangList);
+
+    showToast(`${newSamples.length} sampel tembakau berhasil diproses kirim ke Lab QC!`);
+  };
+
+  const handleUpdateSample = (sample: PengirimanSample) => {
+    const updated = sampleList.map((s) => (s.sample_id === sample.sample_id ? sample : s));
+    setSampleList(updated);
+    saveSampleData(updated);
+    showToast(`Status sampel bal ${sample.no_bal || "-"} diupdate menjadi "${sample.status.toUpperCase()}".`);
+  };
+
+  // --- PRD 6.1: Pengiriman Barang (DO) Handlers ---
+  const handleSaveNewPengiriman = (newPengiriman: PengirimanBarang, updatedBarangIds: string[]) => {
+    if (currentUser?.status_aktif === false) return showToast('Akun Anda dinonaktifkan.', 'info');
+    const updatedPengirimanList = [newPengiriman, ...pengirimanList];
+    setPengirimanList(updatedPengirimanList);
+    savePengirimanData(updatedPengirimanList);
+
+    const updatedSet = new Set(updatedBarangIds);
+    const updatedBarangList = barangList.map((b) => {
+      if (updatedSet.has(b.barang_id)) {
+        return {
+          ...b,
+          status_stok: 'keluar' as const,
+          pengiriman_id: newPengiriman.pengiriman_id,
+        };
+      }
+      return b;
+    });
+    setBarangList(updatedBarangList);
+    saveBarangData(updatedBarangList);
+
+    // If shipment was linked to a Batch Sample, mark those batch items as sent via DO
+    if (newPengiriman.batch_sample_id_ref) {
+      const targetBatchId = newPengiriman.batch_sample_id_ref;
+      const updatedBatches = batchSampleList.map((batch) => {
+        if (batch.batch_id === targetBatchId || batch.kode_batch === targetBatchId) {
+          const updatedItems = (batch.items || []).map((it) => {
+            if (updatedSet.has(it.barang_id)) {
+              return { ...it, sudah_dikirim_do: true };
+            }
+            return it;
+          });
+          const allSent = updatedItems.length > 0 && updatedItems.every((it) => it.sudah_dikirim_do || it.status_item === 'ditolak') && updatedItems.some(it => it.sudah_dikirim_do);
+          return {
+            ...batch,
+            items: updatedItems,
+            status: allSent ? ('selesai' as const) : batch.status,
+          };
+        }
+        return batch;
+      });
+      setBatchSampleList(updatedBatches);
+      saveBatchSampleData(updatedBatches);
+    }
+
+    showToast(`Surat Jalan ${newPengiriman.no_surat_jalan} diterbitkan (${newPengiriman.total_bal} bal keluar)!`);
+  };
+
+  const handleSaveHargaJual = async (item: MasterHargaJual) => {
+    try {
+      const saved = await ErpApiService.saveHargaJual(item);
+      const exists = hargaJualList.some((h) => h.harga_jual_id === saved.harga_jual_id);
+      const updated = exists 
+        ? hargaJualList.map((h) => h.harga_jual_id === saved.harga_jual_id ? saved : h)
+        : [saved, ...hargaJualList];
+      setHargaJualList(updated);
+      saveHargaJualData(updated);
+      showToast(`Harga jual "${saved.kode}" berhasil disimpan ke PostgreSQL.`);
+    } catch (err: any) {
+      showToast(err?.message || 'Gagal menyimpan harga jual ke sistem.', 'info');
+    }
+  };
+
+  const handleDeleteHargaJual = (id: string) => {
+    const updated = hargaJualList.filter((h) => h.harga_jual_id !== id);
+    setHargaJualList(updated);
+    saveHargaJualData(updated);
+    showToast('Harga jual berhasil dihapus.');
+  };
+
+
+  const handleSaveBatchSample = (newBatch: BatchPengirimanSample, updatedBarangs: Barang[]) => {
+    if (currentUser?.status_aktif === false) return showToast('Akun Anda dinonaktifkan.', 'info');
+    const updated = [newBatch, ...batchSampleList];
+    setBatchSampleList(updated);
+    saveBatchSampleData(updated);
+
+    if (updatedBarangs && updatedBarangs.length > 0) {
+      const updatedBarangMap = new Map(updatedBarangs.map((b) => [b.barang_id, b]));
+      const newBarangList = barangList.map((b) => updatedBarangMap.get(b.barang_id) || b);
+      setBarangList(newBarangList);
+      saveBarangData(newBarangList);
+    }
+    showToast(`Batch Sample ${newBatch.kode_batch} berhasil dikirim ke ${newBatch.tujuan_buyer}!`);
+  };
+
+
+  const handleDeleteBatchSample = (batchId: string, revertedBarangs?: Barang[]) => {
+    if (currentUser?.status_aktif === false) return showToast('Akun Anda dinonaktifkan.', 'info');
+    const kodeBatch = batchSampleList.find((b) => b.batch_id === batchId)?.kode_batch || '';
+    const list = batchSampleList.filter(b => b.batch_id !== batchId);
+    setBatchSampleList(list);
+    saveBatchSampleData(list);
+    
+    if (revertedBarangs && revertedBarangs.length > 0) {
+      const updatedBarangMap = new Map(revertedBarangs.map((b) => [b.barang_id, b]));
+      const newBarangList = barangList.map((b) => updatedBarangMap.get(b.barang_id) || b);
+      setBarangList(newBarangList);
+      saveBarangData(newBarangList);
+    }
+    
+    showToast(`Batch ${kodeBatch} berhasil dihapus.`);
+  };
+
+  const handleUpdateBatchSample = (updatedBatch: BatchPengirimanSample, updatedBarangs?: Barang[]) => {
+    const list = batchSampleList.map(b => b.batch_id === updatedBatch.batch_id ? updatedBatch : b);
+    setBatchSampleList(list);
+    saveBatchSampleData(list);
+    
+    if (updatedBarangs && updatedBarangs.length > 0) {
+      const updatedBarangMap = new Map(updatedBarangs.map((b) => [b.barang_id, b]));
+      const newBarangList = barangList.map((b) => updatedBarangMap.get(b.barang_id) || b);
+      setBarangList(newBarangList);
+      saveBarangData(newBarangList);
+    }
+    
+    showToast(`Batch ${updatedBatch.kode_batch} berhasil diperbarui.`);
+  };
+
+  const handleUpdatePengiriman = (updatedPengiriman: PengirimanBarang) => {
+    const list = pengirimanList.map(p => p.pengiriman_id === updatedPengiriman.pengiriman_id ? updatedPengiriman : p);
+    setPengirimanList(list);
+    savePengirimanData(list);
+    showToast(`Data pengiriman DO berhasil diperbarui.`);
+  };
+
+  const handleDeletePengiriman = (pengirimanId: string, revertedBarangs?: Barang[]) => {
+    const target = pengirimanList.find((p) => p.pengiriman_id === pengirimanId);
+    if (target && isSuratJalanTerkunci(target)) {
+      showToast(pesanSuratJalanTerkunci(target), 'info');
+      return;
+    }
+
+    const list = pengirimanList.filter((p) => p.pengiriman_id !== pengirimanId);
+    setPengirimanList(list);
+    savePengirimanData(list);
+
+    if (revertedBarangs && revertedBarangs.length > 0) {
+      const updatedBarangMap = new Map(revertedBarangs.map((b) => [b.barang_id, b]));
+      const newBarangList = barangList.map((b) => updatedBarangMap.get(b.barang_id) || b);
+      setBarangList(newBarangList);
+      saveBarangData(newBarangList);
+    }
+    
+    showToast(`Pengiriman (DO) berhasil dihapus.`);
+  };
+
+  const handleUpdatePengirimanStatus = (pengirimanId: string, newStatus: string) => {
+    const updated = pengirimanList.map(p => p.pengiriman_id === pengirimanId ? { ...p, status: newStatus as any } : p);
+    setPengirimanList(updated);
+    savePengirimanData(updated);
+    showToast(`Status surat jalan ${pengirimanList.find((p) => p.pengiriman_id === pengirimanId)?.no_surat_jalan || ''} menjadi ${newStatus}.`);
+  };
+
+  // Laporan nilai/aset hanya memakai bal dari kupon yang sudah dibayar
+  const barangLunasList = useMemo(() => filterBarangLunas(barangList, transaksiList), [barangList, transaksiList]);
+
+  const totalPetani = petaniList.length;
+  const totalAktif = petaniList.filter((p) => p.status_aktif).length;
+  const totalNonaktif = totalPetani - totalAktif;
+
+  // Breadcrumb title map
+  const getPageTitleAndBreadcrumb = () => {
+    switch (activeModuleId) {
+      case 'modul-home':
+        return { title: 'Dasbor Menu Utama', breadcrumb: 'PR. SEKAR MAJU SEJAHTERA / Beranda' };
+      case 'modul-6-dashboard-analytic':
+        return { title: 'Dashboard Laporan & Analytic ERP', breadcrumb: 'Beranda / Dashboard Analytic' };
+      case 'modul-6-laporan-bal':
+        return { title: 'Laporan Bal Tembakau', breadcrumb: 'Beranda / Laporan Bal' };
+      case 'modul-6-laporan-kode-bal':
+        return { title: 'Laporan Kode Bal', breadcrumb: 'Beranda / Laporan Kode Bal' };
+      case 'modul-6-laporan-grade':
+        return { title: 'Laporan Harga', breadcrumb: 'Beranda / Laporan Harga' };
+      case 'modul-6-laporan-pembelian':
+        return { title: 'Laporan Pembelian Barang', breadcrumb: 'Beranda / Laporan Pembelian' };
+      case 'modul-6-laporan-petani':
+        return { title: 'Laporan Petani & Rekapitulasi Setoran', breadcrumb: 'Beranda / Laporan Petani' };
+      case 'modul-6-laporan-pengiriman':
+        return { title: 'Laporan Pengiriman & Distribusi Tembakau', breadcrumb: 'Beranda / Laporan Pengiriman' };
+      case 'modul-1-petani':
+        return { title: 'Master Data Petani', breadcrumb: 'Beranda / Master Petani' };
+      case 'modul-3-harga':
+        return { title: 'Master Harga Beli', breadcrumb: 'Beranda / Master Harga' };
+      case 'modul-3-harga-jual':
+        return { title: 'Master Harga Jual Pabrik', breadcrumb: 'Beranda / Master Harga Jual' };
+      case 'modul-0-sortir':
+        return { title: 'Sortir Mutu Grade & Sample Bal', breadcrumb: 'Beranda / Pembelian / Sortir' };
+      case 'modul-0-timbangan':
+        return { title: 'Meja Timbangan Bal', breadcrumb: 'Beranda / Pembelian / Timbangan' };
+      case 'modul-0-kasir':
+      case 'modul-0-transaksi':
+        return { title: 'Data Pembelian Barang (Kasir & Cetak Nota)', breadcrumb: 'Beranda / Pembelian / Kasir' };
+      case 'modul-5-pengiriman':
+        return { title: 'Pengiriman Reguler (DO Luar)', breadcrumb: 'Beranda / Pengiriman DO' };
+      case 'modul-4-sample':
+        return { title: 'Pengiriman Sample', breadcrumb: 'Beranda / Pengiriman Sample' };
+      case 'modul-status-batch':
+        return { title: 'Status & Detail Batch Sample', breadcrumb: 'Beranda / Status Batch' };
+      case 'modul-users':
+        return { title: 'Manajemen Pengguna (RBAC)', breadcrumb: 'Beranda / Manajemen Pengguna' };
+      default:
+        return { title: 'Sistem Data Gudang Tembakau', breadcrumb: 'PR. SEKAR MAJU SEJAHTERA / Sistem Data Gudang' };
+    }
+  };
+
+  const pageInfo = getPageTitleAndBreadcrumb();
+
+  // Seluruh halaman berada di balik autentikasi, termasuk rute cetak mandiri.
+  if (!currentUser) {
+    return <LoginView onLoginSuccess={handleLoginSuccess} />;
+  }
+
+  // Halaman cetak mandiri (?cetak=nota&id=...)
+  if (printParam) {
+    return (
+      <DedicatedPrintView
+        type={printParam.type}
+        id={printParam.id}
+        onClose={() => {
+          window.history.replaceState({}, '', window.location.pathname);
+          setPrintParam(null);
+        }}
+        isEmbedded={false}
+        transaksiList={transaksiList}
+        pengirimanList={pengirimanList}
+        barangList={barangList}
+        petaniList={petaniList}
+        tabelHarga={hargaList}
+      />
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#f4f6f9] text-[#212529] font-sans flex flex-col antialiased">
+      
+      {/* Top Professional ERP Header */}
+      <Header
+        totalPetani={totalPetani}
+        totalAktif={totalAktif}
+        totalNonaktif={totalNonaktif}
+        pageTitle={pageInfo.title}
+        pageBreadcrumb={pageInfo.breadcrumb}
+        currentUser={currentUser}
+        onLogout={handleLogout}
+        onOpenUsers={() => handleSelectModule('modul-users')}
+        allUsers={userList}
+        onToggleSidebar={handleToggleSidebar}
+        onMouseEnterToggle={handleMouseEnterToggle}
+        onMouseLeaveToggle={handleMouseLeaveToggle}
+        isSidebarHidden={isSidebarHidden}
+      />
+
+      {/* Main Workspace Layout */}
+      <div className="flex-1 flex overflow-hidden relative">
+        
+        {/* Left ERP Sidebar - Normal Pinned View */}
+        {!isSidebarHidden && (
+          <Sidebar
+            activeModuleId={activeModuleId}
+            onSelectModule={(modId) => {
+              handleSidebarClick(modId);
+            }}
+            petaniCount={totalPetani}
+            transaksiCount={transaksiList.length}
+            sampleCount={sampleList.length}
+            pengirimanCount={pengirimanList.length}
+            hargaJualCount={hargaJualList.length}
+            hargaCount={hargaList.length}
+            userCount={userList.length}
+            userRole={currentRole}
+          />
+        )}
+
+        {/* Left ERP Sidebar - Hover Peek Overlay View (when hidden) */}
+        {isSidebarHidden && isHoverPeek && (
+          <div
+            className="fixed top-14 left-0 bottom-0 z-40 shadow-2xl bg-white flex transition-all duration-150 animate-in fade-in slide-in-from-left-2 border-r border-gray-300"
+            onMouseEnter={handleMouseEnterSidebar}
+            onMouseLeave={handleMouseLeaveSidebar}
+          >
+            <Sidebar
+              activeModuleId={activeModuleId}
+              onSelectModule={(modId) => {
+                handleSidebarClick(modId);
+              }}
+              petaniCount={totalPetani}
+              transaksiCount={transaksiList.length}
+              sampleCount={sampleList.length}
+              pengirimanCount={pengirimanList.length}
+              hargaJualCount={hargaJualList.length}
+              hargaCount={hargaList.length}
+              userCount={userList.length}
+              userRole={currentRole}
+            />
+          </div>
+        )}
+
+        {/* Center Main Stage */}
+        <main className="flex-1 overflow-y-auto p-3 sm:p-4 bg-gray-50/40">
+          <div className="w-full space-y-2.5">
+            
+            {/* Dashboard Menu */}
+            {activeModuleId === 'modul-home' && (
+              <HomeDashboardView
+                onNavigate={(modId) => handleSelectModule(modId)}
+                petaniList={petaniList}
+                barangList={barangList}
+                transaksiList={transaksiList}
+                sampleList={sampleList}
+                pengirimanList={pengirimanList}
+                currentUser={currentUser}
+                userCount={userList.length}
+              />
+            )}
+
+            {/*  Dashboard Laporan & Analytic ERP */}
+            {activeModuleId === 'modul-6-dashboard-analytic' && (
+              <DashboardAnalyticView
+                transaksiList={transaksiList}
+                barangList={barangList}
+                sampleList={sampleList}
+                pengirimanList={pengirimanList}
+                hargaList={hargaList}
+                hargaJualList={hargaJualList}
+                userRole={currentRole}
+                onNavigateToModule={(modId) => handleSelectModule(modId)}
+              />
+            )}
+
+            {/* Laporan Bal Tembakau */}
+            {activeModuleId === 'modul-6-laporan-bal' && (
+              <LaporanBalView
+                barangList={barangList}
+                
+                petaniList={petaniList}
+                transaksiList={transaksiList}
+                hargaList={hargaList}
+                userRole={currentRole}
+                onNavigateToTransaksi={() => handleSelectModule('modul-0-transaksi')}
+              />
+            )}
+
+            {/* Laporan Kode Bal */}
+            {activeModuleId === 'modul-6-laporan-kode-bal' && (
+              <LaporanKodeBalView barangList={barangLunasList} />
+            )}
+
+            {/* Laporan Harga */}
+            {activeModuleId === 'modul-6-laporan-grade' && (
+              <LaporanGradeView
+                initialTab="beli"
+                hargaJualList={hargaJualList}
+                hargaList={hargaList}
+                barangList={barangLunasList}
+                transaksiList={transaksiList}
+                pengirimanList={pengirimanList}
+                sampleList={sampleList}
+                
+                userRole={currentRole}
+                onNavigateToHarga={() => handleSelectModule('modul-3-harga')}
+                onNavigateToHargaJual={() => handleSelectModule('modul-3-harga-jual')}
+              />
+            )}
+
+            {/* Laporan Pembelian Barang */}
+            {activeModuleId === 'modul-6-laporan-pembelian' && (
+              <LaporanPembelianBarangView
+                transaksiList={transaksiList}
+                petaniList={petaniList}
+                userRole={currentRole}
+                onNavigateToTransaksi={() => handleSelectModule('modul-0-transaksi')}
+              />
+            )}
+
+            {/* Laporan Petani & Rekapitulasi Setoran */}
+            {activeModuleId === 'modul-6-laporan-petani' && (
+              <LaporanPetaniView
+                petaniList={petaniList}
+                transaksiList={transaksiList}
+                barangList={barangList}
+                userRole={currentRole}
+                onNavigateToTransaksi={() => handleSelectModule('modul-0-transaksi')}
+              />
+            )}
+
+            {/* Laporan Pengiriman & Distribusi Tembakau */}
+            {activeModuleId === 'modul-6-laporan-pengiriman' && (
+              <LaporanPengirimanView
+                pengirimanList={pengirimanList}
+                sampleList={sampleList}
+                barangList={barangList}
+                
+                userRole={currentRole}
+                onNavigateToSample={() => handleSelectModule('modul-4-sample')}
+              />
+            )}
+
+            {/* PRD 4.1: Master Petani */}
+            {activeModuleId === 'modul-1-petani' && (
+              <PetaniTable
+                data={petaniList}
+                userRole={currentRole}
+                transaksiList={transaksiList}
+                onAddPetani={() => {
+                  setEditingPetani(null);
+                  setIsFormModalOpen(true);
+                }}
+                onEditPetani={(p) => {
+                  setEditingPetani(p);
+                  setIsFormModalOpen(true);
+                }}
+                onViewDetail={(p) => setViewingPetani(p)}
+                onPrintCard={(p) => setPrintingPetani(p)}
+                onToggleStatus={(p) => setDeactivatingPetani(p)}
+                onResetCardNumber={(p) => setResettingCardPetani(p)}
+                onOpenImportExport={() => setIsImportExportOpen(true)}
+              />
+            )}
+
+            {/* PRD 4.2: Master Harga Beli */}
+            {activeModuleId === 'modul-3-harga' && (
+              <HargaManagement
+                hargaList={hargaList}
+                userRole={currentRole}
+                onSaveNewPrice={handleSaveNewPrice}
+              />
+            )}
+
+
+            {/*  Proses 1 - Sortir Page */}
+            {activeModuleId === 'modul-0-sortir' && (
+              <SortirPageView
+                petaniList={petaniList}
+                hargaList={hargaList}
+                transaksiList={transaksiList}
+                barangList={barangList}
+                
+                userRole={currentRole}
+                currentUser={currentUser}
+                onSaveTransaksi={(newTx, newBarangs, meta) => handleSaveTransaksi(newTx, newBarangs, { silent: true, ...meta })}
+                onDeleteTransaksi={handleDeleteTransaksi}
+                onNavigateToTimbangan={(kuponNo, txId, balNo) => {
+                  setTargetKuponNo(kuponNo);
+                  setTargetTxId(txId);
+                  setTargetBalNo(balNo);
+                  handleSelectModule('modul-0-timbangan');
+                }}
+              />
+            )}
+
+            {/*  Proses 2 - Timbangan Page */}
+            {activeModuleId === 'modul-0-timbangan' && (
+              <TimbanganPageView
+                transaksiList={transaksiList}
+                petaniList={petaniList}
+                hargaList={hargaList}
+                barangList={barangList}
+                
+                userRole={currentRole}
+                currentUser={currentUser}
+                initialKuponNo={targetKuponNo}
+                initialTxId={targetTxId}
+                initialBalNo={targetBalNo}
+                onSaveTransaksi={(newTx, newBarangs, meta) => {
+                  handleSaveTransaksi(newTx, newBarangs, { ...meta, silent: true });
+                  showToast(`Data timbangan kupon ${newTx.no_kupon} diperbarui!`);
+                }}
+                onNavigateToKasir={(kuponNo, txId) => {
+                  setTargetKuponNo(kuponNo);
+                  setTargetTxId(txId);
+                  setTargetBalNo(undefined);
+                  handleSelectModule('modul-0-kasir');
+                }}
+                onNavigateToSortir={() => {
+                  handleSelectModule('modul-0-sortir');
+                }}
+              />
+            )}
+
+            {/*  Proses 3 - Kasir & Rekap Data Pembelian Page */}
+            {(activeModuleId === 'modul-0-kasir' || activeModuleId === 'modul-0-transaksi') && (
+              <KasirPageView
+                transaksiList={transaksiList}
+                petaniList={petaniList}
+                hargaList={hargaList}
+                barangList={barangList}
+                
+                userRole={currentRole}
+                currentUser={currentUser}
+                initialKuponNo={targetKuponNo}
+                initialTxId={targetTxId}
+                onSaveTransaksi={handleSaveTransaksi}
+                onDeleteTransaksi={handleDeleteTransaksi}
+                onNavigateToSortir={() => {
+                  handleSelectModule('modul-0-sortir');
+                }}
+                onNavigateToTimbangan={(kuponNo, txId) => {
+                  setTargetKuponNo(kuponNo);
+                  setTargetTxId(txId);
+                  handleSelectModule('modul-0-timbangan');
+                }}
+              />
+            )}
+
+            {/* PRD 6.2: Pengiriman Sample */}
+            {activeModuleId === 'modul-4-sample' && (
+              <SampleManagement
+                sampleList={sampleList}
+                batchSampleList={batchSampleList}
+                barangList={barangList}
+                
+                petaniList={petaniList}
+                hargaJualList={hargaJualList}
+                hargaList={hargaList}
+                transaksiList={transaksiList}
+                userRole={currentRole}
+                onSaveNewSample={handleSaveNewSample}
+                onSaveBatchSamples={handleSaveBatchSamples}
+
+                onSaveBatchSample={handleSaveBatchSample}
+                onUpdateBatchSample={handleUpdateBatchSample}
+                onDeleteBatchSample={handleDeleteBatchSample}
+                onUpdateSample={handleUpdateSample}
+                onNavigateToPengiriman={(batchId) => {
+                  if (batchId) {
+                    setSelectedBatchIdForShipment(batchId);
+                    handleSelectModule('modul-5-pengiriman');
+                  } else {
+                    handleSelectModule('modul-status-batch');
+                  }
+                }}
+              />
+            )}
+
+            {/* PRD 6.1: Pengiriman Reguler (DO Luar) */}
+            {activeModuleId === 'modul-5-pengiriman' && (
+              <PengirimanManagement
+                pengirimanList={pengirimanList}
+                barangList={barangList}
+                sampleList={sampleList}
+                batchSampleList={batchSampleList}
+                selectedBatchId={selectedBatchIdForShipment}
+                
+                petaniList={petaniList}
+                hargaJualList={hargaJualList}
+                tabelHarga={hargaList}
+                transaksiList={transaksiList}
+                userRole={currentRole}
+                onSaveNewPengiriman={handleSaveNewPengiriman}
+                onUpdatePengiriman={handleUpdatePengiriman}
+                onDeletePengiriman={handleDeletePengiriman}
+                onNavigateToStatusBatch={() => handleSelectModule('modul-status-batch')}
+              />
+            )}
+
+            {/*  Manajemen Pengguna (RBAC 5 Role) */}
+            {activeModuleId === 'modul-users' && (
+              <UserManagement
+                userList={userList}
+                currentUser={currentUser}
+                
+                onSaveUser={handleSaveUser}
+                onToggleStatus={handleToggleUserStatus}
+                onResetPassword={handleResetUserPassword}
+              />
+            )}
+
+            {/* Master Harga Jual */}
+            {activeModuleId === 'modul-3-harga-jual' && (
+              <HargaJualManagement
+                hargaJualList={hargaJualList}
+                onSaveHargaJual={handleSaveHargaJual}
+              />
+            )}
+
+            {/* Status & Detail Batch */}
+            {activeModuleId === 'modul-status-batch' && (
+              <StatusBatchPengirimanManagement
+                batchSampleList={batchSampleList}
+                pengirimanList={pengirimanList}
+                barangList={barangList}
+                hargaJualList={hargaJualList}
+                onUpdateBatchSample={handleUpdateBatchSample}
+                onDeleteBatchSample={handleDeleteBatchSample}
+                onUpdatePengirimanStatus={handleUpdatePengirimanStatus}
+                onDeletePengiriman={handleDeletePengiriman}
+                onNavigateToPengirimanWithBatch={(batchId) => {
+                  setSelectedBatchIdForShipment(batchId);
+                  handleSelectModule('modul-5-pengiriman');
+                }}
+              />
+            )}
+
+            {/* Log Aktivitas */}
+            
+
+          </div>
+        </main>
+
+      </div>
+
+      {/* Petani Modals */}
+      <PetaniFormModal
+        isOpen={isFormModalOpen}
+        onClose={() => {
+          setIsFormModalOpen(false);
+          setEditingPetani(null);
+        }}
+        onSave={handleSavePetani}
+        existingPetaniList={petaniList}
+        editingPetani={editingPetani}
+      />
+
+      <PetaniCardPrintModal
+        isOpen={Boolean(printingPetani)}
+        onClose={() => setPrintingPetani(null)}
+        petani={printingPetani}
+      />
+
+      <PetaniDetailDrawer
+        isOpen={Boolean(viewingPetani)}
+        onClose={() => setViewingPetani(null)}
+        petani={viewingPetani}
+        userRole={currentRole}
+        transaksiList={transaksiList}
+        onEdit={(p) => {
+          setViewingPetani(null);
+          setEditingPetani(p);
+          setIsFormModalOpen(true);
+        }}
+        onPrintCard={(p) => setPrintingPetani(p)}
+        onToggleStatus={(p) => setDeactivatingPetani(p)}
+        onResetCard={(p) => setResettingCardPetani(p)}
+      />
+
+      <PetaniDeactivateModal
+        isOpen={Boolean(deactivatingPetani)}
+        onClose={() => setDeactivatingPetani(null)}
+        onConfirm={handleConfirmStatusToggle}
+        petani={deactivatingPetani}
+      />
+
+      <PetaniResetCardModal
+        isOpen={Boolean(resettingCardPetani)}
+        onClose={() => setResettingCardPetani(null)}
+        petani={resettingCardPetani}
+        onConfirmReset={handleConfirmResetCardNumber}
+        existingPetaniList={petaniList}
+      />
+
+      <PetaniImportExportModal
+        isOpen={isImportExportOpen}
+        onClose={() => setIsImportExportOpen(false)}
+        petaniList={petaniList}
+        onImportSuccess={handleImportSuccess}
+      />
+
+      {/* Universal In-App Print & PDF Preview Modal */}
+      {embeddedPrintDoc && (
+        <DedicatedPrintView
+          type={embeddedPrintDoc.type}
+          id={embeddedPrintDoc.id}
+          onClose={() => setEmbeddedPrintDoc(null)}
+          isEmbedded={true}
+          transaksiList={transaksiList}
+          pengirimanList={pengirimanList}
+          barangList={barangList}
+          petaniList={petaniList}
+          tabelHarga={hargaList}
+        />
+      )}
+
+      {/* Toast Notification Popup */}
+      {toast && (
+        <div className="fixed bottom-5 right-5 z-50 flex items-center space-x-2 bg-slate-900 text-white px-4 py-3 rounded-sm shadow-xl border border-slate-800 animate-in slide-in-from-bottom-5 duration-150">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span className="text-xs font-semibold">{toast.message}</span>
+        </div>
+      )}
+
+    </div>
+  );
+}
+>>>>>>> Stashed changes

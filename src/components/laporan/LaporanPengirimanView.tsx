@@ -211,7 +211,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
     const totalKgKirim = filteredPengirimanList.reduce((sum, p) => sum + (p.total_berat_kg || 0), 0);
     
     const countDiterima = filteredPengirimanList.filter((p) => p.status === 'diterima' || p.status === 'selesai').length;
-    const countDalamPerjalanan = filteredPengirimanList.filter((p) => p.status === 'dalam_perjalanan').length;
+    const countDalamPerjalanan = filteredPengirimanList.filter((p) => p.status === 'dalam_perjalanan' || p.status === 'dikirim').length;
     const countDimuat = filteredPengirimanList.filter((p) => p.status === 'dimuat').length;
 
     const totalSample = sampleList.length;
@@ -468,10 +468,16 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
   const renderStatusBadge = (status: string) => {
     switch (status) {
       case 'diterima':
-      case 'dikirim':
+      case 'selesai':
         return (
           <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xs text-[10px] font-bold">
-            Diterima Pabrik
+            {labelStatusDO(status)}
+          </span>
+        );
+      case 'dikirim':
+        return (
+          <span className="px-2 py-0.5 bg-sky-50 text-sky-700 border border-sky-200 rounded-xs text-[10px] font-bold">
+            Dikirim
           </span>
         );
       case 'dalam_perjalanan':
@@ -678,7 +684,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
                 {overallKPIs.countDalamPerjalanan + overallKPIs.countDimuat} DO
               </div>
               <div className="text-[10px] text-gray-500 font-medium mt-0.5">
-                Proses Distribusi
+                Dikirim, dimuat & di jalan
               </div>
             </div>
           </div>
@@ -760,9 +766,11 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
               className="w-full px-2 py-1.5 text-xs bg-gray-50 border border-gray-300 rounded-xs focus:bg-white focus:outline-none focus:border-[#b81d24]"
             >
               <option value="ALL">Semua Status</option>
-              <option value="diterima">Diterima Pabrik</option>
-              <option value="dalam_perjalanan">Dalam Perjalanan</option>
               <option value="dimuat">Sedang Dimuat</option>
+              <option value="dikirim">Dikirim</option>
+              <option value="dalam_perjalanan">Dalam Perjalanan</option>
+              <option value="diterima">Diterima Pabrik</option>
+              <option value="selesai">Selesai</option>
             </select>
           </div>
 
@@ -1522,7 +1530,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
           <KopSurat judul="Laporan Pengiriman & Distribusi" className="mb-2" />
           <div className="mb-4 flex items-center justify-between text-[10px] text-gray-500">
             <span>
-              Tujuan: {appliedFilters.pabrik !== 'ALL' ? appliedFilters.pabrik : 'Semua Pabrik'} • Status: {appliedFilters.status !== 'ALL' ? appliedFilters.status : 'Semua Status'}
+              Tujuan: {appliedFilters.pabrik !== 'ALL' ? appliedFilters.pabrik : 'Semua Pabrik'} • Status: {appliedFilters.status !== 'ALL' ? labelStatusDO(appliedFilters.status) : 'Semua Status'}
             </span>
             <span>Tanggal Ekspor: {formatDateHariBulanTahun(new Date().toISOString())}</span>
           </div>
@@ -1538,7 +1546,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
               <div className="text-sm font-bold font-mono text-gray-900">{overallKPIs.totalBalKirim} Bal</div>
             </div>
             <div>
-              <div className="text-[10px] text-gray-500 uppercase font-bold">Total Tonase Bersih</div>
+              <div className="text-[10px] text-gray-500 uppercase font-bold">Total Tonase Bruto</div>
               <div className="text-sm font-bold font-mono text-blue-900">{overallKPIs.totalKgKirim.toLocaleString('id-ID')} kg</div>
             </div>
             <div>

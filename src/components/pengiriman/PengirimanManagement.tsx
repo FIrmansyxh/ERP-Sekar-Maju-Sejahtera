@@ -168,7 +168,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   // Modal Pilih dari Stok Gudang untuk Pengiriman Reguler
   const [isStokModalOpen, setIsStokModalOpen] = useState(false);
   const [stokModalSearch, setStokModalSearch] = useState('');
-  const [stokModalGrade, setStokModalGrade] = useState('all');
   const [stokModalSelectedIds, setStokModalSelectedIds] = useState<string[]>([]);
 
   useUnsavedChangesWarning(selectedBalIds.length > 0 || regulerManifestBalIds.length > 0);
@@ -620,7 +619,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       if (!batchItem) {
         setScanAlert({
           type: 'error',
-          message: `PERINGATAN: Bal #${targetBal.no_bal || targetBal.barang_id} (${targetBal.kode_grade}) BUKAN bal dari Batch Sample ${activeBatch?.kode_batch || ''}!`,
+          message: `PERINGATAN: Bal #${targetBal.no_bal || targetBal.barang_id} BUKAN bal dari Batch Sample ${activeBatch?.kode_batch || ''}!`,
         });
         setScanInputText('');
         return;
@@ -647,13 +646,13 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       if (selectedBalIds.includes(targetBal.barang_id)) {
         setScanAlert({
           type: 'warning',
-          message: `Bal #${targetBal.no_bal || targetBal.barang_id} (${targetBal.kode_grade}) sudah dicentang siap kirim.`,
+          message: `Bal #${targetBal.no_bal || targetBal.barang_id} sudah dicentang siap kirim.`,
         });
       } else {
         setSelectedBalIds((prev) => [...prev, targetBal.barang_id]);
         setScanAlert({
           type: 'success',
-          message: `✓ Bal #${targetBal.no_bal || targetBal.barang_id} (${targetBal.kode_grade} - ${formatNumber(beratBrutoBal(targetBal), 1)}kg bruto) berhasil di-scan & dicentang siap kirim!`,
+          message: `✓ Bal #${targetBal.no_bal || targetBal.barang_id} (${formatNumber(beratBrutoBal(targetBal), 1)} kg bruto) berhasil di-scan & dicentang siap kirim!`,
         });
       }
       setScanInputText('');
@@ -695,7 +694,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
         setSelectedBalIds((prev) => [...prev, targetBal.barang_id]);
         setScanAlert({
           type: 'success',
-          message: `✓ Bal #${targetBal.no_bal || targetBal.barang_id} (${targetBal.kode_grade} - ${formatNumber(beratBrutoBal(targetBal), 1)}kg bruto) berhasil di-scan & dicentang siap kirim!`,
+          message: `✓ Bal #${targetBal.no_bal || targetBal.barang_id} (${formatNumber(beratBrutoBal(targetBal), 1)} kg bruto) berhasil di-scan & dicentang siap kirim!`,
         });
       }
       setScanInputText('');
@@ -733,7 +732,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   // Filtered bal for the warehouse selection modal
   const modalFilteredBalList = useMemo(() => {
     return availableBalList.filter((b) => {
-      if (stokModalGrade !== 'all' && b.kode_grade !== stokModalGrade) return false;
       if (stokModalSearch.trim()) {
         const q = stokModalSearch.toLowerCase().trim();
         const noBal = (b.no_bal || '').toLowerCase();
@@ -743,7 +741,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       }
       return true;
     });
-  }, [availableBalList, stokModalGrade, stokModalSearch]);
+  }, [availableBalList, stokModalSearch]);
 
   const handleConfirmStokModal = () => {
     if (stokModalSelectedIds.length === 0) return;
@@ -814,15 +812,12 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     const matches = pool.filter((b) => {
       const noBal = (b.no_bal || '').toLowerCase();
       const bId = (b.barang_id || '').toLowerCase();
-      const gr = (b.kode_grade || '').toLowerCase();
       const pet = (b.nama_petani || '').toLowerCase();
       const noBalClean = noBal.replace(/[^a-zA-Z0-9]/g, '');
 
       return (
         noBal.includes(q) ||
         bId.includes(q) ||
-        gr === q ||
-        gr.startsWith(q) ||
         pet.includes(q) ||
         (qClean && noBalClean.includes(qClean))
       );
@@ -883,7 +878,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
 
       setScanAlert({
         type: 'success',
-        message: `✓ Bal #${bal.no_bal || bal.barang_id} (${bal.kode_grade} - ${formatNumber(beratBrutoBal(bal), 1)}kg bruto) berhasil dicentang siap kirim!`,
+        message: `✓ Bal #${bal.no_bal || bal.barang_id} (${formatNumber(beratBrutoBal(bal), 1)} kg bruto) berhasil dicentang siap kirim!`,
       });
       setScanInputText('');
       setIsScanDropdownOpen(false);
@@ -924,7 +919,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       setSelectedBalIds((prev) => [...prev, bal.barang_id]);
       setScanAlert({
         type: 'success',
-        message: `✓ Bal #${bal.no_bal || bal.barang_id} (${bal.kode_grade} - ${formatNumber(beratBrutoBal(bal), 1)}kg bruto) berhasil dicentang ke muatan!`,
+        message: `✓ Bal #${bal.no_bal || bal.barang_id} (${formatNumber(beratBrutoBal(bal), 1)} kg bruto) berhasil dicentang ke muatan!`,
       });
       setScanInputText('');
       setIsScanDropdownOpen(false);
@@ -1595,7 +1590,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                             >
                               {isLoaded && <Check className="w-3 h-3 text-emerald-700" />}
                               <span>{it.no_bal || it.barang_id}</span>
-                              <span className="text-[10px] text-gray-500">({it.kode_grade})</span>
                               {isApproved && (
                                 <span className="text-[9px] bg-emerald-700 text-white px-1 rounded-xs">ACC</span>
                               )}
@@ -1634,7 +1628,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                   type="text"
                   value={noSuratJalan}
                   onChange={(e) => setNoSuratJalan(e.target.value.toUpperCase())}
-                  placeholder={cekNoSuratJalan.saran ? `Contoh: ${cekNoSuratJalan.saran}` : 'Contoh: SJ-PJM0001'}
                   className={`w-full px-2.5 py-1.5 bg-white border rounded-xs font-mono font-bold text-gray-900 uppercase placeholder:font-normal placeholder:normal-case focus:outline-none focus:ring-1 ${
                     cekNoSuratJalan.kembar ? 'border-red-500 bg-red-50 focus:ring-red-500' : 'border-gray-300 focus:ring-gray-700'
                   }`}
@@ -1845,9 +1838,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                                 <span className="font-mono font-bold text-xs text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded-xs border border-slate-300">
                                   #{bal.no_bal || bal.barang_id}
                                 </span>
-                                <span className="px-1.5 py-0.5 bg-gray-100 text-gray-700 border border-gray-300 text-[10px] font-bold rounded-xs">
-                                  Grade {bal.kode_grade}
-                                </span>
                                 <span className="text-[11px] font-mono font-semibold text-gray-600">
                                   {formatNumber(beratBrutoBal(bal), 1)} Kg bruto
                                 </span>
@@ -1947,7 +1937,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                         type="button"
                         onClick={() => {
                           setStokModalSearch('');
-                          setStokModalGrade('all');
                           setStokModalSelectedIds([]);
                           setIsStokModalOpen(true);
                         }}
@@ -2008,23 +1997,21 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                   {sourceMode === 'sample_batch' ? (
                     <colgroup>
                       <col className="w-[6%]" />
-                      <col className="w-[15%]" />
-                      <col className="w-[8%]" />
-                      <col className="w-[13%]" />
-                      <col className="w-[12%]" />
-                      <col className="w-[20%]" />
-                      <col className="w-[12%]" />
+                      <col className="w-[17%]" />
                       <col className="w-[14%]" />
+                      <col className="w-[14%]" />
+                      <col className="w-[21%]" />
+                      <col className="w-[13%]" />
+                      <col className="w-[15%]" />
                     </colgroup>
                   ) : (
                     <colgroup>
                       <col className="w-[6%]" />
-                      <col className="w-[14%]" />
-                      <col className="w-[7%]" />
-                      <col className="w-[12%]" />
                       <col className="w-[15%]" />
+                      <col className="w-[13%]" />
                       <col className="w-[18%]" />
-                      <col className="w-[11%]" />
+                      <col className="w-[19%]" />
+                      <col className="w-[12%]" />
                       <col className="w-[12%]" />
                       <col className="w-[5%]" />
                     </colgroup>
@@ -2035,7 +2022,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                         <>
                           <th className="p-2 text-center">Kirim</th>
                           <th className="p-2 text-center">No Bal</th>
-                          <th className="p-2 text-center">Grade</th>
                           <th className="p-2 text-center">Berat Bruto (Kg)</th>
                           <th className="p-2 text-center">Status Sample</th>
                           <th className="p-2 text-center">Kode Master Harga Jual</th>
@@ -2046,7 +2032,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                         <>
                           <th className="p-2 text-center">Kirim</th>
                           <th className="p-2 text-center">No Bal</th>
-                          <th className="p-2 text-center">Grade</th>
                           <th className="p-2 text-center">Berat Bruto (Kg)</th>
                           <th className="p-2 text-center">Petani</th>
                           <th className="p-2 text-center">Kode Master Harga Jual</th>
@@ -2064,7 +2049,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                       // ==========================================
                       (!activeBatchObj?.items || activeBatchObj.items.length === 0) ? (
                         <tr>
-                          <td colSpan={8} className="p-8 text-center bg-gray-50/50">
+                          <td colSpan={7} className="p-8 text-center bg-gray-50/50">
                             <div className="max-w-md mx-auto space-y-2">
                               <Package className="w-8 h-8 mx-auto text-gray-300" />
                               <div className="text-sm font-bold text-gray-800">
@@ -2128,13 +2113,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                                 </div>
                               </td>
 
-                              {/* Grade */}
-                              <td className="p-2 text-center font-bold">
-                                <span className="px-2 py-0.5 bg-slate-100 text-slate-800 border border-slate-200 rounded-xs font-mono text-[11px]">
-                                  {it.kode_grade}
-                                </span>
-                              </td>
-
                               {/* Berat (bisa dikoreksi saat kirim) */}
                               <td className="p-2 text-right">
                                 {renderBeratKirimInput(it.barang_id, beratGudang, it.sudah_dikirim_do)}
@@ -2190,7 +2168,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                       // ==========================================
                       regulerManifestObjects.length === 0 ? (
                         <tr>
-                          <td colSpan={9} className="p-8 text-center bg-gray-50/50">
+                          <td colSpan={8} className="p-8 text-center bg-gray-50/50">
                             <div className="max-w-md mx-auto space-y-2.5">
                               <Package className="w-9 h-9 mx-auto text-gray-300" />
                               <div className="text-sm font-bold text-gray-800">Tabel Muatan Masih Kosong</div>
@@ -2201,7 +2179,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                                 type="button"
                                 onClick={() => {
                                   setStokModalSearch('');
-                                  setStokModalGrade('all');
                                   setStokModalSelectedIds([]);
                                   setIsStokModalOpen(true);
                                 }}
@@ -2249,11 +2226,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                                   )}
                                 </div>
                               </td>
-                              <td className="p-2 text-center font-bold">
-                                <span className="px-2 py-0.5 bg-slate-100 text-slate-800 border border-slate-200 rounded-xs font-mono">
-                                  {bal.kode_grade}
-                                </span>
-                              </td>
                               <td className="p-2 text-right">
                                 {renderBeratKirimInput(bal.barang_id, beratBrutoBal(bal))}
                               </td>
@@ -2298,7 +2270,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                   {selectedBalIds.length > 0 && (
                     <tfoot className="bg-gray-100 font-bold border-t border-gray-300">
                       <tr>
-                        <td colSpan={3} className="p-2 text-right uppercase text-[11px]">
+                        <td colSpan={2} className="p-2 text-right uppercase text-[11px]">
                           Total Dicentang ({totalSelectedBal} Bal)
                         </td>
                         <td className="p-2 text-right font-mono whitespace-nowrap">
@@ -2440,16 +2412,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                     className="w-full pl-8 pr-3 py-1.5 bg-white border border-gray-300 rounded-xs focus:ring-1 focus:ring-gray-700 text-xs"
                   />
                 </div>
-                <select
-                  value={stokModalGrade}
-                  onChange={(e) => setStokModalGrade(e.target.value)}
-                  className="px-2.5 py-1.5 bg-white border border-gray-300 rounded-xs text-xs font-semibold"
-                >
-                  <option value="all">Semua Grade</option>
-                  {Array.from(new Set(availableBalList.map((b) => b.kode_grade))).filter(Boolean).sort().map((gr) => (
-                    <option key={gr} value={gr}>Grade {gr}</option>
-                  ))}
-                </select>
               </div>
 
               <div className="flex items-center space-x-2">
@@ -2472,7 +2434,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                   <tr>
                     <th className="p-2.5 w-10 text-center">Pilih</th>
                     <th className="p-2.5 w-28 text-center">No. Bal</th>
-                    <th className="p-2.5 w-20 text-center">Grade</th>
                     <th className="p-2.5 w-24 text-center">Bruto (Kg)</th>
                     <th className="p-2.5 text-center">Petani</th>
                     <th className="p-2.5 w-28 text-center">Status Muatan</th>
@@ -2481,7 +2442,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {modalFilteredBalList.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="p-8 text-center text-gray-500">
+                      <td colSpan={5} className="p-8 text-center text-gray-500">
                         Tidak ada bal tembakau di gudang yang sesuai dengan filter pencarian.
                       </td>
                     </tr>
@@ -2524,11 +2485,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                           </td>
                           <td className="p-2.5 font-mono font-bold text-gray-900">
                             #{b.no_bal || b.barang_id}
-                          </td>
-                          <td className="p-2.5 text-center">
-                            <span className="px-2 py-0.5 bg-slate-100 text-slate-800 border border-slate-200 rounded-xs font-mono font-bold text-[11px]">
-                              {b.kode_grade}
-                            </span>
                           </td>
                           <td className="p-2.5 text-right font-mono font-semibold text-gray-800">
                             {formatNumber(beratBrutoBal(b), 1)} Kg

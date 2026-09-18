@@ -408,7 +408,6 @@ const SuratJalanContent: React.FC<SuratJalanContentProps> = ({
   const balDetails = barangIds.map((id, index) => {
     const found = barangList.find((b) => b.barang_id === id);
     const barcodeVal = barcodeList[index] || (found ? found.barcode || found.barang_id : id);
-    const grade = found?.kode_grade || 'A';
     const berat = beratKirimBal(pengiriman, id, found);
 
     // Harga jual hanya dari data DO; tanpa harga beli atau angka pengganti.
@@ -419,7 +418,6 @@ const SuratJalanContent: React.FC<SuratJalanContentProps> = ({
     return {
       id,
       no_bal: found?.no_bal || barcodeVal,
-      kode_grade: grade,
       berat_kg: berat,
       harga_per_kg: pricePerKg,
       total_harga: subtotal,
@@ -509,11 +507,10 @@ const SuratJalanContent: React.FC<SuratJalanContentProps> = ({
           <thead>
             <tr className="bg-slate-100 border-b border-slate-400 font-bold text-slate-900 text-[11px]">
               <th className="p-2 border border-slate-300 text-center w-[6%]">No</th>
-              <th className="p-2 border border-slate-300 w-[22%]">No Bal</th>
-              <th className="p-2 border border-slate-300 text-center w-[12%]">Grade</th>
-              <th className="p-2 border border-slate-300 text-right w-[18%]">Berat Bruto</th>
-              <th className="p-2 border border-slate-300 text-right w-[21%]">Harga / Kg</th>
-              <th className="p-2 border border-slate-300 text-right w-[21%]">Total Nilai</th>
+              <th className="p-2 border border-slate-300 w-[28%]">No Bal</th>
+              <th className="p-2 border border-slate-300 text-right w-[20%]">Berat Bruto</th>
+              <th className="p-2 border border-slate-300 text-right w-[23%]">Harga / Kg</th>
+              <th className="p-2 border border-slate-300 text-right w-[23%]">Total Nilai</th>
             </tr>
           </thead>
           <tbody>
@@ -524,9 +521,6 @@ const SuratJalanContent: React.FC<SuratJalanContentProps> = ({
                 </td>
                 <td className="p-1.5 border border-slate-300 font-mono font-bold text-slate-900 truncate" title={b.no_bal}>
                   {b.no_bal}
-                </td>
-                <td className="p-1.5 border border-slate-300 text-center font-bold">
-                  Grade {b.kode_grade}
                 </td>
                 <td className="p-1.5 border border-slate-300 text-right font-mono font-semibold text-slate-900 whitespace-nowrap">
                   {b.berat_kg.toLocaleString('id-ID', { maximumFractionDigits: 1 })} kg
@@ -542,7 +536,7 @@ const SuratJalanContent: React.FC<SuratJalanContentProps> = ({
 
             {/* Total Row */}
             <tr className="bg-slate-100 font-bold border-t-2 border-slate-400 text-slate-900">
-              <td colSpan={3} className="p-2 border border-slate-300 text-right uppercase text-[11px]">
+              <td colSpan={2} className="p-2 border border-slate-300 text-right uppercase text-[11px]">
                 TOTAL {totalItemsCount} BAL:
               </td>
               <td className="p-2 border border-slate-300 text-right font-mono font-black text-slate-950 text-xs whitespace-nowrap">

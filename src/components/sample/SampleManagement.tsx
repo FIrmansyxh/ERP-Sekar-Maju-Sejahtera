@@ -226,7 +226,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
         statusType: 'in_current_batch' as const,
         badgeText: 'SUDAH DIPILIH',
         badgeClass: 'bg-amber-100 text-amber-800 border-amber-300',
-        message: `⚠️ BAL SUDAH DIPILIH: Bal #${bal.no_bal || bal.barang_id} (${bal.kode_grade}) sudah ada dalam tabel draft sample batch ini!`,
+        message: `⚠️ BAL SUDAH DIPILIH: Bal #${bal.no_bal || bal.barang_id} sudah ada dalam tabel draft sample batch ini!`,
         detail: 'Sudah tercantum di tabel draft di bawah.',
       };
     }
@@ -261,7 +261,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
         statusType: 'used_in_batch' as const,
         badgeText: `SUDAH DIPAKAI: ${matchedBatch.kode_batch}`,
         badgeClass: 'bg-red-100 text-red-800 border-red-300',
-        message: `⚠️ NO BAL SUDAH DIPAKAI: Bal #${bal.no_bal || bal.barang_id} (Grade ${bal.kode_grade}) SUDAH DIGUNAKAN pada Batch Sample "${matchedBatch.kode_batch}" (Tujuan: ${matchedBatch.tujuan_buyer} • Status: ${statusText} • Tgl Kirim: ${matchedBatch.tanggal_kirim || '-'})!`,
+        message: `⚠️ NO BAL SUDAH DIPAKAI: Bal #${bal.no_bal || bal.barang_id} SUDAH DIGUNAKAN pada Batch Sample "${matchedBatch.kode_batch}" (Tujuan: ${matchedBatch.tujuan_buyer} • Status: ${statusText} • Tgl Kirim: ${matchedBatch.tanggal_kirim || '-'})!`,
         detail: `Batch: ${matchedBatch.kode_batch} (${matchedBatch.tujuan_buyer})`,
         batch: matchedBatch,
       };
@@ -294,7 +294,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
       badgeText: 'TERSEDIA',
       badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-300',
       message: `Bal #${bal.no_bal || bal.barang_id} siap digunakan.`,
-      detail: `Grade ${bal.kode_grade} • ${formatNumber(beratBrutoBal(bal), 1)} kg bruto`,
+      detail: `${formatNumber(beratBrutoBal(bal), 1)} kg bruto`,
     };
   };
 
@@ -346,7 +346,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
     setPendingScanBal(bal);
     setScanSampleAlert({
       type: 'success',
-      message: `✓ No Bal #${bal.no_bal || bal.barang_id} (Grade ${bal.kode_grade} - ${formatNumber(beratBrutoBal(bal), 1)} kg bruto) dipilih. Lanjut ke No Jadi.`,
+      message: `✓ No Bal #${bal.no_bal || bal.barang_id} (${formatNumber(beratBrutoBal(bal), 1)} kg bruto) dipilih. Lanjut ke No Jadi.`,
     });
     setIsBalDropdownOpen(false);
     setScanGudang(bal.no_bal || bal.barang_id);
@@ -437,7 +437,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
     setPendingScanBal(targetBal);
     setScanSampleAlert({
       type: 'success',
-      message: `✓ No Bal #${targetBal.no_bal || targetBal.barang_id} (Grade ${targetBal.kode_grade} - ${formatNumber(beratBrutoBal(targetBal), 1)} kg bruto) ditemukan. Lanjut ke No Jadi.`,
+      message: `✓ No Bal #${targetBal.no_bal || targetBal.barang_id} (${formatNumber(beratBrutoBal(targetBal), 1)} kg bruto) ditemukan. Lanjut ke No Jadi.`,
     });
     setTimeout(() => inputPembeliRef.current?.focus(), 100);
   };
@@ -1230,7 +1230,6 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
               </label>
               <input
                 type="text"
-                placeholder={cekNoSuratSample.saran ? `Contoh: ${cekNoSuratSample.saran}` : 'Contoh: SAMPLE-PJM0001'}
                 value={noSuratSample}
                 onChange={(e) => setNoSuratSample(e.target.value.toUpperCase())}
                 className={`w-full px-2.5 py-1.5 text-xs bg-white border rounded-xs font-mono font-bold uppercase text-gray-900 placeholder:font-sans placeholder:font-normal placeholder:normal-case focus:outline-none focus:ring-1 ${
@@ -1429,7 +1428,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                                     </span>
                                   </div>
                                   <div className="text-[10px] text-gray-500 truncate mt-0.5">
-                                    Grade {bal.kode_grade} • {formatNumber(beratBrutoBal(bal), 1)} kg bruto • Petani: {bal.nama_petani || '-'} • {usage.detail}
+                                    {formatNumber(beratBrutoBal(bal), 1)} kg bruto • Petani: {bal.nama_petani || '-'} • {usage.detail}
                                   </div>
                                 </div>
                                 {!usage.isAvailable && (
@@ -1549,7 +1548,6 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                     <th className="p-2.5 w-10 text-center border-r border-gray-200">No</th>
                     <th className="p-2.5 w-28 border-r border-gray-200">No Bal</th>
                     <th className="p-2.5 w-28 border-r border-gray-200">No Jadi</th>
-                    <th className="p-2.5 w-16 text-center border-r border-gray-200">Grade</th>
                     <th className="p-2.5 text-right w-32 border-r border-gray-200">Harga Beli (Rp/Kg)</th>
                     <th className="p-2.5 text-right w-24 border-r border-gray-200">Bruto (Kg)</th>
                     <th className="p-2.5 text-right w-36 border-r border-gray-200">Harga Tawar/Deal (Rp)</th>
@@ -1560,7 +1558,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                 <tbody className="divide-y divide-gray-200">
                   {selectedBalItems.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="p-8 text-center text-gray-500">
+                      <td colSpan={8} className="p-8 text-center text-gray-500">
                         <Package className="w-8 h-8 text-gray-300 mx-auto mb-2" />
                         <span className="font-semibold block text-gray-500">Belum ada bal dipilih</span>
                       </td>
@@ -1576,11 +1574,6 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                           <td className="p-2.5 text-center font-mono text-gray-500 border-r border-gray-200">{idx + 1}</td>
                           <td className="p-2.5 font-mono font-bold text-gray-900 border-r border-gray-200">{item.noBal}</td>
                           <td className="p-2.5 font-mono font-bold text-[#b81d24] border-r border-gray-200">{item.kodeBalPembeli}</td>
-                          <td className="p-2.5 text-center border-r border-gray-200">
-                            <span className="px-1.5 py-0.5 bg-[#b81d24] text-white font-mono text-[10px] font-bold rounded-2xs">
-                              {item.grade}
-                            </span>
-                          </td>
                           <td className="p-2.5 text-right font-mono border-r border-gray-200 font-bold text-emerald-800 bg-emerald-50/30">
                             {formatRupiah(hrgBeli)}
                           </td>
@@ -1611,7 +1604,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                 {selectedBalItems.length > 0 && (
                   <tfoot className="bg-gray-50 font-bold border-t border-gray-300 text-gray-900">
                     <tr>
-                      <td colSpan={4} className="p-2.5 text-right uppercase text-[11px] text-gray-600 tracking-wide border-r border-gray-200">
+                      <td colSpan={3} className="p-2.5 text-right uppercase text-[11px] text-gray-600 tracking-wide border-r border-gray-200">
                         Total {selectedBalItems.length} Bal
                       </td>
                       <td className="p-2.5 text-right font-mono border-r border-gray-200 text-[11px] text-gray-500">

@@ -280,12 +280,12 @@ export const PembayaranKasirModal: React.FC<PembayaranKasirModalProps> = ({
               {/* No Transaksi Referensi */}
               <div>
                 <label className="block text-[11px] font-semibold text-gray-600 mb-1">
-                  No. Transaksi (Referensi)
+                  No. Kupon (Referensi)
                 </label>
                 <input
                   type="text"
                   readOnly
-                  value={transaksi.transaksi_id}
+                  value={transaksi.no_kupon}
                   className="w-full bg-gray-50 border border-gray-200 rounded-sm px-2.5 py-1.5 text-xs text-gray-800 font-mono font-bold cursor-not-allowed focus:outline-none"
                 />
               </div>

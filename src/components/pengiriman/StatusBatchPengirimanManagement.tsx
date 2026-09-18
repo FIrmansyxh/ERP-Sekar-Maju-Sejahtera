@@ -202,7 +202,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
     const item = batchItems[matchedIndex];
     setScanSortirFeedback({
       type: 'success',
-      message: `Bal #${item.no_bal} (${item.kode_grade} - ${formatNumber(beratBrutoItemSample(item), 1)}kg bruto) ditemukan! Status saat ini: ${item.status_item.toUpperCase()}`,
+      message: `Bal #${item.no_bal} (${formatNumber(beratBrutoItemSample(item), 1)} kg bruto) ditemukan! Status saat ini: ${item.status_item.toUpperCase()}`,
       itemRef: item,
     });
     setScanSortirInput('');
@@ -610,7 +610,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                   </div>
                   <input
                     type="text"
-                    placeholder="Ketik no. surat sample (Misal: SAMPLE-PJM0001)..."
+                    placeholder="Ketik no. surat sample..."
                     value={scanBatchId}
                     onChange={(e) => {
                       setScanBatchId(e.target.value);
@@ -933,8 +933,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                 <thead className="bg-gray-100 border-b border-gray-300 text-gray-700 font-bold">
                   <tr>
                     <th className="p-3 w-10 text-center">No</th>
-                    <th className="p-3 w-36">No Bal / ID</th>
-                    <th className="p-3 text-center w-20">Grade</th>
+                    <th className="p-3 w-36">No Bal</th>
                     <th className="p-3 text-right w-24">Berat Bruto (Kg)</th>
                     <th className="p-3 text-center w-48">Status Sortir Pembeli</th>
                     <th className="p-3 w-56">Kode Master Harga Jual</th>
@@ -948,7 +947,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                 <tbody className="divide-y divide-gray-200">
                   {displayedBatchItems.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="p-8 text-center text-gray-500 bg-gray-50/50">
+                      <td colSpan={10} className="p-8 text-center text-gray-500 bg-gray-50/50">
                         Tidak ada bal dengan filter status ini pada batch terpilih.
                       </td>
                     </tr>
@@ -970,11 +969,6 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                           <td className="p-3 text-center font-mono text-gray-500">{idx + 1}</td>
                           <td className="p-3 font-mono font-bold text-gray-900">
                             <div>{item.no_bal || item.barang_id}</div>
-                          </td>
-                          <td className="p-3 text-center font-bold">
-                            <span className="px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded-xs font-mono">
-                              {item.kode_grade}
-                            </span>
                           </td>
                           <td className="p-3 text-right font-mono font-bold">
                             {formatNumber(beratBrutoItemSample(item), 1)} kg
@@ -1103,7 +1097,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                 {displayedBatchItems.length > 0 && (
                   <tfoot className="bg-gray-100 font-bold border-t border-gray-300">
                     <tr>
-                      <td colSpan={3} className="p-3 text-right uppercase text-[11px]">
+                      <td colSpan={2} className="p-3 text-right uppercase text-[11px]">
                         Total ({displayedBatchItems.length} Bal)
                       </td>
                       <td className="p-3 text-right font-mono">

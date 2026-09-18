@@ -78,7 +78,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
 
       if (searchQuery.trim() !== '') {
         const q = searchQuery.toLowerCase().trim();
-        const matchName = user.nama_lengkap.toLowerCase().includes(q);
+        const matchName = (user.nama_lengkap || '').toLowerCase().includes(q);
         const matchUsername = user.username.toLowerCase().includes(q);
         const matchId = user.user_id.toLowerCase().includes(q);
         const matchEmail = (user.email || '').toLowerCase().includes(q);

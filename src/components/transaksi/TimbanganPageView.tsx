@@ -1148,7 +1148,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                 </h3>
               </div>
               <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-mono font-medium border border-gray-200">
-                {pendingOrRecentTxList.length} Batch
+                {pendingOrRecentTxList.length} Kupon
               </span>
             </div>
 

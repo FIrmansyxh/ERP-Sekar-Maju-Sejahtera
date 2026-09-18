@@ -81,7 +81,6 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
   const balDetails = barangIds.map((id, index) => {
     const found = barangList.find((b) => b.barang_id === id);
     const barcodeVal = barcodeList[index] || (found ? found.barcode || found.barang_id : id);
-    const grade = found?.kode_grade || 'A';
     const berat = beratKirimBal(pengiriman, id, found);
     
     // Priority 1: Agreed deal price from Sample Batch negotiation
@@ -94,19 +93,13 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
 
     const subtotal = Math.round(berat * pricePerKg);
 
-    const kodeHarga = pengiriman.kode_harga_jual_map?.[id];
-    const displayGrade = kodeHarga || grade;
-    const keteranganStr = `Tembakau Madura Grade ${displayGrade}`;
-
     return {
       barang_id: id,
       no_bal: found?.no_bal || barcodeVal,
       barcode: barcodeVal,
-      kode_grade: typeof displayGrade !== 'undefined' ? displayGrade : grade,
       berat_kg: berat,
       harga_per_kg: pricePerKg,
       total_harga: subtotal,
-      keterangan: keteranganStr,
     };
   });
 
@@ -259,11 +252,10 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
                 <thead>
                   <tr className="bg-gray-100 border-b border-gray-400 font-bold text-gray-900 text-[11px]">
                     <th className="p-2 border border-gray-300 text-center w-[6%]">No</th>
-                    <th className="p-2 border border-gray-300 w-[22%]">No Bal</th>
-                    <th className="p-2 border border-gray-300 text-center w-[12%]">Grade</th>
-                    <th className="p-2 border border-gray-300 text-right w-[18%]">Berat Bruto</th>
-                    <th className="p-2 border border-gray-300 text-right w-[21%]">Harga / Kg</th>
-                    <th className="p-2 border border-gray-300 text-right w-[21%]">Total Harga</th>
+                    <th className="p-2 border border-gray-300 w-[28%]">No Bal</th>
+                    <th className="p-2 border border-gray-300 text-right w-[20%]">Berat Bruto</th>
+                    <th className="p-2 border border-gray-300 text-right w-[23%]">Harga / Kg</th>
+                    <th className="p-2 border border-gray-300 text-right w-[23%]">Total Harga</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -271,11 +263,6 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
                     <tr key={idx} className={idx % 2 === 1 ? 'bg-gray-50/70' : 'bg-white'}>
                       <td className="p-1.5 border border-gray-300 text-center font-mono text-gray-600">{idx + 1}</td>
                       <td className="p-1.5 border border-gray-300 font-mono font-bold text-gray-900 truncate" title={b.no_bal}>{b.no_bal}</td>
-                      <td className="p-1.5 border border-gray-300 text-center font-bold">
-                        <span className="px-1.5 py-0.5 bg-gray-100 border border-gray-300 text-gray-900 rounded-none text-[10px]">
-                          {b.kode_grade}
-                        </span>
-                      </td>
                       <td className="p-1.5 border border-gray-300 text-right font-mono font-semibold text-gray-900 whitespace-nowrap">
                         {b.berat_kg.toLocaleString('id-ID', { maximumFractionDigits: 2 })} kg
                       </td>
@@ -290,7 +277,7 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
 
                   {/* Summary Subtotal Row */}
                   <tr className="bg-gray-100 font-bold border-t-2 border-gray-400 text-gray-900">
-                    <td colSpan={3} className="p-2 border border-gray-300 text-right uppercase text-[11px]">
+                    <td colSpan={2} className="p-2 border border-gray-300 text-right uppercase text-[11px]">
                       TOTAL {totalItemsCount} BAL:
                     </td>
                     <td className="p-2 border border-gray-300 text-right font-mono font-black text-rose-900 text-xs whitespace-nowrap">
@@ -330,7 +317,7 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
             <div className="border border-gray-200 p-2.5 bg-gray-50/50 text-[10px] text-gray-600 mb-6 space-y-0.5">
               <strong className="block text-gray-800 uppercase font-bold text-[10px]">Syarat & Ketentuan Pengiriman:</strong>
               <ol className="list-decimal pl-4 space-y-0.5">
-                <li>Barang tembakau telah diperiksa bersama dalam kondisi baik, kering, terbungkus rapi dan sesuai grade mutu.</li>
+                <li>Barang tembakau telah diperiksa bersama dalam kondisi baik, kering, terbungkus rapi dan sesuai mutu yang disepakati.</li>
                 <li>Pengemudi wajib menjaga keutuhan segel dan terpal pelindung muatan selama perjalanan hingga ke pabrik tujuan.</li>
                 <li>Klaim selisih berat timbang atau mutu harus dilaporkan dalam tempo 1x24 jam saat pembongkaran di pabrik penerima.</li>
               </ol>

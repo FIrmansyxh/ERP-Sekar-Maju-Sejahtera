@@ -106,7 +106,7 @@ export const Header: React.FC<HeaderProps> = ({
                   title="Informasi Akun Staf & Hak Akses"
                 >
                   <div className="w-7 h-7 rounded-full bg-slate-100 border border-slate-200 text-slate-700 font-semibold flex items-center justify-center text-[11px] shrink-0 group-hover:bg-slate-200 transition-colors">
-                    {currentUser.nama_lengkap.split(' ').map((n) => n[0]).slice(0, 2).join('')}
+                    {(currentUser.nama_lengkap || currentUser.username || '').split(/[\s_]+/).filter(Boolean).map((n) => n[0]).slice(0, 2).join('').toUpperCase()}
                   </div>
 
                   <div className="hidden sm:flex flex-col text-left leading-tight">
