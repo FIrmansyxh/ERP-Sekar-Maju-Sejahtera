@@ -203,7 +203,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     }
   }, [currentTx]);
 
-  // Open a specific bal item and keep focus safely on scanner / No Bal field
+  // Open a specific bal item; fokus tetap di field scan — Enter berikutnya baru ke input berat
   const selectBalAndOpen = useCallback((foundTx: TransaksiPembelian, foundItem: TransaksiItemBal, source: 'manual' | 'scanner' = 'manual') => {
     setSelectedTxId(foundTx.transaksi_id);
     setWorkingItems(foundTx.items || []);
@@ -217,18 +217,48 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     
     const isAlreadyWeighed = (foundItem.berat_kg || 0) > 0;
     setScanFeedback({
-      text: `Bal "${foundItem.no_bal}" (Grade ${foundItem.kode_grade}) dipilih pada Kupon ${foundTx.no_kupon} • ${foundTx.nama_petani}.${isAlreadyWeighed ? ` Bobot terkunci: ${foundItem.berat_kg} kg.` : ' Silakan masukkan nilai berat timbangan.'}`,
+      text: `Bal "${foundItem.no_bal}" (Grade ${foundItem.kode_grade}) dipilih pada Kupon ${foundTx.no_kupon} • ${foundTx.nama_petani}.${
+        isAlreadyWeighed
+          ? ` Bobot terkunci: ${foundItem.berat_kg} kg.`
+          : ' Tekan Enter untuk mengisi berat timbangan.'
+      }`,
       isError: false,
     });
 
-    // Otomatis fokus ke input berat kotor ketika berhasil scan/pilih bal
     setTimeout(() => {
-      if (beratBrutoInputRef.current) {
-        beratBrutoInputRef.current.focus();
-        beratBrutoInputRef.current.select();
-      }
+      barcodeScannerRef.current?.focus();
+      barcodeScannerRef.current?.select();
     }, 120);
   }, []);
+
+  /** Enter kedua (bal sudah aktif): pindah fokus ke input berat kotor */
+  const focusBeratSetelahEnter = useCallback(() => {
+    const item = workingItems.find((it) => it.item_id === activeItemId);
+    if (!item) return false;
+    const q = scannedBarcode.trim().toLowerCase();
+    const qNorm = scannedBarcode.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+    const noBal = (item.no_bal || '').toLowerCase();
+    const noBalNorm = (item.no_bal || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+    const barcode = (item.barcode || '').toLowerCase();
+    const match =
+      !q ||
+      noBal === q ||
+      barcode === q ||
+      (qNorm.length > 0 && noBalNorm === qNorm);
+    if (!match) return false;
+    if ((item.berat_kg || 0) > 0) return false;
+
+    setIsDropdownOpen(false);
+    setScanFeedback({
+      text: `Siap input berat untuk Bal "${item.no_bal}" (Grade ${item.kode_grade}).`,
+      isError: false,
+    });
+    setTimeout(() => {
+      beratBrutoInputRef.current?.focus();
+      beratBrutoInputRef.current?.select();
+    }, 50);
+    return true;
+  }, [workingItems, activeItemId, scannedBarcode]);
 
   // Lookup Bal by code across ALL kupons; bila belum ketemu, tarik ulang dari server (Sortir PC lain)
   const findBalInList = useCallback((list: TransaksiPembelian[], query: string, preferCurrent?: TransaksiPembelian) => {
@@ -557,6 +587,8 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     } else if (isDropdownOpen && balSuggestions.length > 0) {
       const chosen = balSuggestions[0];
       selectBalAndOpen(chosen.tx, chosen.item, 'manual');
+    } else if (focusBeratSetelahEnter()) {
+      // Bal sudah aktif — Enter memindah fokus ke input berat
     } else {
       lookupBal(scannedBarcode, false);
     }
@@ -970,6 +1002,8 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                           e.preventDefault();
                           const chosen = balSuggestions[0];
                           selectBalAndOpen(chosen.tx, chosen.item, 'manual');
+                        } else if (focusBeratSetelahEnter()) {
+                          e.preventDefault();
                         }
                       } else if (e.key === 'Escape') {
                         setIsDropdownOpen(false);
