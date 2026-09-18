@@ -12,7 +12,8 @@ Dokumen terkait DB redesign ditahan sampai perintah: `lanjut rencana mapping db`
 |------|--------|---------|
 | **A (P0)** | **Selesai (2026-09-18)** | `PUT /transaksi/{id}/sortir-items`, `PUT /sample-batch/{id}`, DO stok=`keluar`, sync FE API-first + refetch barang setelah bayar/sample/DO |
 | B (P1) | Belum | Delete harga/transaksi, auth:sanctum, wire update barang UI |
-| C (P2) | Belum | RBAC BE, dashboard stats, deprecate sample legacy |
+| **C3 laporan** | **Selesai sebagian (2026-09-18)** | Refresh list saat buka `modul-6-*`, `getDashboardStats` + fallback SQL, mapper DO isi `total_berat_kg`/`total_nilai_deal`, laporan valuasi pakai `barangLunasList` |
+| C (P2 sisanya) | Belum | RBAC BE, deprecate sample legacy |
 
 ---
 
@@ -58,7 +59,7 @@ Mutasi menu:
 | Status batch | baca sample/DO | — | Local | Local | Local | hampir seluruhnya tidak ke BE |
 | Users | ✅ | ✅ | ✅ | resource ada, FE jarang | cache | OK |
 | Audit | ❌ | ❌ | — | — | **hanya Local** | hilang di device lain |
-| Laporan / dashboard | BE `/dashboard/stats` **tidak dipakai** | — | — | — | agregat list | OK tampilan, bukan source of truth server |
+| Laporan / dashboard | ✅ refresh list + `/dashboard/stats` (fallback tabel) | — | — | — | cache mirror | **Lebih aman**: buka laporan → refetch; DO total kg/nilai dihitung; valuasi pakai bal lunas |
 
 ---
 
@@ -128,7 +129,7 @@ Mutasi menu:
 |---|--------|
 | C1 | Kebijakan cache: setelah login sukses, server wins per domain (dokumentasikan konflik) |
 | C2 | Deprecate `sampleList` legacy atau migrasi ke batch API |
-| C3 | Pakai `/dashboard/stats` atau hapus endpoint mati |
+| C3 | Pakai `/dashboard/stats` + refresh list saat buka laporan; mapper DO isi total kg/nilai; valuasi = bal lunas | **Done 2026-09-18** |
 | C4 | RBAC dari BE (`/auth/me` / login capabilities) atau dokumentasikan bahwa hardcode sengaja |
 | C5 | Samakan generator `item_id` / selalu match by `no_bal` |
 | C6 | Audit trail API (opsional; sekarang Local-only) |

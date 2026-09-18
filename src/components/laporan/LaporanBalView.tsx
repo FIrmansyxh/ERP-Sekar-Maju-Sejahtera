@@ -31,7 +31,7 @@ import {
 } from 'lucide-react';
 import { Barang, Petani, TransaksiPembelian, TabelHarga, UserRole } from '../../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell } from 'recharts';
-import { formatRupiah, formatNumber, formatDateHariBulanTahun } from '../../utils/formatters';
+import { formatRupiah, formatNumber, formatDateHariBulanTahun, extractKodeBalPrefix } from '../../utils/formatters';
 import { downloadElementAsPdf } from '../../utils/printDownload';
 import { downloadExcelReport, labelStatusStok, periodeInfo, todayStamp } from '../../utils/excelExport';
 import { hitungNilaiBal } from '../../utils/finance';
@@ -76,6 +76,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
   const [filterStartDate, setFilterStartDate] = useState<string>('');
   const [filterEndDate, setFilterEndDate] = useState<string>('');
   const [filterGrade, setFilterGrade] = useState<string>('ALL');
+  const [filterKodeBal, setFilterKodeBal] = useState<string>('ALL');
   const [filterStatusStok, setFilterStatusStok] = useState<string>('ALL');
   const [filterStatusBayar, setFilterStatusBayar] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -90,6 +91,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
     startDate: '',
     endDate: '',
     grade: 'ALL',
+    kodeBal: 'ALL',
     statusStok: 'ALL',
     statusBayar: 'ALL',
     search: '',
@@ -158,8 +160,26 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
     barangList.forEach((b) => {
       if (b.kode_grade) grades.add(b.kode_grade.trim().toUpperCase());
     });
+    transaksiList.forEach((tx) => {
+      (tx.items || []).forEach((it) => {
+        if (it.kode_grade) grades.add(it.kode_grade.trim().toUpperCase());
+      });
+    });
     return Array.from(grades).sort();
-  }, [barangList]);
+  }, [barangList, transaksiList]);
+
+  const uniqueKodeBal = useMemo(() => {
+    const codes = new Set<string>();
+    const add = (noBal?: string) => {
+      const prefix = extractKodeBalPrefix(noBal);
+      if (prefix) codes.add(prefix);
+    };
+    barangList.forEach((b) => add(b.no_bal));
+    transaksiList.forEach((tx) => {
+      (tx.items || []).forEach((it) => add(it.no_bal));
+    });
+    return Array.from(codes).sort();
+  }, [barangList, transaksiList]);
 
   // Handle Search / Apply Filters
   const handleApplyFilters = (e?: React.FormEvent) => {
@@ -168,6 +188,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
       startDate: filterStartDate,
       endDate: filterEndDate,
       grade: filterGrade,
+      kodeBal: filterKodeBal,
       statusStok: filterStatusStok,
       statusBayar: filterStatusBayar,
       search: searchQuery.trim(),
@@ -184,6 +205,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
     setFilterStartDate('');
     setFilterEndDate('');
     setFilterGrade('ALL');
+    setFilterKodeBal('ALL');
     setFilterStatusStok('ALL');
     setFilterStatusBayar('ALL');
     setSearchQuery('');
@@ -195,6 +217,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
       startDate: '',
       endDate: '',
       grade: 'ALL',
+      kodeBal: 'ALL',
       statusStok: 'ALL',
       statusBayar: 'ALL',
       search: '',
@@ -242,61 +265,157 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
   };
 
   // Filtered & Enriched Bal Data
+  // Termasuk bal yang baru discan (belum ditimbang): No Bal + harga sudah tampil
   const enrichedBalList = useMemo(() => {
-    // Map transaksi items to ensure accurate harga_per_kg and total_harga if missing
-    const txItemMap = new Map<string, { harga_per_kg: number; total_kotor: number; nama_petani: string; no_kupon: string; potongan: number; status_pembayaran: string; metode_pembayaran: string }>();
+    type TxInfo = {
+      harga_per_kg: number;
+      total_kotor: number;
+      nama_petani: string;
+      no_kupon: string;
+      potongan: number;
+      status_pembayaran: string;
+      metode_pembayaran: string;
+      kode_grade: string;
+      no_bal: string;
+      barang_id?: string;
+      berat_kg: number;
+      berat_bruto_kg?: number;
+      potongan_tara_kg?: number;
+      tanggal: string;
+      petani_id: string;
+      transaksi_id: string;
+      item_id: string;
+    };
+
+    const txItemMap = new Map<string, TxInfo>();
     transaksiList.forEach((tx) => {
-      if (tx.items) {
-        tx.items.forEach((it) => {
-          if (it.barang_id || it.no_bal) {
-            const key = it.barang_id || it.no_bal;
-            txItemMap.set(key, {
-              harga_per_kg: it.harga_per_kg || 0,
-              total_kotor: it.total_kotor || ((it.berat_kg || 0) * (it.harga_per_kg || 0)),
-              nama_petani: tx.nama_petani || '',
-              no_kupon: tx.no_kupon || '',
-              potongan: it.potongan || 0,
-              status_pembayaran: tx.status_pembayaran || 'belum_lunas',
-              metode_pembayaran: tx.metode_pembayaran || '',
-            });
-          }
-        });
-      }
+      (tx.items || []).forEach((it) => {
+        if (!it.barang_id && !it.no_bal) return;
+        const info: TxInfo = {
+          harga_per_kg: it.harga_per_kg || 0,
+          total_kotor: it.total_kotor || ((it.berat_kg || 0) * (it.harga_per_kg || 0)),
+          nama_petani: tx.nama_petani || '',
+          no_kupon: tx.no_kupon || '',
+          potongan: it.potongan || 0,
+          status_pembayaran: tx.status_pembayaran || 'belum_lunas',
+          metode_pembayaran: tx.metode_pembayaran || '',
+          kode_grade: it.kode_grade || '',
+          no_bal: it.no_bal || '',
+          barang_id: it.barang_id,
+          berat_kg: it.berat_kg || 0,
+          berat_bruto_kg: it.berat_bruto_kg,
+          potongan_tara_kg: it.potongan_tara_kg,
+          tanggal: (tx.tanggal_transaksi || '').split(' ')[0] || '',
+          petani_id: tx.petani_id,
+          transaksi_id: tx.transaksi_id,
+          item_id: it.item_id,
+        };
+        if (it.barang_id) txItemMap.set(it.barang_id, info);
+        if (it.no_bal) txItemMap.set(it.no_bal, info);
+      });
     });
 
-    return barangList
-      .map((bal, originalIndex) => {
-        const txInfo = txItemMap.get(bal.barang_id) || txItemMap.get(bal.no_bal);
-        const fallbackGradePrice = hargaList.find(h => h.kode_grade?.toUpperCase() === bal.kode_grade?.toUpperCase())?.harga_per_kg || 0;
-        const hrgBeli = bal.harga_per_kg || txInfo?.harga_per_kg || fallbackGradePrice;
-        const netto = bal.berat_kg || 0;
-        // Hitung nilai murni bal menggunakan helper terpusat (Netto * Harga Beli)
-        const subtotal = hitungNilaiBal({ berat_kg: netto, harga_per_kg: hrgBeli }, fallbackGradePrice);
-        const bruto = bal.berat_bruto_kg && bal.berat_bruto_kg > 0 ? bal.berat_bruto_kg : (netto > 0 ? netto + (bal.potongan_tara_kg || 0) : 0);
-        const tara = bal.potongan_tara_kg !== undefined ? bal.potongan_tara_kg : Math.max(0, bruto - netto);
+    const seenKeys = new Set<string>();
+    const rows: Array<Barang & {
+      originalIndex: number;
+      no_kupon: string;
+      potongan: number;
+      status_pembayaran: string;
+      metode_pembayaran: string;
+      status_bayar: string;
+      has_tx: boolean;
+      kode_bal_prefix: string;
+    }> = [];
 
-        return {
-          ...bal,
-          originalIndex,
-          berat_bruto_kg: bruto,
-          potongan_tara_kg: tara,
-          harga_per_kg: hrgBeli,
-          total_harga: subtotal,
-          nama_petani: bal.nama_petani || txInfo?.nama_petani || 'Petani Kemitraan',
-          no_kupon: txInfo?.no_kupon || '-',
-          potongan: txInfo?.potongan || 0,
-          status_pembayaran: txInfo?.status_pembayaran || 'belum_lunas',
-          metode_pembayaran: txInfo?.metode_pembayaran || '',
-          // Semua bal ditampilkan; status bayar dipakai untuk kolom dan filter
-          status_bayar: !txInfo
-            ? 'tanpa_transaksi'
-            : txInfo.status_pembayaran === 'lunas' || txInfo.metode_pembayaran === 'cash'
+    barangList.forEach((bal, originalIndex) => {
+      const key = bal.barang_id || bal.no_bal;
+      if (key) seenKeys.add(String(key).toUpperCase());
+      if (bal.no_bal) seenKeys.add(String(bal.no_bal).toUpperCase());
+
+      const txInfo = txItemMap.get(bal.barang_id) || txItemMap.get(bal.no_bal);
+      const fallbackGradePrice =
+        hargaList.find((h) => h.kode_grade?.toUpperCase() === bal.kode_grade?.toUpperCase())?.harga_per_kg || 0;
+      const hrgBeli = bal.harga_per_kg || txInfo?.harga_per_kg || fallbackGradePrice;
+      const netto = bal.berat_kg || txInfo?.berat_kg || 0;
+      const subtotal = hitungNilaiBal({ berat_kg: netto, harga_per_kg: hrgBeli }, fallbackGradePrice);
+      const bruto =
+        bal.berat_bruto_kg && bal.berat_bruto_kg > 0
+          ? bal.berat_bruto_kg
+          : netto > 0
+            ? netto + (bal.potongan_tara_kg || 0)
+            : 0;
+      const tara = bal.potongan_tara_kg !== undefined ? bal.potongan_tara_kg : Math.max(0, bruto - netto);
+
+      rows.push({
+        ...bal,
+        no_bal: bal.no_bal || txInfo?.no_bal || '',
+        kode_grade: bal.kode_grade || txInfo?.kode_grade || '',
+        harga_per_kg: hrgBeli,
+        berat_kg: netto,
+        berat_bruto_kg: bruto,
+        potongan_tara_kg: tara,
+        total_harga: subtotal,
+        nama_petani: bal.nama_petani || txInfo?.nama_petani || 'Petani Kemitraan',
+        originalIndex,
+        no_kupon: txInfo?.no_kupon || '-',
+        potongan: txInfo?.potongan || 0,
+        status_pembayaran: txInfo?.status_pembayaran || 'belum_lunas',
+        metode_pembayaran: txInfo?.metode_pembayaran || '',
+        status_bayar: !txInfo
+          ? 'tanpa_transaksi'
+          : txInfo.status_pembayaran === 'lunas' || txInfo.metode_pembayaran === 'cash'
             ? 'lunas'
             : 'belum_lunas',
-          has_tx: !!txInfo,
-        };
+        has_tx: !!txInfo,
+        kode_bal_prefix: extractKodeBalPrefix(bal.no_bal || txInfo?.no_bal),
       });
-  }, [barangList, transaksiList]);
+    });
+
+    // Bal dari kupon (sortir) yang belum masuk inventaris barang — tetap tampil No Bal + harga
+    let syntheticIndex = barangList.length;
+    transaksiList.forEach((tx) => {
+      (tx.items || []).forEach((it) => {
+        const keys = [it.barang_id, it.no_bal].filter(Boolean).map((k) => String(k).toUpperCase());
+        if (keys.some((k) => seenKeys.has(k))) return;
+        keys.forEach((k) => seenKeys.add(k));
+
+        const fallbackGradePrice =
+          hargaList.find((h) => h.kode_grade?.toUpperCase() === (it.kode_grade || '').toUpperCase())?.harga_per_kg || 0;
+        const hrgBeli = it.harga_per_kg || fallbackGradePrice;
+        const netto = it.berat_kg || 0;
+        const subtotal = hitungNilaiBal({ berat_kg: netto, harga_per_kg: hrgBeli }, fallbackGradePrice);
+        const bruto = it.berat_bruto_kg && it.berat_bruto_kg > 0 ? it.berat_bruto_kg : 0;
+
+        rows.push({
+          barang_id: it.barang_id || `TX-ITEM-${it.item_id}`,
+          no_bal: it.no_bal,
+          kode_grade: it.kode_grade,
+          berat_kg: netto,
+          berat_bruto_kg: bruto,
+          potongan_tara_kg: it.potongan_tara_kg || 0,
+          harga_per_kg: hrgBeli,
+          total_harga: subtotal,
+          status_stok: netto > 0 ? 'di_gudang' : 'proses_sortir',
+          tanggal_masuk: (tx.tanggal_transaksi || '').split(' ')[0] || '',
+          petani_id: tx.petani_id,
+          nama_petani: tx.nama_petani,
+          desa_kecamatan: tx.desa_kecamatan,
+          transaksi_pembelian_id: tx.transaksi_id,
+          originalIndex: syntheticIndex++,
+          no_kupon: tx.no_kupon || '-',
+          potongan: it.potongan || 0,
+          status_pembayaran: tx.status_pembayaran || 'belum_lunas',
+          metode_pembayaran: tx.metode_pembayaran || '',
+          status_bayar:
+            tx.status_pembayaran === 'lunas' || tx.metode_pembayaran === 'cash' ? 'lunas' : 'belum_lunas',
+          has_tx: true,
+          kode_bal_prefix: extractKodeBalPrefix(it.no_bal),
+        });
+      });
+    });
+
+    return rows;
+  }, [barangList, transaksiList, hargaList]);
 
   // Filter Data
   const filteredData = useMemo(() => {
@@ -314,6 +433,13 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
       // Kode Grade
       if (appliedFilters.grade !== 'ALL') {
         if (item.kode_grade?.toUpperCase() !== appliedFilters.grade.toUpperCase()) {
+          return false;
+        }
+      }
+      // Kode Bal (prefix, mis. SB / HF / GT)
+      if (appliedFilters.kodeBal !== 'ALL') {
+        const prefix = item.kode_bal_prefix || extractKodeBalPrefix(item.no_bal);
+        if (prefix !== appliedFilters.kodeBal.toUpperCase()) {
           return false;
         }
       }
@@ -1117,6 +1243,25 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                 </select>
               </div>
 
+              {/* Filter 3b: Kode Bal */}
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                  Kode Bal
+                </label>
+                <select
+                  value={filterKodeBal}
+                  onChange={(e) => setFilterKodeBal(e.target.value)}
+                  className="w-full px-2 py-1.5 bg-white border border-[#ced4da] rounded-none text-xs focus:outline-none focus:border-slate-800"
+                >
+                  <option value="ALL">Semua Kode Bal</option>
+                  {uniqueKodeBal.map((k) => (
+                    <option key={k} value={k}>
+                      {k}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {/* Filter 4: Status Stok */}
               <div>
                 <label className="block text-[11px] font-semibold text-gray-700 mb-1">
@@ -1665,6 +1810,10 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
               <div>
                 <span className="font-semibold text-gray-600">Filter Grade:</span>{' '}
                 <span>{appliedFilters.grade === 'ALL' ? 'Semua Grade' : `Grade ${appliedFilters.grade}`}</span>
+              </div>
+              <div>
+                <span className="font-semibold text-gray-600">Filter Kode Bal:</span>{' '}
+                <span>{appliedFilters.kodeBal === 'ALL' ? 'Semua' : appliedFilters.kodeBal}</span>
               </div>
               <div>
                 <span className="font-semibold text-gray-600">Status Bayar:</span>{' '}

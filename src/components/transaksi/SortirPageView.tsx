@@ -22,7 +22,7 @@ import {
 import { TransaksiPembelian, Petani, TabelHarga, Barang, TransaksiItemBal, UserRole, User as UserType, SaveTransaksiMeta } from '../../types';
 import { formatRupiah, formatNoKupon, formatDateHariBulanTahun, formatNumber, generateTransaksiId, hitungPotonganTaraKg } from '../../utils/formatters';
 import { useSessionDraft } from '../../hooks/useSessionDraft';
-import { buildBarangDariItem, hitungUlangKupon, isBalDitimbang, isKuponProsesSortir, nextBarangId } from '../../utils/kuponSortir';
+import { buildBarangDariItem, hitungUlangKupon, isBalDitimbang, isKuponProsesSortir, nextBarangId, sortTransaksiItemsByInputOrder } from '../../utils/kuponSortir';
 import { POTONGAN_GANTI_TIKAR, POTONGAN_KULI_PER_BAL, POTONGAN_TALI_PER_BAL } from '../../config/aturanTimbang';
 
 interface SortirPageViewProps {
@@ -74,6 +74,11 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
     [openTxId, transaksiList]
   );
   const balItems: TransaksiItemBal[] = openTx?.items || [];
+  /** Tampil Sortir: bal terbaru di atas (kebalikan urutan input kronologis). */
+  const balItemsTampil = useMemo(
+    () => [...sortTransaksiItemsByInputOrder(balItems)].reverse(),
+    [balItems]
+  );
 
   // Kupon ditutup dari tempat lain: hanya reset jika kupon sudah bukan proses_sortir.
   // Jangan reset saat kupon belum muncul di list (sedang commit lokal / sync).
@@ -231,11 +236,12 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
 
   // Update hargaSatuan when grade selection changes
     const handleGradeChange = (gradeCode: string) => {
-    setSelectedGrade(gradeCode);
-    const found = hargaList.find((h) => h.kode_grade === gradeCode);
+    const code = (gradeCode || '').trim();
+    setSelectedGrade(code);
+    const found = hargaList.find((h) => h.kode_grade === code && h.status === 'aktif')
+      || hargaList.find((h) => h.kode_grade === code);
     if (found) {
       setHargaSatuan(found.harga_per_kg);
-      // Auto submit removed as per user request
     } else {
       setHargaSatuan(0);
     }
@@ -259,10 +265,17 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
       return;
     }
 
-    const isValidGrade = hargaList.some((h) => h.kode_grade === selectedGrade);
+    const isValidGrade = hargaList.some(
+      (h) => h.kode_grade === selectedGrade && (!h.status || h.status === 'aktif')
+    );
     if (!isValidGrade) {
       document.getElementById('grade-input')?.focus();
-      setScanFeedback({ text: `Gagal: Mutu Barang (Grade) "${selectedGrade}" tidak terdaftar di Master Harga Beli!`, isError: true });
+      setScanFeedback({
+        text: hargaList.length === 0
+          ? 'Master Harga Beli kosong. Tambah grade di menu Master Harga Beli terlebih dahulu.'
+          : `Gagal: Mutu Barang (Grade) "${selectedGrade}" tidak aktif / tidak terdaftar di Master Harga Beli!`,
+        isError: true,
+      });
       return;
     }
 
@@ -740,14 +753,18 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
-                      if (selectedGrade) {
+                      if (selectedGrade && hargaList.some((h) => h.kode_grade === selectedGrade && (!h.status || h.status === 'aktif'))) {
                         handleAddBalItem();
                       }
                     }
                   }}
-                  allowCustom={true}
-                  options={hargaList.map(h => ({ value: h.kode_grade, label: `Grade ${h.kode_grade} — ${formatRupiah(h.harga_per_kg)}/kg` }))}
-                  placeholder="Ketik Grade (Contoh: A0001)..."
+                  options={hargaList
+                    .filter((h) => !h.status || h.status === 'aktif')
+                    .map((h) => ({
+                      value: h.kode_grade,
+                      label: `Grade ${h.kode_grade} — ${formatRupiah(h.harga_per_kg)}/kg`,
+                    }))}
+                  placeholder="Pilih / ketik kode mutu (contoh: A, B, 50)..."
                   className="w-full"
                 />
               </div>
@@ -804,7 +821,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                 </span>
               </h4>
               <p className="text-[11px] text-slate-500">
-                Setiap bal langsung tersimpan dan bisa ditimbang di Meja Timbang tanpa menunggu sortir selesai
+                Bal terbaru muncul di atas. Setiap bal langsung tersimpan dan bisa ditimbang tanpa menunggu sortir selesai.
               </p>
             </div>
 
@@ -822,7 +839,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {balItems.length === 0 ? (
+                  {balItemsTampil.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="py-10 text-center text-slate-400">
                         <Layers className="w-8 h-8 mx-auto text-slate-300 mb-2" />
@@ -833,12 +850,12 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                       </td>
                     </tr>
                   ) : (
-                    balItems.map((item, index) => {
+                    balItemsTampil.map((item, index) => {
                       const ditimbang = isBalDitimbang(item);
                       return (
                       <tr key={item.item_id || index} className="hover:bg-slate-50/80 transition-colors">
                         <td className="py-2.5 px-3.5 text-center font-mono text-slate-500">
-                          {index + 1}
+                          {balItemsTampil.length - index}
                         </td>
                         <td className="py-2.5 px-3.5">
                           <span className="font-mono font-semibold text-slate-900 bg-slate-100 px-2 py-0.5 border border-slate-200 rounded text-xs">

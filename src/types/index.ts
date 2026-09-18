@@ -141,6 +141,7 @@ export interface TransaksiItemBal {
    * Dipakai saat menggabungkan data agar perubahan terbaru tidak tertimpa versi lama/server.
    */
   diubah_lokal_pada?: number;
+  lokasi_simpan?: string;
   sample_label_code?: string; // Kode barcode sample identik
   sample_label_printed?: boolean;
   barang_id?: string;
@@ -213,6 +214,8 @@ export interface SaveTransaksiMeta {
    * termasuk bal yang dihapus atau diganti nomornya, tanpa digabung dengan versi sebelumnya.
    */
   timpaPenuh?: boolean;
+  /** Simpan via PUT /transaksi/{id}/koreksi (Kasir Edit Modal) */
+  koreksi?: boolean;
 }
 
 export type StatusSample ='sample' | 'dikirim' | 'diterima' | 'disetujui' | 'ditolak' | 'nego';

@@ -169,6 +169,11 @@ export function mergeKuponParalel(
     const oldW = old.berat_kg || 0;
     const newW = it.berat_kg || 0;
     if (newW >= oldW) {
+      const potTikar = Math.max(Number(it.potongan_tikar) || 0, Number(old.potongan_tikar) || 0);
+      const gantiTikar =
+        Boolean(it.ganti_tikar) ||
+        Boolean(old.ganti_tikar) ||
+        potTikar > 0;
       byNoBal.set(key, {
         ...old,
         ...it,
@@ -179,8 +184,15 @@ export function mergeKuponParalel(
         berat_bruto_kg: (it.berat_bruto_kg || 0) > 0 ? it.berat_bruto_kg : old.berat_bruto_kg,
         potongan_tara_kg: (it.berat_kg || 0) > 0 ? it.potongan_tara_kg : old.potongan_tara_kg,
         status_timbang: newW > 0 ? it.status_timbang || 'selesai_timbang' : old.status_timbang,
+        ganti_tikar: gantiTikar,
+        potongan_tikar: gantiTikar ? (potTikar || Number(it.potongan_tikar) || Number(old.potongan_tikar) || 75000) : 0,
       });
     } else {
+      const potTikar = Math.max(Number(it.potongan_tikar) || 0, Number(old.potongan_tikar) || 0);
+      const gantiTikar =
+        Boolean(it.ganti_tikar) ||
+        Boolean(old.ganti_tikar) ||
+        potTikar > 0;
       byNoBal.set(key, {
         ...it,
         ...old,
@@ -189,7 +201,8 @@ export function mergeKuponParalel(
         // Field sortir dari incoming jika ada update grade/harga
         kode_grade: it.kode_grade || old.kode_grade,
         harga_per_kg: it.harga_per_kg || old.harga_per_kg,
-        ganti_tikar: it.ganti_tikar ?? old.ganti_tikar,
+        ganti_tikar: gantiTikar,
+        potongan_tikar: gantiTikar ? (potTikar || 75000) : 0,
       });
     }
   }
@@ -235,10 +248,54 @@ export type HasilTimbangBal = Partial<Pick<
 export function terapkanHasilTimbang(
   latestTx: TransaksiPembelian,
   itemId: string,
-  hasil: HasilTimbangBal
+  hasil: HasilTimbangBal,
+  noBalHint?: string
 ): TransaksiPembelian | null {
   const items = latestTx.items || [];
-  if (!items.some((it) => it.item_id === itemId)) return null;
-  const merged = items.map((it) => (it.item_id === itemId ? { ...it, ...hasil } : it));
+  let targetId = itemId;
+  if (!items.some((it) => it.item_id === targetId) && noBalHint) {
+    const byBal = items.find(
+      (it) => String(it.no_bal).toUpperCase() === String(noBalHint).toUpperCase()
+    );
+    if (byBal) targetId = byBal.item_id;
+  }
+  if (!items.some((it) => it.item_id === targetId)) return null;
+  const merged = items.map((it) => (it.item_id === targetId ? { ...it, ...hasil } : it));
   return hitungUlangKupon(latestTx, merged);
+}
+
+/**
+ * Urutan tampil detail bal = urutan waktu input.
+ * Prioritas: seq BE `-BAL-nn` → timestamp di `BAL-ITEM-{ts}-n` / `item-{ts}-n` → angka no_bal.
+ */
+function itemInputSortKey(itemId?: string, noBal?: string): [number, number, string] {
+  const id = String(itemId || '');
+  const balSeq = id.match(/-BAL-(\d+)$/i);
+  if (balSeq) {
+    return [0, parseInt(balSeq[1], 10), id];
+  }
+  const feTs = id.match(/^(?:BAL-ITEM|item)-(\d+)(?:-(\d+))?$/i);
+  if (feTs) {
+    const ts = parseInt(feTs[1], 10);
+    const n = feTs[2] ? parseInt(feTs[2], 10) : 0;
+    return [1, ts * 1000 + n, id];
+  }
+  const digits = String(noBal || '').match(/(\d+)/);
+  if (digits) {
+    return [2, parseInt(digits[1], 10), String(noBal || '')];
+  }
+  return [3, 0, String(noBal || id)];
+}
+
+export function sortTransaksiItemsByInputOrder<T extends { item_id?: string; no_bal?: string } = any>(
+  items?: T[] | null
+): T[] {
+  if (!items || !Array.isArray(items) || items.length <= 1) return items ? [...items] : [];
+  return [...items].sort((a, b) => {
+    const ka = itemInputSortKey(a.item_id, a.no_bal);
+    const kb = itemInputSortKey(b.item_id, b.no_bal);
+    if (ka[0] !== kb[0]) return ka[0] - kb[0];
+    if (ka[1] !== kb[1]) return ka[1] - kb[1];
+    return ka[2].localeCompare(kb[2], undefined, { numeric: true, sensitivity: 'base' });
+  });
 }

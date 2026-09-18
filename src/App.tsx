@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { 
   Petani, 
   Barang, 
@@ -266,51 +266,123 @@ export default function App() {
     }
   }, [activeModuleId]);
 
-  // Sinkronisasi data riil dari backend PostgreSQL saat user terautentikasi
+  // Sinkronisasi data riil dari backend PostgreSQL (login + saat buka modul laporan)
+  const refreshOperationalLists = useCallback(async () => {
+    if (!currentUser) return { fromBackend: false };
+
+    const [
+      petaniRes,
+      barangRes,
+      transaksiRes,
+      hargaRes,
+      userRes,
+      hargaJualRes,
+      batchRes,
+      pengirimanRes,
+    ] = await Promise.all([
+      ErpApiService.getPetaniList(),
+      ErpApiService.getBarangList(),
+      ErpApiService.getTransaksiList(),
+      ErpApiService.getHargaList(),
+      ErpApiService.getUserList(),
+      ErpApiService.getHargaJualList(),
+      ErpApiService.getBatchSampleList(),
+      ErpApiService.getPengirimanList(),
+    ]);
+
+    let fromBackend = false;
+    if (petaniRes.fromBackend) {
+      setPetaniList(petaniRes.data);
+      fromBackend = true;
+    }
+    if (barangRes.fromBackend) {
+      setBarangList(normalizeStatusBal(barangRes.data));
+      fromBackend = true;
+    }
+    if (transaksiRes.fromBackend) {
+      setTransaksiList(transaksiRes.data);
+      fromBackend = true;
+    }
+    if (hargaRes.fromBackend) {
+      setHargaList(hargaRes.data);
+      fromBackend = true;
+    }
+    if (userRes.fromBackend) {
+      setUserList(userRes.data);
+      fromBackend = true;
+    }
+    if (hargaJualRes.fromBackend) {
+      setHargaJualList(hargaJualRes.data);
+      fromBackend = true;
+    }
+    if (batchRes.fromBackend) {
+      setBatchSampleList(batchRes.data);
+      fromBackend = true;
+    }
+    if (pengirimanRes.fromBackend) {
+      setPengirimanList(pengirimanRes.data);
+      fromBackend = true;
+    }
+    return { fromBackend };
+  }, [currentUser]);
+
   useEffect(() => {
     if (currentUser) {
-      ErpApiService.getPetaniList().then((res) => {
-        if (res.fromBackend) {
-          setPetaniList(res.data);
-        }
-      });
-      ErpApiService.getBarangList().then((res) => {
-        if (res.fromBackend) {
-          setBarangList(normalizeStatusBal(res.data));
-        }
-      });
-      ErpApiService.getTransaksiList().then((res) => {
-        if (res.fromBackend) {
-          setTransaksiList(res.data);
-        }
-      });
-      ErpApiService.getHargaList().then((res) => {
-        if (res.fromBackend) {
-          setHargaList(res.data);
-        }
-      });
-      ErpApiService.getUserList().then((res) => {
-        if (res.fromBackend) {
-          setUserList(res.data);
-        }
-      });
-      ErpApiService.getHargaJualList().then((res) => {
-        if (res.fromBackend) {
-          setHargaJualList(res.data);
-        }
-      });
-      ErpApiService.getBatchSampleList().then((res) => {
-        if (res.fromBackend) {
-          setBatchSampleList(res.data);
-        }
-      });
-      ErpApiService.getPengirimanList().then((res) => {
-        if (res.fromBackend) {
-          setPengirimanList(res.data);
-        }
-      });
+      void refreshOperationalLists();
     }
-  }, [currentUser]);
+  }, [currentUser, refreshOperationalLists]);
+
+  const [dashboardServerStats, setDashboardServerStats] = useState<{
+    transaksi: {
+      total_transaksi: number;
+      total_bal: number;
+      total_berat_kg: number;
+      total_pembelian: number;
+    } | null;
+    stok_valuasi: Array<{
+      gudang_id?: string;
+      kode_grade?: string;
+      bal_di_gudang?: number;
+      kg_di_gudang?: number;
+      valuasi_beli?: number;
+    }>;
+    pengiriman: {
+      total_pengiriman: number;
+      total_bal_terkirim: number;
+      total_berat_terkirim: number;
+      total_nilai_deal: number;
+    } | null;
+    pengiriman_terkirim?: {
+      total_pengiriman: number;
+      total_bal_terkirim: number;
+      total_berat_terkirim: number;
+      total_nilai_deal: number;
+    } | null;
+  } | null>(null);
+  const [laporanRefreshing, setLaporanRefreshing] = useState(false);
+
+  // Saat buka modul laporan: refresh list sumber dari BE agar angka tidak usang
+  useEffect(() => {
+    if (!currentUser || !activeModuleId.startsWith('modul-6-')) return;
+    let cancelled = false;
+    setLaporanRefreshing(true);
+    (async () => {
+      try {
+        await refreshOperationalLists();
+        if (activeModuleId === 'modul-6-dashboard-analytic') {
+          const statsRes = await ErpApiService.getDashboardStats();
+          if (!cancelled) {
+            setDashboardServerStats(statsRes.fromBackend ? statsRes.data : null);
+          }
+        }
+      } finally {
+        if (!cancelled) setLaporanRefreshing(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeModuleId, currentUser, refreshOperationalLists]);
 
   // Modul terakhir yang dibuka disimpan di peramban. Saat halaman dimuat ulang
   // hak aksesnya diperiksa ulang agar pengguna tidak masuk ke modul terlarang.
@@ -883,6 +955,34 @@ export default function App() {
     const balCount = newTx.total_bal || (newTx.items ? newTx.items.length : 1);
 
     const updatedPetaniList = petaniList.map((p) => {
+      // Pindah statistik bila petani diganti saat koreksi
+      if (exists && oldTx && oldTx.petani_id !== newTx.petani_id) {
+        if (p.petani_id === oldTx.petani_id) {
+          const oldBalCount = oldTx.total_bal || (oldTx.items ? oldTx.items.length : 1);
+          return {
+            ...p,
+            statistik: {
+              ...p.statistik,
+              total_setoran_bal: Math.max(0, (p.statistik?.total_setoran_bal || 0) - oldBalCount),
+              total_berat_kg: Math.max(0, (p.statistik?.total_berat_kg || 0) - (oldTx.berat_kg || 0)),
+            },
+          };
+        }
+        if (p.petani_id === newTx.petani_id) {
+          return {
+            ...p,
+            statistik: {
+              ...p.statistik,
+              total_setoran_bal: Math.max(0, (p.statistik?.total_setoran_bal || 0) + balCount),
+              total_berat_kg: Math.max(0, (p.statistik?.total_berat_kg || 0) + (newTx.berat_kg || 0)),
+              kunjungan_terakhir: (newTx.tanggal_transaksi ? newTx.tanggal_transaksi.split(' ')[0] : '') || new Date().toISOString().split('T')[0],
+              grade_dominan: `Grade ${newTx.kode_grade}`,
+            },
+          };
+        }
+        return p;
+      }
+
       if (p.petani_id === newTx.petani_id) {
         let totalBalDelta = balCount;
         let totalKgDelta = newTx.berat_kg || 0;
@@ -916,7 +1016,7 @@ export default function App() {
       recordAuditLog({
         user_nama: currentUser?.nama_lengkap || 'Sistem',
         user_role: currentRole,
-        modul: 'Transaksi Pembelian',
+        modul: meta.koreksi ? 'Koreksi Transaksi' : 'Transaksi Pembelian',
         aksi: meta.audit.aksi,
         target_id: newTx.no_kupon,
         deskripsi: meta.audit.deskripsi,
@@ -975,7 +1075,7 @@ export default function App() {
 
     // 2) Sync ke BE di belakang; merge hasil tanpa menghapus bal paralel
     try {
-      const syncResult = await ErpApiService.syncTransaksi(newTx, oldTx);
+      const syncResult = await ErpApiService.syncTransaksi(newTx, oldTx, { koreksi: Boolean(meta.koreksi) });
       if (syncResult.fromBackend && syncResult.syncedTx) {
         const feItems = newTx.items || [];
         const beItems = syncResult.syncedTx.items || [];
@@ -985,10 +1085,22 @@ export default function App() {
               if (!be) return fe;
               const feW = fe.berat_kg || 0;
               // Berat dari perangkat ini menang, termasuk perubahan disengaja (buka kunci = 0)
-              if (feW > 0 || fe.diubah_lokal_pada) {
-                return { ...be, ...fe, item_id: be.item_id || fe.item_id };
-              }
-              return { ...fe, ...be, item_id: be.item_id || fe.item_id };
+              const feMenang = feW > 0 || Boolean(fe.diubah_lokal_pada);
+              const base = feMenang
+                ? { ...be, ...fe, item_id: be.item_id || fe.item_id }
+                : { ...fe, ...be, item_id: be.item_id || fe.item_id };
+              // Perubahan disengaja memakai status tikar dari perangkat ini apa adanya (bisa dimatikan)
+              if (fe.diubah_lokal_pada) return base;
+              const potTikar = Math.max(Number(fe.potongan_tikar) || 0, Number(be.potongan_tikar) || 0);
+              const gantiTikar =
+                Boolean(fe.ganti_tikar) ||
+                Boolean(be.ganti_tikar) ||
+                potTikar > 0;
+              return {
+                ...base,
+                ganti_tikar: gantiTikar,
+                potongan_tikar: gantiTikar ? potTikar || 75000 : 0,
+              };
             })
           : [...beItems];
 
@@ -1002,22 +1114,30 @@ export default function App() {
           ...newTx,
           ...syncResult.syncedTx,
           status_tahap: newTx.status_tahap || syncResult.syncedTx.status_tahap,
+          petani_id: newTx.petani_id || syncResult.syncedTx.petani_id,
+          nama_petani: newTx.nama_petani || syncResult.syncedTx.nama_petani,
+          alasan_perubahan_terakhir: newTx.alasan_perubahan_terakhir,
           items: mergedItems,
         };
 
         commitLocalTx(syncedTx, false);
 
-        if (syncedTx.status_pembayaran === 'lunas') {
+        if (syncedTx.status_pembayaran === 'lunas' || meta.koreksi) {
           try {
             const barangRes = await ErpApiService.getBarangList();
-            if (barangRes.fromBackend) setBarangList(barangRes.data);
+            if (barangRes.fromBackend) setBarangList(normalizeStatusBal(barangRes.data));
           } catch (err) {
-            console.warn('Gagal refresh barang setelah bayar:', err);
+            console.warn('Gagal refresh barang setelah simpan/koreksi:', err);
           }
         }
+      } else if (meta.koreksi) {
+        showToast('Koreksi tersimpan lokal. Server offline — sync ulang saat online.', 'info');
       }
     } catch (err) {
       console.warn('Gagal sinkronisasi transaksi ke backend API, data lokal tetap dipakai:', err);
+      if (meta.koreksi) {
+        showToast(`Koreksi lokal OK, gagal sync server: ${err instanceof Error ? err.message : 'error'}`, 'info');
+      }
     }
   };
 
@@ -1523,8 +1643,20 @@ export default function App() {
                 pengirimanList={pengirimanList}
                 hargaList={hargaList}
                 hargaJualList={hargaJualList}
+                serverStats={dashboardServerStats}
+                isRefreshing={laporanRefreshing}
                 userRole={currentRole}
                 onNavigateToModule={(modId) => handleSelectModule(modId)}
+                onRefreshSources={async () => {
+                  setLaporanRefreshing(true);
+                  try {
+                    await refreshOperationalLists();
+                    const statsRes = await ErpApiService.getDashboardStats();
+                    setDashboardServerStats(statsRes.fromBackend ? statsRes.data : null);
+                  } finally {
+                    setLaporanRefreshing(false);
+                  }
+                }}
               />
             )}
 
@@ -1532,7 +1664,6 @@ export default function App() {
             {activeModuleId === 'modul-6-laporan-bal' && (
               <LaporanBalView
                 barangList={barangList}
-                
                 petaniList={petaniList}
                 transaksiList={transaksiList}
                 hargaList={hargaList}
@@ -1556,7 +1687,6 @@ export default function App() {
                 transaksiList={transaksiList}
                 pengirimanList={pengirimanList}
                 sampleList={sampleList}
-                
                 userRole={currentRole}
                 onNavigateToHarga={() => handleSelectModule('modul-3-harga')}
                 onNavigateToHargaJual={() => handleSelectModule('modul-3-harga-jual')}
@@ -1578,7 +1708,7 @@ export default function App() {
               <LaporanPetaniView
                 petaniList={petaniList}
                 transaksiList={transaksiList}
-                barangList={barangList}
+                barangList={barangLunasList}
                 userRole={currentRole}
                 onNavigateToTransaksi={() => handleSelectModule('modul-0-transaksi')}
               />
@@ -1590,7 +1720,6 @@ export default function App() {
                 pengirimanList={pengirimanList}
                 sampleList={sampleList}
                 barangList={barangList}
-                
                 userRole={currentRole}
                 onNavigateToSample={() => handleSelectModule('modul-4-sample')}
               />

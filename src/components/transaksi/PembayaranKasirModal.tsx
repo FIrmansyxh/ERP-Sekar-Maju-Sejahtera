@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { TransaksiPembelian } from '../../types';
 import { formatRupiah } from '../../utils/formatters';
+import { sortTransaksiItemsByInputOrder } from '../../utils/kuponSortir';
 
 interface PembayaranKasirModalProps {
   isOpen: boolean;
@@ -50,7 +51,7 @@ export const PembayaranKasirModal: React.FC<PembayaranKasirModalProps> = ({
   if (!isOpen || !transaksi) return null;
 
   const totalBersih = Math.round(Math.max(0, transaksi.harga_final || 0));
-  const items = transaksi.items || [];
+  const items = sortTransaksiItemsByInputOrder(transaksi.items || []);
   const balCount = transaksi.total_bal || (items.length > 0 ? items.length : 1);
   const unweighedItems = items.filter((it) => (it.berat_kg || 0) <= 0);
   const hasUnweighedBal = items.length === 0 ? (transaksi.berat_kg || 0) <= 0 : unweighedItems.length > 0;

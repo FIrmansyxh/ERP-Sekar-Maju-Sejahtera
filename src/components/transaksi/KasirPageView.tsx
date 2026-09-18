@@ -37,7 +37,11 @@ interface KasirPageViewProps {
   currentUser?: UserType | null;
   initialKuponNo?: string;
   initialTxId?: string;
-  onSaveTransaksi: (newTx: TransaksiPembelian, generatedBarang: Barang | Barang[], meta?: SaveTransaksiMeta) => void;
+  onSaveTransaksi: (
+    newTx: TransaksiPembelian,
+    generatedBarang: Barang | Barang[],
+    meta?: SaveTransaksiMeta
+  ) => void;
   onDeleteTransaksi?: (transaksiId: string, alasan?: string) => void;
   onNavigateToSortir: () => void;
   onNavigateToTimbangan: (kuponNo?: string, txId?: string) => void;
@@ -1215,6 +1219,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
             if (selectedTxForDetail && selectedTxForDetail.transaksi_id === newTx.transaksi_id) {
               setSelectedTxForDetail(newTx);
             }
+            setSelectedTxForEdit(null);
           }}
         />
       )}

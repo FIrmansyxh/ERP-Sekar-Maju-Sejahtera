@@ -29,7 +29,7 @@ import {
 import { TransaksiPembelian, Petani, TabelHarga, Barang, TransaksiItemBal, UserRole, User as UserType, SaveTransaksiMeta } from '../../types';
 import { formatRupiah, formatNoKupon, formatDateHariBulanTahun, hitungPotonganTaraKg, normalizeKg } from '../../utils/formatters';
 import { recordAuditLog } from '../../utils/storage';
-import { buildBarangDariItem, isKuponProsesSortir, terapkanHasilTimbang } from '../../utils/kuponSortir';
+import { buildBarangDariItem, hitungUlangKupon, isKuponProsesSortir, terapkanHasilTimbang } from '../../utils/kuponSortir';
 import { POTONGAN_GANTI_TIKAR, POTONGAN_KULI_PER_BAL, POTONGAN_TALI_PER_BAL } from '../../config/aturanTimbang';
 
 interface TimbanganPageViewProps {
@@ -207,6 +207,10 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
           setBeratNettoInput(existingActive.berat_kg && existingActive.berat_kg > 0 ? existingActive.berat_kg : '');
           setIsNettoManual(existingActive.is_netto_manual || false);
         }
+        // Selalu sinkronkan tampilan ganti tikar dari data tersimpan
+        const hasGanti =
+          Boolean(existingActive.ganti_tikar) || (existingActive.potongan_tikar || 0) > 0;
+        setPotTikarInput(hasGanti ? (existingActive.potongan_tikar || POTONGAN_GANTI_TIKAR) : '');
         return;
       }
 
@@ -218,6 +222,9 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
         setBeratBrutoInput(targetItem.berat_bruto_kg && targetItem.berat_bruto_kg > 0 ? targetItem.berat_bruto_kg : '');
         setBeratNettoInput(targetItem.berat_kg && targetItem.berat_kg > 0 ? targetItem.berat_kg : '');
         setIsNettoManual(targetItem.is_netto_manual || false);
+        const hasGanti =
+          Boolean(targetItem.ganti_tikar) || (targetItem.potongan_tikar || 0) > 0;
+        setPotTikarInput(hasGanti ? (targetItem.potongan_tikar || POTONGAN_GANTI_TIKAR) : '');
       }
     } else {
       setWorkingItems([]);
@@ -225,8 +232,8 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     }
   }, [currentTx]);
 
-  // Open a specific bal item and keep focus safely on scanner / No Bal field
-  const selectBalAndOpen = useCallback((foundTx: TransaksiPembelian, foundItem: TransaksiItemBal, source: 'manual' | 'scanner' = 'manual') => {
+  // Pilih bal: kursor tetap di kolom No Bal, Enter berikutnya pindah ke kolom berat
+  const selectBalAndOpen = useCallback((foundTx: TransaksiPembelian, foundItem: TransaksiItemBal, _source: 'manual' | 'scanner' = 'manual') => {
     setSelectedTxId(foundTx.transaksi_id);
     setWorkingItems(foundTx.items || []);
     setActiveItemId(foundItem.item_id);
@@ -236,10 +243,16 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     setBeratBrutoInput(foundItem.berat_bruto_kg && foundItem.berat_bruto_kg > 0 ? foundItem.berat_bruto_kg : '');
     setBeratNettoInput(foundItem.berat_kg && foundItem.berat_kg > 0 ? foundItem.berat_kg : '');
     setIsNettoManual(foundItem.is_netto_manual || false);
+    const hasGantiTikar = Boolean(foundItem.ganti_tikar) || (foundItem.potongan_tikar || 0) > 0;
+    setPotTikarInput(hasGantiTikar ? (foundItem.potongan_tikar || POTONGAN_GANTI_TIKAR) : '');
     
     const isAlreadyWeighed = (foundItem.berat_kg || 0) > 0;
     setScanFeedback({
-      text: `Bal "${foundItem.no_bal}" (Grade ${foundItem.kode_grade}) dipilih pada Kupon ${foundTx.no_kupon} • ${foundTx.nama_petani}.${isAlreadyWeighed ? ` Bobot terkunci: ${beratBrutoItem(foundItem)} kg bruto.` : ' Centang Ganti Tikar bila perlu, lalu tekan Enter untuk isi berat.'}`,
+      text: `Bal "${foundItem.no_bal}" (Grade ${foundItem.kode_grade}) dipilih pada Kupon ${foundTx.no_kupon} • ${foundTx.nama_petani}.${
+        isAlreadyWeighed
+          ? ` Bobot terkunci: ${beratBrutoItem(foundItem)} kg bruto.`
+          : ' Centang Ganti Tikar bila perlu, lalu tekan Enter untuk isi berat.'
+      }${hasGantiTikar ? ' • Ganti tikar aktif.' : ''}`,
       isError: false,
     });
 
@@ -340,7 +353,6 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
         text: `Nomor bal "${q}" tidak ditemukan. Pastikan bal sudah ditambahkan di Sortir (langsung tersimpan, tidak perlu Selesai Sortir dulu).`,
         isError: true,
       });
-      barcodeScannerRef.current?.focus();
     }
   }, [currentTx, transaksiList, selectBalAndOpen, findBalInList, onRefreshTransaksiList]);
 
@@ -353,10 +365,8 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     return () => window.clearInterval(id);
   }, [onRefreshTransaksiList]);
 
-  // Focus scanner on mount & Global Scanner listener for barcode guns
+  // Global scanner listener untuk barcode gun (tanpa auto-fokus saat mount)
   useEffect(() => {
-    barcodeScannerRef.current?.focus();
-
     let scanBuffer = '';
     let lastKeyTime = Date.now();
 
@@ -400,46 +410,61 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     return workingItems.find((it) => it.item_id === activeItemId);
   }, [workingItems, activeItemId]);
 
-  // Switch active bal item - focus strictly stays on scanner/No Bal
+  // Switch active bal item — tanpa auto-fokus; muat ulang status ganti tikar
   const handleSelectBalItem = (item: TransaksiItemBal) => {
     setActiveItemId(item.item_id);
     setBeratBrutoInput(item.berat_bruto_kg && item.berat_bruto_kg > 0 ? item.berat_bruto_kg : '');
-    if (item.ganti_tikar && item.potongan_tikar) {
-      setPotTikarInput(item.potongan_tikar);
-    } else {
-      setPotTikarInput(item.potongan_tikar || '');
-    }
+    setBeratNettoInput(item.berat_kg && item.berat_kg > 0 ? item.berat_kg : '');
+    setIsNettoManual(item.is_netto_manual || false);
+    const hasGantiTikar = Boolean(item.ganti_tikar) || (item.potongan_tikar || 0) > 0;
+    setPotTikarInput(hasGantiTikar ? (item.potongan_tikar || POTONGAN_GANTI_TIKAR) : '');
     const isWeighed = (item.berat_kg || 0) > 0;
     setScanFeedback({ 
-      text: `Bal "${item.no_bal}" (Grade ${item.kode_grade}) dipilih.${isWeighed ? ` Bobot tersimpan: ${beratBrutoItem(item)} kg bruto.` : ' Siap untuk input bobot.'}`, 
+      text: `Bal "${item.no_bal}" (Grade ${item.kode_grade}) dipilih.${isWeighed ? ` Bobot tersimpan: ${beratBrutoItem(item)} kg bruto.` : ' Tekan Enter di kolom No Bal atau klik kolom berat untuk mengisi bobot.'}${hasGantiTikar ? ' • Ganti tikar aktif.' : ''}`,
       isError: false 
     });
-    setTimeout(() => {
-      if (barcodeScannerRef.current) {
-        barcodeScannerRef.current.focus();
-        barcodeScannerRef.current.select();
-      }
-    }, 100);
   };
 
-  // Toggle Ganti Tikar for active bal
+  // Toggle Ganti Tikar — simpan segera ke state + BE (bukan hanya UI lokal)
   const handleToggleGantiTikar = (itemId: string) => {
+    if (!currentTx) return;
+    const target = workingItems.find((it) => it.item_id === itemId);
+    if (!target || (target.berat_kg || 0) > 0) return;
+
     let nextGanti = false;
-    setWorkingItems((prev) =>
-      prev.map((it) => {
-        if (it.item_id === itemId) {
-          nextGanti = !it.ganti_tikar;
-          return {
-            ...it,
-            ganti_tikar: nextGanti,
-          };
-        }
-        return it;
-      })
-    );
+    const nextItems = workingItems.map((it) => {
+      if (it.item_id !== itemId) return it;
+      nextGanti = !it.ganti_tikar;
+      const potTikar = nextGanti
+        ? (typeof potTikarInput === 'number' && potTikarInput > 0 ? potTikarInput : POTONGAN_GANTI_TIKAR)
+        : 0;
+      return {
+        ...it,
+        ganti_tikar: nextGanti,
+        potongan_tikar: potTikar,
+        diubah_lokal_pada: Date.now(),
+        potongan: (it.potongan_kuli ?? POTONGAN_KULI_PER_BAL) + (it.potongan_tali ?? POTONGAN_TALI_PER_BAL) + potTikar,
+        subtotal_bersih: Math.max(
+          0,
+          (it.total_kotor || 0) -
+            ((it.potongan_kuli ?? POTONGAN_KULI_PER_BAL) + (it.potongan_tali ?? POTONGAN_TALI_PER_BAL) + potTikar)
+        ),
+      };
+    });
+
+    setWorkingItems(nextItems);
     if (itemId === activeItemId) {
       setPotTikarInput(nextGanti ? POTONGAN_GANTI_TIKAR : '');
     }
+
+    const updatedTx = hitungUlangKupon(currentTx, nextItems);
+    onSaveTransaksi(updatedTx, [], { skipAudit: true });
+    setScanFeedback({
+      text: nextGanti
+        ? `Ganti tikar aktif untuk bal ini (potongan ${POTONGAN_GANTI_TIKAR.toLocaleString('id-ID')}).`
+        : 'Ganti tikar dimatikan untuk bal ini.',
+      isError: false,
+    });
     // Kembalikan kursor supaya Enter tetap bekerja (No Bal → berat → simpan)
     setTimeout(() => {
       const target = fokusTerakhirRef.current === 'berat' ? beratBrutoInputRef.current : barcodeScannerRef.current;
@@ -612,7 +637,8 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
   const liveBruto = typeof beratBrutoInput === 'number' ? beratBrutoInput : (parseFloat(String(beratBrutoInput)) || 0);
   const parsedNettoInput = typeof beratNettoInput === 'number' ? beratNettoInput : (parseFloat(String(beratNettoInput)) || 0);
   const isActiveBalWeighed = (activeBalItem?.berat_kg || 0) > 0;
-  const isGantiTikarActive = Boolean(activeBalItem?.ganti_tikar);
+  const isGantiTikarActive =
+    Boolean(activeBalItem?.ganti_tikar) || (activeBalItem?.potongan_tikar || 0) > 0 || (typeof potTikarInput === 'number' && potTikarInput > 0);
   
   let liveTara = hitungPotonganTaraKg(liveBruto, isGantiTikarActive, activeBalItem?.no_bal);
   let liveNetto = liveBruto > 0 ? Math.max(0, normalizeKg(liveBruto - liveTara)) : 0;
@@ -644,9 +670,6 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
       text: 'Nilai timbangan di-reset. Silakan sesuaikan kuantitas tembakau fisik bal (maksimal 50,0 kg) sebelum menimbang ulang.',
       isError: false,
     });
-    setTimeout(() => {
-      beratBrutoInputRef.current?.focus();
-    }, 100);
   };
 
   // Save weighing for active bal
@@ -660,7 +683,6 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
 
     if (liveBruto <= 0) {
       setScanFeedback({ text: 'Masukkan berat bruto (kotor) lebih dari 0 kg!', isError: true });
-      beratBrutoInputRef.current?.focus();
       return;
     }
 
@@ -674,28 +696,36 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
       return;
     }
 
-    // Tulis hasil timbang satu bal ke versi kupon terbaru, supaya bal yang baru
-    // ditambahkan Sortir secara paralel tidak ikut tertimpa.
-    const kuponTerbaru = { ...currentTx, petugas_timbang: currentUser?.nama_lengkap || 'Operator Timbang Digital' };
-    const itemsDenganId = (kuponTerbaru.items || []).map((it, idx) => ({
+    // Tulis hasil timbang satu bal ke versi kupon terbaru (ikutkan ganti_tikar dari workingItems)
+    const baseItems = (workingItems.length > 0 ? workingItems : currentTx.items || []).map((it, idx) => ({
       ...it,
       barang_id: it.barang_id || `BAL-${currentTx.transaksi_id.replace('TRX-', '')}-${String(idx + 1).padStart(2, '0')}`,
     }));
-    const updatedTx = terapkanHasilTimbang({ ...kuponTerbaru, items: itemsDenganId }, activeBalItem.item_id, {
-      berat_bruto_kg: liveBruto,
-      potongan_tara_kg: liveTara,
-      berat_kg: liveNetto,
-      is_netto_manual: isNettoManual,
-      ganti_tikar: activeBalItem.ganti_tikar,
-      potongan_kuli: livePotKuli,
-      potongan_tali: livePotTali,
-      potongan_tikar: livePotTikar,
-      potongan: livePotTotal,
-      total_kotor: liveTotalKotor,
-      subtotal_bersih: liveSubtotalBersih,
-      status_timbang: 'selesai_timbang',
-      diubah_lokal_pada: Date.now(),
-    });
+    const kuponTerbaru = {
+      ...currentTx,
+      items: baseItems,
+      petugas_timbang: currentUser?.nama_lengkap || 'Operator Timbang Digital',
+    };
+    const updatedTx = terapkanHasilTimbang(
+      kuponTerbaru,
+      activeBalItem.item_id,
+      {
+        berat_bruto_kg: liveBruto,
+        potongan_tara_kg: liveTara,
+        berat_kg: liveNetto,
+        is_netto_manual: isNettoManual,
+        ganti_tikar: Boolean(activeBalItem.ganti_tikar),
+        potongan_kuli: livePotKuli,
+        potongan_tali: livePotTali,
+        potongan_tikar: livePotTikar,
+        potongan: livePotTotal,
+        total_kotor: liveTotalKotor,
+        subtotal_bersih: liveSubtotalBersih,
+        status_timbang: 'selesai_timbang',
+        diubah_lokal_pada: Date.now(),
+      },
+      activeBalItem.no_bal
+    );
 
     if (!updatedTx) {
       setScanFeedback({
@@ -756,14 +786,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     // Mengosongkan isian di layar (Sesuai dengan Requirement form kembali kosong)
     setBeratBrutoInput('');
     setPotTikarInput('');
-    setActiveItemId(null);
-
-    setTimeout(() => {
-      if (barcodeScannerRef.current) {
-        barcodeScannerRef.current.focus();
-        barcodeScannerRef.current.select();
-      }
-    }, 100);
+    setActiveItemId('');
   };
 
   // SISTEM PENGAMAN ANTI-SCAN PADA INPUT BERAT
@@ -891,14 +914,6 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
       isError: false,
     });
     setSaveSuccessMsg(null);
-
-    // Kursor otomatis fokus dan memblok teks berat bruto agar bisa langsung ditimpa atau diedit
-    setTimeout(() => {
-      if (beratBrutoInputRef.current) {
-        beratBrutoInputRef.current.focus();
-        beratBrutoInputRef.current.select();
-      }
-    }, 100);
   };
 
   const handleManualChangeKupon = (txId: string) => {
@@ -1041,7 +1056,6 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                         setScannedBarcode('');
                         setIsDropdownOpen(false);
                         setScanFeedback(null);
-                        barcodeScannerRef.current?.focus();
                       }}
                       className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer p-0.5"
                       title="Hapus input"
@@ -1286,7 +1300,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                   <button
                     key={item.item_id}
                     type="button"
-                    onClick={() => setActiveItemId(item.item_id)}
+                    onClick={() => handleSelectBalItem(item)}
                     className={`w-full text-left px-4 py-3 transition cursor-pointer flex items-center justify-between ${
                       isActive
                         ? 'bg-gray-100 border-l-4 border-[#b81d24] font-semibold'
@@ -1309,7 +1323,8 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                           </span>
                         </div>
                         <p className="text-[10px] text-gray-500 mt-0.5">
-                          {formatRupiah(item.harga_per_kg)}/kg {item.ganti_tikar && '• Ganti Tikar'}
+                          {formatRupiah(item.harga_per_kg)}/kg{' '}
+                          {(item.ganti_tikar || (item.potongan_tikar || 0) > 0) && '• Ganti Tikar'}
                         </p>
                       </div>
                     </div>
@@ -1540,7 +1555,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                     <label className="inline-flex items-center space-x-2.5 cursor-pointer group">
                       <input
                         type="checkbox"
-                        checked={activeBalItem.ganti_tikar}
+                        checked={Boolean(activeBalItem.ganti_tikar) || (activeBalItem.potongan_tikar || 0) > 0}
                         onChange={() => handleToggleGantiTikar(activeBalItem.item_id)}
                         disabled={isActiveBalWeighed}
                         className="w-4 h-4 rounded-xs border-gray-300 text-[#b81d24] focus:ring-[#b81d24] disabled:opacity-50 cursor-pointer"
@@ -1550,7 +1565,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                       </span>
                     </label>
 
-                    {activeBalItem.ganti_tikar && (
+                    {(Boolean(activeBalItem.ganti_tikar) || (activeBalItem.potongan_tikar || 0) > 0) && (
                       <div className="mt-2.5 ml-6 max-w-xs">
                         <label className="block text-[11px] font-semibold text-gray-600 mb-1">
                           Nominal Potongan Tikar (Rp)
