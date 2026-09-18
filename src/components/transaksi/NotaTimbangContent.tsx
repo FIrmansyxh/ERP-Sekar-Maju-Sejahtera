@@ -35,10 +35,13 @@ export const NotaTimbangContent: React.FC<NotaTimbangContentProps> = ({ transaks
   const totalPotonganRp = items.reduce((sum, it) => sum + (it.potongan || 0), 0);
   const grandTotalRp = items.reduce((sum, it) => sum + (it.subtotal_bersih || 0), 0);
 
-  const jumlahGantiTikar = items.filter((it) => it.ganti_tikar).length;
+  const jumlahGantiTikar = items.filter((it) => it.ganti_tikar || (it.potongan_tikar || 0) > 0).length;
   const totalPotonganKuli = items.reduce((sum, it) => sum + (it.potongan_kuli || POTONGAN_KULI_PER_BAL), 0);
   const totalPotonganTali = items.reduce((sum, it) => sum + (it.potongan_tali || POTONGAN_TALI_PER_BAL), 0);
-  const totalPotonganTikar = items.reduce((sum, it) => sum + (it.potongan_tikar || (it.ganti_tikar ? POTONGAN_GANTI_TIKAR : 0)), 0);
+  const totalPotonganTikar = items.reduce(
+    (sum, it) => sum + (it.potongan_tikar || (it.ganti_tikar ? POTONGAN_GANTI_TIKAR : 0)),
+    0
+  );
 
   const cleanDate = formatDateHariBulanTahun(transaksi.tanggal_transaksi);
   const isLunas = transaksi.status_pembayaran === 'lunas' || transaksi.metode_pembayaran === 'cash';

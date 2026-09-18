@@ -138,6 +138,11 @@ export function mergeKuponParalel(
     const oldW = old.berat_kg || 0;
     const newW = it.berat_kg || 0;
     if (newW >= oldW) {
+      const potTikar = Math.max(Number(it.potongan_tikar) || 0, Number(old.potongan_tikar) || 0);
+      const gantiTikar =
+        Boolean(it.ganti_tikar) ||
+        Boolean(old.ganti_tikar) ||
+        potTikar > 0;
       byNoBal.set(key, {
         ...old,
         ...it,
@@ -148,8 +153,15 @@ export function mergeKuponParalel(
         berat_bruto_kg: (it.berat_bruto_kg || 0) > 0 ? it.berat_bruto_kg : old.berat_bruto_kg,
         potongan_tara_kg: (it.berat_kg || 0) > 0 ? it.potongan_tara_kg : old.potongan_tara_kg,
         status_timbang: newW > 0 ? it.status_timbang || 'selesai_timbang' : old.status_timbang,
+        ganti_tikar: gantiTikar,
+        potongan_tikar: gantiTikar ? (potTikar || Number(it.potongan_tikar) || Number(old.potongan_tikar) || 75000) : 0,
       });
     } else {
+      const potTikar = Math.max(Number(it.potongan_tikar) || 0, Number(old.potongan_tikar) || 0);
+      const gantiTikar =
+        Boolean(it.ganti_tikar) ||
+        Boolean(old.ganti_tikar) ||
+        potTikar > 0;
       byNoBal.set(key, {
         ...it,
         ...old,
@@ -158,7 +170,8 @@ export function mergeKuponParalel(
         // Field sortir dari incoming jika ada update grade/harga
         kode_grade: it.kode_grade || old.kode_grade,
         harga_per_kg: it.harga_per_kg || old.harga_per_kg,
-        ganti_tikar: it.ganti_tikar ?? old.ganti_tikar,
+        ganti_tikar: gantiTikar,
+        potongan_tikar: gantiTikar ? (potTikar || 75000) : 0,
       });
     }
   }

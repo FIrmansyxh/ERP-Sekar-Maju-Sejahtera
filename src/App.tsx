@@ -1090,10 +1090,20 @@ export default function App() {
               const be = beItems.find((b) => String(b.no_bal) === String(fe.no_bal));
               if (!be) return fe;
               const feW = fe.berat_kg || 0;
-              if (feW > 0) {
-                return { ...be, ...fe, item_id: be.item_id || fe.item_id };
-              }
-              return { ...fe, ...be, item_id: be.item_id || fe.item_id };
+              const potTikar = Math.max(Number(fe.potongan_tikar) || 0, Number(be.potongan_tikar) || 0);
+              const gantiTikar =
+                Boolean(fe.ganti_tikar) ||
+                Boolean(be.ganti_tikar) ||
+                potTikar > 0;
+              const base =
+                feW > 0
+                  ? { ...be, ...fe, item_id: be.item_id || fe.item_id }
+                  : { ...fe, ...be, item_id: be.item_id || fe.item_id };
+              return {
+                ...base,
+                ganti_tikar: gantiTikar,
+                potongan_tikar: gantiTikar ? potTikar || 75000 : 0,
+              };
             })
           : [...beItems];
 

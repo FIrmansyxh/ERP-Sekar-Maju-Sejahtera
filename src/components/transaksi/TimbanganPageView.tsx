@@ -185,6 +185,10 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
           setBeratNettoInput(existingActive.berat_kg && existingActive.berat_kg > 0 ? existingActive.berat_kg : '');
           setIsNettoManual(existingActive.is_netto_manual || false);
         }
+        // Selalu sinkronkan tampilan ganti tikar dari data tersimpan
+        const hasGanti =
+          Boolean(existingActive.ganti_tikar) || (existingActive.potongan_tikar || 0) > 0;
+        setPotTikarInput(hasGanti ? (existingActive.potongan_tikar || POTONGAN_GANTI_TIKAR) : '');
         return;
       }
 
@@ -196,6 +200,9 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
         setBeratBrutoInput(targetItem.berat_bruto_kg && targetItem.berat_bruto_kg > 0 ? targetItem.berat_bruto_kg : '');
         setBeratNettoInput(targetItem.berat_kg && targetItem.berat_kg > 0 ? targetItem.berat_kg : '');
         setIsNettoManual(targetItem.is_netto_manual || false);
+        const hasGanti =
+          Boolean(targetItem.ganti_tikar) || (targetItem.potongan_tikar || 0) > 0;
+        setPotTikarInput(hasGanti ? (targetItem.potongan_tikar || POTONGAN_GANTI_TIKAR) : '');
       }
     } else {
       setWorkingItems([]);
@@ -214,6 +221,8 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     setBeratBrutoInput(foundItem.berat_bruto_kg && foundItem.berat_bruto_kg > 0 ? foundItem.berat_bruto_kg : '');
     setBeratNettoInput(foundItem.berat_kg && foundItem.berat_kg > 0 ? foundItem.berat_kg : '');
     setIsNettoManual(foundItem.is_netto_manual || false);
+    const hasGantiTikar = Boolean(foundItem.ganti_tikar) || (foundItem.potongan_tikar || 0) > 0;
+    setPotTikarInput(hasGantiTikar ? (foundItem.potongan_tikar || POTONGAN_GANTI_TIKAR) : '');
     
     const isAlreadyWeighed = (foundItem.berat_kg || 0) > 0;
     setScanFeedback({
@@ -221,7 +230,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
         isAlreadyWeighed
           ? ` Bobot terkunci: ${foundItem.berat_kg} kg.`
           : ' Klik kolom berat untuk mengisi nilai timbangan.'
-      }`,
+      }${hasGantiTikar ? ' • Ganti tikar aktif.' : ''}`,
       isError: false,
     });
   }, []);
@@ -370,18 +379,17 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     return workingItems.find((it) => it.item_id === activeItemId);
   }, [workingItems, activeItemId]);
 
-  // Switch active bal item — tanpa auto-fokus
+  // Switch active bal item — tanpa auto-fokus; muat ulang status ganti tikar
   const handleSelectBalItem = (item: TransaksiItemBal) => {
     setActiveItemId(item.item_id);
     setBeratBrutoInput(item.berat_bruto_kg && item.berat_bruto_kg > 0 ? item.berat_bruto_kg : '');
-    if (item.ganti_tikar && item.potongan_tikar) {
-      setPotTikarInput(item.potongan_tikar);
-    } else {
-      setPotTikarInput(item.potongan_tikar || '');
-    }
+    setBeratNettoInput(item.berat_kg && item.berat_kg > 0 ? item.berat_kg : '');
+    setIsNettoManual(item.is_netto_manual || false);
+    const hasGantiTikar = Boolean(item.ganti_tikar) || (item.potongan_tikar || 0) > 0;
+    setPotTikarInput(hasGantiTikar ? (item.potongan_tikar || POTONGAN_GANTI_TIKAR) : '');
     const isWeighed = (item.berat_kg || 0) > 0;
     setScanFeedback({ 
-      text: `Bal "${item.no_bal}" (Grade ${item.kode_grade}) dipilih.${isWeighed ? ` Bobot tersimpan: ${item.berat_kg} kg.` : ' Klik kolom berat untuk mengisi bobot.'}`, 
+      text: `Bal "${item.no_bal}" (Grade ${item.kode_grade}) dipilih.${isWeighed ? ` Bobot tersimpan: ${item.berat_kg} kg.` : ' Klik kolom berat untuk mengisi bobot.'}${hasGantiTikar ? ' • Ganti tikar aktif.' : ''}`, 
       isError: false 
     });
   };
@@ -574,7 +582,8 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
   const liveBruto = typeof beratBrutoInput === 'number' ? beratBrutoInput : (parseFloat(String(beratBrutoInput)) || 0);
   const parsedNettoInput = typeof beratNettoInput === 'number' ? beratNettoInput : (parseFloat(String(beratNettoInput)) || 0);
   const isActiveBalWeighed = (activeBalItem?.berat_kg || 0) > 0;
-  const isGantiTikarActive = Boolean(activeBalItem?.ganti_tikar);
+  const isGantiTikarActive =
+    Boolean(activeBalItem?.ganti_tikar) || (activeBalItem?.potongan_tikar || 0) > 0 || (typeof potTikarInput === 'number' && potTikarInput > 0);
   
   let liveTara = hitungPotonganTaraKg(liveBruto, isGantiTikarActive, activeBalItem?.no_bal);
   let liveNetto = liveBruto > 0 ? Math.max(0, normalizeKg(liveBruto - liveTara)) : 0;
@@ -1230,7 +1239,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                   <button
                     key={item.item_id}
                     type="button"
-                    onClick={() => setActiveItemId(item.item_id)}
+                    onClick={() => handleSelectBalItem(item)}
                     className={`w-full text-left px-4 py-3 transition cursor-pointer flex items-center justify-between ${
                       isActive
                         ? 'bg-gray-100 border-l-4 border-[#b81d24] font-semibold'
@@ -1253,7 +1262,8 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                           </span>
                         </div>
                         <p className="text-[10px] text-gray-500 mt-0.5">
-                          {formatRupiah(item.harga_per_kg)}/kg {item.ganti_tikar && '• Ganti Tikar'}
+                          {formatRupiah(item.harga_per_kg)}/kg{' '}
+                          {(item.ganti_tikar || (item.potongan_tikar || 0) > 0) && '• Ganti Tikar'}
                         </p>
                       </div>
                     </div>
@@ -1483,7 +1493,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                     <label className="inline-flex items-center space-x-2.5 cursor-pointer group">
                       <input
                         type="checkbox"
-                        checked={activeBalItem.ganti_tikar}
+                        checked={Boolean(activeBalItem.ganti_tikar) || (activeBalItem.potongan_tikar || 0) > 0}
                         onChange={() => handleToggleGantiTikar(activeBalItem.item_id)}
                         disabled={isActiveBalWeighed}
                         className="w-4 h-4 rounded-xs border-gray-300 text-[#b81d24] focus:ring-[#b81d24] disabled:opacity-50 cursor-pointer"
@@ -1493,7 +1503,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                       </span>
                     </label>
 
-                    {activeBalItem.ganti_tikar && (
+                    {(Boolean(activeBalItem.ganti_tikar) || (activeBalItem.potongan_tikar || 0) > 0) && (
                       <div className="mt-2.5 ml-6 max-w-xs">
                         <label className="block text-[11px] font-semibold text-gray-600 mb-1">
                           Nominal Potongan Tikar (Rp)
