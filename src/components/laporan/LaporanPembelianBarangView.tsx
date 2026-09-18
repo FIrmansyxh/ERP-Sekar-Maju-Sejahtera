@@ -30,7 +30,7 @@ import { SortIcon } from '../common/SortIcon';
 import { loadCurrentUser } from '../../utils/storage';
 import { formatDateHariBulanTahun } from '../../utils/formatters';
 import { hitungNilaiBal, hitungModalTransaksi } from '../../utils/finance';
-import { POTONGAN_GANTI_TIKAR } from '../../config/aturanTimbang';
+import { POTONGAN_GANTI_TIKAR, POTONGAN_KULI_PER_BAL, POTONGAN_TALI_PER_BAL } from '../../config/aturanTimbang';
 
 export type SortField = 'default' | 'tanggal' | 'kupon' | 'petani' | 'bruto' | 'netto' | 'potongan_tali' | 'potongan_kuli' | 'potongan_tikar' | 'total_harga' | 'jumlah_bayar';
 
@@ -96,8 +96,11 @@ interface RincianBal {
   hargaBeli: number;
   bruto: number;
   netto: number;
+  tali: number;
+  kuli: number;
   tikar: number;
   nilaiBeli: number;
+  jumlahBayar: number;
 }
 
 interface RingkasanKupon {
@@ -113,9 +116,10 @@ interface RingkasanKupon {
 }
 
 /**
- * Rincian setiap bal dan subtotal satu kupon. Potongan kupon memakai nilai yang
- * tercatat di transaksi (yang dibayar Kasir), sedangkan berat dan nilai beli
- * dijumlahkan dari rincian bal agar subtotal selalu sama dengan baris detailnya.
+ * Rincian setiap bal dan subtotal satu kupon.
+ * Per bal: Nilai Beli = Harga Beli × Netto;
+ * Jumlah Bayar = Nilai Beli − Kuli − Tali − Tikar (tikar hanya bila ganti tikar).
+ * Subtotal kupon adalah penjumlahan baris bal, sehingga tabel selalu cocok bila dihitung manual.
  */
 function ringkasKupon(row: TransaksiPembelian): RingkasanKupon {
   const items = row.items || [];
@@ -123,47 +127,57 @@ function ringkasKupon(row: TransaksiPembelian): RingkasanKupon {
     ? items.map((it, i) => {
         const netto = Number(it.berat_kg || 0);
         const hargaBeli = Number(it.harga_per_kg || 0);
+        const nilaiBeli = hitungNilaiBal({ berat_kg: netto, harga_per_kg: hargaBeli });
+        const kuli = Number(it.potongan_kuli ?? POTONGAN_KULI_PER_BAL);
+        const tali = Number(it.potongan_tali ?? POTONGAN_TALI_PER_BAL);
+        const gantiTikar = Boolean(it.ganti_tikar) || Number(it.potongan_tikar || 0) > 0;
+        const tikar = gantiTikar ? Number(it.potongan_tikar || 0) || POTONGAN_GANTI_TIKAR : 0;
         return {
           key: it.item_id || `${row.transaksi_id}-${i}`,
           noBal: it.no_bal || it.barcode || it.sample_label_code || '-',
           hargaBeli,
           bruto: Number(it.berat_bruto_kg || 0) || (netto > 0 ? netto + Number(it.potongan_tara_kg || 0) : 0),
           netto,
-          tikar: Number(it.potongan_tikar ?? (it.ganti_tikar ? POTONGAN_GANTI_TIKAR : 0)),
-          nilaiBeli: hitungNilaiBal({ berat_kg: netto, harga_per_kg: hargaBeli }),
+          tali,
+          kuli,
+          tikar,
+          nilaiBeli,
+          jumlahBayar: nilaiBeli - kuli - tali - tikar,
         };
       })
-    : [{
-        key: row.transaksi_id,
-        noBal: row.no_bal || '-',
-        hargaBeli: Number(row.harga_per_kg || 0),
-        bruto: row.jenis_timbang === 'bruto'
-          ? Number(row.berat_terukur_kg || 0)
-          : (row.berat_kg ? Number(row.berat_kg) + Number(row.potongan_tara_kg || 0) : 0),
-        netto: Number(row.berat_kg || 0),
-        tikar: Number(row.potongan_tikar || 0),
-        nilaiBeli: hitungModalTransaksi(row),
-      }];
+    : (() => {
+        // Data lama tanpa rincian bal: satu baris dari nilai transaksi
+        const nilaiBeli = hitungModalTransaksi(row);
+        const kuli = Number(row.potongan_kuli || 0);
+        const tali = Number(row.potongan_tali || 0);
+        const tikar = Number(row.potongan_tikar || 0);
+        return [{
+          key: row.transaksi_id,
+          noBal: row.no_bal || '-',
+          hargaBeli: Number(row.harga_per_kg || 0),
+          bruto: row.jenis_timbang === 'bruto'
+            ? Number(row.berat_terukur_kg || 0)
+            : (row.berat_kg ? Number(row.berat_kg) + Number(row.potongan_tara_kg || 0) : 0),
+          netto: Number(row.berat_kg || 0),
+          tali,
+          kuli,
+          tikar,
+          nilaiBeli,
+          jumlahBayar: nilaiBeli - kuli - tali - tikar,
+        }];
+      })();
 
-  const kuli = Number(row.potongan_kuli || 0);
-  const tali = Number(row.potongan_tali ?? items.reduce((s, it) => s + Number(it.potongan_tali || 0), 0));
-  const tikar = Number(row.potongan_tikar || 0);
-  const nilaiBeli = rincian.reduce((s, b) => s + b.nilaiBeli, 0);
-  const totalPotongan = Number(row.total_potongan ?? (kuli + tali + tikar));
-  const jumlahBayar = row.harga_final !== undefined && row.harga_final !== null
-    ? Number(row.harga_final)
-    : nilaiBeli - totalPotongan;
-
+  const jumlah = (pilih: (b: RincianBal) => number) => rincian.reduce((s, b) => s + pilih(b), 0);
   return {
     rincian,
     jumlahBal: items.length > 0 ? items.length : (row.total_bal || 1),
-    bruto: rincian.reduce((s, b) => s + b.bruto, 0),
-    netto: rincian.reduce((s, b) => s + b.netto, 0),
-    tali,
-    kuli,
-    tikar,
-    nilaiBeli,
-    jumlahBayar,
+    bruto: jumlah((b) => b.bruto),
+    netto: jumlah((b) => b.netto),
+    tali: jumlah((b) => b.tali),
+    kuli: jumlah((b) => b.kuli),
+    tikar: jumlah((b) => b.tikar),
+    nilaiBeli: jumlah((b) => b.nilaiBeli),
+    jumlahBayar: jumlah((b) => b.jumlahBayar),
   };
 }
 
@@ -597,7 +611,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
       rows.push([idx + 1, row.tanggal_transaksi, row.no_kupon || '-', row.nama_petani || '-', '', '', '', '', '', '', '', '', '', labelStatusBayar(row)]);
       rowKinds.push('group');
       r.rincian.forEach((bal) => {
-        rows.push(['', '', '', '', bal.noBal, bal.hargaBeli, bal.bruto || '', bal.netto || '', '', '', bal.tikar || '', bal.nilaiBeli, '', '']);
+        rows.push(['', '', '', '', bal.noBal, bal.hargaBeli, bal.bruto || '', bal.netto || '', bal.tali, bal.kuli, bal.tikar || '', bal.nilaiBeli, bal.jumlahBayar, '']);
         rowKinds.push('data');
       });
       rows.push([`Total ${row.no_kupon || 'Kupon'} (${r.jumlahBal} bal)`, '', '', '', '', '', r.bruto, r.netto, r.tali, r.kuli, r.tikar, r.nilaiBeli, r.jumlahBayar, '']);
@@ -742,11 +756,11 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
                   <td className="py-1.5 px-2 text-right font-mono text-gray-700 whitespace-nowrap">{formatRp(bal.hargaBeli)}</td>
                   <td className="py-1.5 px-2 text-right font-mono text-gray-700 whitespace-nowrap">{formatKg(bal.bruto)}</td>
                   <td className="py-1.5 px-2 text-right font-mono font-semibold text-gray-900 bg-blue-50/20 whitespace-nowrap">{formatKg(bal.netto)}</td>
-                  <td></td>
-                  <td></td>
+                  <td className="py-1.5 px-2 text-right font-mono text-amber-800 whitespace-nowrap">{formatRp(bal.tali)}</td>
+                  <td className="py-1.5 px-2 text-right font-mono text-amber-800 whitespace-nowrap">{formatRp(bal.kuli)}</td>
                   <td className="py-1.5 px-2 text-right font-mono text-amber-800 whitespace-nowrap">{formatRp(bal.tikar)}</td>
                   <td className="py-1.5 px-2 text-right font-mono font-semibold text-gray-900 whitespace-nowrap">{formatRp(bal.nilaiBeli)}</td>
-                  <td></td>
+                  <td className="py-1.5 px-2.5 text-right font-mono font-semibold text-[#b81d24] whitespace-nowrap">{formatRp(bal.jumlahBayar)}</td>
                 </tr>
               ))}
 
@@ -1203,11 +1217,11 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
                       <td className="p-1 border border-gray-300 text-right font-mono">{formatRp(bal.hargaBeli)}</td>
                       <td className="p-1 border border-gray-300 text-right font-mono">{formatKg(bal.bruto)}</td>
                       <td className="p-1 border border-gray-300 text-right font-mono font-semibold">{formatKg(bal.netto)}</td>
-                      <td className="p-1 border border-gray-300"></td>
-                      <td className="p-1 border border-gray-300"></td>
+                      <td className="p-1 border border-gray-300 text-right font-mono">{formatRp(bal.tali)}</td>
+                      <td className="p-1 border border-gray-300 text-right font-mono">{formatRp(bal.kuli)}</td>
                       <td className="p-1 border border-gray-300 text-right font-mono">{formatRp(bal.tikar)}</td>
                       <td className="p-1 border border-gray-300 text-right font-mono">{formatRp(bal.nilaiBeli)}</td>
-                      <td className="p-1 border border-gray-300"></td>
+                      <td className="p-1 border border-gray-300 text-right font-mono">{formatRp(bal.jumlahBayar)}</td>
                     </tr>
                   ))}
                   <tr className="bg-amber-50 font-bold">
