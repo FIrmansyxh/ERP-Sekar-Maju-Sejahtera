@@ -203,11 +203,19 @@ export type HasilTimbangBal = Partial<Pick<
 export function terapkanHasilTimbang(
   latestTx: TransaksiPembelian,
   itemId: string,
-  hasil: HasilTimbangBal
+  hasil: HasilTimbangBal,
+  noBalHint?: string
 ): TransaksiPembelian | null {
   const items = latestTx.items || [];
-  if (!items.some((it) => it.item_id === itemId)) return null;
-  const merged = items.map((it) => (it.item_id === itemId ? { ...it, ...hasil } : it));
+  let targetId = itemId;
+  if (!items.some((it) => it.item_id === targetId) && noBalHint) {
+    const byBal = items.find(
+      (it) => String(it.no_bal).toUpperCase() === String(noBalHint).toUpperCase()
+    );
+    if (byBal) targetId = byBal.item_id;
+  }
+  if (!items.some((it) => it.item_id === targetId)) return null;
+  const merged = items.map((it) => (it.item_id === targetId ? { ...it, ...hasil } : it));
   return hitungUlangKupon(latestTx, merged);
 }
 

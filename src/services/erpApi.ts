@@ -345,6 +345,10 @@ export class ErpApiService {
             berat_kg: it.berat_kg || 0,
             is_netto_manual: Boolean(it.is_netto_manual),
             lokasi_simpan: (it as any).lokasi_simpan || 'Blok A',
+            ganti_tikar: Boolean(it.ganti_tikar),
+            potongan_tikar: it.ganti_tikar ? (Number(it.potongan_tikar) || 75000) : 0,
+            potongan_kuli: it.potongan_kuli,
+            potongan_tali: it.potongan_tali,
           })),
         };
 
@@ -378,6 +382,7 @@ export class ErpApiService {
             kode_grade: it.kode_grade,
             harga_per_kg: it.harga_per_kg,
             ganti_tikar: Boolean(it.ganti_tikar),
+            potongan_tikar: it.ganti_tikar ? (Number(it.potongan_tikar) || 75000) : 0,
             berat_bruto_kg: it.berat_bruto_kg || 0,
             potongan_tara_kg: it.potongan_tara_kg || 0,
             berat_kg: it.berat_kg || 0,
