@@ -4,31 +4,67 @@ on:
   push:
     branches: [ main ]
 
+# Cegah build ganda bertumpuk jika ada beberapa push berurutan
+concurrency:
+  group: deploy-frontend
+  cancel-in-progress: true
+
 jobs:
-  deploy:
+  build-and-deploy:
     name: Build & Deploy React Frontend
     runs-on: ubuntu-latest
 
     steps:
-    - name: SSH to VPS and Build
+    - name: 1. Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: 2. Setup Node.js (GitHub Runner)
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+
+    - name: 3. Install Dependencies di GitHub Runner
+      run: npm install
+
+    - name: 4. Build Vite di GitHub Runner (Super Cepat & Bebas Beban VPS)
+      run: npm run build
+
+    - name: 5. Kompres Hasil Build dist
+      run: tar -czf dist.tar.gz dist/
+
+    - name: 6. Kirim dist.tar.gz ke VPS
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USER }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        port: ${{ secrets.VPS_PORT || 22 }}
+        source: "dist.tar.gz"
+        target: "/var/www/erp-fe/ERP-Sekar-Maju-Sejahtera"
+        overwrite: true
+
+    - name: 7. Ekstrak di VPS & Reload Nginx
       uses: appleboy/ssh-action@v1.0.3
       with:
         host: ${{ secrets.VPS_HOST }}
         username: ${{ secrets.VPS_USER }}
         key: ${{ secrets.VPS_SSH_KEY }}
         port: ${{ secrets.VPS_PORT || 22 }}
+        command_timeout: 5m
         script: |
-          echo "=== 1. Masuk ke folder frontend ==="
+          echo "=== 1. Bersihkan sisa proses build lama yang menggantung di VPS ==="
+          pkill -f "vite" || true
+          pkill -f "tsc" || true
+
+          echo "=== 2. Masuk ke folder frontend & sinkronkan Git ==="
           cd /var/www/erp-fe/ERP-Sekar-Maju-Sejahtera
+          git pull origin main || true
 
-          echo "=== 2. Tarik update terbaru dari GitHub ==="
-          git pull origin main
-
-          echo "=== 3. Install Paket & Build Vite ==="
-          npm install
-          NODE_OPTIONS="--max-old-space-size=2048" npm run build
+          echo "=== 3. Ekstrak aset produksi terbaru ==="
+          tar -xzf dist.tar.gz
+          rm -f dist.tar.gz
 
           echo "=== 4. Reload Nginx ==="
           sudo systemctl reload nginx
 
-          echo "=== DEPLOY FRONTEND SUKSES! ==="
+          echo "=== DEPLOY FRONTEND SUKSES CEPAT! ==="

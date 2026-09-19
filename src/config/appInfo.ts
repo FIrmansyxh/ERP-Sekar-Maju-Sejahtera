@@ -4,8 +4,8 @@
  */
 export const APP_NAME = 'ERP PR. Sekar Maju Sejahtera';
 export const APP_EDITION = 'Desktop Standalone';
-export const APP_VERSION = '3.0.4';
-export const APP_BUILD = '2026.09.19-V5';
+export const APP_VERSION = '3.0.5';
+export const APP_BUILD = '2026.09.19-V6';
 
 /**
  * Identitas perusahaan pada seluruh dokumen resmi (kop surat nota, surat jalan,
