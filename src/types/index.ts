@@ -73,6 +73,8 @@ export interface Barang {
   total_harga?: number; // Subtotal value = berat_kg * harga_per_kg
   berat_bruto_kg?: number; // Gross weight
   potongan_tara_kg?: number; // Tare deduction
+  ganti_tikar?: boolean; // Ganti tikar bal (Rp 75.000)
+  potongan_tikar?: number;
   status_stok: StatusStokBarang;
   tanggal_masuk: string; // ISO string / YYYY-MM-DD
   tanggal_keluar?: string;
