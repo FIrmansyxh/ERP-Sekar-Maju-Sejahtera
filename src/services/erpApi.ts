@@ -400,6 +400,7 @@ export class ErpApiService {
             harga_per_kg: (tx.total_harga_beli && tx.berat_kg) ? Math.round(tx.total_harga_beli / tx.berat_kg) : 100000,
             ganti_tikar: false,
           }]).map(it => ({
+            item_id: it.item_id || null,
             no_bal: it.no_bal,
             kode_bal_pembeli: it.kode_bal_pembeli || null,
             barcode: it.barcode || null,

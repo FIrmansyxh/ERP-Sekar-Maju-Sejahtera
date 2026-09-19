@@ -202,7 +202,7 @@ export const PetaniCardPrintModal: React.FC<PetaniCardPrintModalProps> = ({
 
                 <div className="text-[8.5px] text-gray-700 space-y-1 leading-snug my-1">
                   <p>1. Kartu identitas resmi petani. Tunjukkan saat Sortir, Timbang, dan pembayaran di Kasir.</p>
-                  <p>2. Tara per bal: No Bal SB 2 kg; bal lain bruto &lt;50 kg 3 kg, 50–59 kg 5 kg, ≥60 kg 6 kg.</p>
+                  <p>2. Tara per bal: SB 2 kg rata; TS &amp; T: &lt;50 kg 4 kg, 50–59 kg 5 kg, ≥60 kg 6 kg; HF/Lain: &lt;50 kg 3 kg, 50–59 kg 5 kg, ≥60 kg 6 kg.</p>
                   <p>3. Potongan per bal: kuli {formatRupiah(POTONGAN_KULI_PER_BAL)} + tali {formatRupiah(POTONGAN_TALI_PER_BAL)}; ganti tikar {formatRupiah(POTONGAN_GANTI_TIKAR)}.</p>
                   <p>4. Dibayar tunai di Kasir setelah semua bal ditimbang; nota resmi diberikan setelah lunas.</p>
                   <p>5. Kartu hilang atau rusak segera lapor ke admin untuk diganti.</p>

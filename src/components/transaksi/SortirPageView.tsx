@@ -4,6 +4,8 @@ import {
   Plus, 
   Check, 
   Trash2, 
+  Pencil,
+  X,
   ArrowRight, 
   AlertCircle, 
   Layers, 
@@ -20,7 +22,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { TransaksiPembelian, Petani, TabelHarga, Barang, TransaksiItemBal, UserRole, User as UserType, SaveTransaksiMeta } from '../../types';
-import { formatRupiah, formatNoKupon, formatDateHariBulanTahun, formatNumber, generateTransaksiId, hitungPotonganTaraKg } from '../../utils/formatters';
+import { formatRupiah, formatNoKupon, formatDateHariBulanTahun, formatNumber, generateTransaksiId, hitungPotonganTaraKg, normalizeKg } from '../../utils/formatters';
 import { useSessionDraft } from '../../hooks/useSessionDraft';
 import { buildBarangDariItem, hitungUlangKupon, isBalDitimbang, isKuponProsesSortir, nextBarangId, sortTransaksiItemsByInputOrder } from '../../utils/kuponSortir';
 import { POTONGAN_GANTI_TIKAR, POTONGAN_KULI_PER_BAL, POTONGAN_TALI_PER_BAL } from '../../config/aturanTimbang';
@@ -124,6 +126,11 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
   const [isGantiTikar, setIsGantiTikar] = useState(false);
   const [scanFeedback, setScanFeedback] = useState<{ text: string; isError: boolean } | null>(null);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+
+  // Inline edit bal di grid tabel
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editNoBal, setEditNoBal] = useState<string>('');
+  const [editGrade, setEditGrade] = useState<string>('');
 
   const barcodeInputRef = useRef<HTMLInputElement>(null);
   const gradeSelectRef = useRef<HTMLSelectElement>(null);
@@ -311,7 +318,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
       return;
     }
 
-    const tara = hitungPotonganTaraKg(0, isGantiTikar, cleanedBalCode);
+    const tara = hitungPotonganTaraKg(0, isGantiTikar, cleanedBalCode, selectedGrade);
     const potTikar = isGantiTikar ? POTONGAN_GANTI_TIKAR : 0;
     const potKuli = POTONGAN_KULI_PER_BAL;
     const potTali = POTONGAN_TALI_PER_BAL;
@@ -419,6 +426,97 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
       handleAddBalItem();
     }
   };
+  const handleStartEdit = (item: TransaksiItemBal) => {
+    setEditingItemId(item.item_id);
+    setEditNoBal(item.no_bal);
+    setEditGrade(item.kode_grade);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingItemId(null);
+    setEditNoBal('');
+    setEditGrade('');
+  };
+
+  const handleSaveEdit = (item: TransaksiItemBal) => {
+    if (!openTx) return;
+
+    const cleanedNoBal = editNoBal.trim().replace(/-/g, '').toUpperCase();
+    if (!cleanedNoBal) {
+      setScanFeedback({ text: 'Nomor bal tidak boleh kosong!', isError: true });
+      return;
+    }
+
+    // Jika nomor bal berubah, cek duplikasi di kupon ini maupun di inventaris gudang
+    if (cleanedNoBal !== item.no_bal.toUpperCase()) {
+      if (balItems.some((b) => b.item_id !== item.item_id && b.no_bal.toUpperCase() === cleanedNoBal)) {
+        setScanFeedback({ text: `Gagal: Nomor bal "${cleanedNoBal}" sudah digunakan pada kupon ini!`, isError: true });
+        return;
+      }
+      if (barangList.some((b) => b.barang_id !== item.barang_id && (b.no_bal || b.barang_id || '').toUpperCase() === cleanedNoBal)) {
+        setScanFeedback({ text: `Gagal: Nomor bal "${cleanedNoBal}" sudah ada di master data inventaris!`, isError: true });
+        return;
+      }
+    }
+
+    const trimmedGrade = editGrade.trim();
+    if (!trimmedGrade) {
+      setScanFeedback({ text: 'Mutu grade tidak boleh kosong!', isError: true });
+      return;
+    }
+
+    const foundGrade = hargaList.find((h) => h.kode_grade === trimmedGrade && (!h.status || h.status === 'aktif'))
+      || hargaList.find((h) => h.kode_grade === trimmedGrade);
+
+    if (!foundGrade) {
+      setScanFeedback({ text: `Grade "${trimmedGrade}" tidak valid atau tidak terdaftar di Master Harga Beli!`, isError: true });
+      return;
+    }
+
+    const newHarga = foundGrade.harga_per_kg;
+    const newTara = hitungPotonganTaraKg(item.berat_bruto_kg || 0, item.ganti_tikar, cleanedNoBal, trimmedGrade);
+    const newNetto = (item.berat_kg || 0) > 0
+      ? (item.is_netto_manual ? item.berat_kg : Math.max(0, normalizeKg((item.berat_bruto_kg || 0) - newTara)))
+      : 0;
+    const totalKotor = Math.round(newNetto * newHarga);
+    const subtotalBersih = Math.round(Math.max(0, totalKotor - (item.potongan || 0)));
+
+    const updatedItem: TransaksiItemBal = {
+      ...item,
+      no_bal: cleanedNoBal,
+      barcode: (!item.barcode || item.barcode === item.no_bal) ? cleanedNoBal : item.barcode,
+      kode_grade: trimmedGrade,
+      harga_per_kg: newHarga,
+      potongan_tara_kg: newTara,
+      berat_kg: newNetto,
+      total_kotor: totalKotor,
+      subtotal_bersih: subtotalBersih,
+      diubah_lokal_pada: Date.now(),
+    };
+
+    const nextItems = balItems.map((b) => (b.item_id === item.item_id ? updatedItem : b));
+    const updatedTx = hitungUlangKupon(openTx, nextItems);
+
+    onSaveTransaksi(
+      updatedTx,
+      [buildBarangDariItem(updatedTx, updatedItem, barangList.find((b) => b.barang_id === updatedItem.barang_id))],
+      {
+        timpaPenuh: true,
+        audit: {
+          aksi: 'SORTIR_EDIT_BAL',
+          deskripsi: `Koreksi bal Kupon ${openTx.no_kupon}: Bal "${item.no_bal}" (Grade ${item.kode_grade}) diubah menjadi "${cleanedNoBal}" (Grade ${trimmedGrade})`,
+        },
+      }
+    );
+
+    setEditingItemId(null);
+    setEditNoBal('');
+    setEditGrade('');
+    setScanFeedback({
+      text: `✓ Perubahan Bal "${cleanedNoBal}" (Grade ${trimmedGrade} • ${formatRupiah(newHarga)}/kg) berhasil disimpan!`,
+      isError: false,
+    });
+  };
 
   const handleRemoveItem = (itemId: string) => {
     if (!openTx) return;
@@ -434,6 +532,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
     }
     const updatedTx = hitungUlangKupon(openTx, balItems.filter((it) => it.item_id !== itemId));
     onSaveTransaksi(updatedTx, [], {
+      timpaPenuh: true,
       audit: {
         aksi: 'SORTIR_HAPUS_BAL',
         deskripsi: `Bal ${item.no_bal} (Grade ${item.kode_grade}) dihapus dari Kupon ${openTx.no_kupon} saat sortir`,
@@ -852,23 +951,89 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                   ) : (
                     balItemsTampil.map((item, index) => {
                       const ditimbang = isBalDitimbang(item);
+                      const isEditing = editingItemId === item.item_id;
                       return (
-                      <tr key={item.item_id || index} className="hover:bg-slate-50/80 transition-colors">
+                      <tr 
+                        key={item.item_id || index} 
+                        className={`transition-colors ${isEditing ? 'bg-amber-50/50' : 'hover:bg-slate-50/80'}`}
+                      >
                         <td className="py-2.5 px-3.5 text-center font-mono text-slate-500">
                           {balItemsTampil.length - index}
                         </td>
-                        <td className="py-2.5 px-3.5">
-                          <span className="font-mono font-semibold text-slate-900 bg-slate-100 px-2 py-0.5 border border-slate-200 rounded text-xs">
-                            {item.no_bal}
-                          </span>
+                        <td className="py-2 px-3.5">
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={editNoBal}
+                              onChange={(e) => setEditNoBal(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleSaveEdit(item);
+                                }
+                                if (e.key === 'Escape') {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleCancelEdit();
+                                }
+                              }}
+                              autoFocus
+                              className="w-full max-w-[140px] bg-white border border-[#b81d24] focus:ring-1 focus:ring-[#b81d24] rounded px-2 py-1 text-xs font-mono font-bold text-slate-900 focus:outline-none shadow-2xs"
+                              placeholder="No Bal..."
+                            />
+                          ) : (
+                            <span className="font-mono font-semibold text-slate-900 bg-slate-100 px-2 py-0.5 border border-slate-200 rounded text-xs">
+                              {item.no_bal}
+                            </span>
+                          )}
                         </td>
-                        <td className="py-2.5 px-3.5">
-                          <span className="px-2 py-0.5 bg-slate-100 text-slate-800 border border-slate-200 font-medium rounded text-[11px]">
-                            Grade {item.kode_grade}
-                          </span>
+                        <td className="py-2 px-3.5">
+                          {isEditing ? (
+                            <select
+                              value={editGrade}
+                              onChange={(e) => setEditGrade(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleSaveEdit(item);
+                                }
+                                if (e.key === 'Escape') {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleCancelEdit();
+                                }
+                              }}
+                              className="w-full max-w-[180px] bg-white border border-slate-300 focus:border-[#b81d24] focus:ring-1 focus:ring-[#b81d24] rounded px-2 py-1 text-xs font-medium text-slate-900 focus:outline-none shadow-2xs"
+                            >
+                              {hargaList
+                                .filter((h) => !h.status || h.status === 'aktif' || h.kode_grade === editGrade)
+                                .map((h) => (
+                                  <option key={h.kode_grade} value={h.kode_grade}>
+                                    Grade {h.kode_grade} ({formatRupiah(h.harga_per_kg)}/kg)
+                                  </option>
+                                ))}
+                            </select>
+                          ) : (
+                            <span className="px-2 py-0.5 bg-slate-100 text-slate-800 border border-slate-200 font-medium rounded text-[11px]">
+                              Grade {item.kode_grade}
+                            </span>
+                          )}
                         </td>
                         <td className="py-2.5 px-3.5 text-right font-mono font-medium text-slate-800">
-                          {formatRupiah(item.harga_per_kg)}/kg
+                          {isEditing ? (
+                            (() => {
+                              const previewH = hargaList.find((h) => h.kode_grade === editGrade)?.harga_per_kg || item.harga_per_kg;
+                              return (
+                                <span className="text-emerald-700 font-semibold">
+                                  {formatRupiah(previewH)}/kg
+                                </span>
+                              );
+                            })()
+                          ) : (
+                            `${formatRupiah(item.harga_per_kg)}/kg`
+                          )}
                         </td>
                         
                         <td className="py-2.5 px-3.5 text-center">
@@ -883,15 +1048,46 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                           )}
                         </td>
                         <td className="py-2.5 px-3.5 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveItem(item.item_id)}
-                            disabled={ditimbang}
-                            className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-400"
-                            title={ditimbang ? 'Bal sudah ditimbang, tidak bisa dihapus dari Sortir' : 'Hapus bal ini dari kupon'}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {isEditing ? (
+                            <div className="flex items-center justify-center space-x-1">
+                              <button
+                                type="button"
+                                onClick={() => handleSaveEdit(item)}
+                                className="p-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded transition-colors cursor-pointer"
+                                title="Simpan Perubahan (Enter)"
+                              >
+                                <Check className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleCancelEdit}
+                                className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-colors cursor-pointer"
+                                title="Batal Edit (Esc)"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center space-x-1">
+                              <button
+                                type="button"
+                                onClick={() => handleStartEdit(item)}
+                                className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors cursor-pointer"
+                                title="Edit Nomor Bal & Mutu Grade"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveItem(item.item_id)}
+                                disabled={ditimbang}
+                                className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-400"
+                                title={ditimbang ? 'Bal sudah ditimbang, tidak bisa dihapus dari Sortir' : 'Hapus bal ini dari kupon'}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                       );

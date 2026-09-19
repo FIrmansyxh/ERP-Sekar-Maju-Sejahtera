@@ -1120,7 +1120,7 @@ export default function App() {
           items: mergedItems,
         };
 
-        commitLocalTx(syncedTx, false);
+        commitLocalTx(syncedTx, false, Boolean(meta.timpaPenuh));
 
         if (syncedTx.status_pembayaran === 'lunas' || meta.koreksi) {
           try {
