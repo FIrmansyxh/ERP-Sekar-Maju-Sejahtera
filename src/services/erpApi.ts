@@ -38,6 +38,7 @@ import {
   authenticateUser as authenticateLocalUser
 } from '../utils/storage';
 import { sortTransaksiItemsByInputOrder } from '../utils/kuponSortir';
+import { generatePetaniId } from '../utils/formatters';
 
 export class ErpApiService {
   private static isOnlineState: boolean | null = null;
@@ -164,30 +165,55 @@ export class ErpApiService {
         }
       }
     } catch (err) {
-      console.warn('Gagal simpan petani ke backend API:', err);
-      throw err;
+      console.warn('Gagal simpan petani ke backend API, beralih ke penyimpanan lokal:', err);
     }
 
     // Fallback simpan lokal jika backend offline
     const currentList = loadPetaniData();
     let resultPetani: Petani;
     if (isEdit && petani.petani_id) {
-      resultPetani = { ...currentList.find(p => p.petani_id === petani.petani_id)!, ...petani } as Petani;
-      savePetaniData(currentList.map(p => p.petani_id === resultPetani.petani_id ? resultPetani : p));
+      const existing = currentList.find(p => p.petani_id === petani.petani_id);
+      resultPetani = {
+        petani_id: petani.petani_id,
+        nama_petani: petani.nama_petani || existing?.nama_petani || '',
+        no_hp: petani.no_hp ?? existing?.no_hp ?? '',
+        alamat: petani.alamat ?? existing?.alamat ?? '',
+        desa_kecamatan: petani.desa_kecamatan ?? existing?.desa_kecamatan ?? '',
+        status_aktif: petani.status_aktif !== undefined ? petani.status_aktif : (existing?.status_aktif ?? true),
+        tanggal_daftar: petani.tanggal_daftar || existing?.tanggal_daftar || new Date().toISOString().split('T')[0],
+        catatan: petani.catatan ?? existing?.catatan ?? '',
+        statistik: existing?.statistik || {
+          total_setoran_bal: 0,
+          total_berat_kg: 0,
+          kunjungan_terakhir: 'Belum Ada',
+          grade_dominan: '-',
+        },
+        ...petani,
+      };
+      const updatedList = currentList.map(p => p.petani_id === resultPetani.petani_id ? resultPetani : p);
+      savePetaniData(updatedList);
     } else {
-      const year = new Date().getFullYear();
-      const count = currentList.length + 1;
-      const newId = `PTN-${year}-${String(count).padStart(3, '0')}`;
+      const newId = petani.petani_id || generatePetaniId(currentList);
       resultPetani = {
         petani_id: newId,
         nama_petani: petani.nama_petani || '',
         no_hp: petani.no_hp || '',
         alamat: petani.alamat || '',
-        status_aktif: true,
-        tanggal_daftar: new Date().toISOString().split('T')[0],
-        ...petani
+        desa_kecamatan: petani.desa_kecamatan || petani.alamat || '',
+        status_aktif: petani.status_aktif ?? true,
+        tanggal_daftar: petani.tanggal_daftar || new Date().toISOString().split('T')[0],
+        catatan: petani.catatan || '',
+        statistik: {
+          total_setoran_bal: 0,
+          total_berat_kg: 0,
+          kunjungan_terakhir: 'Belum Ada',
+          grade_dominan: '-',
+        },
+        ...petani,
       };
-      savePetaniData([resultPetani, ...currentList]);
+      // Simpan di posisi paling atas (data baru di awal list)
+      const filtered = currentList.filter(p => p.petani_id !== resultPetani.petani_id);
+      savePetaniData([resultPetani, ...filtered]);
     }
     return resultPetani;
   }

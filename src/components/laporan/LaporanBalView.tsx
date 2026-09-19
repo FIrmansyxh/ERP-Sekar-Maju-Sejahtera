@@ -790,7 +790,6 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
           { header: 'Petani' },
           { header: 'Kupon', align: 'center' },
           { header: 'Bruto (Kg)', type: 'kg' },
-          { header: 'Tara (Kg)', type: 'kg' },
           { header: 'Netto (Kg)', type: 'kg' },
           { header: 'Harga Beli (Rp/Kg)', type: 'rupiah' },
           { header: 'Total Harga Beli (Rp)', type: 'rupiah' },
@@ -809,7 +808,6 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
             b.nama_petani || '-',
             b.no_kupon || '-',
             ditimbang ? b.berat_bruto_kg || 0 : '-',
-            ditimbang ? b.potongan_tara_kg || 0 : '-',
             ditimbang ? b.berat_kg : '-',
             b.harga_per_kg || 0,
             ditimbang ? b.total_harga || 0 : '-',
@@ -821,7 +819,6 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
         totalRow: [
           `TOTAL LUNAS (${totals.totalBalLunas} dari ${totals.totalBal} bal)`, '', '', '', '', '',
           totals.totalBruto,
-          totals.totalTara,
           totals.totalNetto,
           totals.avgHargaKg,
           totals.totalNilai,
@@ -1541,12 +1538,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                   </div>
                 </th>
 
-                {/* 8. Potongan Tara (kg) */}
-                <th className="py-2.5 px-2.5 text-right border-r border-gray-200 text-gray-600">
-                  <span>Tara (kg)</span>
-                </th>
-
-                {/* 9. Berat Netto (kg) [PRIMARY SORT TARGET] */}
+                {/* 8. Berat Netto (kg) [PRIMARY SORT TARGET] */}
                 <th
                   onClick={() => handleHeaderSort('berat_kg')}
                   className="py-2.5 px-3 text-right border-r border-gray-200 cursor-pointer hover:bg-blue-100 transition group select-none bg-blue-50/70"
@@ -1679,12 +1671,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                         {ditimbang ? (bal.berat_bruto_kg || 0).toFixed(1) : '-'}
                       </td>
 
-                      {/* 8. Tara */}
-                      <td className="py-2 px-2.5 text-right font-mono text-gray-500 border-r border-gray-100 whitespace-nowrap">
-                        {ditimbang ? (bal.potongan_tara_kg || 0).toFixed(1) : '-'}
-                      </td>
-
-                      {/* 9. Netto [HIGHLIGHT] */}
+                      {/* 8. Netto [HIGHLIGHT] */}
                       <td className="py-2 px-3 text-right font-mono font-black text-blue-950 border-r border-gray-100 bg-blue-50/30 whitespace-nowrap">
                         {ditimbang ? (
                           <>
@@ -1729,9 +1716,6 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                   </td>
                   <td className="py-3 px-3 text-right font-mono border-r border-gray-300 whitespace-nowrap">
                     {totals.totalBruto.toFixed(1)} kg
-                  </td>
-                  <td className="py-3 px-2.5 text-right font-mono text-gray-600 border-r border-gray-300 whitespace-nowrap">
-                    {totals.totalTara.toFixed(1)} kg
                   </td>
                   <td className="py-3 px-3 text-right font-mono text-blue-950 border-r border-gray-300 whitespace-nowrap bg-blue-100/70 font-black">
                     {totals.totalNetto.toFixed(1)} kg

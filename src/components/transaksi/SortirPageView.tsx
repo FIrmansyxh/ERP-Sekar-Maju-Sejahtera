@@ -37,6 +37,7 @@ interface SortirPageViewProps {
   onSaveTransaksi: (newTx: TransaksiPembelian, generatedBarang: Barang | Barang[], meta?: SaveTransaksiMeta) => void;
   onDeleteTransaksi?: (transaksiId: string, alasan?: string) => void;
   onNavigateToTimbangan: (kuponNo?: string, txId?: string, balNo?: string) => void;
+  onAddPetani?: () => void;
 }
 
 export const SortirPageView: React.FC<SortirPageViewProps> = ({
@@ -49,6 +50,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
   onSaveTransaksi,
   onDeleteTransaksi,
   onNavigateToTimbangan,
+  onAddPetani,
 }) => {
   // Form Header State
   const draftUserId = currentUser?.user_id;
@@ -191,12 +193,17 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
     return petaniList.filter((p) => p.status_aktif !== false);
   }, [petaniList]);
 
-  // Set default farmer
+  // Set default farmer atau auto-select petani baru yang baru didaftarkan
+  const prevPetaniLenRef = useRef(petaniList.length);
   useEffect(() => {
     if (activeFarmers.length > 0 && !selectedPetaniId) {
       setSelectedPetaniId(activeFarmers[0].petani_id);
+    } else if (petaniList.length > prevPetaniLenRef.current && !openTx && activeFarmers.length > 0) {
+      // Petani baru saja ditambahkan, auto-pilih petani yang baru masuk di paling atas
+      setSelectedPetaniId(activeFarmers[0].petani_id);
     }
-  }, [activeFarmers, selectedPetaniId]);
+    prevPetaniLenRef.current = petaniList.length;
+  }, [activeFarmers, selectedPetaniId, petaniList.length, openTx]);
 
   
 
@@ -730,9 +737,21 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
 
             {/* 2. Petani Penyetor */}
             <div className="sm:col-span-1 md:col-span-1">
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                2. Petani Penyetor <span className="text-rose-500">*</span>
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-700">
+                  2. Petani Penyetor <span className="text-rose-500">*</span>
+                </label>
+                {onAddPetani && !openTx && (
+                  <button
+                    type="button"
+                    onClick={onAddPetani}
+                    className="text-[10px] text-[#b81d24] hover:text-[#90161b] font-semibold hover:underline flex items-center gap-0.5 cursor-pointer"
+                    title="Tambah pendaftaran petani baru"
+                  >
+                    + Petani Baru
+                  </button>
+                )}
+              </div>
               {openTx ? (
                 <input
                   type="text"

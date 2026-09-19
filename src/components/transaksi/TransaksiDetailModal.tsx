@@ -103,7 +103,7 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
       }}
     >
       <div 
-        className="bg-white border border-gray-300 w-full max-w-3xl rounded-none shadow-xl flex flex-col text-xs text-gray-800 max-h-[94vh]"
+        className="bg-white border border-gray-300 w-full max-w-4xl lg:max-w-5xl rounded-none shadow-xl flex flex-col text-xs text-gray-800 max-h-[94vh]"
         onClick={(e) => e.stopPropagation()}
       >
         
@@ -305,10 +305,10 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
         </div>
 
         {/* Modal Body / Thermal & A4 Receipt Printable Preview */}
-        <div className="p-5 overflow-y-auto bg-gray-100 flex-1">
+        <div className="p-4 sm:p-6 overflow-y-auto bg-gray-100 flex-1">
           <div 
             ref={receiptRef}
-            className="bg-white border border-gray-300 p-6 max-w-2xl mx-auto shadow-xs font-sans text-gray-900 rounded-xs"
+            className="bg-white border border-gray-300 p-6 sm:p-10 max-w-4xl mx-auto shadow-sm font-sans text-gray-900 rounded-xs"
           >
             <NotaTimbangContent transaksi={transaksi} />
           </div>

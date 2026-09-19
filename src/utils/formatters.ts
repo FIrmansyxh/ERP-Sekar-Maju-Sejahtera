@@ -183,7 +183,7 @@ export function deteksiKodeAturanTara(noBal?: string, kodeGrade?: string): KodeA
     if (prefix === 'SB' || upper.startsWith('SB')) return 'SB';
     if (prefix === 'TS' || upper.startsWith('TS')) return 'TS';
     if (prefix === 'HF' || upper.startsWith('HF')) return 'HF';
-    if (prefix === 'T' || upper.startsWith('T')) return 'T';
+    if (prefix === 'T' || upper === 'T' || /^T[\s\-_0-9]/.test(upper)) return 'T';
   }
 
   return 'DEFAULT';
