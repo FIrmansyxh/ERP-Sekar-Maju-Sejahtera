@@ -58,8 +58,8 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [itemsPerPage, setItemsPerPage] = useState<number>(10);
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [sortBy, setSortBy] = useState<string>('petani_id');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [sortBy, setSortBy] = useState<string>('terbaru');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   const countActive = useMemo(() => data.filter((p) => p.status_aktif).length, [data]);
   const countInactive = useMemo(() => data.filter((p) => !p.status_aktif).length, [data]);
@@ -81,6 +81,14 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
         return true;
       })
       .sort((a, b) => {
+        if (sortBy === 'terbaru') {
+          const tA = a.tanggal_daftar || '';
+          const tB = b.tanggal_daftar || '';
+          if (tA !== tB) {
+            return sortOrder === 'desc' ? tB.localeCompare(tA) : tA.localeCompare(tB);
+          }
+          return sortOrder === 'desc' ? b.petani_id.localeCompare(a.petani_id) : a.petani_id.localeCompare(b.petani_id);
+        }
         let cmp = 0;
         if (sortBy === 'nama') cmp = a.nama_petani.localeCompare(b.nama_petani);
         else if (sortBy === 'petani_id') cmp = a.petani_id.localeCompare(b.petani_id);
@@ -174,6 +182,7 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
                 }}
                 className="w-full bg-white border border-gray-300 rounded-sm px-2.5 py-1.5 text-xs text-gray-800 focus:outline-none focus:border-[#b81d24]"
               >
+                <option value="terbaru">Terbaru Ditambahkan (Default)</option>
                 <option value="petani_id">ID Petani (PTN-YYYY-XXX)</option>
                 <option value="nama">Nama Petani (A - Z)</option>
                 <option value="tanggal">Tanggal Pendaftaran</option>
@@ -187,7 +196,8 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
                 onClick={() => {
                   setSearchQuery('');
                   setStatusFilter('all');
-                  setSortBy('petani_id');
+                  setSortBy('terbaru');
+                  setSortOrder('desc');
                   setCurrentPage(1);
                 }}
                 className="px-3 py-1.5 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-sm transition cursor-pointer"

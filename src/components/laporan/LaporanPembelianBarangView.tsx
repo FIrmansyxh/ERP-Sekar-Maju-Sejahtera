@@ -28,7 +28,7 @@ import { isTransaksiLunas, labelStatusBayar } from '../../utils/statusBayar';
 import { KopSurat } from '../common/KopSurat';
 import { SortIcon } from '../common/SortIcon';
 import { loadCurrentUser } from '../../utils/storage';
-import { formatDateHariBulanTahun } from '../../utils/formatters';
+import { formatDateHariBulanTahun, extractKodeBalPrefix } from '../../utils/formatters';
 import { hitungNilaiBal, hitungModalTransaksi } from '../../utils/finance';
 import { POTONGAN_GANTI_TIKAR, POTONGAN_KULI_PER_BAL, POTONGAN_TALI_PER_BAL } from '../../config/aturanTimbang';
 
@@ -208,6 +208,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
   const [filterEndDate, setFilterEndDate] = useState('');
   const [filterKupon, setFilterKupon] = useState('');
   const [filterGrade, setFilterGrade] = useState('');
+  const [filterKodeBal, setFilterKodeBal] = useState('');
   const [filterNoBall, setFilterNoBall] = useState('');
   const [filterSupplier, setFilterSupplier] = useState('');
 
@@ -221,6 +222,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
     endDate: '',
     kupon: '',
     grade: '',
+    kodeBal: '',
     noBall: '',
     supplier: '',
   });
@@ -333,6 +335,21 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
     return Array.from(grades).sort();
   }, [transaksiList]);
 
+  const uniqueKodeBal = useMemo(() => {
+    const codes = new Set<string>();
+    transaksiList.forEach((tx) => {
+      (tx.items || []).forEach((it) => {
+        const prefix = extractKodeBalPrefix(it.no_bal);
+        if (prefix) codes.add(prefix);
+      });
+      if (tx.no_bal) {
+        const prefix = extractKodeBalPrefix(tx.no_bal);
+        if (prefix) codes.add(prefix);
+      }
+    });
+    return Array.from(codes).sort();
+  }, [transaksiList]);
+
   const uniqueSuppliers = useMemo(() => {
     const map = new Map<string, string>();
     transaksiList.forEach(t => {
@@ -351,6 +368,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
       endDate: filterEndDate,
       kupon: filterKupon,
       grade: filterGrade,
+      kodeBal: filterKodeBal.trim(),
       noBall: filterNoBall.trim(),
       supplier: filterSupplier,
     });
@@ -362,6 +380,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
     setFilterEndDate('');
     setFilterKupon('');
     setFilterGrade('');
+    setFilterKodeBal('');
     setFilterNoBall('');
     setFilterSupplier('');
     setAppliedFilters({
@@ -369,6 +388,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
       endDate: '',
       kupon: '',
       grade: '',
+      kodeBal: '',
       noBall: '',
       supplier: '',
     });
@@ -443,6 +463,15 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
         if (!rowGrades.includes(targetG) && item.kode_grade?.toUpperCase() !== targetG) {
           return false;
         }
+      }
+      // Filter Kode Bal
+      if (appliedFilters.kodeBal && appliedFilters.kodeBal !== 'ALL') {
+        const targetKode = appliedFilters.kodeBal.trim().toUpperCase();
+        const hasItemMatch = (item.items || []).some(
+          (i) => extractKodeBalPrefix(i.no_bal).toUpperCase() === targetKode
+        );
+        const hasLegacyMatch = extractKodeBalPrefix(item.no_bal).toUpperCase() === targetKode;
+        if (!hasItemMatch && !hasLegacyMatch) return false;
       }
       // Filter No Ball
       if (appliedFilters.noBall) {
@@ -598,6 +627,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
       periodeInfo(appliedFilters.startDate, appliedFilters.endDate),
       [
         `Kode Beli: ${appliedFilters.grade && appliedFilters.grade !== 'ALL' ? appliedFilters.grade : 'Semua'}`,
+        appliedFilters.kodeBal && appliedFilters.kodeBal !== 'ALL' ? `Kode Bal: ${appliedFilters.kodeBal}` : '',
         `Kupon: ${appliedFilters.kupon && appliedFilters.kupon !== 'ALL' ? appliedFilters.kupon : 'Semua'}`,
         `Petani: ${namaSupplier || 'Semua'}`,
         appliedFilters.noBall ? `No Bal: ${appliedFilters.noBall}` : '',
@@ -898,7 +928,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
           </span>
         </div>
 
-        <form onSubmit={handleSearch} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+        <form onSubmit={handleSearch} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
           
           {/* Tanggal Dari */}
           <div>
@@ -972,6 +1002,27 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
             </datalist>
           </div>
 
+          {/* Kode Bal */}
+          <div>
+            <label className="block text-[11px] font-semibold text-gray-600 mb-1">
+              Kode Bal
+            </label>
+            <input
+              type="text"
+              list="kode-bal-list"
+              value={filterKodeBal}
+              onChange={(e) => setFilterKodeBal(e.target.value)}
+              placeholder="Semua Kode Bal..."
+              className="w-full text-xs px-2.5 py-1.5 bg-gray-50 border border-gray-300 focus:bg-white focus:border-[#b81d24] focus:outline-none rounded-none uppercase"
+            />
+            <datalist id="kode-bal-list">
+              <option value="ALL">Semua Kode Bal</option>
+              {uniqueKodeBal.map((k) => (
+                <option key={k} value={k}>Kode Bal {k}</option>
+              ))}
+            </datalist>
+          </div>
+
           {/* No Bal */}
           <div>
             <label className="block text-[11px] font-semibold text-gray-600 mb-1">
@@ -1010,7 +1061,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
           </div>
 
           {/* Action Filter Buttons */}
-          <div className="sm:col-span-2 lg:col-span-6 flex items-center justify-end space-x-2 pt-2 border-t border-gray-100">
+          <div className="sm:col-span-2 lg:col-span-7 flex items-center justify-end space-x-2 pt-2 border-t border-gray-100">
             <button
               type="button"
               onClick={handleReset}

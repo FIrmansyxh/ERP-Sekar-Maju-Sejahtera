@@ -164,8 +164,9 @@ export function extractNomorBalId(noBal?: string): string {
 
 // Ketentuan tara ini juga tertulis di balik Kartu Petani (PetaniCardPrintModal); ubah keduanya bersamaan.
 export function hitungPotonganTaraKg(beratBruto: number, gantiTikar?: boolean, noBal?: string): number {
-  // Kode bal berawalan SB (insensitive) = 2kg rata
   const prefix = extractKodeBalPrefix(noBal);
+
+  // Aturan 1: Kode bal SB = 2kg rata
   if (prefix === 'SB' || (noBal && noBal.toUpperCase().startsWith('SB'))) {
     return 2.0;
   }
@@ -173,7 +174,20 @@ export function hitungPotonganTaraKg(beratBruto: number, gantiTikar?: boolean, n
   // Fallback if berat <= 0
   if (beratBruto <= 0) return 0;
 
-  // Selain SB
+  // Aturan 2: Kode bal TS dan T (T sama dengan TS)
+  // TS 30-49 = 4kg (<50kg), 50-60 = 5kg (>=50 & <60), 60 ke atas = 6kg
+  if (prefix === 'TS' || prefix === 'T' || (noBal && (noBal.toUpperCase().startsWith('TS') || noBal.toUpperCase().startsWith('T')))) {
+    if (beratBruto >= 60) {
+      return 6.0;
+    } else if (beratBruto >= 50) {
+      return 5.0;
+    } else {
+      return 4.0;
+    }
+  }
+
+  // Aturan 3: Kode bal HF dan Umum/Lainnya
+  // 49kg ke bawah = 3kg, 50 ke atas = 5kg, 60 ke atas = 6kg
   if (beratBruto >= 60) {
     return 6.0;
   } else if (beratBruto >= 50) {
