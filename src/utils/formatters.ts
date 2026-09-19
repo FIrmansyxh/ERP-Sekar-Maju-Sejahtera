@@ -164,14 +164,6 @@ export function extractNomorBalId(noBal?: string): string {
   return match ? match[1] : trimmed;
 }
 // Ketentuan tara ini juga tertulis di balik Kartu Petani (PetaniCardPrintModal); ubah keduanya bersamaan.
-<<<<<<< HEAD
-export function hitungPotonganTaraKg(beratBruto: number, gantiTikar?: boolean, noBal?: string): number {
-  const prefix = extractKodeBalPrefix(noBal);
-
-  // Aturan 1: Kode bal SB = 2kg rata
-  if (prefix === 'SB' || (noBal && noBal.toUpperCase().startsWith('SB'))) {
-=======
-
 /**
  * Deteksi kategori kode aturan tara dari nomor bal atau kode grade:
  * - 'SB': Kode bal atau grade berawalan SB
@@ -201,7 +193,7 @@ export function deteksiKodeAturanTara(noBal?: string, kodeGrade?: string): KodeA
  * - SB 2KG RATA (semua bobot)
  * - HF: 49 kg ke bawah = 3 kg, 50 ke atas = 5 kg, 60 ke atas = 6 kg
  * - TS: 30-49 kg = 4 kg, 50-60 kg = 5 kg, 60 kg ke atas = 6 kg
- * - T : SAMA DENGAN TS (<50 kg = 4 kg, 50-59.9 kg = 5 kg, >=60 kg = 6 kg)
+ * - T : SAMA DENGAN TS (<50 kg = 4 kg, 50-60 kg = 5 kg, >60 kg = 6 kg)
  * - Default: Mengikuti aturan umum (sama dengan HF)
  */
 export function hitungPotonganTaraKg(
@@ -214,40 +206,25 @@ export function hitungPotonganTaraKg(
 
   // Kode bal SB = 2 kg rata (berlaku bahkan jika bobot awal 0 saat registrasi bal)
   if (kategori === 'SB') {
->>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
     return 2.0;
   }
 
   // Fallback jika belum ditimbang / bruto <= 0
   if (beratBruto <= 0) return 0;
 
-<<<<<<< HEAD
-  // Aturan 2: Kode bal TS dan T (T sama dengan TS)
-  // TS 30-49 = 4kg (<50kg), 50-60 = 5kg (>=50 & <60), 60 ke atas = 6kg
-  if (prefix === 'TS' || prefix === 'T' || (noBal && (noBal.toUpperCase().startsWith('TS') || noBal.toUpperCase().startsWith('T')))) {
-=======
-  // Kode bal TS dan T: 30-49 kg (atau <50 kg) = 4 kg, 50-59.9 kg = 5 kg, >=60 kg = 6 kg
+  // Kode bal TS dan T: 30-49 kg (atau <50 kg) = 4 kg, 50-60 kg = 5 kg, >60 kg = 6 kg
   if (kategori === 'TS' || kategori === 'T') {
->>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
-    if (beratBruto >= 60) {
+    if (beratBruto > 60) {
       return 6.0;
     } else if (beratBruto >= 50) {
       return 5.0;
     } else {
-<<<<<<< HEAD
-=======
       // 49 kg ke bawah (30-49 kg)
->>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
       return 4.0;
     }
   }
 
-<<<<<<< HEAD
-  // Aturan 3: Kode bal HF dan Umum/Lainnya
-  // 49kg ke bawah = 3kg, 50 ke atas = 5kg, 60 ke atas = 6kg
-=======
-  // Kode bal HF dan kode lainnya (default): <= 49 kg = 3 kg, 50-59.9 kg = 5 kg, >= 60 kg = 6 kg
->>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
+  // Kode bal HF dan kode lainnya (default): <= 49 kg = 3 kg, 50 ke atas (50-59.9 kg) = 5 kg, >= 60 kg = 6 kg
   if (beratBruto >= 60) {
     return 6.0;
   } else if (beratBruto >= 50) {

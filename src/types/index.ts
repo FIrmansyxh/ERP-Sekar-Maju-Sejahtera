@@ -73,13 +73,8 @@ export interface Barang {
   total_harga?: number; // Subtotal value = berat_kg * harga_per_kg
   berat_bruto_kg?: number; // Gross weight
   potongan_tara_kg?: number; // Tare deduction
-<<<<<<< HEAD
-  ganti_tikar?: boolean; // status ganti tikar
+  ganti_tikar?: boolean; // status ganti tikar (Rp 75.000)
   potongan_tikar?: number; // nominal potongan ganti tikar
-=======
-  ganti_tikar?: boolean; // Ganti tikar bal (Rp 75.000)
-  potongan_tikar?: number;
->>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
   status_stok: StatusStokBarang;
   tanggal_masuk: string; // ISO string / YYYY-MM-DD
   tanggal_keluar?: string;
@@ -133,11 +128,7 @@ export interface TransaksiItemBal {
   harga_per_kg: number;
   ganti_tikar?: boolean; // true = potongan nominal rupiah diaktifkan; tidak mengubah potongan tara berat
   berat_bruto_kg?: number; // Berat kotor timbangan saat proses 2
-<<<<<<< HEAD
-  potongan_tara_kg?: number; // SB = 2kg rata; TS/T: <50kg=4kg, 50-59kg=5kg, >=60kg=6kg; HF/lain: <=49kg=3kg, 50-59kg=5kg, >=60kg=6kg
-=======
-  potongan_tara_kg?: number; // SB = 2kg rata; TS & T: <50kg=4kg, 50-59kg=5kg, >=60kg=6kg; HF/Lain: <=49kg=3kg, 50-59kg=5kg, >=60kg=6kg
->>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
+  potongan_tara_kg?: number; // SB = 2kg rata; TS & T: 30-49kg=4kg, 50-60kg=5kg, >60kg=6kg; HF: <=49kg=3kg, 50-59kg=5kg, >=60kg=6kg
   is_netto_manual?: boolean; // True jika berat netto diinput/diedit secara manual
   berat_kg: number; // Berat netto final (0 jika belum ditimbang di proses 2)
   potongan_kuli?: number; // Rp 7.000 per bal

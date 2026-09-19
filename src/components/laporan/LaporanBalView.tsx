@@ -60,13 +60,8 @@ type SortField =
   | 'harga_per_kg'
   | 'total_harga'
   | 'nama_petani'
-<<<<<<< HEAD
   | 'ganti_tikar'
   | 'status_stok';
-=======
-  | 'status_stok'
-  | 'ganti_tikar';
->>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
 
 type SortDirection = 'asc' | 'desc' | 'none';
 
@@ -85,11 +80,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
   const [filterKodeBal, setFilterKodeBal] = useState<string>('ALL');
   const [filterStatusStok, setFilterStatusStok] = useState<string>('ALL');
   const [filterStatusBayar, setFilterStatusBayar] = useState<string>('ALL');
-<<<<<<< HEAD
   const [filterGantiTikar, setFilterGantiTikar] = useState<'ALL' | 'ya' | 'tidak'>('ALL');
-=======
-  const [filterGantiTikar, setFilterGantiTikar] = useState<string>('ALL');
->>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [tableSearch, setTableSearch] = useState<string>('');
   const [filterMinBerat, setFilterMinBerat] = useState<string>('');
@@ -105,11 +96,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
     kodeBal: 'ALL',
     statusStok: 'ALL',
     statusBayar: 'ALL',
-<<<<<<< HEAD
     gantiTikar: 'ALL' as 'ALL' | 'ya' | 'tidak',
-=======
-    gantiTikar: 'ALL',
->>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
     search: '',
     minBerat: '',
     maxBerat: '',
@@ -301,25 +288,19 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
       berat_bruto_kg?: number;
       potongan_tara_kg?: number;
       ganti_tikar: boolean;
-      potongan_tikar: number;
+      potongan_tikar?: number;
       tanggal: string;
       petani_id: string;
       transaksi_id: string;
       item_id: string;
-      ganti_tikar: boolean;
-      potongan_tikar?: number;
     };
 
     const txItemMap = new Map<string, TxInfo>();
     transaksiList.forEach((tx) => {
       (tx.items || []).forEach((it) => {
         if (!it.barang_id && !it.no_bal) return;
-<<<<<<< HEAD
-        const isTikar = Boolean(it.ganti_tikar) || (it.potongan_tikar || 0) > 0;
-=======
-        const isGantiTikar = Boolean(it.ganti_tikar) || Number(it.potongan_tikar || 0) > 0;
-        const potTikar = Number(it.potongan_tikar || 0) || (isGantiTikar ? 75000 : 0);
->>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
+        const isTikar = Boolean(it.ganti_tikar) || Number(it.potongan_tikar || 0) > 0;
+        const potTikar = Number(it.potongan_tikar || 0) || (isTikar ? 75000 : 0);
         const info: TxInfo = {
           harga_per_kg: it.harga_per_kg || 0,
           total_kotor: it.total_kotor || ((it.berat_kg || 0) * (it.harga_per_kg || 0)),
@@ -334,14 +315,12 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
           berat_kg: it.berat_kg || 0,
           berat_bruto_kg: it.berat_bruto_kg,
           potongan_tara_kg: it.potongan_tara_kg,
-          ganti_tikar: isGantiTikar,
-          potongan_tikar: potTikar,
           tanggal: (tx.tanggal_transaksi || '').split(' ')[0] || '',
           petani_id: tx.petani_id,
           transaksi_id: tx.transaksi_id,
           item_id: it.item_id,
           ganti_tikar: isTikar,
-          potongan_tikar: it.potongan_tikar,
+          potongan_tikar: potTikar,
         };
         if (it.barang_id) txItemMap.set(it.barang_id, info);
         if (it.no_bal) txItemMap.set(it.no_bal, info);
@@ -359,11 +338,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
       has_tx: boolean;
       kode_bal_prefix: string;
       ganti_tikar: boolean;
-<<<<<<< HEAD
       potongan_tikar?: number;
-=======
-      potongan_tikar: number;
->>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
     }> = [];
 
     barangList.forEach((bal, originalIndex) => {
@@ -384,12 +359,8 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
             ? netto + (bal.potongan_tara_kg || 0)
             : 0;
       const tara = bal.potongan_tara_kg !== undefined ? bal.potongan_tara_kg : Math.max(0, bruto - netto);
-<<<<<<< HEAD
-      const gantiTikar = Boolean(bal.ganti_tikar) || Boolean(txInfo?.ganti_tikar) || (txInfo?.potongan_tikar || 0) > 0;
-=======
-      const isGantiTikar = Boolean(bal.ganti_tikar) || Number(bal.potongan_tikar || 0) > 0 || (txInfo ? txInfo.ganti_tikar : false);
-      const potTikar = bal.potongan_tikar || (txInfo ? txInfo.potongan_tikar : 0) || (isGantiTikar ? 75000 : 0);
->>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
+      const isTikar = Boolean(bal.ganti_tikar) || Number(bal.potongan_tikar || 0) > 0 || (txInfo ? txInfo.ganti_tikar : false);
+      const potTikar = bal.potongan_tikar || (txInfo ? txInfo.potongan_tikar : 0) || (isTikar ? 75000 : 0);
 
       rows.push({
         ...bal,
@@ -399,7 +370,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
         berat_kg: netto,
         berat_bruto_kg: bruto,
         potongan_tara_kg: tara,
-        ganti_tikar: isGantiTikar,
+        ganti_tikar: isTikar,
         potongan_tikar: potTikar,
         total_harga: subtotal,
         nama_petani: bal.nama_petani || txInfo?.nama_petani || 'Petani Kemitraan',
@@ -415,8 +386,6 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
             : 'belum_lunas',
         has_tx: !!txInfo,
         kode_bal_prefix: extractKodeBalPrefix(bal.no_bal || txInfo?.no_bal),
-        ganti_tikar: gantiTikar,
-        potongan_tikar: bal.potongan_tikar || txInfo?.potongan_tikar,
       });
     });
 
@@ -434,12 +403,8 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
         const netto = it.berat_kg || 0;
         const subtotal = hitungNilaiBal({ berat_kg: netto, harga_per_kg: hrgBeli }, fallbackGradePrice);
         const bruto = it.berat_bruto_kg && it.berat_bruto_kg > 0 ? it.berat_bruto_kg : 0;
-<<<<<<< HEAD
-        const isTikar = Boolean(it.ganti_tikar) || (it.potongan_tikar || 0) > 0;
-=======
-        const isGantiTikar = Boolean(it.ganti_tikar) || Number(it.potongan_tikar || 0) > 0;
-        const potTikar = Number(it.potongan_tikar || 0) || (isGantiTikar ? 75000 : 0);
->>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
+        const isTikar = Boolean(it.ganti_tikar) || Number(it.potongan_tikar || 0) > 0;
+        const potTikar = Number(it.potongan_tikar || 0) || (isTikar ? 75000 : 0);
 
         rows.push({
           barang_id: it.barang_id || `TX-ITEM-${it.item_id}`,
@@ -448,8 +413,6 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
           berat_kg: netto,
           berat_bruto_kg: bruto,
           potongan_tara_kg: it.potongan_tara_kg || 0,
-          ganti_tikar: isGantiTikar,
-          potongan_tikar: potTikar,
           harga_per_kg: hrgBeli,
           total_harga: subtotal,
           status_stok: netto > 0 ? 'di_gudang' : 'proses_sortir',
@@ -468,7 +431,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
           has_tx: true,
           kode_bal_prefix: extractKodeBalPrefix(it.no_bal),
           ganti_tikar: isTikar,
-          potongan_tikar: it.potongan_tikar,
+          potongan_tikar: potTikar,
         });
       });
     });
@@ -512,17 +475,11 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
       if (appliedFilters.statusBayar !== 'ALL' && item.status_bayar !== appliedFilters.statusBayar) {
         return false;
       }
-<<<<<<< HEAD
       // Filter Ganti Tikar
       if (appliedFilters.gantiTikar !== 'ALL') {
-        if (appliedFilters.gantiTikar === 'ya' && !item.ganti_tikar) return false;
-        if (appliedFilters.gantiTikar === 'tidak' && item.ganti_tikar) return false;
-=======
-      // Ganti Tikar
-      if (appliedFilters.gantiTikar !== 'ALL') {
-        if (appliedFilters.gantiTikar === 'YA' && !item.ganti_tikar) return false;
-        if (appliedFilters.gantiTikar === 'TIDAK' && item.ganti_tikar) return false;
->>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
+        const isYa = String(appliedFilters.gantiTikar).toLowerCase() === 'ya';
+        if (isYa && !item.ganti_tikar) return false;
+        if (!isYa && item.ganti_tikar) return false;
       }
       // Min & Max Berat
       if (appliedFilters.minBerat) {
@@ -619,12 +576,6 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
             const stA = a.status_stok || '';
             const stB = b.status_stok || '';
             comparison = stA.localeCompare(stB);
-            break;
-          }
-          case 'ganti_tikar': {
-            const gtA = a.ganti_tikar ? 1 : 0;
-            const gtB = b.ganti_tikar ? 1 : 0;
-            comparison = gtA - gtB;
             break;
           }
         }
@@ -848,12 +799,8 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
       periodeInfo(f.startDate, f.endDate),
       [
         `Grade: ${f.grade !== 'ALL' ? f.grade : 'Semua'}`,
-<<<<<<< HEAD
         f.kodeBal !== 'ALL' ? `Kode Bal: ${f.kodeBal}` : '',
-        f.gantiTikar !== 'ALL' ? `Tikar: ${f.gantiTikar === 'ya' ? 'Ganti Tikar' : 'Standar'}` : '',
-=======
-        `Ganti Tikar: ${f.gantiTikar === 'YA' ? 'Ya (Ganti Tikar)' : f.gantiTikar === 'TIDAK' ? 'Tidak Ganti Tikar' : 'Semua'}`,
->>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
+        f.gantiTikar !== 'ALL' ? `Tikar: ${String(f.gantiTikar).toLowerCase() === 'ya' ? 'Ganti Tikar' : 'Standar'}` : '',
         `Status Stok: ${f.statusStok !== 'ALL' ? labelStatusStok(f.statusStok) : 'Semua'}`,
         `Status Bayar: ${f.statusBayar === 'lunas' ? 'Lunas' : f.statusBayar === 'belum_lunas' ? 'Belum Lunas' : 'Semua'}`,
         rentang('Berat', f.minBerat, f.maxBerat, 'kg'),
@@ -895,11 +842,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
             b.kode_grade || '-',
             b.nama_petani || '-',
             b.no_kupon || '-',
-<<<<<<< HEAD
             b.ganti_tikar ? 'Ganti Tikar' : 'Standar',
-=======
-            b.ganti_tikar ? 'Ya (Rp 75rb)' : 'Tidak',
->>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
             ditimbang ? b.berat_bruto_kg || 0 : '-',
             ditimbang ? b.berat_kg : '-',
             b.harga_per_kg || 0,
@@ -1280,11 +1223,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
           </div>
 
           <form onSubmit={handleApplyFilters} className="space-y-3">
-<<<<<<< HEAD
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 text-xs">
-=======
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-3 text-xs">
->>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
               
               {/* Filter 1: Tanggal Dari */}
               <div>
@@ -1396,7 +1335,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                   Ganti Tikar
                 </label>
                 <select
-<<<<<<< HEAD
+                  id="filter-ganti-tikar"
                   value={filterGantiTikar}
                   onChange={(e) => setFilterGantiTikar(e.target.value as 'ALL' | 'ya' | 'tidak')}
                   className="w-full px-2 py-1.5 bg-white border border-[#ced4da] rounded-none text-xs focus:outline-none focus:border-slate-800"
@@ -1404,16 +1343,6 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                   <option value="ALL">Semua Tikar</option>
                   <option value="ya">Ganti Tikar (Ya)</option>
                   <option value="tidak">Tidak Ganti (Standar)</option>
-=======
-                  id="filter-ganti-tikar"
-                  value={filterGantiTikar}
-                  onChange={(e) => setFilterGantiTikar(e.target.value)}
-                  className="w-full px-2 py-1.5 bg-white border border-[#ced4da] rounded-none text-xs focus:outline-none focus:border-slate-800 font-semibold"
-                >
-                  <option value="ALL">Semua (Ya &amp; Tidak)</option>
-                  <option value="YA">Ganti Tikar (Ya)</option>
-                  <option value="TIDAK">Tidak Ganti Tikar</option>
->>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
                 </select>
               </div>
 
@@ -1653,11 +1582,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                 {/* 6. Ganti Tikar */}
                 <th
                   onClick={() => handleHeaderSort('ganti_tikar')}
-<<<<<<< HEAD
                   className="py-2.5 px-2.5 text-center border-r border-gray-200 cursor-pointer hover:bg-gray-200/80 transition group select-none whitespace-nowrap"
-=======
-                  className="py-2.5 px-2.5 text-center border-r border-gray-200 cursor-pointer hover:bg-amber-100 transition group select-none whitespace-nowrap bg-amber-50/50"
->>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
                   title="Klik untuk urutkan Status Ganti Tikar"
                 >
                   <div className="flex items-center justify-center space-x-1">
@@ -1734,11 +1659,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
             <tbody className="divide-y divide-gray-200">
               {paginatedData.length === 0 ? (
                 <tr>
-<<<<<<< HEAD
                   <td colSpan={14} className="py-12 text-center text-gray-500 bg-white">
-=======
-                  <td colSpan={12} className="py-12 text-center text-gray-500 bg-white">
->>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
                     <div className="flex flex-col items-center justify-center space-y-2">
                       <Package className="w-8 h-8 text-gray-300" />
                       <p className="font-semibold text-gray-700">Tidak ada data bal yang cocok dengan filter.</p>
@@ -1813,19 +1734,11 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                       {/* 6. Ganti Tikar */}
                       <td className="py-2 px-2.5 text-center border-r border-gray-100 whitespace-nowrap">
                         {bal.ganti_tikar ? (
-<<<<<<< HEAD
                           <span className="inline-flex items-center px-1.5 py-0.5 rounded-xs text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
                             Ganti Tikar
                           </span>
                         ) : (
                           <span className="text-[11px] text-gray-500 font-medium">
-=======
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                            Ya {bal.potongan_tikar ? `(Rp ${(bal.potongan_tikar / 1000).toFixed(0)}rb)` : '(Rp 75rb)'}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] text-gray-400 font-medium">
->>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
                             Tidak
                           </span>
                         )}
@@ -2009,11 +1922,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                 <th className="p-1 border border-gray-300">TANGGAL</th>
                 <th className="p-1 border border-gray-300">NO BAL</th>
                 <th className="p-1 border border-gray-300">PETANI</th>
-<<<<<<< HEAD
                 <th className="p-1 border border-gray-300 text-center">TIKAR</th>
-=======
-                <th className="p-1 border border-gray-300 text-center">GANTI TIKAR</th>
->>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
                 <th className="p-1 border border-gray-300 text-right">BERAT</th>
                 <th className="p-1 border border-gray-300 text-right">HARGA</th>
                 <th className="p-1 border border-gray-300 text-center">STATUS BAYAR</th>
@@ -2028,13 +1937,9 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                   <td className="p-1 border border-gray-300 font-mono">{b.tanggal_masuk?.split('T')[0] || '-'}</td>
                   <td className="p-1 border border-gray-300 font-mono font-bold">{b.no_bal}</td>
                   <td className="p-1 border border-gray-300">{b.nama_petani}</td>
-<<<<<<< HEAD
                   <td className="p-1 border border-gray-300 text-center uppercase text-[9px] font-semibold">
                     {b.ganti_tikar ? 'GANTI' : '-'}
                   </td>
-=======
-                  <td className="p-1 border border-gray-300 text-center font-bold">{b.ganti_tikar ? 'YA' : 'TIDAK'}</td>
->>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
                   <td className="p-1 border border-gray-300 text-right font-mono font-bold">{(b.berat_kg || 0) > 0 ? (b.berat_kg || 0).toFixed(1) : '-'}</td>
                   <td className="p-1 border border-gray-300 text-right font-mono font-bold">{(b.berat_kg || 0) > 0 ? `Rp ${Math.round(b.total_harga || 0).toLocaleString('id-ID')}` : '-'}</td>
                   <td className="p-1 border border-gray-300 text-center uppercase text-[9px]">{b.status_bayar === 'lunas' ? 'LUNAS' : b.status_bayar === 'belum_lunas' ? 'BELUM LUNAS' : '-'}</td>

@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { UserRole } from '../types';
 import { hasModuleAccess } from '../utils/rbac';
+import { APP_VERSION, APP_BUILD } from '../config/appInfo';
 
 interface SidebarProps {
   activeModuleId: string;
@@ -643,6 +644,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
       </div>
+
+      {/* Version Footer */}
+      {!isCollapsed ? (
+        <div className="px-4 py-2.5 border-t border-slate-200 bg-slate-50/70 text-[10px] text-slate-400 flex items-center justify-between">
+          <span className="font-mono font-semibold text-slate-500">v{APP_VERSION}</span>
+          <span className="text-[9px] text-slate-400">{APP_BUILD}</span>
+        </div>
+      ) : (
+        <div className="py-2 border-t border-slate-200 text-center text-[9px] font-mono text-slate-400">
+          v{APP_VERSION}
+        </div>
+      )}
     </aside>
   );
 };

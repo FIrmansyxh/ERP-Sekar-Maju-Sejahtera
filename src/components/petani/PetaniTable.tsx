@@ -59,11 +59,7 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
   const [itemsPerPage, setItemsPerPage] = useState<number>(10);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [sortBy, setSortBy] = useState<string>('terbaru');
-<<<<<<< HEAD
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-=======
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
->>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
 
   // Auto-reset ke halaman 1 saat jumlah data petani bertambah (misal baru disimpan)
   const prevDataLengthRef = useRef(data.length);
@@ -205,11 +201,7 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
                 }}
                 className="w-full bg-white border border-gray-300 rounded-sm px-2.5 py-1.5 text-xs text-gray-800 focus:outline-none focus:border-[#b81d24]"
               >
-<<<<<<< HEAD
                 <option value="terbaru">Terbaru Ditambahkan (Default)</option>
-=======
-                <option value="terbaru">Terbaru Ditambahkan (Paling Baru)</option>
->>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
                 <option value="petani_id">ID Petani (PTN-YYYY-XXX)</option>
                 <option value="nama">Nama Petani (A - Z)</option>
                 <option value="tanggal">Tanggal Pendaftaran</option>
@@ -224,11 +216,7 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
                   setSearchQuery('');
                   setStatusFilter('all');
                   setSortBy('terbaru');
-<<<<<<< HEAD
                   setSortOrder('desc');
-=======
-                  setSortOrder('asc');
->>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
                   setCurrentPage(1);
                 }}
                 className="px-3 py-1.5 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-sm transition cursor-pointer"

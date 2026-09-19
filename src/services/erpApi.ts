@@ -212,17 +212,11 @@ export class ErpApiService {
           kunjungan_terakhir: 'Belum Ada',
           grade_dominan: '-',
         },
-<<<<<<< HEAD
-        ...petani
-      };
-      savePetaniData([resultPetani, ...currentList.filter(p => p.petani_id !== resultPetani.petani_id)]);
-=======
         ...petani,
       };
       // Simpan di posisi paling atas (data baru di awal list)
       const filtered = currentList.filter(p => p.petani_id !== resultPetani.petani_id);
       savePetaniData([resultPetani, ...filtered]);
->>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
     }
     return resultPetani;
   }

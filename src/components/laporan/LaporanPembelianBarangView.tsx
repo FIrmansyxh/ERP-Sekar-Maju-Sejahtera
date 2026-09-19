@@ -335,20 +335,6 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
     return Array.from(grades).sort();
   }, [transaksiList]);
 
-  const uniqueKodeBal = useMemo(() => {
-    const codes = new Set<string>();
-    transaksiList.forEach((tx) => {
-      (tx.items || []).forEach((it) => {
-        const prefix = extractKodeBalPrefix(it.no_bal);
-        if (prefix) codes.add(prefix);
-      });
-      if (tx.no_bal) {
-        const prefix = extractKodeBalPrefix(tx.no_bal);
-        if (prefix) codes.add(prefix);
-      }
-    });
-    return Array.from(codes).sort();
-  }, [transaksiList]);
 
   const uniqueSuppliers = useMemo(() => {
     const map = new Map<string, string>();
@@ -481,16 +467,6 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
           return false;
         }
       }
-<<<<<<< HEAD
-      // Filter Kode Bal
-      if (appliedFilters.kodeBal && appliedFilters.kodeBal !== 'ALL') {
-        const targetKode = appliedFilters.kodeBal.trim().toUpperCase();
-        const hasItemMatch = (item.items || []).some(
-          (i) => extractKodeBalPrefix(i.no_bal).toUpperCase() === targetKode
-        );
-        const hasLegacyMatch = extractKodeBalPrefix(item.no_bal).toUpperCase() === targetKode;
-        if (!hasItemMatch && !hasLegacyMatch) return false;
-=======
       // Filter Kode Bal (prefix huruf kode bal, misal: SB, HF, TS, T, GT, dll)
       if (appliedFilters.kodeBal && appliedFilters.kodeBal !== 'ALL') {
         const targetKode = appliedFilters.kodeBal.trim().toUpperCase();
@@ -504,7 +480,6 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
         );
         const singleMatch = item.no_bal ? matchesKode(item.no_bal) : false;
         if (!hasItemMatch && !singleMatch) return false;
->>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
       }
       // Filter No Ball
       if (appliedFilters.noBall) {
@@ -961,11 +936,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
           </span>
         </div>
 
-<<<<<<< HEAD
-        <form onSubmit={handleSearch} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
-=======
         <form onSubmit={handleSearch} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
->>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
           
           {/* Tanggal Dari */}
           <div>
@@ -1049,20 +1020,12 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
               list="kode-bal-list"
               value={filterKodeBal}
               onChange={(e) => setFilterKodeBal(e.target.value)}
-<<<<<<< HEAD
-              placeholder="Semua Kode Bal..."
-=======
               placeholder="Ketik/Pilih Kode Bal..."
->>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
               className="w-full text-xs px-2.5 py-1.5 bg-gray-50 border border-gray-300 focus:bg-white focus:border-[#b81d24] focus:outline-none rounded-none uppercase"
             />
             <datalist id="kode-bal-list">
               <option value="ALL">Semua Kode Bal</option>
-<<<<<<< HEAD
-              {uniqueKodeBal.map((k) => (
-=======
               {uniqueKodeBal.map(k => (
->>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
                 <option key={k} value={k}>Kode Bal {k}</option>
               ))}
             </datalist>
@@ -1106,11 +1069,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
           </div>
 
           {/* Action Filter Buttons */}
-<<<<<<< HEAD
-          <div className="sm:col-span-2 lg:col-span-7 flex items-center justify-end space-x-2 pt-2 border-t border-gray-100">
-=======
           <div className="col-span-full flex items-center justify-end space-x-2 pt-2 border-t border-gray-100">
->>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
             <button
               type="button"
               onClick={handleReset}
