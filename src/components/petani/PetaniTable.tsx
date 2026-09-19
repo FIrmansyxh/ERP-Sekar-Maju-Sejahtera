@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   Search, 
   Plus, 
@@ -59,7 +59,20 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
   const [itemsPerPage, setItemsPerPage] = useState<number>(10);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [sortBy, setSortBy] = useState<string>('terbaru');
+<<<<<<< HEAD
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+=======
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+>>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
+
+  // Auto-reset ke halaman 1 saat jumlah data petani bertambah (misal baru disimpan)
+  const prevDataLengthRef = useRef(data.length);
+  useEffect(() => {
+    if (data.length > prevDataLengthRef.current) {
+      setCurrentPage(1);
+    }
+    prevDataLengthRef.current = data.length;
+  }, [data.length]);
 
   const countActive = useMemo(() => data.filter((p) => p.status_aktif).length, [data]);
   const countInactive = useMemo(() => data.filter((p) => !p.status_aktif).length, [data]);
@@ -90,15 +103,25 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
           return sortOrder === 'desc' ? b.petani_id.localeCompare(a.petani_id) : a.petani_id.localeCompare(b.petani_id);
         }
         let cmp = 0;
-        if (sortBy === 'nama') cmp = a.nama_petani.localeCompare(b.nama_petani);
-        else if (sortBy === 'petani_id') cmp = a.petani_id.localeCompare(b.petani_id);
-        else if (sortBy === 'tanggal') cmp = (a.tanggal_daftar || '').localeCompare(b.tanggal_daftar || '');
-        else if (sortBy === 'setoran') {
+        if (sortBy === 'terbaru') {
+          // Data baru berada di awal array `data` (index 0)
+          const idxA = data.indexOf(a);
+          const idxB = data.indexOf(b);
+          cmp = idxA - idxB;
+        } else if (sortBy === 'nama') {
+          cmp = a.nama_petani.localeCompare(b.nama_petani);
+        } else if (sortBy === 'petani_id') {
+          cmp = a.petani_id.localeCompare(b.petani_id);
+        } else if (sortBy === 'tanggal') {
+          cmp = (a.tanggal_daftar || '').localeCompare(b.tanggal_daftar || '');
+        } else if (sortBy === 'setoran') {
           const balA = a.statistik?.total_setoran_bal || 0;
           const balB = b.statistik?.total_setoran_bal || 0;
           cmp = balA - balB;
         } else {
-          cmp = a.petani_id.localeCompare(b.petani_id);
+          const idxA = data.indexOf(a);
+          const idxB = data.indexOf(b);
+          cmp = idxA - idxB;
         }
         return sortOrder === 'asc' ? cmp : -cmp;
       });
@@ -182,7 +205,11 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
                 }}
                 className="w-full bg-white border border-gray-300 rounded-sm px-2.5 py-1.5 text-xs text-gray-800 focus:outline-none focus:border-[#b81d24]"
               >
+<<<<<<< HEAD
                 <option value="terbaru">Terbaru Ditambahkan (Default)</option>
+=======
+                <option value="terbaru">Terbaru Ditambahkan (Paling Baru)</option>
+>>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
                 <option value="petani_id">ID Petani (PTN-YYYY-XXX)</option>
                 <option value="nama">Nama Petani (A - Z)</option>
                 <option value="tanggal">Tanggal Pendaftaran</option>
@@ -197,7 +224,11 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
                   setSearchQuery('');
                   setStatusFilter('all');
                   setSortBy('terbaru');
+<<<<<<< HEAD
                   setSortOrder('desc');
+=======
+                  setSortOrder('asc');
+>>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
                   setCurrentPage(1);
                 }}
                 className="px-3 py-1.5 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-sm transition cursor-pointer"
@@ -396,7 +427,14 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
 
                         {/* Nama Petani */}
                         <td className="py-3 px-4 font-medium text-slate-900">
-                          {petani.nama_petani}
+                          <div className="flex items-center gap-2">
+                            <span>{petani.nama_petani}</span>
+                            {petani.tanggal_daftar === new Date().toISOString().split('T')[0] && (
+                              <span className="px-1.5 py-0.5 text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-sm">
+                                Baru
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* No HP */}

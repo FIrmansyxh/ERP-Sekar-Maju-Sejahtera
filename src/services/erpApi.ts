@@ -175,8 +175,26 @@ export class ErpApiService {
     const currentList = loadPetaniData();
     let resultPetani: Petani;
     if (isEdit && petani.petani_id) {
-      resultPetani = { ...currentList.find(p => p.petani_id === petani.petani_id)!, ...petani } as Petani;
-      savePetaniData(currentList.map(p => p.petani_id === resultPetani.petani_id ? resultPetani : p));
+      const existing = currentList.find(p => p.petani_id === petani.petani_id);
+      resultPetani = {
+        petani_id: petani.petani_id,
+        nama_petani: petani.nama_petani || existing?.nama_petani || '',
+        no_hp: petani.no_hp ?? existing?.no_hp ?? '',
+        alamat: petani.alamat ?? existing?.alamat ?? '',
+        desa_kecamatan: petani.desa_kecamatan ?? existing?.desa_kecamatan ?? '',
+        status_aktif: petani.status_aktif !== undefined ? petani.status_aktif : (existing?.status_aktif ?? true),
+        tanggal_daftar: petani.tanggal_daftar || existing?.tanggal_daftar || new Date().toISOString().split('T')[0],
+        catatan: petani.catatan ?? existing?.catatan ?? '',
+        statistik: existing?.statistik || {
+          total_setoran_bal: 0,
+          total_berat_kg: 0,
+          kunjungan_terakhir: 'Belum Ada',
+          grade_dominan: '-',
+        },
+        ...petani,
+      };
+      const updatedList = currentList.map(p => p.petani_id === resultPetani.petani_id ? resultPetani : p);
+      savePetaniData(updatedList);
     } else {
       const newId = petani.petani_id || generatePetaniId(currentList);
       resultPetani = {
@@ -194,9 +212,17 @@ export class ErpApiService {
           kunjungan_terakhir: 'Belum Ada',
           grade_dominan: '-',
         },
+<<<<<<< HEAD
         ...petani
       };
       savePetaniData([resultPetani, ...currentList.filter(p => p.petani_id !== resultPetani.petani_id)]);
+=======
+        ...petani,
+      };
+      // Simpan di posisi paling atas (data baru di awal list)
+      const filtered = currentList.filter(p => p.petani_id !== resultPetani.petani_id);
+      savePetaniData([resultPetani, ...filtered]);
+>>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
     }
     return resultPetani;
   }
@@ -409,6 +435,7 @@ export class ErpApiService {
             harga_per_kg: (tx.total_harga_beli && tx.berat_kg) ? Math.round(tx.total_harga_beli / tx.berat_kg) : 100000,
             ganti_tikar: false,
           }]).map(it => ({
+            item_id: it.item_id || null,
             no_bal: it.no_bal,
             kode_bal_pembeli: it.kode_bal_pembeli || null,
             barcode: it.barcode || null,

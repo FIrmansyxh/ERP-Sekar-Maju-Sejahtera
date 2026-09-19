@@ -366,7 +366,7 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
       <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gray-100 flex justify-center items-start print:p-0 print:m-0 print:bg-white print:overflow-visible">
         <div
           ref={printAreaRef}
-          className="print-canvas-paper bg-white border border-gray-300 print:border-none shadow-md print:shadow-none p-6 sm:p-8 mx-auto w-full max-w-[820px] text-slate-900 font-sans print:m-0 transition-transform duration-100"
+          className="print-canvas-paper bg-white border border-gray-300 print:border-none shadow-md print:shadow-none p-6 sm:p-10 mx-auto w-full max-w-[900px] text-slate-900 font-sans print:m-0 transition-transform duration-100"
           style={{ 
             minHeight: '1050px',
             transform: zoomScale !== 1 ? `scale(${zoomScale})` : undefined,

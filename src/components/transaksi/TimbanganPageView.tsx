@@ -27,7 +27,7 @@ import {
   Info
 } from 'lucide-react';
 import { TransaksiPembelian, Petani, TabelHarga, Barang, TransaksiItemBal, UserRole, User as UserType, SaveTransaksiMeta } from '../../types';
-import { formatRupiah, formatNoKupon, formatDateHariBulanTahun, hitungPotonganTaraKg, normalizeKg } from '../../utils/formatters';
+import { formatRupiah, formatNoKupon, formatDateHariBulanTahun, hitungPotonganTaraKg, normalizeKg, getInfoAturanTara } from '../../utils/formatters';
 import { recordAuditLog } from '../../utils/storage';
 import { buildBarangDariItem, hitungUlangKupon, isKuponProsesSortir, terapkanHasilTimbang } from '../../utils/kuponSortir';
 import { POTONGAN_GANTI_TIKAR, POTONGAN_KULI_PER_BAL, POTONGAN_TALI_PER_BAL } from '../../config/aturanTimbang';
@@ -139,6 +139,62 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
   const [beratNettoInput, setBeratNettoInput] = useState<number | string>('');
   const [isNettoManual, setIsNettoManual] = useState<boolean>(false);
   const [potTikarInput, setPotTikarInput] = useState<number | ''>('');
+
+  // Daftar ID bal yang baru saja ditimbang di sesi berjalan (urutan teratas)
+  const [localWeighedIds, setLocalWeighedIds] = useState<string[]>([]);
+
+  // Daftar seluruh bal yang sudah ditimbang lintas kupon (bal terakhir ditimbang berada paling atas)
+  const balTerakhirDitimbangList = useMemo(() => {
+    const list: {
+      item: TransaksiItemBal;
+      tx: TransaksiPembelian;
+      waktuTimbang: number;
+      sessionIndex: number;
+    }[] = [];
+
+    for (const tx of transaksiList) {
+      for (const item of tx.items || []) {
+        const isWeighed = (item.berat_kg || 0) > 0 || item.status_timbang === 'selesai_timbang';
+        if (!isWeighed) continue;
+
+        let waktu = item.diubah_lokal_pada || 0;
+        if (!waktu) {
+          const matchedB = barangList.find(
+            (b) => b.transaksi_pembelian_id === tx.transaksi_id && (b.no_bal === item.no_bal || b.barang_id === item.barang_id)
+          );
+          if (matchedB?.created_at) {
+            waktu = new Date(matchedB.created_at).getTime();
+          } else if (tx.terakhir_diubah_pada) {
+            waktu = new Date(tx.terakhir_diubah_pada).getTime();
+          } else if (tx.tanggal_transaksi) {
+            waktu = new Date(tx.tanggal_transaksi).getTime();
+          }
+        }
+
+        const sIdx = localWeighedIds.indexOf(item.item_id);
+
+        list.push({
+          item,
+          tx,
+          waktuTimbang: waktu,
+          sessionIndex: sIdx >= 0 ? sIdx : 999999,
+        });
+      }
+    }
+
+    return list.sort((a, b) => {
+      // Prioritas 1: Bal yang baru saja ditimbang di sesi ini
+      if (a.sessionIndex !== b.sessionIndex) {
+        return a.sessionIndex - b.sessionIndex;
+      }
+      // Prioritas 2: Waktu timbang / diubah_lokal_pada terbaru
+      if (b.waktuTimbang !== a.waktuTimbang) {
+        return b.waktuTimbang - a.waktuTimbang;
+      }
+      // Prioritas 3: Fallback ke transaksi_id descending
+      return b.tx.transaksi_id.localeCompare(a.tx.transaksi_id);
+    });
+  }, [transaksiList, barangList, localWeighedIds]);
 
   const [scanFeedback, setScanFeedback] = useState<{ text: string; isError: boolean } | null>(null);
   const [antiScanAlert, setAntiScanAlert] = useState<{ text: string; code?: string } | null>(null);
@@ -640,13 +696,15 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
   const isGantiTikarActive =
     Boolean(activeBalItem?.ganti_tikar) || (activeBalItem?.potongan_tikar || 0) > 0 || (typeof potTikarInput === 'number' && potTikarInput > 0);
   
-  let liveTara = hitungPotonganTaraKg(liveBruto, isGantiTikarActive, activeBalItem?.no_bal);
+  let liveTara = hitungPotonganTaraKg(liveBruto, isGantiTikarActive, activeBalItem?.no_bal, activeBalItem?.kode_grade);
   let liveNetto = liveBruto > 0 ? Math.max(0, normalizeKg(liveBruto - liveTara)) : 0;
   
   if (isNettoManual && parsedNettoInput > 0) {
     liveNetto = parsedNettoInput;
     liveTara = Math.max(0, normalizeKg(liveBruto - liveNetto));
   }
+
+  const infoAturanTara = getInfoAturanTara(activeBalItem?.no_bal, activeBalItem?.kode_grade, liveBruto);
 
   const livePotTikar = isGantiTikarActive ? (typeof potTikarInput === 'number' ? potTikarInput : POTONGAN_GANTI_TIKAR) : 0;
   const livePotKuli = POTONGAN_KULI_PER_BAL;
@@ -746,6 +804,9 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
       [buildBarangDariItem(updatedTx, weighedItem, barangList.find((b) => b.barang_id === weighedItem.barang_id))],
       { skipAudit: true }
     );
+
+    // Catat ID bal ke urutan teratas bal yang terakhir ditimbang di sesi berjalan
+    setLocalWeighedIds((prev) => [activeBalItem.item_id, ...prev.filter((id) => id !== activeBalItem.item_id)]);
 
     // Record activity log for Super Admin accountability audit trail
     recordAuditLog({
@@ -1277,76 +1338,73 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
 
           </div>
 
-                    {/* List of Bals in Selected Kupon */}
-          <div className="bg-white border border-gray-200 shadow-2xs rounded-sm overflow-hidden">
+          {/* List of Recently Weighed Bals across all kupons */}
+          <div className="bg-white border border-gray-200 shadow-2xs rounded-sm overflow-hidden flex flex-col flex-1">
             <div className="bg-[#f8f9fa] border-b border-gray-200 px-4 py-2.5 flex items-center justify-between">
-              <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider">
-                Daftar Bal ({workingItems.length})
-              </h3>
-              {isKuponProsesSortir(currentTx) && (
-                <span
-                  className="px-1.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded-xs text-[10px] font-bold"
-                  title="Sortir kupon ini belum ditutup. Bal baru dari Sortir akan muncul otomatis."
-                >
-                  Sortir masih berjalan
-                </span>
-              )}
+              <div className="flex items-center space-x-1.5">
+                <Clock className="w-3.5 h-3.5 text-gray-600" />
+                <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider">
+                  Bal Terakhir Ditimbang
+                </h3>
+              </div>
+              <span className="px-2 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xs text-[10px] font-bold">
+                {balTerakhirDitimbangList.length} Bal
+              </span>
             </div>
-            <div className="divide-y divide-gray-100 max-h-[500px] overflow-y-auto">
-              {workingItems.map((item, index) => {
-                const isActive = activeItemId === item.item_id;
-                const isWeighed = (item.berat_kg || 0) > 0;
-                return (
-                  <button
-                    key={item.item_id}
-                    type="button"
-                    onClick={() => handleSelectBalItem(item)}
-                    className={`w-full text-left px-4 py-3 transition cursor-pointer flex items-center justify-between ${
-                      isActive
-                        ? 'bg-gray-100 border-l-4 border-[#b81d24] font-semibold'
-                        : isWeighed
-                        ? 'bg-white hover:bg-[#f8f9fa]'
-                        : 'bg-white hover:bg-[#f8f9fa]'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-2.5">
-                      <span className="font-mono text-slate-400 text-[10px] w-4">
-                        #{index + 1}
-                      </span>
-                      <div>
-                        <div className="flex items-center space-x-1.5">
-                          <span className="font-mono font-extrabold text-base text-gray-900">
-                            {item.no_bal}
-                          </span>
-                          <span className="px-1.5 py-0.2 bg-gray-100 text-gray-700 border border-gray-200 text-[10px] font-medium rounded-xs">
-                            Grade {item.kode_grade}
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-gray-500 mt-0.5">
-                          {formatRupiah(item.harga_per_kg)}/kg{' '}
-                          {(item.ganti_tikar || (item.potongan_tikar || 0) > 0) && '• Ganti Tikar'}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      {isWeighed ? (
-                        <div>
-                          <span className="font-mono font-semibold text-gray-900 text-xs">
-                            {beratBrutoItem(item)} Kg Bruto
-                          </span>
-                          <p className="text-[9px] text-emerald-600 font-medium">
-                            ✓ Terekam
+            <div className="divide-y divide-gray-100 max-h-[520px] overflow-y-auto">
+              {balTerakhirDitimbangList.length === 0 ? (
+                <div className="p-8 text-center text-gray-400 space-y-1.5">
+                  <Scale className="w-8 h-8 mx-auto text-gray-300 stroke-1" />
+                  <p className="text-xs font-semibold text-gray-600">Belum ada bal yang ditimbang</p>
+                  <p className="text-[11px] text-gray-400 max-w-xs mx-auto">
+                    Ketik nomor bal atau scan barcode di kolom pencarian atas untuk memulai penimbangan.
+                  </p>
+                </div>
+              ) : (
+                balTerakhirDitimbangList.map(({ item, tx }, index) => {
+                  const isActive = activeItemId === item.item_id;
+                  const isWeighed = (item.berat_kg || 0) > 0;
+                  return (
+                    <button
+                      key={`${tx.transaksi_id}-${item.item_id}`}
+                      type="button"
+                      onClick={() => selectBalAndOpen(tx, item, 'manual')}
+                      className={`w-full text-left px-3.5 py-2.5 transition cursor-pointer flex items-center justify-between ${
+                        isActive
+                          ? 'bg-red-50/60 border-l-4 border-[#b81d24] font-semibold'
+                          : 'bg-white hover:bg-[#f8f9fa]'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-2.5 min-w-0 pr-2">
+                        <span className="font-mono text-slate-400 text-[10px] w-5 shrink-0 text-center font-bold">
+                          #{index + 1}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="flex items-center space-x-1.5">
+                            <span className="font-mono font-extrabold text-sm text-gray-900 truncate">
+                              {item.no_bal}
+                            </span>
+                            <span className="px-1.5 py-0.2 bg-gray-100 text-gray-700 border border-gray-200 text-[10px] font-medium rounded-xs shrink-0">
+                              Grade {item.kode_grade}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-gray-500 mt-0.5 truncate">
+                            <span className="font-mono font-semibold text-gray-700">{tx.no_kupon}</span> • {tx.nama_petani}
                           </p>
                         </div>
-                      ) : (
-                        <span className="px-2 py-0.5 bg-gray-100 text-gray-600 border border-gray-200 rounded-xs text-[10px] font-medium">
-                          Belum Timbang
-                        </span>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="font-mono font-bold text-gray-900 text-xs">
+                          {beratBrutoItem(item)} Kg Bruto
+                        </div>
+                        <p className="text-[10px] font-mono text-emerald-700 font-medium">
+                          Netto: {item.berat_kg} Kg {item.potongan_tara_kg ? `(Tara ${item.potongan_tara_kg}kg)` : ''}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>
@@ -1543,9 +1601,18 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                           <span className="text-gray-500 font-semibold text-xs">KG</span>
                         </div>
                       </div>
-                      <div className="flex justify-between items-center text-[11px] pt-0.5">
-                        <span className="text-gray-500">Potongan Tara:</span>
-                        <span className="font-semibold text-gray-700">{liveBruto ? liveTara : 0} KG {isNettoManual ? '(Disesuaikan)' : ''}</span>
+                      <div className="pt-1 space-y-1.5">
+                        <div className="flex justify-between items-center text-[11px]">
+                          <span className="text-gray-500 font-medium">Potongan Tara (Otomatis):</span>
+                          <span className="font-bold text-gray-800">
+                            {liveBruto ? liveTara : (infoAturanTara.kode === 'SB' ? 2 : 0)} KG{' '}
+                            {isNettoManual ? <span className="text-amber-600 font-normal">(Manual)</span> : ''}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] bg-slate-50 px-2 py-1 rounded-xs border border-slate-200">
+                          <span className="font-semibold text-slate-700">{infoAturanTara.label}</span>
+                          <span className="text-slate-600">{infoAturanTara.keterangan}</span>
+                        </div>
                       </div>
                     </div>
                   </div>

@@ -1,3 +1,5 @@
+import { KodeAturanTara, DAFTAR_ATURAN_TARA } from '../config/aturanTimbang';
+
 // Utility functions for ERP Gudang Tembakau
 export function formatRupiah(amount?: number | null): string {
   if (amount === undefined || amount === null) return 'Rp 0';
@@ -161,41 +163,138 @@ export function extractNomorBalId(noBal?: string): string {
   const match = trimmed.match(/(\d+)$/);
   return match ? match[1] : trimmed;
 }
-
 // Ketentuan tara ini juga tertulis di balik Kartu Petani (PetaniCardPrintModal); ubah keduanya bersamaan.
+<<<<<<< HEAD
 export function hitungPotonganTaraKg(beratBruto: number, gantiTikar?: boolean, noBal?: string): number {
   const prefix = extractKodeBalPrefix(noBal);
 
   // Aturan 1: Kode bal SB = 2kg rata
   if (prefix === 'SB' || (noBal && noBal.toUpperCase().startsWith('SB'))) {
+=======
+
+/**
+ * Deteksi kategori kode aturan tara dari nomor bal atau kode grade:
+ * - 'SB': Kode bal atau grade berawalan SB
+ * - 'TS': Kode bal atau grade berawalan TS
+ * - 'HF': Kode bal atau grade berawalan HF
+ * - 'T' : Kode bal atau grade berawalan T (setelah dicek bukan TS)
+ * - 'DEFAULT': Kode lainnya atau tanpa awalan huruf khusus
+ */
+export function deteksiKodeAturanTara(noBal?: string, kodeGrade?: string): KodeAturanTara {
+  const candidates = [noBal, kodeGrade].filter(Boolean) as string[];
+
+  for (const c of candidates) {
+    const prefix = extractKodeBalPrefix(c);
+    const upper = c.trim().toUpperCase();
+
+    if (prefix === 'SB' || upper.startsWith('SB')) return 'SB';
+    if (prefix === 'TS' || upper.startsWith('TS')) return 'TS';
+    if (prefix === 'HF' || upper.startsWith('HF')) return 'HF';
+    if (prefix === 'T' || upper === 'T' || /^T[\s\-_0-9]/.test(upper)) return 'T';
+  }
+
+  return 'DEFAULT';
+}
+
+/**
+ * Hitung potongan tara (bruto ke netto) dalam satuan kg:
+ * - SB 2KG RATA (semua bobot)
+ * - HF: 49 kg ke bawah = 3 kg, 50 ke atas = 5 kg, 60 ke atas = 6 kg
+ * - TS: 30-49 kg = 4 kg, 50-60 kg = 5 kg, 60 kg ke atas = 6 kg
+ * - T : SAMA DENGAN TS (<50 kg = 4 kg, 50-59.9 kg = 5 kg, >=60 kg = 6 kg)
+ * - Default: Mengikuti aturan umum (sama dengan HF)
+ */
+export function hitungPotonganTaraKg(
+  beratBruto: number,
+  gantiTikar?: boolean,
+  noBal?: string,
+  kodeGrade?: string
+): number {
+  const kategori = deteksiKodeAturanTara(noBal, kodeGrade);
+
+  // Kode bal SB = 2 kg rata (berlaku bahkan jika bobot awal 0 saat registrasi bal)
+  if (kategori === 'SB') {
+>>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
     return 2.0;
   }
 
-  // Fallback if berat <= 0
+  // Fallback jika belum ditimbang / bruto <= 0
   if (beratBruto <= 0) return 0;
 
+<<<<<<< HEAD
   // Aturan 2: Kode bal TS dan T (T sama dengan TS)
   // TS 30-49 = 4kg (<50kg), 50-60 = 5kg (>=50 & <60), 60 ke atas = 6kg
   if (prefix === 'TS' || prefix === 'T' || (noBal && (noBal.toUpperCase().startsWith('TS') || noBal.toUpperCase().startsWith('T')))) {
+=======
+  // Kode bal TS dan T: 30-49 kg (atau <50 kg) = 4 kg, 50-59.9 kg = 5 kg, >=60 kg = 6 kg
+  if (kategori === 'TS' || kategori === 'T') {
+>>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
     if (beratBruto >= 60) {
       return 6.0;
     } else if (beratBruto >= 50) {
       return 5.0;
     } else {
+<<<<<<< HEAD
+=======
+      // 49 kg ke bawah (30-49 kg)
+>>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
       return 4.0;
     }
   }
 
+<<<<<<< HEAD
   // Aturan 3: Kode bal HF dan Umum/Lainnya
   // 49kg ke bawah = 3kg, 50 ke atas = 5kg, 60 ke atas = 6kg
+=======
+  // Kode bal HF dan kode lainnya (default): <= 49 kg = 3 kg, 50-59.9 kg = 5 kg, >= 60 kg = 6 kg
+>>>>>>> 4d7cbdcf1401709293a0717fd9b4a93992d2dca4
   if (beratBruto >= 60) {
     return 6.0;
   } else if (beratBruto >= 50) {
     return 5.0;
   } else {
-    // 49kg ke bawah
+    // 49 kg ke bawah
     return 3.0;
   }
+}
+
+/**
+ * Informasi ringkas aturan tara yang berlaku untuk bal tertentu (untuk tampilan UI).
+ */
+export function getInfoAturanTara(
+  noBal?: string,
+  kodeGrade?: string,
+  beratBruto?: number
+): {
+  kode: KodeAturanTara;
+  label: string;
+  potonganKg: number;
+  keterangan: string;
+} {
+  const kategori = deteksiKodeAturanTara(noBal, kodeGrade);
+  const tara = hitungPotonganTaraKg(beratBruto || 0, false, noBal, kodeGrade);
+
+  let keterangan = DAFTAR_ATURAN_TARA[kategori].deskripsi;
+  if ((beratBruto || 0) > 0) {
+    if (kategori === 'SB') {
+      keterangan = 'Tarif rata 2.0 kg';
+    } else if (kategori === 'TS' || kategori === 'T') {
+      if ((beratBruto || 0) >= 60) keterangan = 'Bobot ≥60 kg → Potongan 6.0 kg';
+      else if ((beratBruto || 0) >= 50) keterangan = 'Bobot 50–59.9 kg → Potongan 5.0 kg';
+      else keterangan = 'Bobot <50 kg (30–49 kg) → Potongan 4.0 kg';
+    } else {
+      if ((beratBruto || 0) >= 60) keterangan = 'Bobot ≥60 kg → Potongan 6.0 kg';
+      else if ((beratBruto || 0) >= 50) keterangan = 'Bobot 50–59.9 kg → Potongan 5.0 kg';
+      else keterangan = 'Bobot ≤49 kg → Potongan 3.0 kg';
+    }
+  }
+
+  return {
+    kode: kategori,
+    label: DAFTAR_ATURAN_TARA[kategori].label,
+    potonganKg: tara,
+    keterangan,
+  };
 }
 
 // Simple pseudo QR Matrix renderer for printable ID card

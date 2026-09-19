@@ -130,8 +130,22 @@ export function mergeKuponParalel(
     return hitungUlangKupon(incoming, incoming.items || []);
   }
 
+  const incomingItemIds = new Map<string, TransaksiItemBal>();
+  const incomingBarangIds = new Map<string, TransaksiItemBal>();
+  for (const it of incoming.items || []) {
+    if (it.item_id) incomingItemIds.set(it.item_id, it);
+    if (it.barang_id) incomingBarangIds.set(it.barang_id, it);
+  }
+
   const byNoBal = new Map<string, TransaksiItemBal>();
   for (const it of prev.items || []) {
+    // Jika bal ini memiliki item_id / barang_id yang sama dengan item di incoming tetapi
+    // nomor bal-nya telah diedit/diubah di incoming, jangan masukkan entri nomor lama ini
+    const matchedIncoming = (it.item_id && incomingItemIds.get(it.item_id))
+      || (it.barang_id && incomingBarangIds.get(it.barang_id));
+    if (matchedIncoming && String(matchedIncoming.no_bal).toUpperCase() !== String(it.no_bal).toUpperCase()) {
+      continue;
+    }
     byNoBal.set(String(it.no_bal).toUpperCase(), it);
   }
   for (const it of incoming.items || []) {
