@@ -113,29 +113,29 @@ export const NotaTimbangContent: React.FC<NotaTimbangContentProps> = ({ transaks
   };
 
   return (
-    <div className="space-y-5 text-sm sm:text-base text-slate-900 font-sans leading-relaxed">
+    <div className="space-y-4 text-xs text-slate-900 font-sans leading-normal">
       {/* 1. Kop Surat Resmi ERP */}
       <KopSurat judul="Surat Bukti Timbang & Nota Pembelian Tembakau" />
 
-      {/* 2. Metadata Grid Transaksi & Petani - Tipografi Diperbesar & Jelas */}
-      <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50/80 border border-slate-300 rounded-sm text-sm avoid-page-break">
+      {/* 2. Metadata Grid Transaksi & Petani */}
+      <div className="grid grid-cols-2 gap-4 p-3 bg-slate-50/70 border border-slate-300 rounded-sm text-xs avoid-page-break">
         {/* Kolom Kiri: Informasi Transaksi & Pembayaran */}
-        <div className="space-y-2 pr-2">
+        <div className="space-y-1.5 pr-2">
           <div className="flex justify-between items-center">
-            <span className="text-slate-600 font-semibold text-xs sm:text-sm uppercase tracking-wider">No. Kupon:</span>
-            <span className="font-mono font-black text-slate-950 text-base sm:text-lg">{transaksi.no_kupon}</span>
+            <span className="text-slate-500 font-medium">NO. KUPON:</span>
+            <span className="font-mono font-bold text-slate-950 text-xs sm:text-sm">{transaksi.no_kupon}</span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-slate-600 font-semibold text-xs sm:text-sm uppercase tracking-wider">Tanggal:</span>
-            <span className="font-mono text-slate-900 font-bold text-sm sm:text-base">{cleanDate}</span>
+            <span className="text-slate-500 font-medium">TANGGAL:</span>
+            <span className="font-mono text-slate-800">{cleanDate}</span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-slate-600 font-semibold text-xs sm:text-sm uppercase tracking-wider">Status Kasir:</span>
+            <span className="text-slate-500 font-medium">STATUS KASIR:</span>
             <span
-              className={`font-black px-3 py-1 text-xs sm:text-sm tracking-wide rounded-xs border ${
+              className={`font-semibold px-2 py-0.5 text-[10.5px] tracking-wide rounded-xs border ${
                 isLunas
-                  ? 'text-emerald-800 bg-emerald-100 border-emerald-400'
-                  : 'text-amber-800 bg-amber-100 border-amber-400'
+                  ? 'text-emerald-800 bg-emerald-50 border-emerald-300'
+                  : 'text-amber-800 bg-amber-50 border-amber-300'
               }`}
             >
               {isLunas ? '✓ LUNAS (CASH)' : 'BELUM LUNAS (KREDIT)'}
@@ -143,138 +143,134 @@ export const NotaTimbangContent: React.FC<NotaTimbangContentProps> = ({ transaks
           </div>
         </div>
 
-        {/* Kolom Kanan: Informasi Petani */}
-        <div className="space-y-2 border-l-2 border-slate-300 pl-4">
+        {/* Kolom Kanan: Informasi Petani (Total Bal diatas dihapus sesuai permintaan) */}
+        <div className="space-y-1.5 border-l border-slate-300 pl-4">
           <div className="flex justify-between items-center">
-            <span className="text-slate-600 font-semibold text-xs sm:text-sm uppercase tracking-wider">Petani / Penjual:</span>
-            <span className="font-black text-slate-950 text-base sm:text-lg truncate max-w-[240px]">
+            <span className="text-slate-500 font-medium">PETANI / PENJUAL:</span>
+            <span className="font-bold text-slate-900 truncate max-w-[220px]">
               {transaksi.nama_petani}{' '}
-              <span className="font-mono text-xs sm:text-sm text-slate-500 font-normal">({transaksi.petani_id})</span>
+              <span className="font-mono text-[11px] text-slate-500 font-normal">({transaksi.petani_id})</span>
             </span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-slate-600 font-semibold text-xs sm:text-sm uppercase tracking-wider">Asal / Desa:</span>
-            <span className="text-slate-900 font-bold text-sm sm:text-base truncate max-w-[240px]">{transaksi.desa_kecamatan || '-'}</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-slate-600 font-semibold text-xs sm:text-sm uppercase tracking-wider">Total Bal:</span>
-            <span className="font-mono font-black text-slate-950 text-base sm:text-lg">{totalBal} Bal ({transaksi.kode_grade || 'Multi-Grade'})</span>
+            <span className="text-slate-500 font-medium">ASAL / DESA:</span>
+            <span className="text-slate-800 truncate max-w-[220px]">{transaksi.desa_kecamatan || '-'}</span>
           </div>
         </div>
       </div>
 
-      {/* 3. Main Bal Items Table: Kolom Total Kotor (Netto x Harga) - Teks Dimaksimalkan */}
-      <div className="border-2 border-slate-300 rounded-sm overflow-hidden shadow-2xs">
-        <table className="w-full text-base border-collapse">
+      {/* 3. Main Bal Items Table: Kolom Total Kotor, Ukuran Teks Cukup & Pas, Ganti Tikar tulis 75.000 saja */}
+      <div className="border border-slate-300 rounded-sm overflow-hidden shadow-2xs">
+        <table className="w-full text-xs text-left border-collapse">
           <thead>
-            <tr className="bg-slate-100 border-b-2 border-slate-300 font-black text-slate-800 text-xs sm:text-sm uppercase tracking-wider">
-              <th className="py-3 px-3 text-center w-14 border-r border-slate-300">No</th>
-              <th className="py-3 px-4 text-left w-36 border-r border-slate-300">No Bal</th>
-              <th className="py-3 px-3 text-center w-36 border-r border-slate-300">Tikar</th>
-              <th className="py-3 px-4 text-right w-32 border-r border-slate-300">Bruto (kg)</th>
-              <th className="py-3 px-4 text-right w-36 border-r border-slate-300 bg-slate-200/50">Netto (kg)</th>
-              <th className="py-3 px-4 text-right w-36 border-r border-slate-300">Harga / Kg</th>
-              <th className="py-3 px-4 text-right w-44">Total Kotor</th>
+            <tr className="bg-slate-100 border-b border-slate-300 font-bold text-slate-700 text-xs uppercase tracking-wider">
+              <th className="py-2.5 px-3 text-center w-12 border-r border-slate-300">No</th>
+              <th className="py-2.5 px-3 text-left w-28 border-r border-slate-300">No Bal</th>
+              <th className="py-2.5 px-3 text-center w-24 border-r border-slate-300">Tikar</th>
+              <th className="py-2.5 px-3 text-right w-28 border-r border-slate-300">Bruto (kg)</th>
+              <th className="py-2.5 px-3 text-right w-28 border-r border-slate-300 bg-slate-200/50">Netto (kg)</th>
+              <th className="py-2.5 px-3 text-right w-32 border-r border-slate-300">Harga / Kg</th>
+              <th className="py-2.5 px-3 text-right w-36">Total Kotor</th>
             </tr>
           </thead>
-          <tbody className="divide-y-2 divide-slate-200 text-slate-900">
+          <tbody className="divide-y divide-slate-200 text-slate-800 text-[13px]">
             {items.map((item, idx) => (
               <tr 
                 key={item.no} 
-                className={`${idx % 2 === 1 ? 'bg-slate-50/70' : 'bg-white'} hover:bg-slate-100/60 transition-colors`}
+                className={`${idx % 2 === 1 ? 'bg-slate-50/70' : 'bg-white'} hover:bg-slate-100/50 transition-colors`}
               >
-                <td className="py-3.5 px-3 text-center font-mono font-bold text-slate-600 border-r border-slate-200 text-sm sm:text-base">
+                <td className="py-2 px-3 text-center font-mono font-medium text-slate-500 border-r border-slate-200 text-xs">
                   {item.no}
                 </td>
-                <td className="py-3.5 px-4 text-left font-mono font-black text-slate-950 border-r border-slate-200 whitespace-nowrap text-base sm:text-lg">
+                <td className="py-2 px-3 text-left font-mono font-bold text-slate-950 border-r border-slate-200 text-xs sm:text-sm">
                   {item.no_bal}
                 </td>
-                <td className="py-3.5 px-3 text-center border-r border-slate-200">
+                <td className="py-2 px-3 text-center border-r border-slate-200 font-mono text-xs">
                   {item.isGantiTikar ? (
-                    <span className="inline-block text-amber-950 font-black bg-amber-100 px-2.5 py-1 rounded border border-amber-400 text-xs sm:text-sm shadow-2xs">
-                      Ganti Tikar ({formatRupiah(item.tikar)})
+                    <span className="inline-block text-amber-900 font-bold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                      75.000
                     </span>
                   ) : (
-                    <span className="text-slate-500 font-semibold text-xs sm:text-sm">Standar</span>
+                    <span className="text-slate-400">Standar</span>
                   )}
                 </td>
-                <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-800 border-r border-slate-200 text-base sm:text-lg">
+                <td className="py-2 px-3 text-right font-mono font-medium text-slate-700 border-r border-slate-200 text-xs sm:text-sm">
                   {formatKg(item.bruto)}
                 </td>
-                <td className="py-3.5 px-4 text-right font-mono font-black text-slate-950 border-r border-slate-200 text-lg sm:text-xl bg-slate-100/90">
+                <td className="py-2 px-3 text-right font-mono font-bold text-slate-950 border-r border-slate-200 text-xs sm:text-sm bg-slate-50/70">
                   {formatKg(item.netto)}
                 </td>
-                <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-800 border-r border-slate-200 text-base sm:text-lg">
-                  {item.hargaPerKg.toLocaleString('id-ID')}
+                <td className="py-2 px-3 text-right font-mono font-medium text-slate-700 border-r border-slate-200 text-xs sm:text-sm">
+                  {formatRupiah(item.hargaPerKg)}
                 </td>
-                <td className="py-3.5 px-4 text-right font-mono font-black text-slate-950 text-lg sm:text-xl">
-                  {item.totalKotor.toLocaleString('id-ID')}
+                <td className="py-2 px-3 text-right font-mono font-bold text-slate-950 text-xs sm:text-sm">
+                  {formatRupiah(item.totalKotor)}
                 </td>
               </tr>
             ))}
 
-            {/* Total Summary Row Bal Table - Teks Ekstra Besar & Jelas */}
-            <tr className="bg-slate-100 font-black border-t-2 border-slate-300 text-slate-950 text-base sm:text-lg">
-              <td colSpan={3} className="py-4 px-4 text-right uppercase tracking-wider text-xs sm:text-sm text-slate-800 font-extrabold border-r border-slate-300">
+            {/* Total Summary Row Bal Table */}
+            <tr className="bg-slate-100 font-bold border-t-2 border-slate-300 text-slate-900 text-xs sm:text-sm">
+              <td colSpan={3} className="py-2.5 px-3 text-right uppercase tracking-wider text-xs text-slate-700 font-bold border-r border-slate-300">
                 TOTAL ({totalBal} BAL):
               </td>
-              <td className="py-4 px-4 text-right font-mono font-bold text-slate-800 border-r border-slate-300 text-base sm:text-lg">
+              <td className="py-2.5 px-3 text-right font-mono font-medium text-slate-700 border-r border-slate-300">
                 {formatKg(totalBrutoKg)} kg
               </td>
-              <td className="py-4 px-4 text-right font-mono font-black text-slate-950 bg-slate-200/60 border-r border-slate-300 text-xl sm:text-2xl">
+              <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-950 bg-slate-200/50 border-r border-slate-300">
                 {formatKg(totalNettoKg)} kg
               </td>
-              <td className="py-4 px-4 border-r border-slate-300"></td>
-              <td className="py-4 px-4 text-right font-mono font-black text-slate-950 text-xl sm:text-2xl">
-                <span className="text-sm text-slate-600 mr-1.5 font-sans font-bold">Rp</span>
-                {totalKotorRp.toLocaleString('id-ID')}
+              <td className="py-2.5 px-3 border-r border-slate-300"></td>
+              <td className="py-2.5 px-3 text-right font-mono font-black text-slate-950 text-sm">
+                <span className="text-xs text-slate-500 mr-1.5 font-sans font-semibold">Rp</span>
+                {formatAccounting(totalKotorRp)}
               </td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      {/* 4. Rincian Potongan Biaya Table - Teks Nyaman & Mudah Dibaca */}
-      <div className="border-2 border-slate-300 rounded-sm overflow-hidden mt-4 avoid-page-break shadow-2xs">
-        <table className="w-full text-base text-left border-collapse">
+      {/* 4. Rincian Potongan Biaya Table */}
+      <div className="border border-slate-300 rounded-sm overflow-hidden mt-3 avoid-page-break shadow-2xs">
+        <table className="w-full text-xs text-left border-collapse">
           <thead>
-            <tr className="bg-slate-100 border-b-2 border-slate-300 font-black text-slate-800 text-xs sm:text-sm uppercase tracking-wider">
-              <th className="py-3 px-4 border-r border-slate-300">Rincian Potongan Biaya</th>
-              <th className="py-3 px-4 text-center w-36 border-r border-slate-300">Jumlah</th>
-              <th className="py-3 px-4 text-right w-56">Subtotal Potongan</th>
+            <tr className="bg-slate-100 border-b border-slate-300 font-bold text-slate-700 text-xs uppercase tracking-wider">
+              <th className="py-2 px-3 border-r border-slate-300">Rincian Potongan Biaya</th>
+              <th className="py-2 px-3 text-center w-36 border-r border-slate-300">Jumlah</th>
+              <th className="py-2 px-4 text-right w-48">Subtotal Potongan</th>
             </tr>
           </thead>
-          <tbody className="divide-y-2 divide-slate-200 text-slate-900">
+          <tbody className="divide-y divide-slate-200 text-slate-800 text-[12.5px]">
             <tr className="bg-white">
-              <td className="py-3 px-4 text-slate-800 font-semibold border-r border-slate-200 text-sm sm:text-base">
+              <td className="py-2 px-3 text-slate-700 font-medium border-r border-slate-200">
                 Biaya Kuli &amp; Angkut (@ Rp {POTONGAN_KULI_PER_BAL.toLocaleString('id-ID')})
               </td>
-              <td className="py-3 px-4 text-center font-mono text-slate-800 font-bold border-r border-slate-200 text-sm sm:text-base">
+              <td className="py-2 px-3 text-center font-mono text-slate-700 font-semibold border-r border-slate-200">
                 {totalBal} bal
               </td>
-              <td className="py-3 px-4 text-right font-mono text-slate-900 font-bold text-base sm:text-lg">
+              <td className="py-2 px-4 text-right font-mono text-slate-800 font-semibold">
                 {totalPotonganKuli > 0 ? (
                   <>
-                    <span className="text-xs sm:text-sm text-slate-500 mr-1 font-sans font-normal">-Rp</span>
-                    {totalPotonganKuli.toLocaleString('id-ID')}
+                    <span className="text-xs text-slate-400 mr-1">-Rp</span>
+                    {formatAccounting(totalPotonganKuli)}
                   </>
                 ) : (
                   <span className="text-slate-400">Rp 0</span>
                 )}
               </td>
             </tr>
-            <tr className="bg-slate-50/70">
-              <td className="py-3 px-4 text-slate-800 font-semibold border-r border-slate-200 text-sm sm:text-base">
+            <tr className="bg-slate-50/60">
+              <td className="py-2 px-3 text-slate-700 font-medium border-r border-slate-200">
                 Biaya Tali (@ Rp {POTONGAN_TALI_PER_BAL.toLocaleString('id-ID')})
               </td>
-              <td className="py-3 px-4 text-center font-mono text-slate-800 font-bold border-r border-slate-200 text-sm sm:text-base">
+              <td className="py-2 px-3 text-center font-mono text-slate-700 font-semibold border-r border-slate-200">
                 {totalBal} bal
               </td>
-              <td className="py-3 px-4 text-right font-mono text-slate-900 font-bold text-base sm:text-lg">
+              <td className="py-2 px-4 text-right font-mono text-slate-800 font-semibold">
                 {totalPotonganTali > 0 ? (
                   <>
-                    <span className="text-xs sm:text-sm text-slate-500 mr-1 font-sans font-normal">-Rp</span>
-                    {totalPotonganTali.toLocaleString('id-ID')}
+                    <span className="text-xs text-slate-400 mr-1">-Rp</span>
+                    {formatAccounting(totalPotonganTali)}
                   </>
                 ) : (
                   <span className="text-slate-400">Rp 0</span>
@@ -282,30 +278,30 @@ export const NotaTimbangContent: React.FC<NotaTimbangContentProps> = ({ transaks
               </td>
             </tr>
             <tr className="bg-white">
-              <td className="py-3 px-4 text-slate-800 font-semibold border-r border-slate-200 text-sm sm:text-base">
+              <td className="py-2 px-3 text-slate-700 font-medium border-r border-slate-200">
                 Biaya Ganti Tikar (@ Rp {POTONGAN_GANTI_TIKAR.toLocaleString('id-ID')})
               </td>
-              <td className="py-3 px-4 text-center font-mono text-slate-800 font-bold border-r border-slate-200 text-sm sm:text-base">
+              <td className="py-2 px-3 text-center font-mono text-slate-700 font-semibold border-r border-slate-200">
                 {jumlahGantiTikar} bal
               </td>
-              <td className="py-3 px-4 text-right font-mono text-slate-900 font-bold text-base sm:text-lg">
+              <td className="py-2 px-4 text-right font-mono text-slate-800 font-semibold">
                 {totalPotonganTikar > 0 ? (
                   <>
-                    <span className="text-xs sm:text-sm text-slate-500 mr-1 font-sans font-normal">-Rp</span>
-                    {totalPotonganTikar.toLocaleString('id-ID')}
+                    <span className="text-xs text-slate-400 mr-1">-Rp</span>
+                    {formatAccounting(totalPotonganTikar)}
                   </>
                 ) : (
                   <span className="text-slate-400">Rp 0</span>
                 )}
               </td>
             </tr>
-            <tr className="bg-slate-100 font-black border-t-2 border-slate-300 text-slate-950 text-base sm:text-lg">
-              <td colSpan={2} className="py-3.5 px-4 text-right uppercase text-xs sm:text-sm tracking-wider text-slate-800 font-black border-r border-slate-300">
+            <tr className="bg-slate-100 font-bold border-t-2 border-slate-300 text-slate-900">
+              <td colSpan={2} className="py-2 px-3 text-right uppercase text-xs tracking-wider text-slate-700 border-r border-slate-300">
                 TOTAL POTONGAN KESELURUHAN:
               </td>
-              <td className="py-3.5 px-4 text-right font-mono font-black text-slate-950 text-lg sm:text-xl">
-                <span className="text-sm text-slate-600 mr-1 font-sans font-bold">-Rp</span>
-                {totalPotonganRp.toLocaleString('id-ID')}
+              <td className="py-2 px-4 text-right font-mono font-black text-slate-950 text-xs sm:text-sm">
+                <span className="text-xs text-slate-400 mr-1">-Rp</span>
+                {formatAccounting(totalPotonganRp)}
               </td>
             </tr>
           </tbody>
@@ -313,60 +309,56 @@ export const NotaTimbangContent: React.FC<NotaTimbangContentProps> = ({ transaks
       </div>
 
       {/* 5. Subtotal / Total Bersih Dibayar (Total Kotor - Semua Potongan) & Terbilang */}
-      <div className="space-y-4 avoid-page-break pt-2">
+      <div className="space-y-3 avoid-page-break pt-1">
         <div className="flex justify-end">
-          <div className="w-full sm:w-3/4 md:w-3/5 bg-slate-50 border-2 border-slate-400 p-5 rounded-sm shadow-sm space-y-3">
-            <div className="flex justify-between items-center text-sm sm:text-base text-slate-700 font-medium">
+          <div className="w-full sm:w-2/3 md:w-1/2 bg-slate-50 border-2 border-slate-400 p-3.5 rounded-sm shadow-xs space-y-1.5">
+            <div className="flex justify-between items-center text-xs text-slate-600">
               <span>Total Kotor (Netto x Harga)</span>
-              <span className="font-mono font-bold text-slate-950 text-base sm:text-lg">
-                Rp {totalKotorRp.toLocaleString('id-ID')}
-              </span>
+              <span className="font-mono font-semibold text-slate-900">Rp {formatAccounting(totalKotorRp)}</span>
             </div>
-            <div className="flex justify-between items-center text-sm sm:text-base text-slate-700 font-medium">
+            <div className="flex justify-between items-center text-xs text-slate-600">
               <span>Semua Potongan (Kuli, Tali, Tikar)</span>
-              <span className="font-mono font-bold text-slate-800 text-base sm:text-lg">
-                -Rp {totalPotonganRp.toLocaleString('id-ID')}
-              </span>
+              <span className="font-mono font-semibold text-slate-800">-Rp {formatAccounting(totalPotonganRp)}</span>
             </div>
-            <div className="border-t-2 border-slate-400 pt-3 flex justify-between items-center">
+            <div className="border-t-2 border-slate-300 pt-2 flex justify-between items-center">
               <div>
-                <span className="font-black uppercase text-sm sm:text-base tracking-wider text-slate-950 block">
+                <span className="font-bold uppercase text-xs sm:text-sm tracking-wider text-slate-900 block">
                   Subtotal / Total Dibayar
                 </span>
-                <span className="text-xs sm:text-sm text-slate-600 font-semibold block mt-0.5">
+                <span className="text-[11px] text-slate-500 font-medium block">
                   (Diterima Petani)
                 </span>
               </div>
-              <span className="font-mono font-black text-2xl sm:text-3xl text-slate-950 flex items-center">
-                <span className="text-base text-slate-600 mr-2 font-sans font-bold">Rp</span>
-                {grandTotalRp.toLocaleString('id-ID')}
+              <span className="font-mono font-black text-lg sm:text-xl text-slate-950 flex items-center">
+                <span className="text-xs text-slate-500 mr-1.5 font-sans font-semibold">Rp</span>
+                {formatAccounting(grandTotalRp)}
               </span>
             </div>
           </div>
         </div>
 
-        {/* Terbilang Box - Font Besar & Nyaman Dibaca */}
-        <div className="p-4 bg-slate-50 border-2 border-slate-300 rounded-sm">
-          <span className="font-black text-slate-600 shrink-0 uppercase tracking-wider text-xs sm:text-sm block">Terbilang:</span>
-          <p className="italic font-black text-slate-950 capitalize text-sm sm:text-base mt-1 leading-relaxed">
+        {/* Terbilang Box */}
+        <div className="p-2.5 bg-slate-50 border border-slate-300 text-xs flex items-start space-x-2 rounded-sm">
+          <span className="font-bold text-slate-700 shrink-0 uppercase tracking-wider text-[11px]">Terbilang:</span>
+          <span className="italic font-bold text-slate-950 capitalize text-xs leading-relaxed">
             {terbilangRupiah(grandTotalRp)} rupiah
-          </p>
+          </span>
         </div>
 
         {/* Tanda Tangan */}
-        <div className="pt-6 grid grid-cols-2 gap-10 text-center text-sm avoid-page-break">
+        <div className="pt-4 grid grid-cols-2 gap-8 text-center text-xs avoid-page-break">
           <div>
-            <p className="text-slate-700 font-black uppercase tracking-wider text-xs sm:text-sm">Penjual / Petani</p>
-            <div className="h-24 sm:h-28 flex items-end justify-center">
-              <span className="font-black border-b-2 border-slate-900 pb-1 min-w-[160px] inline-block text-slate-950 text-base sm:text-lg">
+            <p className="text-slate-600 font-bold uppercase tracking-wider text-xs">Penjual / Petani</p>
+            <div className="h-20 sm:h-22 flex items-end justify-center">
+              <span className="font-bold border-b border-slate-800 pb-0.5 min-w-[140px] inline-block text-slate-900 text-xs sm:text-sm">
                 {transaksi.nama_petani || <>&nbsp;</>}
               </span>
             </div>
           </div>
           <div>
-            <p className="text-slate-700 font-black uppercase tracking-wider text-xs sm:text-sm">Petugas Kasir / Admin</p>
-            <div className="h-24 sm:h-28 flex items-end justify-center">
-              <span className="font-black border-b-2 border-slate-900 pb-1 min-w-[160px] inline-block text-slate-950 text-base sm:text-lg">
+            <p className="text-slate-600 font-bold uppercase tracking-wider text-xs">Petugas Kasir / Admin</p>
+            <div className="h-20 sm:h-22 flex items-end justify-center">
+              <span className="font-bold border-b border-slate-800 pb-0.5 min-w-[140px] inline-block text-slate-900 text-xs sm:text-sm">
                 {kasirNama}
               </span>
             </div>
@@ -374,7 +366,7 @@ export const NotaTimbangContent: React.FC<NotaTimbangContentProps> = ({ transaks
         </div>
 
         {/* Footer Dokumen */}
-        <div className="pt-4 border-t border-slate-300 flex justify-between items-center text-xs font-mono text-slate-500 avoid-page-break">
+        <div className="pt-3 border-t border-slate-300 flex justify-between items-center text-[11px] text-slate-500 font-mono avoid-page-break">
           <div>Dicetak {printDateStr} oleh {kasirNama}</div>
           <div>Halaman 1 dari 1 • Dokumen Resmi Pembelian Tembakau</div>
         </div>
