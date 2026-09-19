@@ -35,7 +35,8 @@ import {
   saveCurrentUser,
   recordAuditLog,
   STORAGE_KEY_BARANG,
-  STORAGE_KEY_TRANSAKSI
+  STORAGE_KEY_TRANSAKSI,
+  STORAGE_KEY_PETANI
 } from './utils/storage';
 import { mergeKuponParalel, normalizeStatusBal, resolveStatusStok } from './utils/kuponSortir';
 import { filterBarangLunas } from './utils/statusBayar';
@@ -407,6 +408,7 @@ export default function App() {
   const [deactivatingPetani, setDeactivatingPetani] = useState<Petani | null>(null);
   const [resettingCardPetani, setResettingCardPetani] = useState<Petani | null>(null);
   const [isImportExportOpen, setIsImportExportOpen] = useState(false);
+  const [highlightPetaniId, setHighlightPetaniId] = useState<string | null>(null);
 
   // Toast Notification
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
@@ -438,6 +440,8 @@ export default function App() {
         setTransaksiList(loadTransaksiData());
       } else if (e.key === STORAGE_KEY_BARANG) {
         setBarangList(normalizeStatusBal(loadBarangData()));
+      } else if (e.key === STORAGE_KEY_PETANI) {
+        setPetaniList(loadPetaniData());
       }
     };
     window.addEventListener('storage', handleDataChange);
@@ -657,9 +661,13 @@ export default function App() {
       savePetaniData(updated);
       setIsFormModalOpen(false);
       setEditingPetani(null);
+      if (!exists) {
+        setHighlightPetaniId(saved.petani_id);
+      }
     } catch (err: any) {
       console.warn('Fallback penyimpanan lokal petani:', err);
       let updated: Petani[];
+      let savedId = petaniData.petani_id;
       if (exists) {
         updated = petaniList.map((p) =>
           p.petani_id === petaniData.petani_id ? { ...p, ...petaniData } : p
@@ -672,6 +680,7 @@ export default function App() {
           status_aktif: true,
           tanggal_daftar: petaniData.tanggal_daftar || new Date().toISOString().split('T')[0],
         };
+        savedId = fallbackSaved.petani_id;
         updated = [fallbackSaved, ...petaniList.filter((p) => p.petani_id !== fallbackSaved.petani_id)];
         showToast(`Petani baru "${fallbackSaved.nama_petani}" (${fallbackSaved.petani_id}) berhasil disimpan!`);
       }
@@ -679,6 +688,9 @@ export default function App() {
       savePetaniData(updated);
       setIsFormModalOpen(false);
       setEditingPetani(null);
+      if (!exists) {
+        setHighlightPetaniId(savedId);
+      }
     }
   };
 
@@ -1751,6 +1763,7 @@ export default function App() {
                 data={petaniList}
                 userRole={currentRole}
                 transaksiList={transaksiList}
+                highlightPetaniId={highlightPetaniId}
                 onAddPetani={() => {
                   setEditingPetani(null);
                   setIsFormModalOpen(true);

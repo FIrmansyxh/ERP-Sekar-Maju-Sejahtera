@@ -128,7 +128,7 @@ export interface TransaksiItemBal {
   harga_per_kg: number;
   ganti_tikar?: boolean; // true = potongan nominal rupiah diaktifkan; tidak mengubah potongan tara berat
   berat_bruto_kg?: number; // Berat kotor timbangan saat proses 2
-  potongan_tara_kg?: number; // SB = 2kg rata; TS & T: 30-49kg=4kg, 50-60kg=5kg, >60kg=6kg; HF: <=49kg=3kg, 50-59kg=5kg, >=60kg=6kg
+  potongan_tara_kg?: number; // SB 2kg rata; HF: ≤49=3, ≥50=5, ≥60=6; TS & T: 30–49=4, 50–59=5, ≥60=6
   is_netto_manual?: boolean; // True jika berat netto diinput/diedit secara manual
   berat_kg: number; // Berat netto final (0 jika belum ditimbang di proses 2)
   potongan_kuli?: number; // Rp 7.000 per bal

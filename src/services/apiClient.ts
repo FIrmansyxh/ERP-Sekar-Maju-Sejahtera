@@ -143,7 +143,15 @@ export async function apiRequest<T = any>(
   const data = await res.json().catch(() => ({ status: 'error', message: 'Respon tidak valid dari server' }));
 
   if (!res.ok) {
-    throw new Error(data.message || `HTTP Error ${res.status}`);
+    const errors = data?.errors;
+    let detail = data?.message || `HTTP Error ${res.status}`;
+    if (errors && typeof errors === 'object') {
+      const first = (Object.values(errors) as unknown[])
+        .flat()
+        .find((item) => typeof item === 'string' && item.trim());
+      if (typeof first === 'string') detail = first;
+    }
+    throw new Error(detail);
   }
 
   return data;

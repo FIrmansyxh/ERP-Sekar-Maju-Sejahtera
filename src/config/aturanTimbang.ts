@@ -8,11 +8,11 @@ export const POTONGAN_GANTI_TIKAR = 75000;
 
 /**
  * Ketentuan Potongan Tara (Bruto ke Netto) per Kode Bal / Mutu:
- * - SB: 2 kg rata (semua bobot)
- * - HF: <= 49 kg (3 kg), 50 - 59.9 kg (5 kg), >= 60 kg (6 kg)
- * - TS: 30 - 49 kg (4 kg, batas bawah <50 kg), 50 - 59.9 kg (5 kg), >= 60 kg (6 kg)
+ * - SB: 2 kg rata
+ * - HF: 49 kg ke bawah = 3 kg, 50 ke atas = 5 kg, 60 ke atas = 6 kg
+ * - TS: 30–49 kg = 4 kg, 50–59 kg = 5 kg, 60 kg ke atas = 6 kg
  * - T : Sama dengan TS
- * - Standar / Kode lain: Sama dengan HF (<50 kg: 3 kg, 50-59.9 kg: 5 kg, >=60 kg: 6 kg)
+ * - Standar / Kode lain: Sama dengan HF
  */
 export type KodeAturanTara = 'SB' | 'HF' | 'TS' | 'T' | 'DEFAULT';
 
@@ -31,21 +31,21 @@ export const DAFTAR_ATURAN_TARA: Record<KodeAturanTara, AturanTaraDetail> = {
   HF: {
     kode: 'HF',
     label: 'Kode HF',
-    deskripsi: '≤49 kg: 3 kg | 50–59 kg: 5 kg | ≥60 kg: 6 kg',
+    deskripsi: '49 kg ke bawah: 3 kg | 50 ke atas: 5 kg | 60 ke atas: 6 kg',
   },
   TS: {
     kode: 'TS',
     label: 'Kode TS',
-    deskripsi: '30–49 kg (<50 kg): 4 kg | 50–59 kg: 5 kg | ≥60 kg: 6 kg',
+    deskripsi: '30–49 kg: 4 kg | 50–59 kg: 5 kg | 60 kg ke atas: 6 kg',
   },
   T: {
     kode: 'T',
     label: 'Kode T',
-    deskripsi: 'Sama dengan TS (30–49 kg: 4 kg | 50–59 kg: 5 kg | ≥60 kg: 6 kg)',
+    deskripsi: 'Sama dengan TS (30–49 kg: 4 kg | 50–59 kg: 5 kg | 60 kg ke atas: 6 kg)',
   },
   DEFAULT: {
     kode: 'DEFAULT',
     label: 'Standar / Lainnya',
-    deskripsi: '≤49 kg: 3 kg | 50–59 kg: 5 kg | ≥60 kg: 6 kg',
+    deskripsi: '49 kg ke bawah: 3 kg | 50 ke atas: 5 kg | 60 ke atas: 6 kg',
   },
 };

@@ -16,7 +16,7 @@ import { ConfirmModal } from '../common/ConfirmModal';
 interface PetaniFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (petani: Petani) => void;
+  onSave: (petani: Petani) => void | Promise<void>;
   existingPetaniList: Petani[];
   editingPetani?: Petani | null;
 }
@@ -42,6 +42,8 @@ export const PetaniFormModal: React.FC<PetaniFormModalProps> = ({
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   useEffect(() => {
     if (isOpen) {
@@ -61,6 +63,8 @@ export const PetaniFormModal: React.FC<PetaniFormModalProps> = ({
       }
       setErrors({});
       setIsConfirmOpen(false);
+      setIsSaving(false);
+      setSaveError('');
     }
   }, [isOpen, editingPetani, existingPetaniList]);
 
@@ -90,7 +94,7 @@ export const PetaniFormModal: React.FC<PetaniFormModalProps> = ({
     }
   };
 
-  const handleConfirmSave = () => {
+  const handleConfirmSave = async () => {
     const finalData: Petani = {
       petani_id: formData.petani_id || generatePetaniId(existingPetaniList),
             nama_petani: (formData.nama_petani || '').trim(),
@@ -108,9 +112,17 @@ export const PetaniFormModal: React.FC<PetaniFormModalProps> = ({
       },
     };
 
-    onSave(finalData);
-    setIsConfirmOpen(false);
-    onClose();
+    setIsSaving(true);
+    setSaveError('');
+    try {
+      await Promise.resolve(onSave(finalData));
+      setIsConfirmOpen(false);
+    } catch (err: any) {
+      setSaveError(err?.message || 'Gagal menyimpan data petani. Periksa isian lalu coba lagi.');
+      setIsConfirmOpen(false);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -147,10 +159,11 @@ export const PetaniFormModal: React.FC<PetaniFormModalProps> = ({
               <button
                 type="button"
                 onClick={handleSubmit}
-                className="px-3.5 py-1.5 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#a0181e] rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
+                disabled={isSaving}
+                className="px-3.5 py-1.5 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#a0181e] disabled:opacity-50 rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
               >
                 <Save className="w-3.5 h-3.5" />
-                <span>{isEdit ? 'Simpan Perubahan' : 'Simpan Petani'}</span>
+                <span>{isSaving ? 'Menyimpan...' : isEdit ? 'Simpan Perubahan' : 'Simpan Petani'}</span>
               </button>
             </div>
           </div>
@@ -250,6 +263,12 @@ export const PetaniFormModal: React.FC<PetaniFormModalProps> = ({
               )}
             </div>
 
+            {saveError && (
+              <div className="p-2.5 bg-red-50 border border-red-200 text-[11px] text-red-700 font-medium">
+                {saveError}
+              </div>
+            )}
+
             {/* Status Aktif */}
             <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
               <div>
@@ -288,6 +307,7 @@ export const PetaniFormModal: React.FC<PetaniFormModalProps> = ({
         message={`Apakah Anda yakin ingin ${isEdit ? 'memperbarui' : 'mendaftarkan'} data petani "${formData.nama_petani}" dengan ID ${formData.petani_id}?`}
         variant="primary"
         confirmText={isEdit ? 'Simpan Perubahan' : 'Ya, Daftarkan Petani'}
+        isLoading={isSaving}
         onConfirm={handleConfirmSave}
         onCancel={() => setIsConfirmOpen(false)}
       />

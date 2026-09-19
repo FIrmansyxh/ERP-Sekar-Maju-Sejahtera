@@ -46,6 +46,7 @@ const KEY_AUDIT_LOG = `${NS}audit_log_${STORAGE_VERSION}`;
 /** Kunci yang dipantau untuk sinkronisasi kupon antar tab/jendela */
 export const STORAGE_KEY_TRANSAKSI = KEY_TRANSAKSI;
 export const STORAGE_KEY_BARANG = KEY_BARANG;
+export const STORAGE_KEY_PETANI = KEY_PETANI;
 
 /** Kunci sesi login (tidak dikompresi agar mudah dibersihkan saat logout). */
 const KEY_RAW_AUTH = `${NS}auth_session`;

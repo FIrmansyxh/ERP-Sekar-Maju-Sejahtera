@@ -39,6 +39,7 @@ interface PetaniTableProps {
   onToggleStatus: (petani: Petani) => void;
   onResetCardNumber?: (petani: Petani) => void;
   onOpenImportExport: () => void;
+  highlightPetaniId?: string | null;
 }
 
 export const PetaniTable: React.FC<PetaniTableProps> = ({
@@ -52,6 +53,7 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
   onToggleStatus,
   onResetCardNumber,
   onOpenImportExport,
+  highlightPetaniId,
 }) => {
   const [isFilterOpen, setIsFilterOpen] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -99,15 +101,10 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
           return sortOrder === 'desc' ? b.petani_id.localeCompare(a.petani_id) : a.petani_id.localeCompare(b.petani_id);
         }
         let cmp = 0;
-        if (sortBy === 'terbaru') {
-          // Data baru berada di awal array `data` (index 0)
-          const idxA = data.indexOf(a);
-          const idxB = data.indexOf(b);
-          cmp = idxA - idxB;
-        } else if (sortBy === 'nama') {
-          cmp = a.nama_petani.localeCompare(b.nama_petani);
+        if (sortBy === 'nama') {
+          cmp = a.nama_petani.localeCompare(b.nama_petani, 'id', { sensitivity: 'base' });
         } else if (sortBy === 'petani_id') {
-          cmp = a.petani_id.localeCompare(b.petani_id);
+          cmp = a.petani_id.localeCompare(b.petani_id, undefined, { numeric: true, sensitivity: 'base' });
         } else if (sortBy === 'tanggal') {
           cmp = (a.tanggal_daftar || '').localeCompare(b.tanggal_daftar || '');
         } else if (sortBy === 'setoran') {
@@ -136,6 +133,15 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
       itemNumber: (currentPage - 1) * itemsPerPage + idx + 1,
     }));
   }, [paginatedData, currentPage, itemsPerPage]);
+
+  useEffect(() => {
+    if (!highlightPetaniId) return;
+    setSearchQuery('');
+    setStatusFilter('all');
+    setSortBy('petani_id');
+    setSortOrder('desc');
+    setCurrentPage(1);
+  }, [highlightPetaniId]);
 
   // Render clean single sort arrow indicator
   const handleSort = (field: string) => {
@@ -401,7 +407,11 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
                     return (
                       <tr 
                         key={petani.petani_id}
-                        className={`transition-colors hover:bg-slate-50/80 ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/40'}`}
+                        className={`transition-colors hover:bg-slate-50/80 ${
+                          highlightPetaniId === petani.petani_id
+                            ? 'bg-amber-50 ring-1 ring-inset ring-amber-200'
+                            : index % 2 === 0 ? 'bg-white' : 'bg-slate-50/40'
+                        }`}
                       >
                         {/* No */}
                         <td className="py-3 px-4 text-center font-mono text-slate-500">
@@ -411,6 +421,11 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
                         {/* ID Petani */}
                         <td className="py-3 px-4 font-mono font-semibold text-slate-900">
                           {petani.petani_id}
+                          {highlightPetaniId === petani.petani_id && (
+                            <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold uppercase bg-amber-100 text-amber-800 border border-amber-200 rounded-sm">
+                              Baru
+                            </span>
+                          )}
                         </td>
 
                         {/* Nama Petani */}

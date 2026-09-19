@@ -40,6 +40,32 @@ import {
 import { sortTransaksiItemsByInputOrder } from '../utils/kuponSortir';
 import { generatePetaniId } from '../utils/formatters';
 
+function mapTanggalPetani(value: unknown): string | undefined {
+  if (typeof value === 'string' && value.trim()) {
+    return value.slice(0, 10);
+  }
+  if (value && typeof value === 'object' && 'date' in (value as Record<string, unknown>)) {
+    const dateVal = (value as { date?: unknown }).date;
+    if (typeof dateVal === 'string') return dateVal.slice(0, 10);
+  }
+  return undefined;
+}
+
+function mapPetaniFromApi(raw: any): Petani {
+  return {
+    petani_id: String(raw?.petani_id || ''),
+    nama_petani: String(raw?.nama_petani || '').trim(),
+    no_hp: raw?.no_hp ? String(raw.no_hp) : '',
+    alamat: raw?.alamat ? String(raw.alamat) : '',
+    desa_kecamatan: raw?.desa_kecamatan ? String(raw.desa_kecamatan) : '',
+    status_aktif: raw?.status_aktif !== false && raw?.status_aktif !== 0 && raw?.status_aktif !== '0' && raw?.status_aktif !== 'false',
+    alasan_nonaktif: raw?.alasan_nonaktif || undefined,
+    tanggal_daftar: mapTanggalPetani(raw?.tanggal_daftar),
+    catatan: raw?.catatan || '',
+    statistik: raw?.statistik,
+  };
+}
+
 export class ErpApiService {
   private static isOnlineState: boolean | null = null;
   private static cekServerTerakhir: { online: boolean; pada: number } | null = null;
@@ -123,9 +149,9 @@ export class ErpApiService {
       if (isOnline) {
         const res = await api.get<Petani[]>('/petani');
         if (res.status === 'success' && Array.isArray(res.data)) {
-          // Sync ke localStorage sebagai cache offline
-          savePetaniData(res.data);
-          return { data: res.data, fromBackend: true };
+          const mapped = res.data.map(mapPetaniFromApi).filter((p) => p.petani_id && p.nama_petani);
+          savePetaniData(mapped);
+          return { data: mapped, fromBackend: true };
         }
       }
     } catch (err) {
@@ -143,17 +169,18 @@ export class ErpApiService {
           // Update data yang sudah ada
           const res = await api.put<Petani>(`/petani/${petani.petani_id}`, petani);
           if (res.data) {
-            const list = loadPetaniData().map(p => p.petani_id === res.data!.petani_id ? res.data! : p);
+            const saved = mapPetaniFromApi(res.data);
+            const list = loadPetaniData().map(p => p.petani_id === saved.petani_id ? saved : p);
             savePetaniData(list);
-            return res.data;
+            return saved;
           }
         } else {
           // Create data baru ke PostgreSQL
           const payload = {
             petani_id: petani.petani_id,
             nama_petani: petani.nama_petani,
-            alamat: petani.alamat,
-            no_hp: petani.no_hp,
+            alamat: petani.alamat || '',
+            no_hp: petani.no_hp || '',
             desa_kecamatan: petani.desa_kecamatan || petani.alamat || '',
             catatan: petani.catatan || '',
             status_aktif: petani.status_aktif ?? true,
@@ -161,9 +188,10 @@ export class ErpApiService {
           };
           const res = await api.post<Petani>('/petani', payload);
           if (res.data) {
-            const list = [res.data, ...loadPetaniData().filter(p => p.petani_id !== res.data!.petani_id)];
+            const saved = mapPetaniFromApi(res.data);
+            const list = [saved, ...loadPetaniData().filter(p => p.petani_id !== saved.petani_id)];
             savePetaniData(list);
-            return res.data;
+            return saved;
           }
         }
       }
