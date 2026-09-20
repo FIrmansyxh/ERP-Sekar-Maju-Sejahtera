@@ -1,6 +1,7 @@
 import { Barang, StatusStokBarang, TransaksiItemBal, TransaksiPembelian } from '../types';
 import { normalizeKg } from './formatters';
 import { POTONGAN_KULI_PER_BAL } from '../config/aturanTimbang';
+import { isTransaksiLunas } from './statusBayar';
 
 /**
  * Aturan kupon terbuka: Sortir dan Timbangan boleh mengerjakan kupon yang sama
@@ -13,6 +14,19 @@ export const isKuponProsesSortir = (tx?: Pick<TransaksiPembelian, 'status_tahap'
   tx?.status_tahap === 'proses_sortir';
 
 export const isBalDitimbang = (item: Pick<TransaksiItemBal, 'berat_kg'>): boolean => (item.berat_kg || 0) > 0;
+
+/**
+ * Bal susulan: bal yang baru datang setelah sortir/timbang kupon selesai. Boleh ditambahkan
+ * selama kupon belum dibayar di Kasir. Mengembalikan alasan penolakan, atau null bila boleh.
+ * Kupon yang masih Proses Sortir selalu boleh, karena Sortir memang belum ditutup.
+ */
+export function alasanBalSusulanDitolak(tx?: Pick<TransaksiPembelian, 'no_kupon' | 'status_pembayaran' | 'metode_pembayaran'> | null): string | null {
+  if (!tx) return 'Kupon tidak ditemukan.';
+  if (isTransaksiLunas(tx)) {
+    return `Kupon ${tx.no_kupon} sudah lunas sehingga tidak bisa ditambah bal. Buat kupon baru untuk bal tersebut.`;
+  }
+  return null;
+}
 
 /**
  * Status bal mengikuti tahap timbang: belum ditimbang berarti Proses Sortir, sudah

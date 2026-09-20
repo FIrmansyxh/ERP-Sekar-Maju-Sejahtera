@@ -63,7 +63,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
             SMS
           </div>
           <div className="flex items-center space-x-2 text-xs">
-            <span className="font-bold text-gray-900 tracking-tight">PR. SEKAR MAJU SEJAHTERA</span>
+            <span className="font-bold text-gray-900 tracking-tight">PT. SEKAR MAJU SEJAHTERA</span>
             <span className="text-gray-300">|</span>
             <span className="text-gray-500">Sistem Data Gudang Tembakau</span>
           </div>
@@ -90,7 +90,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
               {/* Title */}
               <h1 className="text-3xl font-black tracking-tight text-white mb-3 leading-tight">
-                PR. SEKAR MAJU SEJAHTERA
+                PT. SEKAR MAJU SEJAHTERA
               </h1>
               <p className="text-sm text-red-100/90 leading-relaxed mb-8 font-normal pr-4">
                 Sistem Enterprise Resource Planning (ERP) Manajemen Data Petani, Stok Bal, Intake Timbangan, & Logistik.
@@ -229,7 +229,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
               <div className="mt-5 pt-3.5 border-t border-gray-200 flex items-start space-x-2 text-[11px] text-gray-500 leading-relaxed">
                 <ShieldCheck className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-0.5" />
                 <span>
-                  Akses sistem dibatasi untuk staf terdaftar PR. Sekar Maju Sejahtera. Seluruh aktivitas
+                  Akses sistem dibatasi untuk staf terdaftar PT. Sekar Maju Sejahtera. Seluruh aktivitas
                   akun tercatat pada log audit. Hubungi Administrator Gudang bila kredensial Anda bermasalah.
                 </span>
               </div>
@@ -242,7 +242,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
       {/* Bottom Footer */}
       <footer className="py-2.5 px-6 text-center text-[11px] text-gray-500">
-        Hak Cipta © 2026 PR. SEKAR MAJU SEJAHTERA Pamekasan. Seluruh hak cipta dilindungi undang-undang.
+        Hak Cipta © 2026 PT. SEKAR MAJU SEJAHTERA Pamekasan. Seluruh hak cipta dilindungi undang-undang.
       </footer>
 
     </div>

@@ -43,6 +43,7 @@ import { filterBarangLunas } from './utils/statusBayar';
 import { balTerkirimDariTransaksi, isSuratJalanTerkunci, pesanSuratJalanTerkunci, pesanTransaksiTerkunci } from './utils/kunciHapus';
 import { clearAllDrafts, getDraftRecovery, markDraftCleanExit, touchDraftAlive } from './utils/draftStorage';
 import { hasModuleAccess } from './utils/rbac';
+import { antrianSinkron } from './services/antrianSinkron';
 import { normalizeKg, generatePetaniId } from './utils/formatters';
 import { hashPassword } from './utils/crypto';
 import { Header } from './components/Header';
@@ -333,6 +334,24 @@ export default function App() {
     }
   }, [currentUser, refreshOperationalLists]);
 
+  // Antrean sinkron kupon: mengirim ulang simpanan yang tertinggal (juga dari sesi sebelumnya) sampai berhasil
+  useEffect(() => {
+    if (!currentUser) return;
+    antrianSinkron.pasang((tx, dasar, opsi) => ErpApiService.syncTransaksi(tx, dasar, { ...opsi, tanpaCekKesehatan: true }));
+  }, [currentUser]);
+
+  // Peringatan bila halaman ditutup padahal masih ada simpanan yang belum sampai ke server
+  useEffect(() => {
+    const peringatan = (e: BeforeUnloadEvent) => {
+      if (antrianSinkron.ringkasan().menunggu > 0) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', peringatan);
+    return () => window.removeEventListener('beforeunload', peringatan);
+  }, []);
+
   const [dashboardServerStats, setDashboardServerStats] = useState<{
     transaksi: {
       total_transaksi: number;
@@ -398,6 +417,8 @@ export default function App() {
   const [targetKuponNo, setTargetKuponNo] = useState<string | undefined>(undefined);
   const [targetTxId, setTargetTxId] = useState<string | undefined>(undefined);
   const [targetBalNo, setTargetBalNo] = useState<string | undefined>(undefined);
+  // Kupon yang dibuka di Sortir lewat tombol Tambah Bal di Kasir; dipakai sekali lalu dikosongkan
+  const [targetSortirTxId, setTargetSortirTxId] = useState<string | undefined>(undefined);
   const currentRole: UserRole = currentUser?.role || 'superadmin';
 
   // Petani Modals & Drawers
@@ -1105,9 +1126,13 @@ export default function App() {
       showToast(`Kupon ${newTx.no_kupon} (${balCount} Bal, ${newTx.berat_kg} Kg) berhasil disimpan!`);
     }
 
-    // 2) Sync ke BE di belakang; merge hasil tanpa menghapus bal paralel
+    // 2) Sync ke BE lewat antrean: satu permintaan per kupon, dicoba ulang otomatis bila gagal, dan hasilnya
+    //    diverifikasi. Merge hasil tanpa menghapus bal paralel. Simpanan yang tergantikan simpanan lebih baru
+    //    tidak perlu digabung ke layar karena hasil simpanan terbarulah yang membawa keadaan akhir.
     try {
-      const syncResult = await ErpApiService.syncTransaksi(newTx, oldTx, { koreksi: Boolean(meta.koreksi) });
+      const hasilAntrian = await antrianSinkron.masukkan(newTx, oldTx, { koreksi: Boolean(meta.koreksi) });
+      const syncResult =
+        hasilAntrian.terbaru && hasilAntrian.hasil ? hasilAntrian.hasil : { syncedTx: newTx, fromBackend: false };
       if (syncResult.fromBackend && syncResult.syncedTx) {
         const feItems = newTx.items || [];
         const beItems = syncResult.syncedTx.items || [];
@@ -1198,6 +1223,9 @@ export default function App() {
       deskripsi: `Penghapusan kupon ${txToDelete.no_kupon} (Petani: ${txToDelete.nama_petani}). Alasan: ${alasanHapus || 'Tanpa keterangan'}`,
       rincian_perubahan: [`Alasan: ${alasanHapus || '-'}`],
     });
+
+    // Kupon yang dihapus tidak perlu lagi dikirim ke server lewat antrean
+    antrianSinkron.batalkan(transaksiId);
 
     // 1. Remove from transaksiList
     const updatedTxList = transaksiList.filter((t) => t.transaksi_id !== transaksiId);
@@ -1515,7 +1543,7 @@ export default function App() {
   const getPageTitleAndBreadcrumb = () => {
     switch (activeModuleId) {
       case 'modul-home':
-        return { title: 'Dasbor Menu Utama', breadcrumb: 'PR. SEKAR MAJU SEJAHTERA / Beranda' };
+        return { title: 'Dasbor Menu Utama', breadcrumb: 'PT. SEKAR MAJU SEJAHTERA / Beranda' };
       case 'modul-6-dashboard-analytic':
         return { title: 'Dashboard Laporan & Analytic ERP', breadcrumb: 'Beranda / Dashboard Analytic' };
       case 'modul-6-laporan-bal':
@@ -1552,7 +1580,7 @@ export default function App() {
       case 'modul-users':
         return { title: 'Manajemen Pengguna (RBAC)', breadcrumb: 'Beranda / Manajemen Pengguna' };
       default:
-        return { title: 'Sistem Data Gudang Tembakau', breadcrumb: 'PR. SEKAR MAJU SEJAHTERA / Sistem Data Gudang' };
+        return { title: 'Sistem Data Gudang Tembakau', breadcrumb: 'PT. SEKAR MAJU SEJAHTERA / Sistem Data Gudang' };
     }
   };
 
@@ -1812,6 +1840,8 @@ export default function App() {
                   setEditingPetani(null);
                   setIsFormModalOpen(true);
                 }}
+                initialTxId={targetSortirTxId}
+                onInitialTxHandled={() => setTargetSortirTxId(undefined)}
               />
             )}
 
@@ -1882,6 +1912,10 @@ export default function App() {
                   setTargetKuponNo(kuponNo);
                   setTargetTxId(txId);
                   handleSelectModule('modul-0-timbangan');
+                }}
+                onEditKupon={(tx) => {
+                  setTargetSortirTxId(tx.transaksi_id);
+                  handleSelectModule('modul-0-sortir');
                 }}
               />
             )}

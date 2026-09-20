@@ -31,8 +31,12 @@ import { loadCurrentUser } from '../../utils/storage';
 import { formatDateHariBulanTahun, extractKodeBalPrefix } from '../../utils/formatters';
 import { hitungNilaiBal, hitungModalTransaksi } from '../../utils/finance';
 import { POTONGAN_GANTI_TIKAR, POTONGAN_KULI_PER_BAL, POTONGAN_TALI_PER_BAL } from '../../config/aturanTimbang';
+import { useLaporanTampilan } from '../../hooks/useLaporanTampilan';
+import { LaporanTampilanToggle } from './LaporanTampilanToggle';
+import { LaporanPembelianRekap, nilaiKotor, RekapJasa, totalJasa } from './LaporanPembelianRekap';
+import { PresetTanggal } from './PresetTanggal';
 
-export type SortField = 'default' | 'tanggal' | 'kupon' | 'petani' | 'bruto' | 'netto' | 'potongan_tali' | 'potongan_kuli' | 'potongan_tikar' | 'total_harga' | 'jumlah_bayar';
+export type SortField = 'default' | 'tanggal' | 'kupon' | 'petani' | 'no_bal' | 'bruto' | 'netto' | 'potongan_tali' | 'potongan_kuli' | 'potongan_tikar' | 'total_harga' | 'jumlah_bayar';
 
 interface LaporanPembelianBarangViewProps {
   transaksiList: TransaksiPembelian[];
@@ -227,6 +231,10 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
     supplier: '',
   });
 
+  // Panel Filter dan Ringkasan bisa disembunyikan (pilihan diingat) agar tabel lebih luas
+  const tampilan = useLaporanTampilan('pembelian');
+  const jumlahFilterAktif = Object.values(appliedFilters).filter((v) => v !== '').length;
+
   // Table Real-Time Quick Search
   const [tableSearch, setTableSearch] = useState('');
 
@@ -406,12 +414,14 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
     setSortConfigs(prev => {
       const existingIndex = prev.findIndex(c => c.field === field);
       
+      // No Bal paling wajar dibaca dari nomor kecil ke besar, jadi klik pertamanya naik (asc)
+      const arahAwal = field === 'no_bal' ? 'asc' : 'desc';
       if (existingIndex >= 0) {
         const existing = prev[existingIndex];
-        if (existing.direction === 'desc') {
-          // Toggle to asc (second click)
+        if (existing.direction === arahAwal) {
+          // Balik arah (klik kedua)
           const newConfigs = [...prev];
-          newConfigs[existingIndex] = { ...existing, direction: 'asc' };
+          newConfigs[existingIndex] = { ...existing, direction: arahAwal === 'asc' ? 'desc' : 'asc' };
           return newConfigs;
         } else {
           // Remove from sort (third click)
@@ -419,7 +429,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
         }
       } else {
         // Add new sort, desc first (first click)
-        const newConfigs = [...prev, { field, direction: 'desc' as const }];
+        const newConfigs = [...prev, { field, direction: arahAwal as 'asc' | 'desc' }];
         // Keep only max 3 columns for sorting
         if (newConfigs.length > 3) {
           newConfigs.shift();
@@ -442,16 +452,16 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
     return null; // The column indicator is handled inside ResizableHeader
   };
 
-  // Filtered Transaksi Data
-  const filteredData = useMemo(() => {
-    return transaksiList.filter((item) => {
+  // Aturan filter satu sumber; abaikanTanggal dipakai untuk rekap "sepanjang masa" (filter lain tetap berlaku)
+  const cocokFilter = (item: TransaksiPembelian, abaikanTanggal = false): boolean => {
+    {
       // Filter Tanggal Dari
-      if (appliedFilters.startDate && item.tanggal_transaksi) {
+      if (!abaikanTanggal && appliedFilters.startDate && item.tanggal_transaksi) {
         const itemDate = item.tanggal_transaksi.split('T')[0];
         if (itemDate < appliedFilters.startDate) return false;
       }
       // Filter Tanggal Sampai
-      if (appliedFilters.endDate && item.tanggal_transaksi) {
+      if (!abaikanTanggal && appliedFilters.endDate && item.tanggal_transaksi) {
         const itemDate = item.tanggal_transaksi.split('T')[0];
         if (itemDate > appliedFilters.endDate) return false;
       }
@@ -492,13 +502,39 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
         return false;
       }
       return true;
-    });
-  }, [transaksiList, appliedFilters]);
+    }
+  };
+
+  // Filtered Transaksi Data
+  const filteredData = useMemo(
+    () => transaksiList.filter((item) => cocokFilter(item)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [transaksiList, appliedFilters]
+  );
+
+  // Data dengan filter yang sama tetapi tanpa batas tanggal (sepanjang masa)
+  const dataSepanjangMasa = useMemo(
+    () => transaksiList.filter((item) => cocokFilter(item, true)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [transaksiList, appliedFilters]
+  );
 
   // Rincian bal & subtotal per kupon, dipakai tabel, urutan, total, Excel, dan PDF
+  const urutanNoBal = sortConfigs.find((c) => c.field === 'no_bal')?.direction;
   const ringkasanMap = useMemo(
-    () => new Map(filteredData.map((row) => [row, ringkasKupon(row)] as const)),
-    [filteredData]
+    () =>
+      new Map(
+        filteredData.map((row) => {
+          const r = ringkasKupon(row);
+          if (urutanNoBal) {
+            // Bal di dalam kupon diurutkan menurut nomor (natural: A2 sebelum A10)
+            const arah = urutanNoBal === 'asc' ? 1 : -1;
+            r.rincian = [...r.rincian].sort((a, b) => arah * a.noBal.localeCompare(b.noBal, undefined, { numeric: true, sensitivity: 'base' }));
+          }
+          return [row, r] as const;
+        })
+      ),
+    [filteredData, urutanNoBal]
   );
   const ringkasan = (row: TransaksiPembelian): RingkasanKupon => ringkasanMap.get(row) ?? ringkasKupon(row);
 
@@ -528,6 +564,13 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
             const pA = a.nama_petani || '';
             const pB = b.nama_petani || '';
             comparison = pA.localeCompare(pB, undefined, { numeric: true, sensitivity: 'base' });
+            break;
+          }
+          case 'no_bal': {
+            // Kupon diurutkan menurut bal pertamanya pada urutan yang sedang dipakai
+            const nA = ringkasan(a).rincian[0]?.noBal || '';
+            const nB = ringkasan(b).rincian[0]?.noBal || '';
+            comparison = nA.localeCompare(nB, undefined, { numeric: true, sensitivity: 'base' });
             break;
           }
           case 'bruto':
@@ -626,6 +669,45 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
   }, [sortedData, ringkasanMap]);
 
 
+  // Rekap ganti tikar, jasa (tali + kuli + tikar), dan nilai kotor untuk hasil filter serta sepanjang masa
+  const hitungRekapJasa = (daftar: TransaksiPembelian[]): RekapJasa => {
+    const hasil: RekapJasa = { kupon: daftar.length, bal: 0, balTikar: 0, tikar: 0, tali: 0, kuli: 0, nilaiBeli: 0 };
+    daftar.forEach((row) => {
+      const r = ringkasKupon(row);
+      hasil.bal += r.jumlahBal;
+      hasil.balTikar += r.rincian.filter((b) => b.tikar > 0).length;
+      hasil.tikar += r.tikar;
+      hasil.tali += r.tali;
+      hasil.kuli += r.kuli;
+      hasil.nilaiBeli += r.nilaiBeli;
+    });
+    return hasil;
+  };
+  const rekapSesuaiFilter = useMemo(() => hitungRekapJasa(filteredData), [filteredData]);
+  const rekapSepanjangMasa = useMemo(() => hitungRekapJasa(dataSepanjangMasa), [dataSepanjangMasa]);
+  const adaFilterTanggal = Boolean(appliedFilters.startDate || appliedFilters.endDate);
+  const konteksRekap = [
+    periodeInfo(appliedFilters.startDate, appliedFilters.endDate),
+    appliedFilters.supplier && appliedFilters.supplier !== 'ALL'
+      ? 'Petani: ' + (petaniList.find((pt) => pt.petani_id === appliedFilters.supplier)?.nama_petani || appliedFilters.supplier)
+      : '',
+  ].filter(Boolean).join(' · ');
+
+  // Rentang tanggal cepat: langsung diterapkan bersama filter lain yang sedang dipilih di form
+  const handlePilihRentang = (start: string, end: string) => {
+    setFilterStartDate(start);
+    setFilterEndDate(end);
+    setAppliedFilters({
+      startDate: start,
+      endDate: end,
+      kupon: filterKupon,
+      grade: filterGrade,
+      kodeBal: filterKodeBal.trim(),
+      noBall: filterNoBall.trim(),
+      supplier: filterSupplier,
+    });
+  };
+
   // Export Excel
   const handleExportExcel = () => {
     if (sortedData.length === 0) return;
@@ -644,17 +726,33 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
 
     const rows: ExcelCellValue[][] = [];
     const rowKinds: ExcelRowKind[] = [];
-    sortedData.forEach((row, idx) => {
+    sortedData.forEach((row) => {
       const r = ringkasan(row);
-      rows.push([idx + 1, row.tanggal_transaksi, row.no_kupon || '-', row.nama_petani || '-', '', '', '', '', '', '', '', '', '', labelStatusBayar(row)]);
+      rows.push(['', row.tanggal_transaksi, row.no_kupon || '-', row.nama_petani || '-', '', '', '', '', '', '', '', '', '', labelStatusBayar(row)]);
       rowKinds.push('group');
-      r.rincian.forEach((bal) => {
-        rows.push(['', '', '', '', bal.noBal, bal.hargaBeli, bal.bruto || '', bal.netto || '', bal.tali, bal.kuli, bal.tikar || '', bal.nilaiBeli, bal.jumlahBayar, '']);
+      r.rincian.forEach((bal, balIdx) => {
+        rows.push([balIdx + 1, '', '', '', bal.noBal, bal.hargaBeli, bal.bruto || '', bal.netto || '', bal.tali, bal.kuli, bal.tikar || '', bal.nilaiBeli, bal.jumlahBayar, '']);
         rowKinds.push('data');
       });
       rows.push([`Total ${row.no_kupon || 'Kupon'} (${r.jumlahBal} bal)`, '', '', '', '', '', r.bruto, r.netto, r.tali, r.kuli, r.tikar, r.nilaiBeli, r.jumlahBayar, '']);
       rowKinds.push('subtotal');
     });
+
+    const barisRekap = (): ExcelCellValue[][] => {
+      const a = rekapSesuaiFilter;
+      const b = rekapSepanjangMasa;
+      return [
+        ['Jumlah Kupon', a.kupon, b.kupon],
+        ['Jumlah Bal', a.bal, b.bal],
+        ['Bal Ganti Tikar', a.balTikar, b.balTikar],
+        ['Potongan Tikar (Rp)', a.tikar, b.tikar],
+        ['Potongan Tali (Rp)', a.tali, b.tali],
+        ['Potongan Kuli (Rp)', a.kuli, b.kuli],
+        ['Total Jasa: Tali + Kuli + Tikar (Rp)', totalJasa(a), totalJasa(b)],
+        ['Nilai Beli (Rp)', a.nilaiBeli, b.nilaiBeli],
+        ['Total Nilai Kotor: Nilai Beli + Tali + Kuli + Tikar (Rp)', nilaiKotor(a), nilaiKotor(b)],
+      ];
+    };
 
     downloadExcelReport(`Laporan_Pembelian_Barang_${todayStamp()}`, [
       {
@@ -690,6 +788,17 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
           totals.totalJumlahBayar,
           '',
         ],
+      },
+      {
+        name: 'Rekap Jasa',
+        title: 'Rekap Ganti Tikar, Jasa & Nilai Kotor',
+        info,
+        columns: [
+          { header: 'Keterangan' },
+          { header: 'Sesuai Filter', type: 'integer' },
+          { header: 'Sepanjang Masa', type: 'integer' },
+        ],
+        rows: barisRekap(),
       },
     ]);
   };
@@ -730,7 +839,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
           <SortableHeader title="Tanggal" widthClass="" sortField="tanggal" sortConfigs={sortConfigs} onSort={handleSort} />
           <SortableHeader title="Kupon" widthClass="" sortField="kupon" sortConfigs={sortConfigs} onSort={handleSort} />
           <SortableHeader title="Petani" widthClass="" sortField="petani" sortConfigs={sortConfigs} onSort={handleSort} />
-          <SortableHeader title="No Bal" widthClass="" align="center" />
+          <SortableHeader title="No Bal" widthClass="" align="center" sortField="no_bal" sortConfigs={sortConfigs} onSort={handleSort} />
           <SortableHeader title="Harga Beli (Rp/Kg)" widthClass="" align="right" />
           <SortableHeader title="Bruto (Kg)" widthClass="" align="right" sortField="bruto" sortConfigs={sortConfigs} onSort={handleSort} />
           <SortableHeader title="Netto (Kg)" widthClass="" align="right" sortField="netto" sortConfigs={sortConfigs} onSort={handleSort} />
@@ -761,7 +870,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
             <tbody key={row.transaksi_id || idx} className="border-t-2 border-gray-300">
               {/* 1. Baris kupon */}
               <tr className="bg-slate-100 text-gray-900">
-                <td className="py-2 px-2 text-center font-mono text-[11px] font-bold text-gray-600 whitespace-nowrap">{idx + 1}</td>
+                <td className="py-2 px-2"></td>
                 <td className="py-2 px-2 font-mono text-[11px] text-gray-700 whitespace-nowrap">{formatDateHariBulanTahun(row.tanggal_transaksi)}</td>
                 <td className="py-2 px-2 whitespace-nowrap">
                   <span className="bg-white border border-gray-200 px-2 py-0.5 rounded text-[11px] font-mono font-bold text-[#b81d24]">
@@ -787,9 +896,11 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
               </tr>
 
               {/* 2. Rincian setiap bal */}
-              {r.rincian.map((bal) => (
+              {r.rincian.map((bal, balIdx) => (
                 <tr key={bal.key} className="bg-white hover:bg-amber-50/40 transition-colors">
-                  <td colSpan={4} className="bg-white"></td>
+                  {/* Nomor urut bal, mulai dari 1 pada setiap kupon */}
+                  <td className="py-1.5 px-2 text-center font-mono text-[11px] text-gray-500 whitespace-nowrap">{balIdx + 1}</td>
+                  <td colSpan={3} className="bg-white"></td>
                   <td className="py-1.5 px-2.5 text-center font-mono font-semibold text-gray-800 whitespace-nowrap">{bal.noBal}</td>
                   <td className="py-1.5 px-2 text-right font-mono text-gray-700 whitespace-nowrap">{formatRp(bal.hargaBeli)}</td>
                   <td className="py-1.5 px-2 text-right font-mono text-gray-700 whitespace-nowrap">{formatKg(bal.bruto)}</td>
@@ -854,8 +965,10 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
           </h1>
         </div>
 
-        {/* Top Action Buttons (Direct Download Only) */}
-        <div className="flex items-center space-x-2">
+        {/* Tampilan (Filter / Ringkasan / Fokus Tabel) dan tombol unduh */}
+        <div className="flex flex-wrap items-center gap-2">
+          <LaporanTampilanToggle tampilan={tampilan} jumlahFilterAktif={jumlahFilterAktif} />
+
           <button
             onClick={handleExportExcel}
             disabled={sortedData.length === 0}
@@ -877,6 +990,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
       </div>
 
       {/* Ringkasan Keseluruhan (Kumulatif) */}
+      {tampilan.tampilRingkasan && (
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-white p-3 border border-gray-200 shadow-xs flex items-center justify-between">
           <div>
@@ -923,8 +1037,10 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
           </div>
         </div>
       </div>
+      )}
 
       {/* Filter Form Card  */}
+      {tampilan.tampilFilter && (
       <div className="bg-white p-4 border border-gray-200 shadow-xs">
         <div className="flex items-center space-x-2 pb-3 mb-3 border-b border-gray-100">
           <Filter className="w-4 h-4 text-[#b81d24]" />
@@ -935,6 +1051,8 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
             (Sesuaikan kriteria data lalu klik "Cari Data")
           </span>
         </div>
+
+        <PresetTanggal className="mb-3" startDate={filterStartDate} endDate={filterEndDate} onPilih={handlePilihRentang} />
 
         <form onSubmit={handleSearch} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
           
@@ -1088,8 +1206,10 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
           </div>
         </form>
       </div>
+      )}
 
       {/* Quick Summary Pill Row */}
+      {tampilan.tampilRingkasan && (
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs">
         <div className="bg-white p-2.5 border border-gray-200">
           <div className="text-gray-500 text-[11px]">Total Data Ditemukan</div>
@@ -1126,6 +1246,17 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
           </div>
         </div>
       </div>
+      )}
+
+      {/* Rekap ganti tikar, jasa, dan nilai kotor: sesuai filter dan sepanjang masa */}
+      {tampilan.tampilRingkasan && (
+        <LaporanPembelianRekap
+          sesuaiFilter={rekapSesuaiFilter}
+          sepanjangMasa={rekapSepanjangMasa}
+          adaFilterTanggal={adaFilterTanggal}
+          konteks={konteksRekap}
+        />
+      )}
 
       {/* Data Table Card  */}
       <div className="bg-white border border-gray-200 shadow-xs overflow-hidden">
@@ -1172,7 +1303,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
           </div>
         </div>
 
-        <div className="overflow-x-auto overflow-y-auto max-h-[60vh] border border-gray-200 shadow-sm relative scrollbar-thin">
+        <div className={`overflow-x-auto overflow-y-auto ${tampilan.fokusTabel ? 'max-h-[calc(100vh-170px)]' : 'max-h-[60vh]'} border border-gray-200 shadow-sm relative scrollbar-thin`}>
           {tabelUtama}
         </div>
       </div>
@@ -1269,7 +1400,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
               return (
                 <tbody key={row.transaksi_id || idx} data-pdf-keep="true">
                   <tr className="bg-gray-100 font-bold">
-                    <td className="p-1 border border-gray-300 text-center">{idx + 1}</td>
+                    <td className="p-1 border border-gray-300"></td>
                     <td className="p-1 border border-gray-300 font-mono whitespace-nowrap">{formatDateHariBulanTahun(row.tanggal_transaksi)}</td>
                     <td className="p-1 border border-gray-300 font-mono">{row.no_kupon || '-'}</td>
                     <td className="p-1 border border-gray-300">{row.nama_petani || '-'}</td>
@@ -1277,9 +1408,10 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
                       {r.jumlahBal} bal · {labelStatusBayar(row)}
                     </td>
                   </tr>
-                  {r.rincian.map((bal) => (
+                  {r.rincian.map((bal, balIdx) => (
                     <tr key={bal.key}>
-                      <td colSpan={4} className="p-1 border border-gray-300"></td>
+                      <td className="p-1 border border-gray-300 text-center">{balIdx + 1}</td>
+                      <td colSpan={3} className="p-1 border border-gray-300"></td>
                       <td className="p-1 border border-gray-300 text-center font-mono">{bal.noBal}</td>
                       <td className="p-1 border border-gray-300 text-right font-mono">{formatRp(bal.hargaBeli)}</td>
                       <td className="p-1 border border-gray-300 text-right font-mono">{formatKg(bal.bruto)}</td>

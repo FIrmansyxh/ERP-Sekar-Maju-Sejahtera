@@ -56,7 +56,7 @@ export const RoleMatrixModal: React.FC<RoleMatrixModalProps> = ({
                 Matriks Hak Akses Pengguna (Role-Based Access Control)
               </h2>
               <p className="text-xs text-gray-600">
-                PR. SEKAR MAJU SEJAHTERA - Standar Pembagian Wewenang 6 Role Operasional
+                PT. SEKAR MAJU SEJAHTERA - Standar Pembagian Wewenang 6 Role Operasional
               </p>
             </div>
           </div>

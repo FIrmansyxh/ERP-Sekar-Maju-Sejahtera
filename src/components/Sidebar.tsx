@@ -229,7 +229,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {!isCollapsed && (
           <div className="overflow-hidden">
             <h2 className="text-sm font-semibold tracking-tight text-slate-900 leading-tight">
-              PR. SEKAR MAJU SEJAHTERA
+              PT. SEKAR MAJU SEJAHTERA
             </h2>
             <p className="text-[10px] text-slate-500 font-normal leading-none mt-0.5">
               Sistem Data Gudang Tembakau

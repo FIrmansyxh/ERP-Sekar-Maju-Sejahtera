@@ -84,6 +84,14 @@ export async function downloadElementAsPdf(
     }
     await new Promise((r) => setTimeout(r, 60));
 
+    // Dokumen yang sudah dibagi per lembar ([data-pdf-page], mis. Nota Pembelian): tiap lembar
+    // menjadi satu halaman PDF utuh, tanpa dipotong dari satu gambar panjang.
+    const lembarList = Array.from(clone.querySelectorAll<HTMLElement>('[data-pdf-page]'));
+    if (lembarList.length > 0) {
+      await simpanPdfPerLembar(lembarList, cleanFilename, orientation, options.format);
+      return;
+    }
+
     // Capture the complete element with native visual fidelity
     const pixelRatio = 2.5;
     const imgData = await toPng(clone, {
@@ -309,6 +317,60 @@ export async function downloadElementAsPdf(
       document.body.removeChild(sandbox);
     }
   }
+}
+
+/**
+ * Menyimpan PDF dengan satu halaman per lembar dokumen. Tiap lembar difoto sendiri lalu
+ * ditempel utuh ke halamannya; lembar yang sedikit lebih tinggi dari halaman diperkecil
+ * proporsional, jadi tidak ada baris yang terpotong.
+ */
+async function simpanPdfPerLembar(
+  lembarList: HTMLElement[],
+  filename: string,
+  orientation: 'portrait' | 'landscape',
+  format?: string
+): Promise<void> {
+  const pdf = new jsPDF({ orientation, unit: 'mm', format: format || 'a4', compress: true });
+  const margin = 8;
+  const maxWidthMm = pdf.internal.pageSize.getWidth() - margin * 2;
+  const maxHeightMm = pdf.internal.pageSize.getHeight() - margin * 2;
+
+  for (let i = 0; i < lembarList.length; i++) {
+    const lembar = lembarList[i];
+    // Tampilan layar berupa kertas berbingkai; di PDF cukup isinya dengan margin halaman
+    lembar.style.border = 'none';
+    lembar.style.boxShadow = 'none';
+    lembar.style.padding = '0';
+    lembar.style.margin = '0';
+
+    const dataUrl = await toPng(lembar, {
+      quality: 1,
+      pixelRatio: 2.5,
+      backgroundColor: '#ffffff',
+      cacheBust: true,
+    });
+
+    const img = new Image();
+    img.src = dataUrl;
+    await new Promise((resolve, reject) => {
+      img.onload = () => resolve(true);
+      img.onerror = (e) => reject(e);
+    });
+
+    const imgWidthPx = img.naturalWidth || img.width;
+    const imgHeightPx = img.naturalHeight || img.height;
+    let widthMm = maxWidthMm;
+    let heightMm = (imgHeightPx * widthMm) / imgWidthPx;
+    if (heightMm > maxHeightMm) {
+      heightMm = maxHeightMm;
+      widthMm = (imgWidthPx * heightMm) / imgHeightPx;
+    }
+
+    if (i > 0) pdf.addPage();
+    pdf.addImage(dataUrl, 'PNG', margin + (maxWidthMm - widthMm) / 2, margin, widthMm, heightMm, undefined, 'FAST');
+  }
+
+  pdf.save(filename);
 }
 
 /**

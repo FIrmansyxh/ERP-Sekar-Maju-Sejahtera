@@ -24,7 +24,8 @@ import {
 import { TransaksiPembelian, Petani, TabelHarga, Barang, TransaksiItemBal, UserRole, User as UserType, SaveTransaksiMeta } from '../../types';
 import { formatRupiah, formatNoKupon, formatDateHariBulanTahun, formatNumber, generateTransaksiId, hitungPotonganTaraKg, normalizeKg } from '../../utils/formatters';
 import { useSessionDraft } from '../../hooks/useSessionDraft';
-import { buildBarangDariItem, hitungUlangKupon, isBalDitimbang, isKuponProsesSortir, nextBarangId, sortTransaksiItemsByInputOrder } from '../../utils/kuponSortir';
+import { alasanBalSusulanDitolak, buildBarangDariItem, hitungUlangKupon, isBalDitimbang, isKuponProsesSortir, nextBarangId, sortTransaksiItemsByInputOrder } from '../../utils/kuponSortir';
+import { isBalTerkirim } from '../../utils/kunciHapus';
 import { POTONGAN_GANTI_TIKAR, POTONGAN_KULI_PER_BAL, POTONGAN_TALI_PER_BAL } from '../../config/aturanTimbang';
 
 interface SortirPageViewProps {
@@ -38,6 +39,10 @@ interface SortirPageViewProps {
   onDeleteTransaksi?: (transaksiId: string, alasan?: string) => void;
   onNavigateToTimbangan: (kuponNo?: string, txId?: string, balNo?: string) => void;
   onAddPetani?: () => void;
+  /** Kupon yang langsung dibuka saat halaman ini dibuka dari tombol Edit di Kasir. */
+  initialTxId?: string;
+  /** Dipanggil setelah initialTxId diproses, agar tidak terpakai lagi saat halaman dibuka ulang. */
+  onInitialTxHandled?: () => void;
 }
 
 export const SortirPageView: React.FC<SortirPageViewProps> = ({
@@ -51,6 +56,8 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
   onDeleteTransaksi,
   onNavigateToTimbangan,
   onAddPetani,
+  initialTxId,
+  onInitialTxHandled,
 }) => {
   // Form Header State
   const draftUserId = currentUser?.user_id;
@@ -73,10 +80,16 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
   // Kupon terbuka: tersimpan sejak bal pertama discan sehingga Timbangan di komputer
   // lain bisa langsung menimbang, walaupun sortir kupon ini belum selesai.
   const [openTxId, setOpenTxId, resetOpenTxId] = useSessionDraft<string>('sortir_open_tx_id', draftUserId, '');
-  const openTx = useMemo(
-    () => (openTxId ? transaksiList.find((t) => t.transaksi_id === openTxId && isKuponProsesSortir(t)) : undefined),
-    [openTxId, transaksiList]
-  );
+  // Mode edit kupon: kupon yang sortirnya sudah ditutup dibuka lagi dari Kasir untuk tambah, ubah, atau hapus bal
+  const [susulanMode, setSusulanMode, resetSusulanMode] = useSessionDraft<boolean>('sortir_susulan', draftUserId, false);
+  const openTx = useMemo(() => {
+    if (!openTxId) return undefined;
+    const tx = transaksiList.find((t) => t.transaksi_id === openTxId);
+    if (!tx) return undefined;
+    if (isKuponProsesSortir(tx)) return tx;
+    return susulanMode && !alasanBalSusulanDitolak(tx) ? tx : undefined;
+  }, [openTxId, susulanMode, transaksiList]);
+  const isSusulan = Boolean(openTx) && !isKuponProsesSortir(openTx);
   const balItems: TransaksiItemBal[] = openTx?.items || [];
   /** Tampil Sortir: bal terbaru di atas (kebalikan urutan input kronologis). */
   const balItemsTampil = useMemo(
@@ -84,13 +97,36 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
     [balItems]
   );
 
-  // Kupon ditutup dari tempat lain: hanya reset jika kupon sudah bukan proses_sortir.
+  // Kupon ditutup atau dibayar dari tempat lain: lepaskan kupon ini dari layar Sortir.
   // Jangan reset saat kupon belum muncul di list (sedang commit lokal / sync).
   useEffect(() => {
     if (!openTxId || openTx) return;
     const tx = transaksiList.find((t) => t.transaksi_id === openTxId);
-    if (tx && !isKuponProsesSortir(tx)) resetOpenTxId();
-  }, [openTxId, openTx, transaksiList]);
+    if (!tx) return;
+    const alasan = alasanBalSusulanDitolak(tx);
+    if (alasan && susulanMode) {
+      // Kupon dibayar di Kasir saat sedang diedit di sini
+      resetFormKuponBaru(tx.no_kupon);
+      setScanFeedback({ text: alasan, isError: true });
+    } else if (!isKuponProsesSortir(tx)) {
+      resetOpenTxId();
+      resetSusulanMode();
+    }
+  }, [openTxId, openTx, susulanMode, transaksiList]);
+
+  // Dibuka dari Kasir lewat tombol Edit: langsung buka kupon yang dipilih
+  useEffect(() => {
+    if (!initialTxId) return;
+    const tx = transaksiList.find((t) => t.transaksi_id === initialTxId);
+    onInitialTxHandled?.();
+    if (!tx) return;
+    const alasan = alasanBalSusulanDitolak(tx);
+    if (alasan) {
+      setScanFeedback({ text: alasan, isError: true });
+      return;
+    }
+    handleLanjutkanKupon(tx);
+  }, [initialTxId]);
 
   // Kupon proses sortir lain yang bisa dilanjutkan (mis. setelah browser ditutup)
   const kuponBelumSelesai = useMemo(
@@ -293,6 +329,12 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
       return;
     }
 
+    // Kupon yang sedang dibuka belum/tidak lagi tersedia: jangan diam-diam membuat kupon baru
+    if (!openTx && openTxId) {
+      setScanFeedback({ text: 'Kupon yang dibuka belum termuat atau sudah tidak tersedia. Tunggu sebentar lalu ulangi.', isError: true });
+      return;
+    }
+
     // Kupon baru dibuka bersamaan dengan bal pertama
     if (!openTx) {
       if (!selectedPetaniId || !currentPetani) {
@@ -395,7 +437,14 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
     onSaveTransaksi(
       updatedTx,
       [buildBarangDariItem(updatedTx, itemBaru)],
-      openTx
+      isSusulan
+        ? {
+            audit: {
+              aksi: 'TAMBAH_BAL_SUSULAN',
+              deskripsi: `Bal ${cleanedBalCode} (Grade ${selectedGrade}) ditambahkan ke Kupon ${updatedTx.no_kupon} (${updatedTx.nama_petani}) saat edit kupon, sebelum dibayar`,
+            },
+          }
+        : openTx
         ? { skipAudit: true }
         : {
             audit: {
@@ -529,10 +578,26 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
     if (!openTx) return;
     const item = balItems.find((it) => it.item_id === itemId);
     if (!item) return;
-    // Hasil timbang tidak boleh hilang karena perubahan di Sortir
+    // Bal yang sudah dikirim lewat Surat Jalan tidak boleh hilang dari kupon
+    const balGudang = barangList.find((b) => (item.barang_id && b.barang_id === item.barang_id) || b.no_bal === item.no_bal);
+    if (balGudang && isBalTerkirim(balGudang)) {
+      setScanFeedback({ text: `Bal "${item.no_bal}" sudah dikirim lewat Surat Jalan sehingga tidak bisa dihapus dari kupon.`, isError: true });
+      return;
+    }
     if (isBalDitimbang(item)) {
+      if (!isSusulan) {
+        // Saat sortir masih berjalan, hasil timbang tidak boleh hilang karena perubahan di Sortir
+        setScanFeedback({
+          text: `Bal "${item.no_bal}" sudah ditimbang (${formatNumber(item.berat_kg)} kg) sehingga tidak bisa dihapus dari Sortir.`,
+          isError: true,
+        });
+        return;
+      }
+      if (!window.confirm(`Bal ${item.no_bal} sudah ditimbang (${formatNumber(item.berat_kg)} kg). Hapus dari Kupon ${openTx.no_kupon}? Hasil timbangnya ikut terhapus.`)) return;
+    }
+    if (isSusulan && balItems.length <= 1) {
       setScanFeedback({
-        text: `Bal "${item.no_bal}" sudah ditimbang (${formatNumber(item.berat_kg)} kg) sehingga tidak bisa dihapus dari Sortir.`,
+        text: `Kupon ${openTx.no_kupon} harus memiliki minimal 1 bal. Untuk membatalkan seluruh kupon, gunakan tombol hapus di menu Kasir.`,
         isError: true,
       });
       return;
@@ -542,7 +607,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
       timpaPenuh: true,
       audit: {
         aksi: 'SORTIR_HAPUS_BAL',
-        deskripsi: `Bal ${item.no_bal} (Grade ${item.kode_grade}) dihapus dari Kupon ${openTx.no_kupon} saat sortir`,
+        deskripsi: `Bal ${item.no_bal} (Grade ${item.kode_grade}${isBalDitimbang(item) ? `, ${item.berat_kg} kg` : ''}) dihapus dari Kupon ${openTx.no_kupon} ${isSusulan ? 'saat edit kupon' : 'saat sortir'}`,
       },
     });
     setScanFeedback({ text: `Bal "${item.no_bal}" dihapus dari Kupon ${openTx.no_kupon}.`, isError: false });
@@ -551,6 +616,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
   // Siapkan form untuk kupon berikutnya
   const resetFormKuponBaru = (kuponTerakhir: string) => {
     resetOpenTxId();
+    resetSusulanMode();
     resetDraftPetani();
     let maxNum = 0;
     [...transaksiList.map((tx) => tx.no_kupon || ''), kuponTerakhir].forEach((kupon) => {
@@ -603,14 +669,38 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
   };
 
   // Melanjutkan kupon proses sortir yang belum ditutup
+  // Kupon yang sortirnya sudah ditutup dibuka dalam mode bal susulan
   const handleLanjutkanKupon = (tx: TransaksiPembelian) => {
+    const susulan = !isKuponProsesSortir(tx);
     setOpenTxId(tx.transaksi_id);
+    setSusulanMode(susulan);
     setNoKupon(tx.no_kupon);
     setSelectedPetaniId(tx.petani_id);
     setTanggal((tx.tanggal_transaksi || '').split(' ')[0] || tanggal);
+    setInputNoBal('');
+    setSelectedGrade('');
+    setHargaSatuan(0);
+    setIsGantiTikar(false);
     setSaveSuccessMsg(null);
-    setScanFeedback({ text: `Melanjutkan sortir Kupon ${tx.no_kupon} (${(tx.items || []).length} bal).`, isError: false });
+    setScanFeedback({
+      text: susulan
+        ? `Kupon ${tx.no_kupon} dibuka untuk diedit (${(tx.items || []).length} bal). Bal baru langsung bisa ditimbang.`
+        : `Melanjutkan sortir Kupon ${tx.no_kupon} (${(tx.items || []).length} bal).`,
+      isError: false,
+    });
     setTimeout(() => barcodeInputRef.current?.focus(), 100);
+  };
+
+  // Menutup mode edit kupon. Setiap perubahan sudah tersimpan otomatis, jadi tidak ada yang perlu disimpan lagi.
+  const handleSelesaiSusulan = () => {
+    if (!openTx) return;
+    const menungguTimbang = balItems.filter((it) => !isBalDitimbang(it)).length;
+    setSaveSuccessMsg(
+      menungguTimbang > 0
+        ? `Edit Kupon ${openTx.no_kupon} selesai. ${menungguTimbang} bal menunggu ditimbang di modul Timbangan, setelah itu kupon bisa dibayar di Kasir.`
+        : `Edit Kupon ${openTx.no_kupon} selesai. Seluruh bal sudah ditimbang, kupon siap dibayar di Kasir.`
+    );
+    resetFormKuponBaru(openTx.no_kupon);
   };
 
   return (
@@ -629,6 +719,23 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
           >
             Tutup
           </button>
+        </div>
+      )}
+
+      {/* Mode edit kupon: kupon yang sortirnya sudah selesai dibuka lagi (dari Kasir) untuk tambah, ubah, atau hapus bal */}
+      {isSusulan && openTx && (
+        <div className="bg-amber-50 border border-amber-300 p-3.5 rounded-sm flex items-start space-x-2.5">
+          <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <div className="text-xs text-amber-900 space-y-0.5">
+            <p className="font-bold">
+              Mode Edit Kupon • Kupon <span className="font-mono">{openTx.no_kupon}</span> • {openTx.nama_petani}
+            </p>
+            <p className="text-[11px] leading-relaxed">
+              Kupon ini belum dibayar, jadi bal boleh ditambah, diubah (nomor bal &amp; grade), atau dihapus. Berat bal yang sudah ditimbang
+              tidak berubah; koreksi berat dilakukan di Timbangan. Bal baru langsung masuk daftar Timbangan, dan tombol Bayar di Kasir
+              terkunci sampai semua bal selesai ditimbang. Tekan <strong>Selesai Edit</strong> bila perubahan sudah lengkap.
+            </p>
+          </div>
         </div>
       )}
 
@@ -676,7 +783,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                 className="px-2 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded-xs text-[10px] font-bold"
                 title="Setiap bal langsung tersimpan dan bisa ditimbang di Timbangan"
               >
-                Kupon {openTx.no_kupon} terbuka • tersimpan otomatis
+                {isSusulan ? 'Edit Kupon' : 'Kupon'} {openTx.no_kupon} terbuka • tersimpan otomatis
               </span>
             )}
             <span className="text-[11px] text-gray-500 font-medium">
@@ -1099,9 +1206,9 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                               <button
                                 type="button"
                                 onClick={() => handleRemoveItem(item.item_id)}
-                                disabled={ditimbang}
+                                disabled={ditimbang && !isSusulan}
                                 className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-400"
-                                title={ditimbang ? 'Bal sudah ditimbang, tidak bisa dihapus dari Sortir' : 'Hapus bal ini dari kupon'}
+                                title={ditimbang && !isSusulan ? 'Bal sudah ditimbang, tidak bisa dihapus dari Sortir' : 'Hapus bal ini dari kupon'}
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -1129,25 +1236,29 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
             </div>
 
             <div className="flex items-center space-x-2 w-full sm:w-auto">
-              <button
-                type="button"
-                onClick={handleBatalkanKupon}
-                disabled={!openTx || balItems.some(isBalDitimbang)}
-                title={balItems.some(isBalDitimbang) ? 'Kupon yang sudah ada bal tertimbang tidak bisa dibatalkan' : 'Hapus kupon ini beserta seluruh balnya'}
-                className="px-3 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 font-medium text-xs rounded-sm transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Batalkan Kupon
-              </button>
+              {!isSusulan && (
+                <button
+                  type="button"
+                  onClick={handleBatalkanKupon}
+                  disabled={!openTx || balItems.some(isBalDitimbang)}
+                  title={balItems.some(isBalDitimbang) ? 'Kupon yang sudah ada bal tertimbang tidak bisa dibatalkan' : 'Hapus kupon ini beserta seluruh balnya'}
+                  className="px-3 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 font-medium text-xs rounded-sm transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Batalkan Kupon
+                </button>
+              )}
 
               <button
                 type="button"
-                onClick={handleSelesaiSortir}
+                onClick={isSusulan ? handleSelesaiSusulan : handleSelesaiSortir}
                 disabled={!openTx || balItems.length === 0}
-                title="Tutup kupon. Kupon bisa dibayar di Kasir setelah semua bal ditimbang."
+                title={isSusulan
+                  ? 'Tutup mode edit kupon. Bal baru ditimbang di Timbangan, lalu kupon dibayar di Kasir.'
+                  : 'Tutup kupon. Kupon bisa dibayar di Kasir setelah semua bal ditimbang.'}
                 className="flex-1 sm:flex-none px-4 py-2 bg-[#b81d24] hover:bg-[#b81d24] text-white font-medium text-xs rounded-sm transition flex items-center justify-center space-x-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-2xs"
               >
                 <Check className="w-4 h-4 text-emerald-400" />
-                <span>Selesai Sortir</span>
+                <span>{isSusulan ? 'Selesai Edit' : 'Selesai Sortir'}</span>
               </button>
 
               

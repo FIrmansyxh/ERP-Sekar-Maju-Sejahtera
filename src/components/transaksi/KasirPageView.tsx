@@ -20,12 +20,11 @@ import { TransaksiPembelian, Petani, TabelHarga, Barang, UserRole, User as UserT
 import { formatRupiah, formatAccounting, formatDateIndo, formatNoKupon, normalizeKg } from '../../utils/formatters';
 import { TransaksiDetailModal } from './TransaksiDetailModal';
 import { PembayaranKasirModal } from './PembayaranKasirModal';
-import { TransaksiEditModal } from './TransaksiEditModal';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { Pagination } from '../common/Pagination';
 import { SortIcon } from '../common/SortIcon';
 import { openPrintDocument } from '../../utils/openDedicatedPrint';
-import { isKuponProsesSortir } from '../../utils/kuponSortir';
+import { alasanBalSusulanDitolak, isKuponProsesSortir } from '../../utils/kuponSortir';
 import { balTerkirimDariTransaksi, pesanTransaksiTerkunci } from '../../utils/kunciHapus';
 
 interface KasirPageViewProps {
@@ -45,6 +44,8 @@ interface KasirPageViewProps {
   onDeleteTransaksi?: (transaksiId: string, alasan?: string) => void;
   onNavigateToSortir: () => void;
   onNavigateToTimbangan: (kuponNo?: string, txId?: string) => void;
+  /** Membuka kupon di halaman Sortir untuk menambah, mengubah, atau menghapus bal (kupon belum lunas). */
+  onEditKupon?: (tx: TransaksiPembelian) => void;
 }
 
 export const KasirPageView: React.FC<KasirPageViewProps> = ({
@@ -60,6 +61,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
   onDeleteTransaksi,
   onNavigateToSortir,
   onNavigateToTimbangan,
+  onEditKupon,
 }) => {
   // Filter States
   const [startDate, setStartDate] = useState('');
@@ -77,7 +79,6 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
   // Modals & Selection
   const [selectedTxForDetail, setSelectedTxForDetail] = useState<TransaksiPembelian | null>(null);
   const [selectedTxForBayar, setSelectedTxForBayar] = useState<TransaksiPembelian | null>(null);
-  const [selectedTxForEdit, setSelectedTxForEdit] = useState<TransaksiPembelian | null>(null);
   const [txToDelete, setTxToDelete] = useState<TransaksiPembelian | null>(null);
   const [alasanHapus, setAlasanHapus] = useState('');
 
@@ -182,6 +183,29 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     if (directPrintAfter) {
       openPrintDocument('nota', txId);
     }
+  };
+
+  // Edit kupon (tambah, ubah, hapus bal) hanya untuk kupon belum lunas dan hanya superadmin / admin kasir
+  const canEditKupon = Boolean(onEditKupon) && (userRole === 'superadmin' || userRole === 'admin_kasir');
+
+  const handleEditKupon = (tx: TransaksiPembelian) => {
+    if (!onEditKupon || !canEditKupon) return;
+    // Pakai data terbaru, bukan salinan lama dari modal Detail
+    const latest = transaksiList.find((t) => t.transaksi_id === tx.transaksi_id) || tx;
+    const alasan = alasanBalSusulanDitolak(latest);
+    if (alasan) {
+      setConfirmConfig({
+        isOpen: true,
+        title: 'Kupon Tidak Bisa Diedit',
+        message: alasan,
+        confirmText: 'Mengerti',
+        cancelText: 'Tutup',
+        onConfirm: () => setConfirmConfig((prev) => ({ ...prev, isOpen: false })),
+      });
+      return;
+    }
+    setSelectedTxForDetail(null);
+    onEditKupon(latest);
   };
 
   const handleMarkAsLunas = (txId: string) => {
@@ -1076,16 +1100,25 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                             )
                           )}
 
-                          {/* Tombol Edit jika role diperbolehkan */}
-                          {(userRole === 'superadmin' || userRole === 'admin_kasir') && (
-                            <button
-                              type="button"
-                              onClick={() => setSelectedTxForEdit(tx)}
-                              className="p-1 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
-                              title="Koreksi Transaksi"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
+                          {/* Tombol Edit Kupon: tambah, ubah, hapus bal (hanya kupon belum lunas) */}
+                          {canEditKupon && (
+                            isLunas ? (
+                              <span
+                                className="p-1 text-slate-300 cursor-not-allowed inline-flex"
+                                title="Kupon sudah lunas sehingga tidak bisa diedit"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleEditKupon(tx)}
+                                className="p-1 text-slate-400 hover:text-[#b81d24] transition-colors cursor-pointer"
+                                title={isSortirOpen ? 'Lanjutkan sortir kupon ini' : 'Edit kupon: tambah, ubah, atau hapus bal'}
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                            )
                           )}
 
                           {/* Tombol Hapus khusus superadmin; terkunci bila bal sudah dikirim */}
@@ -1182,7 +1215,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
         onUpdateNotaStatus={handleUpdateNotaStatus}
         onMarkAsLunas={handleMarkAsLunas}
         onOpenBayarModal={(tx) => setSelectedTxForBayar(tx)}
-        onOpenEditModal={(tx) => setSelectedTxForEdit(tx)}
+        onEditKupon={canEditKupon ? handleEditKupon : undefined}
         alasanHapusTerkunci={(() => {
           if (!selectedTxForDetail) return undefined;
           const noBalTerkirim = balTerkirimDariTransaksi(selectedTxForDetail, barangList);
@@ -1202,27 +1235,6 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
         currentKasirName={currentUser?.nama_lengkap || currentUser?.username || 'Petugas Kasir'}
         onConfirmPembayaran={handleConfirmCashPayment}
       />
-
-      {/* Edit Transaksi Modal */}
-      {selectedTxForEdit && (
-        <TransaksiEditModal
-          isOpen={Boolean(selectedTxForEdit)}
-          onClose={() => setSelectedTxForEdit(null)}
-          transaksi={selectedTxForEdit}
-          petaniList={petaniList}
-          hargaList={hargaList}
-          barangList={barangList}
-          
-          currentUser={currentUser}
-          onSaveTransaksi={(newTx, generatedBarang, meta) => {
-            onSaveTransaksi(newTx, generatedBarang, meta);
-            if (selectedTxForDetail && selectedTxForDetail.transaksi_id === newTx.transaksi_id) {
-              setSelectedTxForDetail(newTx);
-            }
-            setSelectedTxForEdit(null);
-          }}
-        />
-      )}
 
       {/* Delete Confirmation Modal */}
       {txToDelete && (

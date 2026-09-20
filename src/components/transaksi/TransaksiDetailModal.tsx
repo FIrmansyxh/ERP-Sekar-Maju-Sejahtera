@@ -25,10 +25,11 @@ interface TransaksiDetailModalProps {
   onClose: () => void;
   transaksi: TransaksiPembelian | null;
   onDeleteTransaksi?: (transaksiId: string, alasan?: string) => void;
-  onOpenEditModal?: (transaksi: TransaksiPembelian) => void;
   onUpdateNotaStatus?: (transaksiId: string) => void;
   onMarkAsLunas?: (transaksiId: string) => void;
   onOpenBayarModal?: (tx: TransaksiPembelian) => void;
+  /** Membuka kupon di halaman Sortir untuk tambah, ubah, atau hapus bal. Kupon lunas tidak bisa diedit. */
+  onEditKupon?: (tx: TransaksiPembelian) => void;
   /** Diisi bila kupon tidak boleh dihapus (bal sudah dikirim lewat Surat Jalan). */
   alasanHapusTerkunci?: string;
 }
@@ -39,10 +40,10 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
   transaksi,
   onDeleteTransaksi,
   alasanHapusTerkunci,
-  onOpenEditModal,
   onUpdateNotaStatus,
   onMarkAsLunas,
   onOpenBayarModal,
+  onEditKupon,
 }) => {
   const receiptRef = useRef<HTMLDivElement>(null);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
@@ -151,19 +152,26 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
               <span>Tutup</span>
             </button>
 
-            {onOpenEditModal && (
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  onOpenEditModal(transaksi);
-                }}
-                className="px-3.5 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-sm transition flex items-center space-x-1 cursor-pointer shadow-xs"
-                title="Edit / Koreksi data transaksi ini"
-              >
-                <Edit3 className="w-3.5 h-3.5 text-gray-500" />
-                <span>Edit</span>
-              </button>
+            {onEditKupon && (
+              isLunas ? (
+                <span
+                  className="px-3.5 py-1.5 text-xs font-semibold text-gray-400 bg-gray-50 border border-gray-200 rounded-sm flex items-center space-x-1 cursor-not-allowed"
+                  title="Kupon sudah lunas sehingga tidak bisa diedit"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Edit</span>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onEditKupon(transaksi)}
+                  className="px-3.5 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-sm transition flex items-center space-x-1 cursor-pointer shadow-xs"
+                  title="Edit kupon: tambah, ubah, atau hapus bal"
+                >
+                  <Edit3 className="w-3.5 h-3.5 text-gray-500" />
+                  <span>Edit</span>
+                </button>
+              )
             )}
 
             {onDeleteTransaksi && alasanHapusTerkunci && (
@@ -308,7 +316,7 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
         <div className="p-4 sm:p-6 overflow-y-auto bg-gray-100 flex-1">
           <div 
             ref={receiptRef}
-            className="bg-white border border-gray-300 p-6 sm:p-10 max-w-4xl mx-auto shadow-sm font-sans text-gray-900 rounded-xs"
+            className="max-w-4xl mx-auto font-sans text-gray-900"
           >
             <NotaTimbangContent transaksi={transaksi} />
           </div>

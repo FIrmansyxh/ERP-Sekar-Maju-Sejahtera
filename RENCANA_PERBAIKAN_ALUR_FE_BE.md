@@ -11,6 +11,7 @@ Dokumen terkait DB redesign ditahan sampai perintah: `lanjut rencana mapping db`
 | Fase | Status | Catatan |
 |------|--------|---------|
 | **A (P0)** | **Selesai (2026-09-18)** | `PUT /transaksi/{id}/sortir-items`, `PUT /sample-batch/{id}`, DO stok=`keluar`, sync FE API-first + refetch barang setelah bayar/sample/DO |
+| **D (keandalan simpan)** | **Selesai FE (2026-09-20)** | Antrean sinkron kupon, verifikasi hasil server, percobaan ulang, muat ulang server tidak menimpa perubahan tertunda, lencana status di Header. Perlu dukungan BE: lihat `DOKUMENTASI_DATABASE.md` bagian 6 |
 | B (P1) | Belum | Delete harga/transaksi, auth:sanctum, wire update barang UI |
 | **C3 laporan** | **Selesai sebagian (2026-09-18)** | Refresh list saat buka `modul-6-*`, `getDashboardStats` + fallback SQL, mapper DO isi `total_berat_kg`/`total_nilai_deal`, laporan valuasi pakai `barangLunasList` |
 | C (P2 sisanya) | Belum | RBAC BE, deprecate sample legacy |
@@ -169,3 +170,23 @@ Jangan campur dengan cutover `newplan-db` sampai alur sync di atas stabil (kecua
 - Perubahan harga beli terkini (upsert + `HB-` sequence + `GradeMaster::firstOrCreate`) **sudah selaras** arah yang benar.  
 - Masalah terbesar bukan “localStorage rusak”, melainkan **mutasi penting masih Local-authoritative** sementara login **menarik ulang dari BE** → Local kalah.  
 - Perbaikan inti: **API complete untuk setiap aksi UI**, lalu Local hanya cache mirror.
+
+---
+
+## 6. Fase D: keandalan simpan kupon (2026-09-20)
+
+Temuan pemakaian produksi 3 hari (ganti tikar dan berat timbang kadang tidak tersimpan di DB) berakar pada
+frontend, bukan hanya backend:
+
+| Temuan | Perbaikan FE |
+|--------|--------------|
+| `syncTransaksi` menelan galat, data hanya lokal, tanpa percobaan ulang | Galat dilempar; `antrianSinkron` menyimpan tugas di localStorage dan mengulang otomatis |
+| `refreshOperationalLists` dan `getTransaksiList` mengganti data lokal dengan data server, menghapus perubahan yang belum terkirim | Data server ditimpa dulu dengan tugas tertunda (`terapkanKeDaftar`) |
+| Cek `/health` 3 detik; sekali gagal = offline 10 detik | Batas 6 detik; simpanan mencoba permintaan sungguhan tanpa menunggu cek |
+| Simpanan beruntun ke satu kupon berjalan bersamaan (salinan lama bisa menimpa) | Satu permintaan per kupon, simpanan berikutnya digabung jadi keadaan terbaru |
+| Tidak ada tanda saat simpanan gagal | Lencana di Header + peringatan saat menutup halaman |
+| Kupon lama hanya tersimpan lokal (404 saat diubah) atau sudah ada (duplikat saat dibuat) | Jalur ubah dan buat saling menggantikan otomatis |
+| Bayar bisa mendahului bal yang baru ditimbang (permintaan digabung) | Bal dikirim dulu, baru `bayar` |
+
+**Yang masih perlu dari BE** (bukan FE): `DOKUMENTASI_DATABASE.md` bagian 6, terutama PUT idempoten, tulis ganti
+tikar bersama berat dalam satu transaksi, jawaban memuat `items` lengkap, dan kode status 404/409/401 yang jelas.

@@ -123,3 +123,46 @@ table:not(.no-zebra) > tbody > tr:not(.no-zebra-row):hover {
 ::-webkit-scrollbar-thumb:hover {
   background: #adb5bd;
 }
+
+/*
+ * Lembar Nota Pembelian. Satu lembar = satu halaman PDF/cetak, jadi baris tabel tidak pernah
+ * terbelah di pergantian halaman (pembagian halaman dihitung di utils/paginasiNota.ts).
+ * Di layar tiap lembar tampil sebagai kertas terpisah dengan jarak jelas antarhalaman.
+ */
+.nota-sheets {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.nota-sheet {
+  display: flex;
+  flex-direction: column;
+  row-gap: 16px;
+  box-sizing: border-box;
+  min-height: 1090px;
+  padding: 24px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.2);
+}
+
+@media print {
+  .nota-sheets {
+    display: block;
+  }
+  .nota-sheet {
+    zoom: 0.92;
+    height: 300mm;
+    min-height: 0;
+    padding: 0;
+    border: none;
+    box-shadow: none;
+    break-after: page;
+    page-break-after: always;
+  }
+  .nota-sheet:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+}
