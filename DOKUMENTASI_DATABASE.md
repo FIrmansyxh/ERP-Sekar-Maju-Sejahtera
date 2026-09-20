@@ -192,6 +192,31 @@ antrean sinkron): kupon baru = `POST sortir` → `PUT timbang` bila ada bal diti
 Bila `sortir-items` menjawab 404 (kupon lama yang dulu hanya tersimpan lokal), FE otomatis beralih ke
 `POST sortir`; bila `POST sortir` menjawab duplikat (409/422 "sudah ada"), FE beralih ke `sortir-items`.
 
+### 5.1 Surat Jalan: bruto timbang ulang, netto jual, dan nilai
+
+Pembeli memotong berat bal dengan aturan yang berbeda dan sering berubah (contoh GG: 1-49 kg dipotong 4 kg,
+50 kg ke atas dipotong 5 kg; PJM: 2 kg flat). Aturan **tidak disimpan sebagai master**; operator mengisinya di
+kartu **Atur Netto** pada halaman Pengiriman untuk tiap Surat Jalan. Yang disimpan adalah hasilnya.
+
+| Nama di layar | Field FE (`PengirimanBarang`) | Field di `POST /pengiriman` | Keterangan |
+|---------------|-------------------------------|------------------------------|------------|
+| Berat Bruto | `Barang.berat_bruto_kg` | (tidak dikirim) | Dari timbangan pembelian, **tidak diubah** oleh pengiriman, jadi laporan pembelian/bal tidak terganggu |
+| Bruto Timbang Ulang | `berat_kirim_map[barang_id]` | `items[].berat_kirim_kg` | Default sama dengan bruto; berbeda hanya bila ada susut. Snapshot di Surat Jalan |
+| Netto Jual | `netto_jual_map[barang_id]` | `items[].netto_jual_kg` | Bruto timbang ulang dikurangi potongan sesuai aturan. Kosong bila Surat Jalan tanpa aturan |
+| Aturan potongan | `aturan_netto[] = {min, max\|null, potongan}` | `aturan_netto` | Disimpan sebagai bukti dasar perhitungan; `max = null` berarti "ke atas" |
+| Harga Jual | `harga_deal_map[barang_id]` | `items[].harga_deal_per_kg` | Dipilih dari Master Harga Jual |
+| Total Nilai | (dihitung) `total_nilai_deal` | (dihitung) | `ROUND(netto_jual_kg * harga_deal_per_kg)` per bal, dijumlahkan; tanpa aturan, netto = bruto timbang ulang |
+
+Aturan rentang: kg utuh, jadi `1-49` mencakup 1 sampai 49,999 kg dan `50` mulai dari 50 kg. FE menolak
+rentang tumpang tindih, baris tidak lengkap, dan bal yang beratnya di luar semua rentang.
+
+**Yang perlu dari backend** (belum bisa diverifikasi dari repo ini): kolom `berat_kirim_kg` dan `netto_jual_kg`
+pada `pengiriman_reguler_bal`, kolom `aturan_netto` (JSONB) pada `pengiriman_reguler`, dan `total_nilai_deal`
+dihitung dari `netto_jual_kg` (bila server menghitung dari bruto, nilainya berbeda dari yang tampil di FE).
+Sampai kolom itu ada, FE mempertahankan netto, aturan, dan total nilai dari data lokal saat memuat ulang
+dari server (`ErpApiService.gabungPengirimanServer`); Surat Jalan yang dimuat dari komputer lain akan
+menampilkan nilai versi bruto.
+
 ---
 
 ## 6. Aturan wajib di sisi server

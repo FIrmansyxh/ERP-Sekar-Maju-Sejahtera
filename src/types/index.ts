@@ -298,6 +298,13 @@ export interface PengirimanSample {
   permintaan_buyer?: string;
 }
 
+/** Satu baris aturan potongan bruto ke netto jual: bruto min sampai max (null = ke atas) dipotong sekian kg. */
+export interface AturanNettoDO {
+  min: number;
+  max: number | null;
+  potongan: number;
+}
+
 export type StatusPengiriman = 'dimuat' | 'dalam_perjalanan' | 'diterima' | 'dikirim' | 'selesai';
 
 export interface PengirimanBarang {
@@ -322,7 +329,9 @@ export interface PengirimanBarang {
   total_nilai_deal?: number;
   harga_deal_map?: Record<string, number>; // barang_id -> harga_deal_per_kg
   kode_harga_jual_map?: Record<string, string>; // barang_id -> kode_harga_jual
-  berat_kirim_map?: Record<string, number>; // barang_id -> berat netto saat dikirim (kg), boleh beda dari data bal karena susut
+  berat_kirim_map?: Record<string, number>; // barang_id -> bruto timbang ulang saat dikirim (kg), boleh beda dari bruto bal karena susut
+  netto_jual_map?: Record<string, number>; // barang_id -> netto jual (bruto timbang ulang - potongan aturan netto), dasar nilai DO
+  aturan_netto?: AturanNettoDO[]; // aturan potongan netto yang dipakai pada DO ini (berbeda tiap pembeli)
   catatan?: string;
   petugas?: string;
   dibuat_oleh?: string;

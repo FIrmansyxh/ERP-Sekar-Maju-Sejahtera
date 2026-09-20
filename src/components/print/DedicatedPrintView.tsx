@@ -19,26 +19,22 @@ import {
   loadTransaksiData, 
   loadPengirimanData, 
   loadBarangData, 
+  loadBatchSampleData,
   loadPetaniData,
   loadCurrentUser
 } from '../../utils/storage';
 import { 
   TransaksiPembelian, 
   PengirimanBarang, 
+  BatchPengirimanSample,
   Barang, 
   Petani, 
   TabelHarga 
 } from '../../types';
-import { 
-  formatRupiah, 
-  formatDateHariBulanTahun, 
-  formatNumber, 
-  terbilangRupiah 
-} from '../../utils/formatters';
 import { downloadElementAsPdf } from '../../utils/printDownload';
 import { NotaTimbangContent } from '../transaksi/NotaTimbangContent';
-import { KopSurat } from '../common/KopSurat';
-import { beratKirimBal } from '../../utils/beratKirim';
+import { SuratJalanDokumen } from '../pengiriman/SuratJalanDokumen';
+import { SuratSampleDokumen } from '../sample/SuratSampleDokumen';
 
 export interface DedicatedPrintViewProps {
   type: 'nota' | 'surat_jalan' | 'sample' | 'bon_produksi';
@@ -47,6 +43,7 @@ export interface DedicatedPrintViewProps {
   isEmbedded?: boolean;
   transaksiList?: TransaksiPembelian[];
   pengirimanList?: PengirimanBarang[];
+  batchSampleList?: BatchPengirimanSample[];
   barangList?: Barang[];
   petaniList?: Petani[];
   tabelHarga?: TabelHarga[];
@@ -59,6 +56,7 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
   isEmbedded = true,
   transaksiList: propTransaksiList,
   pengirimanList: propPengirimanList,
+  batchSampleList: propBatchSampleList,
   barangList: propBarangList,
   petaniList: propPetaniList,
 }) => {
@@ -78,6 +76,12 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
       ? propPengirimanList
       : loadPengirimanData();
   }, [propPengirimanList]);
+
+  const activeBatchSampleList = useMemo(() => {
+    return propBatchSampleList && propBatchSampleList.length > 0
+      ? propBatchSampleList
+      : loadBatchSampleData();
+  }, [propBatchSampleList]);
 
   const activeBarangList = useMemo(() => {
     return propBarangList && propBarangList.length > 0
@@ -124,6 +128,15 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
     );
   }, [activePengirimanList, type, cleanId]);
 
+  const foundBatch = useMemo(() => {
+    if (type !== 'sample') return null;
+    return (
+      activeBatchSampleList.find((b) => b.batch_id === cleanId) ||
+      activeBatchSampleList.find((b) => b.kode_batch === cleanId) ||
+      null
+    );
+  }, [activeBatchSampleList, type, cleanId]);
+
   // Document Title for Tab / Save As
   const docTitle = useMemo(() => {
     if (type === 'nota' && foundTransaksi) {
@@ -134,8 +147,11 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
         ? `Bon Pemakaian Produksi - ${foundPengiriman.no_surat_jalan}`
         : `Surat Jalan Pengiriman DO - ${foundPengiriman.no_surat_jalan}`;
     }
+    if (type === 'sample' && foundBatch) {
+      return `Surat Pengantar Sample - ${foundBatch.kode_batch}`;
+    }
     return `Dokumen Cetak - ${id}`;
-  }, [type, foundTransaksi, foundPengiriman, id]);
+  }, [type, foundTransaksi, foundPengiriman, foundBatch, id]);
 
   useEffect(() => {
     const originalTitle = document.title;
@@ -173,14 +189,19 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
     printAreaRef.current.style.transform = 'none';
 
     try {
+      const aman = (teks: string) => teks.replace(/[/\\?%*:|"<>]/g, '_');
       const filename =
         type === 'nota' && foundTransaksi
-          ? `NOTA_TIMBANG_${foundTransaksi.no_kupon.replace(/[/\\?%*:|"<>]/g, '_')}.pdf`
-          : `SURAT_JALAN_${(foundPengiriman?.no_surat_jalan || id).replace(/[/\\?%*:|"<>]/g, '_')}.pdf`;
+          ? `NOTA_TIMBANG_${aman(foundTransaksi.no_kupon)}.pdf`
+          : type === 'sample'
+          ? `SURAT_SAMPLE_${aman(foundBatch?.kode_batch || id)}.pdf`
+          : `SURAT_JALAN_${aman(foundPengiriman?.no_surat_jalan || id)}.pdf`;
 
       const judulLanjutan =
         type === 'nota' && foundTransaksi
           ? `Nota Pembelian ${foundTransaksi.no_kupon}`
+          : type === 'sample'
+          ? `Surat Sample ${foundBatch?.kode_batch || ''}`.trim()
           : `Surat Jalan ${foundPengiriman?.no_surat_jalan || ''}`.trim();
       await downloadElementAsPdf(printAreaRef.current, filename, { orientation: 'portrait', judulLanjutan });
     } catch (err) {
@@ -209,7 +230,7 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
   };
 
   // NOT FOUND STATE
-  if ((type === 'nota' && !foundTransaksi) || (type === 'surat_jalan' && !foundPengiriman)) {
+  if ((type === 'nota' && !foundTransaksi) || (type === 'surat_jalan' && !foundPengiriman) || (type === 'sample' && !foundBatch)) {
     return (
       <div className="print-modal-backdrop fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm font-sans">
         <div className="bg-white border border-gray-300 rounded-none p-6 max-w-md w-full text-center shadow-2xl animate-in zoom-in-95 duration-150">
@@ -220,7 +241,7 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
             Data Dokumen Tidak Ditemukan
           </h2>
           <p className="text-xs text-gray-600 mb-4">
-            Dokumen <strong>{type === 'nota' ? 'Nota' : 'Surat Jalan'}</strong> dengan nomor identitas{' '}
+            Dokumen <strong>{type === 'nota' ? 'Nota' : type === 'sample' ? 'Surat Sample' : 'Surat Jalan'}</strong> dengan nomor identitas{' '}
             <span className="font-mono font-bold text-gray-800 bg-gray-100 px-1 py-0.5 rounded-xs">
               {id}
             </span>{' '}
@@ -291,12 +312,14 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
                 <h1 className="text-sm font-bold tracking-tight text-gray-900 truncate">
                   {type === 'nota'
                     ? 'Pratinjau Nota Pembelian & Kasir'
+                    : type === 'sample'
+                    ? 'Pratinjau Surat Pengantar Sample'
                     : foundPengiriman?.jenis_pengeluaran === 'produksi_sendiri'
                     ? 'Pratinjau Bon Pemakaian Produksi (BPP)'
                     : 'Pratinjau Surat Jalan Pengiriman (DO)'}
                 </h1>
                 <span className="bg-red-50 text-[#b81d24] border border-red-200 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-sm">
-                  {type === 'nota' ? foundTransaksi?.no_kupon : foundPengiriman?.no_surat_jalan}
+                  {type === 'nota' ? foundTransaksi?.no_kupon : type === 'sample' ? foundBatch?.kode_batch : foundPengiriman?.no_surat_jalan}
                 </span>
               </div>
               <p className="text-[11px] text-gray-500 font-medium hidden sm:block">
@@ -366,13 +389,9 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
       <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gray-100 flex justify-center items-start print:p-0 print:m-0 print:bg-white print:overflow-visible">
         <div
           ref={printAreaRef}
-          className={`print-canvas-paper mx-auto w-full max-w-[980px] print:max-w-none text-slate-900 font-sans print:m-0 transition-transform duration-100 ${
-            type === 'nota'
-              ? '' // Nota terdiri dari lembar-lembar berkertas sendiri (lihat .nota-sheet)
-              : 'bg-white border border-gray-300 print:border-none shadow-md print:shadow-none p-5 sm:p-8'
-          }`}
+          // Nota, Surat Jalan, dan Surat Sample terdiri dari lembar-lembar berkertas sendiri (lihat .nota-sheet)
+          className="print-canvas-paper mx-auto w-full max-w-[980px] print:max-w-none text-slate-900 font-sans print:m-0 transition-transform duration-100"
           style={{
-            minHeight: type === 'nota' ? undefined : '1050px',
             transform: zoomScale !== 1 ? `scale(${zoomScale})` : undefined,
             transformOrigin: 'top center'
           }}
@@ -384,219 +403,16 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
           )}
 
           {type === 'surat_jalan' && foundPengiriman && (
-            <SuratJalanContent
+            <SuratJalanDokumen
               pengiriman={foundPengiriman}
               barangList={activeBarangList}
             />
           )}
+
+          {type === 'sample' && foundBatch && <SuratSampleDokumen batch={foundBatch} />}
         </div>
       </main>
 
-    </div>
-  );
-};
-
-// ==========================================
-// SURAT JALAN PENGIRIMAN (DO) COMPONENT
-// ==========================================
-interface SuratJalanContentProps {
-  pengiriman: PengirimanBarang;
-  barangList: Barang[];
-}
-
-const SuratJalanContent: React.FC<SuratJalanContentProps> = ({
-  pengiriman,
-  barangList,
-}) => {
-  const barangIds = pengiriman.barang_ids || [];
-  const barcodeList = pengiriman.barcode_list || [];
-  // Petugas Logistik / Pengirim = nama akun yang login dan mencetak surat jalan
-  const namaPetugasLogistik = loadCurrentUser()?.nama_lengkap || pengiriman.petugas || '';
-
-  const balDetails = barangIds.map((id, index) => {
-    const found = barangList.find((b) => b.barang_id === id);
-    const barcodeVal = barcodeList[index] || (found ? found.barcode || found.barang_id : id);
-    const berat = beratKirimBal(pengiriman, id, found);
-
-    // Harga jual hanya dari data DO; tanpa harga beli atau angka pengganti.
-    const pricePerKg = pengiriman.harga_deal_map?.[id] || 0;
-
-    const subtotal = Math.round(berat * pricePerKg);
-
-    return {
-      id,
-      no_bal: found?.no_bal || barcodeVal,
-      berat_kg: berat,
-      harga_per_kg: pricePerKg,
-      total_harga: subtotal,
-    };
-  });
-
-  const totalItemsCount = balDetails.length;
-  const grandTotalBerat = balDetails.reduce((sum, b) => sum + b.berat_kg, 0);
-  const grandTotalNilai = balDetails.reduce((sum, b) => sum + b.total_harga, 0);
-
-  return (
-    <div className="space-y-4 text-xs text-slate-900 font-sans">
-      <div>
-        <KopSurat
-          judul={pengiriman.jenis_pengeluaran === 'produksi_sendiri' ? 'Bon Pemakaian Produksi (BPP)' : 'Surat Jalan Pengiriman (DO)'}
-          className="mb-2"
-        />
-        <div className="flex items-center justify-between">
-          <div className="text-xs font-mono font-bold text-slate-900">
-            No: <span className="text-[#b81d24]">{pengiriman.no_surat_jalan}</span>
-          </div>
-          <div className="text-[10.5px] text-slate-600 font-medium">
-            Tgl Kirim: <span className="font-mono font-bold text-slate-800">{pengiriman.tanggal_kirim}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Meta Details Grid */}
-      <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 border border-slate-300 text-xs">
-        <div className="space-y-1.5">
-          <div className="border-b border-slate-200 pb-1">
-            <span className="text-[10px] font-bold uppercase text-slate-500 block">
-              Pabrik Rekanan / Tujuan Kirim:
-            </span>
-            <span className="font-bold text-sm text-slate-900 block leading-tight">
-              {pengiriman.tujuan}
-            </span>
-          </div>
-          <div className="grid grid-cols-2 gap-2 text-[11px] pt-0.5">
-            <div>
-              <span className="text-slate-500 text-[10px] block">Gudang Pengirim:</span>
-              <span className="font-semibold text-slate-800">Gudang Pusat Pamekasan</span>
-            </div>
-            <div>
-              <span className="text-slate-500 text-[10px] block">Status Dokumen:</span>
-              <span className="font-bold text-emerald-800">Sah & Berlaku</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-1.5 border-l border-slate-200 pl-3">
-          <div className="border-b border-slate-200 pb-1">
-            <span className="text-[10px] font-bold uppercase text-slate-500 block">
-              Armada & Pengemudi:
-            </span>
-            <span className="font-bold text-sm text-slate-900 block leading-tight">
-              {pengiriman.driver_nama || 'Supir Ekspedisi'}
-            </span>
-          </div>
-          <div className="grid grid-cols-2 gap-2 text-[11px] pt-0.5">
-            <div>
-              <span className="text-slate-500 text-[10px] block">No. Polisi (Plat):</span>
-              <span className="font-mono font-black text-slate-900">{pengiriman.plat_nomor || '-'}</span>
-            </div>
-            <div>
-              <span className="text-slate-500 text-[10px] block">Petugas Logistik:</span>
-              <span className="font-semibold text-slate-800">
-                {namaPetugasLogistik || '-'}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Items Table */}
-      <div>
-        <div className="flex items-center justify-between mb-1.5">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
-            Rincian Muatan Bal Tembakau & Nilai Pengiriman
-          </h3>
-          <span className="text-[11px] font-mono text-slate-600">
-            Total Muatan: <strong>{totalItemsCount} Bal</strong> ({formatNumber(grandTotalBerat)} kg)
-          </span>
-        </div>
-
-        <table className="w-full text-xs text-left border-collapse border border-slate-400 table-fixed">
-          <thead>
-            <tr className="bg-slate-100 border-b border-slate-400 font-bold text-slate-900 text-[11px]">
-              <th className="p-2 border border-slate-300 text-center w-[6%]">No</th>
-              <th className="p-2 border border-slate-300 w-[28%]">No Bal</th>
-              <th className="p-2 border border-slate-300 text-right w-[20%]">Berat Bruto</th>
-              <th className="p-2 border border-slate-300 text-right w-[23%]">Harga / Kg</th>
-              <th className="p-2 border border-slate-300 text-right w-[23%]">Total Nilai</th>
-            </tr>
-          </thead>
-          <tbody>
-            {balDetails.map((b, idx) => (
-              <tr key={idx} className={idx % 2 === 1 ? 'bg-slate-50/70' : 'bg-white'}>
-                <td className="p-1.5 border border-slate-300 text-center font-mono text-slate-600">
-                  {idx + 1}
-                </td>
-                <td className="p-1.5 border border-slate-300 font-mono font-bold text-slate-900 truncate" title={b.no_bal}>
-                  {b.no_bal}
-                </td>
-                <td className="p-1.5 border border-slate-300 text-right font-mono font-semibold text-slate-900 whitespace-nowrap">
-                  {b.berat_kg.toLocaleString('id-ID', { maximumFractionDigits: 1 })} kg
-                </td>
-                <td className="p-1.5 border border-slate-300 text-right font-mono text-slate-700 whitespace-nowrap">
-                  {b.harga_per_kg > 0 ? formatRupiah(b.harga_per_kg) : '-'}
-                </td>
-                <td className="p-1.5 border border-slate-300 text-right font-mono font-bold text-slate-950 whitespace-nowrap">
-                  {b.harga_per_kg > 0 ? formatRupiah(b.total_harga) : '-'}
-                </td>
-              </tr>
-            ))}
-
-            {/* Total Row */}
-            <tr className="bg-slate-100 font-bold border-t-2 border-slate-400 text-slate-900">
-              <td colSpan={2} className="p-2 border border-slate-300 text-right uppercase text-[11px]">
-                TOTAL {totalItemsCount} BAL:
-              </td>
-              <td className="p-2 border border-slate-300 text-right font-mono font-black text-slate-950 text-xs whitespace-nowrap">
-                {formatNumber(grandTotalBerat)} kg
-              </td>
-              <td className="p-2 border border-slate-300 text-right font-mono text-slate-600 text-[10.5px] whitespace-nowrap">
-                Rata-rata: {formatRupiah(grandTotalBerat > 0 ? Math.round(grandTotalNilai / grandTotalBerat) : 0)}
-              </td>
-              <td className="p-2 border border-slate-300 text-right font-mono font-black text-[#b81d24] text-xs whitespace-nowrap">
-                {formatRupiah(grandTotalNilai)}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      {/* Terbilang Box */}
-      <div className="p-2.5 bg-slate-50 border border-slate-300 text-xs flex items-start space-x-2">
-        <span className="font-bold text-slate-700 shrink-0">Terbilang:</span>
-        <span className="italic font-semibold text-slate-900 capitalize">
-          {terbilangRupiah(grandTotalNilai)}
-        </span>
-      </div>
-
-      {/* Signature Blocks */}
-      {/* Signature Grid */}
-      <div className="pt-4 grid grid-cols-3 gap-4 text-center text-xs avoid-page-break">
-        <div>
-          <p className="text-slate-600 font-medium">Petugas Logistik / Pengirim</p>
-          <div className="h-24 flex items-end justify-center">
-            <span className="font-bold border-b border-slate-900 pb-0.5 min-w-[130px] inline-block">
-              {namaPetugasLogistik || <>&nbsp;</>}
-            </span>
-          </div>
-        </div>
-        <div>
-          <p className="text-slate-600 font-medium">Pengemudi / Supir Ekspedisi</p>
-          <div className="h-24 flex items-end justify-center">
-            <span className="font-bold border-b border-slate-900 pb-0.5 min-w-[130px] inline-block">
-              {pengiriman.driver_nama || <>&nbsp;</>}
-            </span>
-          </div>
-        </div>
-        <div>
-          <p className="text-slate-600 font-medium">Penerima Gudang Pabrik</p>
-          <div className="h-24 flex items-end justify-center">
-            <span className="font-bold border-b border-slate-900 pb-0.5 min-w-[130px] inline-block">
-              {pengiriman.penerima || <>&nbsp;</>}
-            </span>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };

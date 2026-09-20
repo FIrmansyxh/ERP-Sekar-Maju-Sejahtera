@@ -348,6 +348,8 @@ src/
     ├── kuponSortir.ts       Aturan kupon terbuka Sortir dan Timbangan
     ├── rekapKodeBal.ts      Rekap jumlah bal per kode bal dan per petani
     ├── paginasiNota.ts      Pembagian halaman nota agar baris tidak terpotong
+    ├── paginasiDokumen.ts   Pembagian halaman Surat Jalan dan Surat Sample (aturan sama dengan nota)
+    ├── aturanNetto.ts       Aturan potongan bruto ke netto jual pada Surat Jalan (rentang berat per pembeli)
     ├── excelExport.ts       Ekspor laporan Excel (.xlsx) siap cetak
     └── printDownload.ts     Ekspor PDF
 ```

@@ -30,7 +30,8 @@ import {
   Trash2,
   Package,
   Edit3,
-  Layers
+  Layers,
+  Scissors
 } from 'lucide-react';
 import { 
   PengirimanBarang, 
@@ -54,6 +55,7 @@ import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
 
 import { useSessionDraft } from '../../hooks/useSessionDraft';
 import { beratBrutoBal, beratBrutoItemSample } from '../../utils/beratKirim';
+import { AturanNettoBaris, NettoJualHasil, barisAturanBaru, bacaAturanNetto, hitungNettoJual, labelRentang } from '../../utils/aturanNetto';
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
 
 /** Penanda bal yang belum punya harga jual (pengganti "Rp 0" / angka karangan). */
@@ -161,6 +163,10 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   // Koreksi berat per bal saat dikirim (mis. susut selama disimpan), disimpan apa adanya seperti diketik.
   // Hanya tercatat di DO; data bal di gudang tidak diubah.
   const [beratKirimInputMap, setBeratKirimInputMap] = useSessionDraft<Record<string, string>>('kirim_berat_kirim', undefined, {});
+
+  // Aturan potongan bruto ke netto jual. Berbeda tiap pembeli dan sering berubah, jadi diisi per Surat Jalan.
+  const [aturanNettoBaris, setAturanNettoBaris] = useSessionDraft<AturanNettoBaris[]>('kirim_aturan_netto', undefined, []);
+  const aturanNetto = useMemo(() => bacaAturanNetto(aturanNettoBaris), [aturanNettoBaris]);
 
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -441,6 +447,46 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     return val > 0 ? val : 0;
   };
 
+  // Bruto timbang ulang dikurangi potongan sesuai aturan netto. Dasar Netto Jual dan Total Nilai.
+  const hitungBal = (barangId: string, beratGudangKg: number): NettoJualHasil =>
+    hitungNettoJual(getBeratKirim(barangId, beratGudangKg), aturanNetto.aturan);
+
+  const handleTambahBarisAturan = () => setAturanNettoBaris((prev) => [...prev, barisAturanBaru()]);
+
+  const handleUbahBarisAturan = (id: string, kolom: 'min' | 'max' | 'potongan', raw: string) => {
+    // Angka dengan satu pemisah desimal (koma atau titik) dan maksimal 3 desimal
+    if (!/^\d*[.,]?\d{0,3}$/.test(raw)) return;
+    setAturanNettoBaris((prev) => prev.map((b) => (b.id === id ? { ...b, [kolom]: raw } : b)));
+  };
+
+  const handleHapusBarisAturan = (id: string) => setAturanNettoBaris((prev) => prev.filter((b) => b.id !== id));
+
+  // Surat Jalan terbaru yang memakai aturan netto (diutamakan yang tujuannya sama) untuk disalin
+  const aturanTerakhir = useMemo(() => {
+    const tujuan = tujuanBuyer.trim().toLowerCase();
+    const punya = pengirimanList
+      .filter((p) => p.aturan_netto && p.aturan_netto.length > 0)
+      .sort(
+        (a, b) =>
+          (b.tanggal_kirim || '').localeCompare(a.tanggal_kirim || '') ||
+          (parseInt(b.pengiriman_id, 10) || 0) - (parseInt(a.pengiriman_id, 10) || 0)
+      );
+    return (tujuan ? punya.find((p) => (p.tujuan || '').trim().toLowerCase() === tujuan) : punya[0]) || null;
+  }, [pengirimanList, tujuanBuyer]);
+
+  const handlePakaiAturanTerakhir = () => {
+    if (!aturanTerakhir?.aturan_netto) return;
+    const teks = (n: number) => String(n).replace('.', ',');
+    setAturanNettoBaris(
+      aturanTerakhir.aturan_netto.map((a) => ({
+        ...barisAturanBaru(),
+        min: teks(a.min),
+        max: a.max === null ? '' : teks(a.max),
+        potongan: teks(a.potongan),
+      }))
+    );
+  };
+
   const handleUpdateBeratKirim = (barangId: string, raw: string) => {
     // Angka dengan satu pemisah desimal (koma atau titik) dan maksimal 3 desimal
     if (!/^\d*[.,]?\d{0,3}$/.test(raw)) return;
@@ -484,7 +530,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                 e.currentTarget.blur();
               }
             }}
-            title="Ubah bila berat bal berubah (mis. susut). Data bal di gudang tidak ikut berubah."
+            title="Isi bruto hasil timbang ulang bila ada susut. Berat bruto bal dan laporan pembelian tidak ikut berubah."
             className={`w-full pl-2 pr-7 py-1 text-right text-xs font-mono font-semibold text-gray-900 border rounded-xs focus:outline-none focus:ring-1 disabled:bg-gray-100 disabled:text-gray-400 ${
               isInvalid
                 ? 'bg-red-50 border-red-500 focus:ring-red-500'
@@ -499,14 +545,44 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
           <span className="mt-0.5 text-[10px] font-semibold text-red-600">Berat wajib lebih dari 0</span>
         ) : isChanged ? (
           <span className="mt-0.5 text-[10px] font-semibold text-amber-700 text-right leading-tight">
-            Gudang {formatNumber(beratGudangKg)} Kg ({selisih < 0 ? 'susut' : 'naik'} {formatNumber(Math.abs(selisih))} Kg)
+            {selisih < 0 ? 'Susut' : 'Naik'} {formatNumber(Math.abs(selisih))} Kg
           </span>
         ) : null}
       </div>
     );
   };
 
-  
+
+  const renderNettoJual = (hasil: NettoJualHasil) => (
+    <div className="flex flex-col items-end">
+      <span className={`font-mono font-bold whitespace-nowrap ${hasil.tercakup && hasil.netto > 0 ? 'text-gray-900' : 'text-red-700'}`}>
+        {formatNumber(hasil.netto, 1)} Kg
+      </span>
+      {!hasil.tercakup ? (
+        <span className="text-[10px] font-semibold text-amber-700 whitespace-nowrap">Di luar aturan</span>
+      ) : hasil.potongan > 0 ? (
+        <span className="text-[10px] text-gray-500 whitespace-nowrap">Potongan {formatNumber(hasil.potongan)} Kg</span>
+      ) : null}
+    </div>
+  );
+
+  // Harga jual dipilih dari Master Harga Jual; harga deal sample tanpa kode tampil sebagai isian awal.
+  const renderHargaJual = (barangId: string) => {
+    const kode = getKodeHargaJual(barangId);
+    const harga = getHargaJualKg(barangId);
+    return (
+      <div className="space-y-0.5">
+        <SearchableSelect
+          value={kode}
+          onChange={(v) => handleUpdateBalKodeHarga(barangId, v)}
+          options={activeHargaJualList.map((h) => ({ value: h.kode, label: `${formatRupiah(h.harga_jual)}/kg (${h.kode})` }))}
+          placeholder={harga > 0 ? `${formatRupiah(harga)}/kg` : '-- Pilih Harga --'}
+        />
+        {harga <= 0 && <BelumAdaHarga />}
+      </div>
+    );
+  };
+
   // Apply bulk price code to all currently selected bales
   const handleApplyBulkKodeHarga = () => {
     if (!bulkKodeHarga) return;
@@ -987,10 +1063,17 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     return sourceMode === 'sample_batch' ? hargaDealMap[barangId] ?? 0 : 0;
   };
 
-  const totalNilaiSuratJalan = selectedBalObjects.reduce(
-    (sum, b) => sum + Math.round(getBeratKirim(b.barang_id, beratBrutoBal(b)) * getHargaJualKg(b.barang_id)),
+  // Nilai Surat Jalan = netto jual (bruto timbang ulang - potongan aturan netto) x harga jual
+  const hasilNettoBal = selectedBalObjects.map((b) => ({ b, hasil: hitungBal(b.barang_id, beratBrutoBal(b)) }));
+  const totalNettoJual = normalizeKg(hasilNettoBal.reduce((sum, r) => sum + r.hasil.netto, 0));
+  const totalPotongan = normalizeKg(totalSelectedBerat - totalNettoJual);
+  const totalNilaiSuratJalan = hasilNettoBal.reduce(
+    (sum, r) => sum + Math.round(r.hasil.netto * getHargaJualKg(r.b.barang_id)),
     0
   );
+  // Bal yang berat timbang ulangnya tidak masuk rentang aturan mana pun, atau nettonya habis dipotong
+  const balDiLuarAturan = hasilNettoBal.filter((r) => !r.hasil.tercakup).map((r) => r.b);
+  const balNettoHabis = hasilNettoBal.filter((r) => r.hasil.tercakup && r.hasil.netto <= 0).map((r) => r.b);
 
   // Bal terpilih yang belum punya harga jual
   const balTanpaHargaObjects = selectedBalObjects.filter((b) => getHargaJualKg(b.barang_id) <= 0);
@@ -1071,6 +1154,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     setRegulerManifestBalIds([]);
     setCustomKodeHargaMap({});
     setBeratKirimInputMap({});
+    setAturanNettoBaris([]);
     setScanAlert(null);
     setFilterGrade('all');
     setFilterPetani('all');
@@ -1128,9 +1212,23 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       setErrorMessage(`Berat kirim belum valid pada bal ${daftarBal}. Isi berat lebih dari 0 Kg.`);
       return;
     }
+    if (aturanNetto.masalah.length > 0) {
+      setErrorMessage(`Atur Netto belum benar. ${aturanNetto.masalah[0]}`);
+      return;
+    }
+    if (aturanNetto.aturan.length > 0 && balDiLuarAturan.length > 0) {
+      const daftarBal = balDiLuarAturan.map((b) => `#${b.no_bal || b.barang_id}`).join(', ');
+      setErrorMessage(`Berat bal ${daftarBal} di luar semua rentang Atur Netto. Tambahkan baris aturan untuk berat tersebut.`);
+      return;
+    }
+    if (balNettoHabis.length > 0) {
+      const daftarBal = balNettoHabis.map((b) => `#${b.no_bal || b.barang_id}`).join(', ');
+      setErrorMessage(`Netto jual bal ${daftarBal} menjadi 0 Kg setelah dipotong. Periksa Atur Netto atau bruto timbang ulangnya.`);
+      return;
+    }
     if (balTanpaHargaObjects.length > 0) {
       const daftarBal = balTanpaHargaObjects.map((b) => `#${b.no_bal || b.barang_id}`).join(', ');
-      setErrorMessage(`${balTanpaHargaObjects.length} bal belum punya harga jual (${daftarBal}). Pilih Kode Master Harga Jual terlebih dahulu.`);
+      setErrorMessage(`${balTanpaHargaObjects.length} bal belum punya harga jual (${daftarBal}). Pilih Harga Jual terlebih dahulu.`);
       return;
     }
     if (!driverNama.trim()) {
@@ -1164,6 +1262,11 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     });
 
     
+    const finalNettoJualMap: Record<string, number> = {};
+    selectedBalObjects.forEach((b) => {
+      finalNettoJualMap[b.barang_id] = hitungBal(b.barang_id, beratBrutoBal(b)).netto;
+    });
+
     const finalHargaDealMap: Record<string, number> = {};
     const finalKodeHargaMap: Record<string, string> = {};
     selectedBalIds.forEach((id) => {
@@ -1201,6 +1304,9 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       harga_deal_map: Object.keys(finalHargaDealMap).length > 0 ? finalHargaDealMap : undefined,
       kode_harga_jual_map: Object.keys(finalKodeHargaMap).length > 0 ? finalKodeHargaMap : undefined,
       berat_kirim_map: finalBeratKirimMap,
+      // Tanpa aturan netto, nilai tetap bruto x harga seperti Surat Jalan sebelumnya
+      netto_jual_map: aturanNetto.aturan.length > 0 ? finalNettoJualMap : undefined,
+      aturan_netto: aturanNetto.aturan.length > 0 ? aturanNetto.aturan : undefined,
       total_nilai_deal: totalNilaiSuratJalan,
     };
 
@@ -1703,6 +1809,127 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
           </div>
 
           {/* ========================================================================= */}
+          {/* ATUR NETTO: potongan bruto ke netto jual, aturannya berbeda tiap pembeli   */}
+          {/* ========================================================================= */}
+          <div className="bg-white p-4 sm:p-5 border border-gray-300 rounded-sm shadow-xs space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-200 pb-2">
+              <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center space-x-1.5">
+                <Scissors className="w-4 h-4 text-gray-700" />
+                <span>Atur Netto (Potongan Bruto ke Netto Jual)</span>
+              </h3>
+              <div className="flex items-center gap-2 flex-wrap">
+                {aturanNettoBaris.length === 0 && aturanTerakhir && (
+                  <button
+                    type="button"
+                    onClick={handlePakaiAturanTerakhir}
+                    title={`Salin aturan dari Surat Jalan ${aturanTerakhir.no_surat_jalan}`}
+                    className="px-2.5 py-1 text-[11px] font-semibold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-xs cursor-pointer transition"
+                  >
+                    Pakai aturan {aturanTerakhir.no_surat_jalan} ({aturanTerakhir.tujuan})
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleTambahBarisAturan}
+                  className="px-2.5 py-1 text-[11px] font-bold text-white bg-[#b81d24] hover:bg-[#a0181e] rounded-xs cursor-pointer transition flex items-center space-x-1 shadow-2xs"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>Tambah Baris</span>
+                </button>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-gray-500 leading-relaxed">
+              Isi rentang berat bruto (hasil timbang ulang) beserta potongannya sesuai aturan pembeli. Netto Jual di tabel muatan terisi otomatis.
+              Rentang ditulis dalam kg utuh: 1-49 mencakup sampai 49,9 kg. Kosongkan kolom Sampai untuk &quot;ke atas&quot;.
+              Contoh GG: 1-49 potongan 4, lalu 50 (Sampai kosong) potongan 5.
+            </p>
+
+            {aturanNettoBaris.length === 0 ? (
+              <div className="p-3 bg-gray-50 border border-dashed border-gray-300 text-xs text-gray-600 rounded-xs">
+                Belum ada aturan, jadi Netto Jual sama dengan Bruto Timbang Ulang (tanpa potongan).
+                Klik <strong>Tambah Baris</strong> bila pembeli memotong berat.
+              </div>
+            ) : (
+              <div className="space-y-1.5 max-w-xl">
+                <div className="grid grid-cols-[1fr_1fr_1fr_2rem] gap-2 text-[10px] font-bold uppercase text-gray-500">
+                  <span>Bruto dari (Kg)</span>
+                  <span>Sampai (Kg)</span>
+                  <span>Potongan Netto (Kg)</span>
+                  <span />
+                </div>
+                {aturanNettoBaris.map((b, i) => (
+                  <div key={b.id} className="grid grid-cols-[1fr_1fr_1fr_2rem] gap-2 items-center">
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      data-scanner-ignore
+                      value={b.min}
+                      placeholder="1"
+                      onChange={(e) => handleUbahBarisAturan(b.id, 'min', e.target.value)}
+                      className="w-full px-2 py-1.5 text-right text-xs font-mono font-semibold bg-white border border-gray-300 rounded-xs focus:outline-none focus:ring-1 focus:ring-[#b81d24]"
+                    />
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      data-scanner-ignore
+                      value={b.max}
+                      placeholder="ke atas"
+                      onChange={(e) => handleUbahBarisAturan(b.id, 'max', e.target.value)}
+                      className="w-full px-2 py-1.5 text-right text-xs font-mono font-semibold bg-white border border-gray-300 rounded-xs focus:outline-none focus:ring-1 focus:ring-[#b81d24] placeholder:font-sans placeholder:font-normal"
+                    />
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      data-scanner-ignore
+                      value={b.potongan}
+                      placeholder="4"
+                      onChange={(e) => handleUbahBarisAturan(b.id, 'potongan', e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          if (i === aturanNettoBaris.length - 1) handleTambahBarisAturan();
+                        }
+                      }}
+                      className="w-full px-2 py-1.5 text-right text-xs font-mono font-semibold bg-white border border-gray-300 rounded-xs focus:outline-none focus:ring-1 focus:ring-[#b81d24]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleHapusBarisAturan(b.id)}
+                      title="Hapus baris aturan"
+                      className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-xs transition cursor-pointer justify-self-center"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {aturanNetto.masalah.length > 0 && (
+              <ul className="text-[11px] font-semibold text-red-700 space-y-0.5 list-disc pl-4">
+                {aturanNetto.masalah.map((m) => (
+                  <li key={m}>{m}</li>
+                ))}
+              </ul>
+            )}
+
+            {aturanNetto.masalah.length === 0 && aturanNetto.aturan.length > 0 && (
+              <p className="text-[11px] font-semibold text-emerald-800">
+                Aturan aktif: {aturanNetto.aturan.map((a) => `${labelRentang(a)} dipotong ${formatNumber(a.potongan)} kg`).join(' • ')}
+              </p>
+            )}
+
+            {aturanNetto.aturan.length > 0 && balDiLuarAturan.length > 0 && (
+              <p className="text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded-xs">
+                {balDiLuarAturan.length} bal di luar semua rentang aturan (tanpa potongan):{' '}
+                {balDiLuarAturan.slice(0, 6).map((b) => `#${b.no_bal || b.barang_id}`).join(', ')}
+                {balDiLuarAturan.length > 6 ? ', ...' : ''}. Tambahkan baris untuk berat tersebut sebelum menerbitkan Surat Jalan.
+              </p>
+            )}
+          </div>
+
+          {/* ========================================================================= */}
           {/* SCAN & VERIFIKASI MUATAN FISIK (WAJIB SAMA PERSIS DENGAN LIST ACC)         */}
           {/* ========================================================================= */}
           <div className="bg-white p-4 sm:p-5 border border-gray-300 rounded-sm shadow-xs space-y-4">
@@ -1842,9 +2069,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                                   {formatNumber(beratBrutoBal(bal), 1)} Kg bruto
                                 </span>
                               </div>
-                              <div className="text-[11px] text-gray-500 flex items-center space-x-2">
-                                <span>Petani: <strong className="text-gray-700">{bal.nama_petani || '-'}</strong></span>
-                              </div>
                             </div>
 
                             <div className="text-right shrink-0">
@@ -1905,7 +2129,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                 </div>
                 <div className="text-right">
                   <span className="text-gray-600 font-mono text-xs">
-                    Total Berat: <strong>{formatNumber(totalSelectedBerat, 1)} Kg</strong> • Grand Total DO: <strong className="text-emerald-800 text-sm">{formatRupiah(totalNilaiSuratJalan)}</strong>
+                    Bruto Timbang Ulang: <strong>{formatNumber(totalSelectedBerat, 1)} Kg</strong> • Netto Jual: <strong>{formatNumber(totalNettoJual, 1)} Kg</strong> • Grand Total DO: <strong className="text-emerald-800 text-sm">{formatRupiah(totalNilaiSuratJalan)}</strong>
                   </span>
                 </div>
               </div>
@@ -1966,16 +2190,16 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
 
                 {/* Bulk Master Price Code Selector */}
                 <div className="flex items-center space-x-2 ml-auto flex-wrap">
-                  <span className="text-[11px] font-bold text-gray-700">Terapkan Kode Harga Massal:</span>
+                  <span className="text-[11px] font-bold text-gray-700">Terapkan Harga Jual Massal:</span>
                   <select
                     value={bulkKodeHarga}
                     onChange={(e) => setBulkKodeHarga(e.target.value)}
                     className="px-2.5 py-1 text-xs font-semibold bg-white border border-gray-300 rounded-xs focus:ring-1 focus:ring-[#b81d24] text-gray-900"
                   >
-                    <option value="">-- Pilih Kode Harga Jual --</option>
+                    <option value="">-- Pilih Harga Jual --</option>
                     {activeHargaJualList.map((h) => (
                       <option key={h.harga_jual_id} value={h.kode}>
-                        {h.kode} ({formatRupiah(h.harga_jual)}/kg)
+                        {formatRupiah(h.harga_jual)}/kg ({h.kode})
                       </option>
                     ))}
                   </select>
@@ -1991,55 +2215,46 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
               </div>
 
               {/* Data Table */}
-              <div className="border border-gray-300 rounded-xs overflow-x-auto max-h-[480px] overflow-y-auto">
-                <table className="w-full min-w-[980px] table-fixed text-left text-xs border-collapse">
+              <div className="border border-gray-300 rounded-xs overflow-x-auto max-h-[62vh] overflow-y-auto">
+                <table className={`w-full table-fixed text-left text-xs border-collapse ${sourceMode === 'sample_batch' ? 'min-w-[1080px]' : 'min-w-[1000px]'}`}>
                   {/* Lebar kolom proporsional agar tidak ada kolom yang menelan sisa ruang */}
                   {sourceMode === 'sample_batch' ? (
                     <colgroup>
-                      <col className="w-[6%]" />
+                      <col className="w-[5%]" />
+                      <col className="w-[14%]" />
+                      <col className="w-[12%]" />
+                      <col className="w-[11%]" />
+                      <col className="w-[15%]" />
+                      <col className="w-[12%]" />
                       <col className="w-[17%]" />
                       <col className="w-[14%]" />
-                      <col className="w-[14%]" />
-                      <col className="w-[21%]" />
-                      <col className="w-[13%]" />
-                      <col className="w-[15%]" />
                     </colgroup>
                   ) : (
                     <colgroup>
-                      <col className="w-[6%]" />
+                      <col className="w-[5%]" />
+                      <col className="w-[15%]" />
+                      <col className="w-[12%]" />
                       <col className="w-[15%]" />
                       <col className="w-[13%]" />
-                      <col className="w-[18%]" />
                       <col className="w-[19%]" />
-                      <col className="w-[12%]" />
-                      <col className="w-[12%]" />
+                      <col className="w-[16%]" />
                       <col className="w-[5%]" />
                     </colgroup>
                   )}
-                  <thead className="bg-gray-100 border-b border-gray-300 text-gray-700 font-bold z-10">
+                  <thead className="bg-gray-100 border-b border-gray-300 text-gray-700 font-bold z-10 sticky top-0 shadow-[0_1px_0_0_#d1d5db]">
                     <tr>
-                      {sourceMode === 'sample_batch' ? (
-                        <>
-                          <th className="p-2 text-center">Kirim</th>
-                          <th className="p-2 text-center">No Bal</th>
-                          <th className="p-2 text-center">Berat Bruto (Kg)</th>
-                          <th className="p-2 text-center">Status Sample</th>
-                          <th className="p-2 text-center">Kode Master Harga Jual</th>
-                          <th className="p-2 text-center">Harga (Rp/Kg)</th>
-                          <th className="p-2 text-center">Total Nilai</th>
-                        </>
-                      ) : (
-                        <>
-                          <th className="p-2 text-center">Kirim</th>
-                          <th className="p-2 text-center">No Bal</th>
-                          <th className="p-2 text-center">Berat Bruto (Kg)</th>
-                          <th className="p-2 text-center">Petani</th>
-                          <th className="p-2 text-center">Kode Master Harga Jual</th>
-                          <th className="p-2 text-center">Harga (Rp/Kg)</th>
-                          <th className="p-2 text-center">Total Nilai Bal</th>
-                          <th className="p-2 text-center">Aksi</th>
-                        </>
-                      )}
+                      <th className="p-2 text-center">Kirim</th>
+                      <th className="p-2 text-center">No Bal</th>
+                      {sourceMode === 'sample_batch' && <th className="p-2 text-center">Status Sample</th>}
+                      <th className="p-2 text-center">Berat Bruto</th>
+                      <th className="p-2 text-center">Bruto Timbang Ulang</th>
+                      <th className="p-2 text-center">Netto Jual</th>
+                      <th className="p-2 text-center">Harga Jual /Kg</th>
+                      <th className="p-2 text-center">
+                        Total Nilai
+                        <span className="block text-[10px] font-medium text-gray-500">Netto Jual × Harga</span>
+                      </th>
+                      {sourceMode === 'gudang_reguler' && <th className="p-2 text-center">Aksi</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 bg-white">
@@ -2049,31 +2264,28 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                       // ==========================================
                       (!activeBatchObj?.items || activeBatchObj.items.length === 0) ? (
                         <tr>
-                          <td colSpan={7} className="p-8 text-center bg-gray-50/50">
+                          <td colSpan={8} className="p-8 text-center bg-gray-50/50">
                             <div className="max-w-md mx-auto space-y-2">
                               <Package className="w-8 h-8 mx-auto text-gray-300" />
                               <div className="text-sm font-bold text-gray-800">
                                 {!selectedBatchSampleId ? 'Belum Ada Batch Sample yang Dipilih' : 'Tidak ada bal pada batch ini'}
                               </div>
                               <p className="text-xs text-gray-500">
-                                {!selectedBatchSampleId 
-                                  ? 'Silakan cari atau pilih kode batch sample pada kolom pencarian di atas untuk memuat daftar bal tembakau.' 
+                                {!selectedBatchSampleId
+                                  ? 'Silakan cari atau pilih kode batch sample pada kolom pencarian di atas untuk memuat daftar bal tembakau.'
                                   : 'Silakan pilih batch sample lainnya pada dropdown di atas.'}
                               </p>
                             </div>
                           </td>
                         </tr>
                       ) : (
-                        activeBatchObj.items.map((it, idx) => {
+                        activeBatchObj.items.map((it) => {
                           const isIncluded = selectedBalIds.includes(it.barang_id);
                           const balObj = barangList.find((b) => b.barang_id === it.barang_id);
                           const beratGudang = beratBrutoBal(balObj) || beratBrutoItemSample(it);
-                          const berat = getBeratKirim(it.barang_id, beratGudang);
-
-                          const currentKode = getKodeHargaJual(it.barang_id);
+                          const hasil = hitungBal(it.barang_id, beratGudang);
                           const currentPrice = getHargaJualKg(it.barang_id);
-
-                          const subtotal = Math.round(berat * currentPrice);
+                          const subtotal = Math.round(hasil.netto * currentPrice);
 
                           return (
                             <tr
@@ -2113,11 +2325,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                                 </div>
                               </td>
 
-                              {/* Berat (bisa dikoreksi saat kirim) */}
-                              <td className="p-2 text-right">
-                                {renderBeratKirimInput(it.barang_id, beratGudang, it.sudah_dikirim_do)}
-                              </td>
-
                               {/* Status Sample Evaluasi */}
                               <td className="p-2 text-center whitespace-nowrap">
                                 {it.status_item === 'disetujui' ? (
@@ -2139,22 +2346,23 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                                 )}
                               </td>
 
-                              {/* Dropdown Kode Master Harga Jual */}
-                              <td className="p-2">
-                                <SearchableSelect
-                                  value={currentKode}
-                                  onChange={(v) => handleUpdateBalKodeHarga(it.barang_id, v)}
-                                  options={activeHargaJualList.map(h => ({ value: h.kode, label: `${h.kode} (${formatRupiah(h.harga_jual)}/kg)` }))}
-                                  placeholder="-- Pilih Kode --"
-                                />
+                              {/* Berat Bruto (dari timbangan pembelian, tidak bisa diubah) */}
+                              <td className="p-2 text-right font-mono font-semibold text-gray-700 whitespace-nowrap">
+                                {formatNumber(beratGudang, 1)} Kg
                               </td>
 
-                              {/* Display Harga (Rp/Kg) */}
-                              <td className="p-2 text-right font-mono font-bold text-emerald-800 whitespace-nowrap">
-                                {currentPrice > 0 ? formatRupiah(currentPrice) : <BelumAdaHarga />}
+                              {/* Bruto Timbang Ulang (hanya berubah bila ada penyusutan) */}
+                              <td className="p-2 text-right">
+                                {renderBeratKirimInput(it.barang_id, beratGudang, it.sudah_dikirim_do)}
                               </td>
 
-                              {/* Total Nilai Bal */}
+                              {/* Netto Jual otomatis dari Atur Netto */}
+                              <td className="p-2 text-right">{renderNettoJual(hasil)}</td>
+
+                              {/* Harga Jual */}
+                              <td className="p-2">{renderHargaJual(it.barang_id)}</td>
+
+                              {/* Total Nilai */}
                               <td className="p-2 text-right font-mono font-bold text-gray-900 whitespace-nowrap">
                                 {currentPrice > 0 ? formatRupiah(subtotal) : '-'}
                               </td>
@@ -2191,13 +2399,12 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                           </td>
                         </tr>
                       ) : (
-                        regulerManifestObjects.map((bal, idx) => {
+                        regulerManifestObjects.map((bal) => {
                           const isChecked = selectedBalIds.includes(bal.barang_id);
-                          
-                          const currentKode = getKodeHargaJual(bal.barang_id);
+                          const beratGudang = beratBrutoBal(bal);
+                          const hasil = hitungBal(bal.barang_id, beratGudang);
                           const currentPrice = getHargaJualKg(bal.barang_id);
-
-                          const subtotalBal = Math.round(getBeratKirim(bal.barang_id, beratBrutoBal(bal)) * currentPrice);
+                          const subtotalBal = Math.round(hasil.netto * currentPrice);
 
                           return (
                             <tr
@@ -2226,27 +2433,21 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                                   )}
                                 </div>
                               </td>
+                              {/* Berat Bruto (dari timbangan pembelian, tidak bisa diubah) */}
+                              <td className="p-2 text-right font-mono font-semibold text-gray-700 whitespace-nowrap">
+                                {formatNumber(beratGudang, 1)} Kg
+                              </td>
+
+                              {/* Bruto Timbang Ulang (hanya berubah bila ada penyusutan) */}
                               <td className="p-2 text-right">
-                                {renderBeratKirimInput(bal.barang_id, beratBrutoBal(bal))}
-                              </td>
-                              <td className="p-2 text-[11px] text-gray-700">
-                                <strong className="block truncate" title={bal.nama_petani || '-'}>{bal.nama_petani || '-'}</strong>
+                                {renderBeratKirimInput(bal.barang_id, beratGudang)}
                               </td>
 
-                              {/* Dropdown Kode Master Harga Jual */}
-                              <td className="p-2">
-                                <SearchableSelect
-                                  value={currentKode}
-                                  onChange={(v) => handleUpdateBalKodeHarga(bal.barang_id, v)}
-                                  options={activeHargaJualList.map(h => ({ value: h.kode, label: `${h.kode} (${formatRupiah(h.harga_jual)}/kg)` }))}
-                                  placeholder="-- Pilih Kode --"
-                                />
-                              </td>
+                              {/* Netto Jual otomatis dari Atur Netto */}
+                              <td className="p-2 text-right">{renderNettoJual(hasil)}</td>
 
-                              {/* Display Harga (Rp/Kg) */}
-                              <td className="p-2 text-right font-mono font-bold text-emerald-800 whitespace-nowrap">
-                                {currentPrice > 0 ? formatRupiah(currentPrice) : <BelumAdaHarga />}
-                              </td>
+                              {/* Harga Jual */}
+                              <td className="p-2">{renderHargaJual(bal.barang_id)}</td>
 
                               <td className="p-2 text-right font-mono font-bold text-gray-900 whitespace-nowrap">
                                 {currentPrice > 0 ? formatRupiah(subtotalBal) : '-'}
@@ -2268,10 +2469,13 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                     )}
                   </tbody>
                   {selectedBalIds.length > 0 && (
-                    <tfoot className="bg-gray-100 font-bold border-t border-gray-300">
+                    <tfoot className="bg-gray-100 font-bold border-t border-gray-300 sticky bottom-0 shadow-[0_-1px_0_0_#d1d5db]">
                       <tr>
-                        <td colSpan={2} className="p-2 text-right uppercase text-[11px]">
+                        <td colSpan={sourceMode === 'sample_batch' ? 3 : 2} className="p-2 text-right uppercase text-[11px]">
                           Total Dicentang ({totalSelectedBal} Bal)
+                        </td>
+                        <td className="p-2 text-right font-mono whitespace-nowrap">
+                          {formatNumber(totalSelectedBeratGudang, 1)} Kg
                         </td>
                         <td className="p-2 text-right font-mono whitespace-nowrap">
                           <div>{formatNumber(totalSelectedBerat, 1)} Kg</div>
@@ -2281,9 +2485,15 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                             </div>
                           )}
                         </td>
-                        <td colSpan={3} className="p-2 text-right uppercase text-[11px]">
-                          Grand Total Nilai Surat Jalan:
+                        <td className="p-2 text-right font-mono whitespace-nowrap">
+                          <div>{formatNumber(totalNettoJual, 1)} Kg</div>
+                          {totalPotongan > 0 && (
+                            <div className="text-[10px] font-semibold text-gray-500 whitespace-nowrap">
+                              Potongan {formatNumber(totalPotongan, 1)} Kg
+                            </div>
+                          )}
                         </td>
+                        <td className="p-2 text-right uppercase text-[11px]">Grand Total:</td>
                         <td className="p-2 text-right font-mono text-sm text-emerald-800 whitespace-nowrap">
                           {formatRupiah(totalNilaiSuratJalan)}
                         </td>
@@ -2300,7 +2510,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
           <div className="bg-white p-4 border border-gray-300 rounded-sm shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="space-y-1">
               <div className="text-xs text-gray-600">
-                Muatan Siap Kirim: <strong className="text-gray-900">{totalSelectedBal} Bal</strong> ({formatNumber(totalSelectedBerat, 1)} Kg) tujuan <strong className={tujuanBuyer ? 'text-gray-900' : 'text-red-600 italic'}>{tujuanBuyer || '(Wajib diisi)'}</strong>.
+                Muatan Siap Kirim: <strong className="text-gray-900">{totalSelectedBal} Bal</strong> ({formatNumber(totalSelectedBerat, 1)} Kg bruto{totalPotongan > 0 ? `, ${formatNumber(totalNettoJual, 1)} Kg netto jual` : ''}) tujuan <strong className={tujuanBuyer ? 'text-gray-900' : 'text-red-600 italic'}>{tujuanBuyer || '(Wajib diisi)'}</strong>.
               </div>
               {!canSubmitShipment && (
                 <div className="text-[11px] font-semibold text-slate-700 bg-slate-50 px-2.5 py-1 rounded-xs border border-slate-200 inline-flex items-center space-x-1.5">
@@ -2360,11 +2570,11 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       <ConfirmModal
         isOpen={isConfirmOpen}
         title="Konfirmasi Penerbitan Surat Jalan DO"
-        message={`Apakah Anda yakin ingin menerbitkan Surat Jalan ${noSuratJalan} untuk pengiriman ${totalSelectedBal} bal tembakau (${formatNumber(totalSelectedBerat, 1)} Kg${
+        message={`Apakah Anda yakin ingin menerbitkan Surat Jalan ${noSuratJalan} untuk pengiriman ${totalSelectedBal} bal tembakau (${formatNumber(totalSelectedBerat, 1)} Kg bruto${totalPotongan > 0 ? `, netto jual ${formatNumber(totalNettoJual, 1)} Kg` : ''}${
           totalSelisihBerat !== 0
             ? `, ${totalSelisihBerat < 0 ? 'susut' : 'naik'} ${formatNumber(Math.abs(totalSelisihBerat))} Kg dari berat gudang ${formatNumber(totalSelectedBeratGudang, 1)} Kg`
             : ''
-        }) ke ${tujuanBuyer}?`}
+        }) ke ${tujuanBuyer} dengan total nilai ${formatRupiah(totalNilaiSuratJalan)}?`}
         confirmText="Ya, Terbitkan Surat Jalan"
         cancelText="Periksa Lagi"
         onConfirm={handleConfirmSave}
@@ -2406,7 +2616,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                   <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-2.5" />
                   <input
                     type="text"
-                    placeholder="Cari No. Bal / ID / Petani..."
+                    placeholder="Cari No. Bal / ID..."
                     value={stokModalSearch}
                     onChange={(e) => setStokModalSearch(e.target.value)}
                     className="w-full pl-8 pr-3 py-1.5 bg-white border border-gray-300 rounded-xs focus:ring-1 focus:ring-gray-700 text-xs"
@@ -2435,14 +2645,13 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                     <th className="p-2.5 w-10 text-center">Pilih</th>
                     <th className="p-2.5 w-28 text-center">No. Bal</th>
                     <th className="p-2.5 w-24 text-center">Bruto (Kg)</th>
-                    <th className="p-2.5 text-center">Petani</th>
-                    <th className="p-2.5 w-28 text-center">Status Muatan</th>
+                                        <th className="p-2.5 w-28 text-center">Status Muatan</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {modalFilteredBalList.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="p-8 text-center text-gray-500">
+                      <td colSpan={4} className="p-8 text-center text-gray-500">
                         Tidak ada bal tembakau di gudang yang sesuai dengan filter pencarian.
                       </td>
                     </tr>
@@ -2488,9 +2697,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                           </td>
                           <td className="p-2.5 text-right font-mono font-semibold text-gray-800">
                             {formatNumber(beratBrutoBal(b), 1)} Kg
-                          </td>
-                          <td className="p-2.5 text-[11px] text-gray-600">
-                            <strong>{b.nama_petani || '-'}</strong>
                           </td>
                           <td className="p-2.5 text-center">
                             {isAlreadyInManifest ? (

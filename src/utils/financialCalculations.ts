@@ -5,7 +5,7 @@ import {
   MasterHargaJual,
   TabelHarga,
 } from '../types';
-import { beratKirimBal } from './beratKirim';
+import { beratKirimBal, nettoJualBal } from './beratKirim';
 
 /**
  * Interface hasil kalkulasi metrik barang terkirim dan keuntungan bersih
@@ -173,7 +173,9 @@ export function hitungProfitPengiriman(
 
     // Penjualan memakai berat bruto saat dikirim (bisa susut); modal tetap memakai berat netto saat dibeli
     const beratKirim = (b: Barang) => Number(beratKirimBal(p, b.barang_id, b));
-    const doTotalBeratKg = doBals.reduce((sum, b) => sum + beratKirim(b), 0);
+    // Nilai penjualan dihitung dari netto jual (bruto timbang ulang dikurangi potongan aturan netto)
+    const nettoKirim = (b: Barang) => Number(nettoJualBal(p, b.barang_id, b));
+    const doTotalNettoKg = doBals.reduce((sum, b) => sum + nettoKirim(b), 0);
 
     // Cek apakah ada total_nilai_deal langsung di DO
     const hasDoTotalDeal = p.total_nilai_deal !== undefined && p.total_nilai_deal > 0;
@@ -193,8 +195,8 @@ export function hitungProfitPengiriman(
       totalBeratTerkirimKg += brutoKirim;
 
       if (hasDoTotalDeal) {
-        // Jika ada nilai deal total pada DO, distribusikan secara proporsional sesuai berat bruto kirim
-        const proporsiBerat = doTotalBeratKg > 0 ? brutoKirim / doTotalBeratKg : 1 / doBals.length;
+        // Jika ada nilai deal total pada DO, distribusikan secara proporsional sesuai netto jual
+        const proporsiBerat = doTotalNettoKg > 0 ? nettoKirim(bal) / doTotalNettoKg : 1 / doBals.length;
         doPenjualan += (p.total_nilai_deal || 0) * proporsiBerat;
       } else {
         // Cari harga jual per bal
@@ -212,7 +214,7 @@ export function hitungProfitPengiriman(
           hargaJualBal = hjMatch ? hjMatch.harga_jual : 0;
         }
 
-        doPenjualan += brutoKirim * hargaJualBal;
+        doPenjualan += nettoKirim(bal) * hargaJualBal;
       }
     });
 

@@ -33,7 +33,7 @@ import { downloadElementAsPdf } from '../../utils/printDownload';
 import { downloadExcelReport, periodeInfo, todayStamp } from '../../utils/excelExport';
 import { Pagination } from '../common/Pagination';
 import { KopSurat } from '../common/KopSurat';
-import { beratBrutoBal, beratKirimBal } from '../../utils/beratKirim';
+import { beratBrutoBal, beratKirimBal, nettoJualBal } from '../../utils/beratKirim';
 import { useLaporanTampilan } from '../../hooks/useLaporanTampilan';
 import { LaporanTampilanToggle } from './LaporanTampilanToggle';
 
@@ -326,8 +326,9 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
         const bal = barangMap.get(id);
         const beratGudang = beratBrutoBal(bal);
         const beratKirim = beratKirimBal(p, id, bal);
+        const nettoJual = nettoJualBal(p, id, bal);
         const harga = p.harga_deal_map?.[id] || 0;
-        return { p, id, bal, beratGudang, beratKirim, harga };
+        return { p, id, bal, beratGudang, beratKirim, nettoJual, harga };
       })
     );
 
@@ -384,8 +385,10 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
           { header: 'No Bal', align: 'center' },
           { header: 'Grade', align: 'center' },
           { header: 'Bruto Gudang (Kg)', type: 'kg' },
-          { header: 'Berat Kirim (Kg)', type: 'kg' },
+          { header: 'Bruto Timbang Ulang (Kg)', type: 'kg' },
           { header: 'Selisih / Susut (Kg)', type: 'kg' },
+          { header: 'Potongan Netto (Kg)', type: 'kg' },
+          { header: 'Netto Jual (Kg)', type: 'kg' },
           { header: 'Harga Jual (Rp/Kg)', type: 'rupiah' },
           { header: 'Nilai (Rp)', type: 'rupiah' },
         ],
@@ -399,16 +402,20 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
           r.beratGudang,
           r.beratKirim,
           Math.round((r.beratKirim - r.beratGudang) * 1000) / 1000,
+          Math.round((r.beratKirim - r.nettoJual) * 1000) / 1000,
+          r.nettoJual,
           r.harga,
-          Math.round(r.beratKirim * r.harga),
+          Math.round(r.nettoJual * r.harga),
         ]),
         totalRow: [
           `TOTAL (${rincianBal.length} bal)`, '', '', '', '', '',
           rincianBal.reduce((sum, r) => sum + r.beratGudang, 0),
           rincianBal.reduce((sum, r) => sum + r.beratKirim, 0),
           Math.round(rincianBal.reduce((sum, r) => sum + (r.beratKirim - r.beratGudang), 0) * 1000) / 1000,
+          Math.round(rincianBal.reduce((sum, r) => sum + (r.beratKirim - r.nettoJual), 0) * 1000) / 1000,
+          rincianBal.reduce((sum, r) => sum + r.nettoJual, 0),
           '',
-          rincianBal.reduce((sum, r) => sum + Math.round(r.beratKirim * r.harga), 0),
+          rincianBal.reduce((sum, r) => sum + Math.round(r.nettoJual * r.harga), 0),
         ],
       },
       {
