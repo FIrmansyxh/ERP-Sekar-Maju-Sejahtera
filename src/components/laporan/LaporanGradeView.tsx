@@ -29,6 +29,8 @@ import { formatNumber, formatRupiah } from '../../utils/formatters';
 import { downloadExcelReport, labelStatusStok, todayStamp } from '../../utils/excelExport';
 import { isTransaksiLunas } from '../../utils/statusBayar';
 import { COMPANY_NAME } from '../../config/appInfo';
+import { useLaporanTampilan } from '../../hooks/useLaporanTampilan';
+import { LaporanTampilanToggle } from './LaporanTampilanToggle';
 import { SortIcon } from '../common/SortIcon';
 
 // Keep export for DashboardAnalyticView compatibility
@@ -101,7 +103,9 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
   // Sorting State
   const [sortField, setSortField] = useState<keyof LaporanHargaRow>('jumlah_bal');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [showGradeSummary, setShowGradeSummary] = useState(true);
+  // Kartu visual per grade (ringkasan) bisa disembunyikan agar tabel lebih luas; pilihan diingat
+  const tampilan = useLaporanTampilan('grade', { filter: false });
+  const showGradeSummary = tampilan.tampilRingkasan;
 
   // Ref for table scrolling container
   const tableContainerRef = React.useRef<HTMLDivElement>(null);
@@ -780,7 +784,7 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
         </div>
         
         {/* Right Controls: Tab Switcher & Excel Export */}
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex bg-gray-100 p-0.5 rounded-sm border border-gray-300">
             <button
               id="tab-harga-beli"
@@ -814,6 +818,8 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
             </button>
           </div>
 
+          <LaporanTampilanToggle tampilan={tampilan} />
+
           <button
             id="btn-export-laporan-harga-excel"
             onClick={handleExportExcel}
@@ -837,24 +843,6 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
             <span>Netto: <strong className="text-blue-700 font-mono">{formatNumber(totals.berat_netto)}</strong> Kg</span>
             <span className="text-gray-300">|</span>
             <span>Nilai: <strong className="text-emerald-700 font-mono">{formatRupiah(totals.total_nilai)}</strong></span>
-            <span className="hidden sm:inline text-gray-300">|</span>
-            <button
-              type="button"
-              onClick={() => setShowGradeSummary(!showGradeSummary)}
-              className="px-2.5 py-1 text-xs font-semibold text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-300 rounded-xs transition flex items-center space-x-1 cursor-pointer"
-            >
-              {showGradeSummary ? (
-                <>
-                  <ChevronUp className="w-3.5 h-3.5 text-gray-500" />
-                  <span>Sembunyikan Visual</span>
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
-                  <span>Tampilkan Visual</span>
-                </>
-              )}
-            </button>
           </div>
           <div className="w-full sm:w-72 md:w-80">
             <div className="relative">

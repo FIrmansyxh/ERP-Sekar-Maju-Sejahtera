@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { User } from '../types';
 import { getRoleInfo, canUserPerform } from '../utils/rbac';
+import { IndikatorSinkron } from './common/IndikatorSinkron';
 
 interface HeaderProps {
   totalPetani: number;
@@ -31,7 +32,7 @@ export const Header: React.FC<HeaderProps> = ({
   totalAktif,
   totalNonaktif,
   pageTitle = 'Sistem Data Gudang',
-  pageBreadcrumb = 'PR. SEKAR MAJU SEJAHTERA / Sistem Data Gudang',
+  pageBreadcrumb = 'PT. SEKAR MAJU SEJAHTERA / Sistem Data Gudang',
   onToggleSidebar,
   onMouseEnterToggle,
   onMouseLeaveToggle,
@@ -84,7 +85,7 @@ export const Header: React.FC<HeaderProps> = ({
 
             <div className="flex items-center space-x-2.5 min-w-0">
               <span className="hidden sm:inline-block text-xs font-semibold uppercase tracking-wider text-slate-400 shrink-0">
-                PR. Sekar Maju Sejahtera
+                PT. Sekar Maju Sejahtera
               </span>
               <span className="text-slate-300 hidden sm:inline-block font-light">/</span>
               <h1 className="font-semibold text-sm sm:text-base text-slate-900 tracking-tight truncate max-w-[220px] sm:max-w-[360px] md:max-w-[500px]" title={pageTitle}>
@@ -95,6 +96,9 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Right Tools & User Account Controls */}
           <div className="flex items-center space-x-3">
+
+            {/* Status simpanan ke server: hanya tampil saat ada yang belum tersimpan */}
+            {currentUser && <IndikatorSinkron />}
             
             {/* User Profile & Role Dropdown (RBAC) */}
             {currentUser && (

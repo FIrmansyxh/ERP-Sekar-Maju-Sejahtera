@@ -48,11 +48,21 @@ export function setAuthToken(token: string | null): void {
 }
 
 /** Batas waktu satu permintaan API, agar layar tidak menunggu tanpa akhir bila server macet */
-export const API_TIMEOUT_MS = 10000;
+export const API_TIMEOUT_MS = 15000;
 
 /** Waktu (ms) terakhir permintaan gagal karena jaringan / batas waktu; membatalkan cache status server */
 let terakhirGagalJaringan = 0;
 export const getTerakhirGagalJaringan = (): number => terakhirGagalJaringan;
+
+/** Galat dari server dengan kode HTTP-nya, agar pemanggil bisa membedakan sesi habis (401), data belum ada (404), dan galat server (5xx). */
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
 
 export interface ApiResponse<T = any> {
   status: 'success' | 'error' | 'warning';
@@ -69,7 +79,7 @@ export async function checkBackendHealth(): Promise<boolean> {
   }
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 detik timeout
+    const timeoutId = setTimeout(() => controller.abort(), 6000); // 6 detik: VPS yang baru bangun bisa lambat menjawab
 
     const res = await fetch(`${API_BASE_URL}/health`, {
       method: 'GET',
@@ -137,7 +147,7 @@ export async function apiRequest<T = any>(
   if (!contentType.includes('application/json')) {
     const textPreview = await res.text().catch(() => '');
     console.error(`[ERP-API] Request ke ${url} merespon dengan ${contentType} (bukan JSON):`, textPreview.substring(0, 200));
-    throw new Error(`Server tidak mengembalikan JSON (${res.status} ${res.statusText}). Periksa konfigurasi Nginx / backend server.`);
+    throw new ApiError(`Server tidak mengembalikan JSON (${res.status} ${res.statusText}). Periksa konfigurasi Nginx / backend server.`, res.status);
   }
 
   const data = await res.json().catch(() => ({ status: 'error', message: 'Respon tidak valid dari server' }));
@@ -151,7 +161,7 @@ export async function apiRequest<T = any>(
         .find((item) => typeof item === 'string' && item.trim());
       if (typeof first === 'string') detail = first;
     }
-    throw new Error(detail);
+    throw new ApiError(detail, res.status);
   }
 
   return data;

@@ -105,7 +105,7 @@ export const HomeDashboardView: React.FC<HomeDashboardViewProps> = ({
             Menu Akses Anda ({roleInfo?.label})
           </h2>
           <span className="text-xs text-slate-500 font-medium">
-            Sistem Data Gudang Tembakau - PR. SEKAR MAJU SEJAHTERA
+            Sistem Data Gudang Tembakau - PT. SEKAR MAJU SEJAHTERA
           </span>
         </div>
 
@@ -155,7 +155,7 @@ export const HomeDashboardView: React.FC<HomeDashboardViewProps> = ({
 
         <div className="p-3 bg-slate-50/80 border-t border-slate-200 text-xs text-slate-500 flex justify-between items-center">
           <span>Menampilkan {menuList.length} modul aktif sesuai wewenang peran {roleInfo?.label}</span>
-          <span className="font-medium text-slate-700">PR. SEKAR MAJU SEJAHTERA</span>
+          <span className="font-medium text-slate-700">PT. SEKAR MAJU SEJAHTERA</span>
         </div>
       </div>
 

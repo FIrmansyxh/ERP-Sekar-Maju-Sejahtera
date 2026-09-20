@@ -40,6 +40,12 @@ import { KopSurat } from '../common/KopSurat';
 import { SortIcon } from '../common/SortIcon';
 import { COMPANY_NAME } from '../../config/appInfo';
 import { loadCurrentUser } from '../../utils/storage';
+import { useLaporanTampilan } from '../../hooks/useLaporanTampilan';
+import { LaporanTampilanToggle } from './LaporanTampilanToggle';
+import { LaporanBalRekap } from './LaporanBalRekap';
+import { PresetTanggal } from './PresetTanggal';
+import { SearchableSelect } from '../common/SearchableSelect';
+import { rekapPerKode, totalRekapKode } from '../../utils/rekapKodeBal';
 
 interface LaporanBalViewProps {
   barangList: Barang[];
@@ -81,6 +87,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
   const [filterStatusStok, setFilterStatusStok] = useState<string>('ALL');
   const [filterStatusBayar, setFilterStatusBayar] = useState<string>('ALL');
   const [filterGantiTikar, setFilterGantiTikar] = useState<'ALL' | 'ya' | 'tidak'>('ALL');
+  const [filterPetani, setFilterPetani] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [tableSearch, setTableSearch] = useState<string>('');
   const [filterMinBerat, setFilterMinBerat] = useState<string>('');
@@ -97,6 +104,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
     statusStok: 'ALL',
     statusBayar: 'ALL',
     gantiTikar: 'ALL' as 'ALL' | 'ya' | 'tidak',
+    petani: 'ALL',
     search: '',
     minBerat: '',
     maxBerat: '',
@@ -109,8 +117,11 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
   const [sortConfigs, setSortConfigs] = useState<SortConfig[]>([]);
 
   // UI States
-  const [showSummaryCards, setShowSummaryCards] = useState(true);
-  const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(true);
+  // Panel Ringkasan dan Filter bisa disembunyikan (pilihan diingat) agar tabel lebih luas
+  const tampilan = useLaporanTampilan('bal');
+  const showSummaryCards = tampilan.tampilRingkasan;
+  const isFilterPanelOpen = tampilan.tampilFilter;
+  const jumlahFilterAktif = Object.values(appliedFilters).filter((v) => v !== '' && v !== 'ALL').length;
   const [itemsPerPage, setItemsPerPage] = useState<number>(20);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
@@ -195,6 +206,29 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
       statusStok: filterStatusStok,
       statusBayar: filterStatusBayar,
       gantiTikar: filterGantiTikar,
+      petani: filterPetani,
+      search: searchQuery.trim(),
+      minBerat: filterMinBerat,
+      maxBerat: filterMaxBerat,
+      minHarga: filterMinHarga,
+      maxHarga: filterMaxHarga,
+    });
+    setCurrentPage(1);
+  };
+
+  // Rentang tanggal cepat (Hari Ini, Kemarin, dst.): langsung diterapkan bersama filter lain di form
+  const handlePilihRentang = (start: string, end: string) => {
+    setFilterStartDate(start);
+    setFilterEndDate(end);
+    setAppliedFilters({
+      startDate: start,
+      endDate: end,
+      grade: filterGrade,
+      kodeBal: filterKodeBal,
+      statusStok: filterStatusStok,
+      statusBayar: filterStatusBayar,
+      gantiTikar: filterGantiTikar,
+      petani: filterPetani,
       search: searchQuery.trim(),
       minBerat: filterMinBerat,
       maxBerat: filterMaxBerat,
@@ -213,6 +247,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
     setFilterStatusStok('ALL');
     setFilterStatusBayar('ALL');
     setFilterGantiTikar('ALL');
+    setFilterPetani('ALL');
     setSearchQuery('');
     setFilterMinBerat('');
     setFilterMaxBerat('');
@@ -226,6 +261,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
       statusStok: 'ALL',
       statusBayar: 'ALL',
       gantiTikar: 'ALL',
+      petani: 'ALL',
       search: '',
       minBerat: '',
       maxBerat: '',
@@ -439,18 +475,22 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
     return rows;
   }, [barangList, transaksiList, hargaList]);
 
-  // Filter Data
-  const filteredData = useMemo(() => {
-    return enrichedBalList.filter((item) => {
+  // Aturan filter satu sumber; abaikanTanggal dipakai untuk rekap "sepanjang masa" (filter lain tetap berlaku)
+  const cocokFilter = (item: (typeof enrichedBalList)[number], abaikanTanggal = false): boolean => {
+    {
       // Tanggal Dari
-      if (appliedFilters.startDate && item.tanggal_masuk) {
+      if (!abaikanTanggal && appliedFilters.startDate && item.tanggal_masuk) {
         const itemDate = item.tanggal_masuk.split('T')[0];
         if (itemDate < appliedFilters.startDate) return false;
       }
       // Tanggal Sampai
-      if (appliedFilters.endDate && item.tanggal_masuk) {
+      if (!abaikanTanggal && appliedFilters.endDate && item.tanggal_masuk) {
         const itemDate = item.tanggal_masuk.split('T')[0];
         if (itemDate > appliedFilters.endDate) return false;
+      }
+      // Petani
+      if (appliedFilters.petani !== 'ALL' && item.petani_id !== appliedFilters.petani) {
+        return false;
       }
       // Kode Grade
       if (appliedFilters.grade !== 'ALL') {
@@ -515,8 +555,49 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
       }
 
       return true;
+    }
+  };
+
+  const filteredData = useMemo(
+    () => enrichedBalList.filter((item) => cocokFilter(item)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [enrichedBalList, appliedFilters]
+  );
+
+  // Bal dengan filter yang sama tetapi tanpa batas tanggal, untuk kolom "Sepanjang Masa" di rekap
+  const balSepanjangMasa = useMemo(
+    () => enrichedBalList.filter((item) => cocokFilter(item, true)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [enrichedBalList, appliedFilters]
+  );
+
+  // Daftar petani untuk pilihan filter
+  const petaniOptions = useMemo(() => {
+    const peta = new Map<string, string>();
+    enrichedBalList.forEach((b) => {
+      if (b.petani_id && !peta.has(b.petani_id)) peta.set(b.petani_id, b.nama_petani || b.petani_id);
     });
-  }, [enrichedBalList, appliedFilters]);
+    petaniList.forEach((pt) => {
+      if (pt.petani_id && !peta.has(pt.petani_id)) peta.set(pt.petani_id, pt.nama_petani);
+    });
+    return [
+      { value: 'ALL', label: 'Semua Petani' },
+      ...Array.from(peta.entries())
+        .map(([value, label]) => ({ value, label: `${label} (${value})` }))
+        .sort((x, y) => x.label.localeCompare(y.label)),
+    ];
+  }, [enrichedBalList, petaniList]);
+
+  // Keterangan filter untuk judul rekap dan Excel
+  const konteksRekap = useMemo(() => {
+    const f = appliedFilters;
+    const petaniDipilih = f.petani !== 'ALL' ? petaniOptions.find((o) => o.value === f.petani)?.label : '';
+    return [
+      periodeInfo(f.startDate, f.endDate),
+      petaniDipilih ? `Petani: ${petaniDipilih}` : '',
+      f.kodeBal !== 'ALL' ? `Kode Bal: ${f.kodeBal}` : '',
+    ].filter(Boolean).join(' · ');
+  }, [appliedFilters, petaniOptions]);
 
   // Sorted Data based on sortConfigs
   const sortedData = useMemo(() => {
@@ -800,6 +881,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
       [
         `Grade: ${f.grade !== 'ALL' ? f.grade : 'Semua'}`,
         f.kodeBal !== 'ALL' ? `Kode Bal: ${f.kodeBal}` : '',
+        f.petani !== 'ALL' ? `Petani: ${petaniOptions.find((o) => o.value === f.petani)?.label || f.petani}` : '',
         f.gantiTikar !== 'ALL' ? `Tikar: ${String(f.gantiTikar).toLowerCase() === 'ya' ? 'Ganti Tikar' : 'Standar'}` : '',
         `Status Stok: ${f.statusStok !== 'ALL' ? labelStatusStok(f.statusStok) : 'Semua'}`,
         `Status Bayar: ${f.statusBayar === 'lunas' ? 'Lunas' : f.statusBayar === 'belum_lunas' ? 'Belum Lunas' : 'Semua'}`,
@@ -861,6 +943,31 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
           totalPotongan,
           '', '',
         ],
+      },
+      {
+        name: 'Rekap Kode Bal',
+        title: 'Rekap Jumlah Bal per Kode',
+        info: [...info, 'Semua bal dihitung, termasuk yang belum ditimbang dan belum dibayar.'],
+        columns: [
+          { header: 'No', type: 'integer', align: 'center' },
+          { header: 'Kode Bal', align: 'center' },
+          { header: 'Total Bal', type: 'integer' },
+          { header: 'Belum Ditimbang', type: 'integer' },
+          { header: 'Ditimbang, Belum Lunas', type: 'integer' },
+          { header: 'Lunas', type: 'integer' },
+          { header: 'Netto (Kg)', type: 'kg' },
+          { header: 'Total Bal Sepanjang Masa', type: 'integer' },
+        ],
+        rows: (() => {
+          const semua = new Map(rekapPerKode(balSepanjangMasa).map((r) => [r.kode, r] as const));
+          return rekapPerKode(filteredData).map((r, idx) => [
+            idx + 1, r.kode, r.total, r.belumTimbang, r.kredit, r.lunas, r.netto, semua.get(r.kode)?.total ?? r.total,
+          ]);
+        })(),
+        totalRow: (() => {
+          const t = totalRekapKode(rekapPerKode(filteredData));
+          return ['TOTAL', '', t.total, t.belumTimbang, t.kredit, t.lunas, t.netto, totalRekapKode(rekapPerKode(balSepanjangMasa)).total];
+        })(),
       },
       {
         name: 'Ringkasan per Grade',
@@ -929,21 +1036,9 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
           </div>
         </div>
 
-        {/* Action Buttons: Filter Toggle, Excel, Print */}
-        <div className="flex items-center space-x-2">
-          <button
-            type="button"
-            onClick={() => setIsFilterPanelOpen(!isFilterPanelOpen)}
-            className={`px-3 py-1.5 rounded-none font-bold text-xs flex items-center space-x-1.5 border transition cursor-pointer ${
-              isFilterPanelOpen
-                ? 'bg-slate-100 text-slate-900 border-slate-300'
-                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-            }`}
-          >
-            <Filter className="w-3.5 h-3.5 text-gray-600" />
-            <span>Filter Panel</span>
-            {isFilterPanelOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-          </button>
+        {/* Action Buttons: Tampilan (Filter / Ringkasan / Fokus Tabel), Excel, Print */}
+        <div className="flex flex-wrap items-center gap-2">
+          <LaporanTampilanToggle tampilan={tampilan} jumlahFilterAktif={jumlahFilterAktif} />
 
           <button
             type="button"
@@ -969,7 +1064,8 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
         </div>
       </div>
 
-      {/* 2. Ringkasan & Sub-Ringkasan Grade (Di atas Filter Data) */}
+      {/* 2. Ringkasan & Sub-Ringkasan Grade (Di atas Filter Data); bisa disembunyikan lewat toolbar Tampilan */}
+      {showSummaryCards && (
       <div className="bg-white border border-gray-200 shadow-xs">
         <div className="px-4 py-3 bg-[#f8f9fa] border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex items-center space-x-2">
@@ -985,23 +1081,6 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
             <p className="text-[11px] text-gray-500 font-medium">
               Total Tonase: <strong className="text-gray-900 font-mono">{totals.totalNetto.toFixed(1)} kg</strong> ({(totals.totalNetto / 1000).toFixed(2)} Ton)
             </p>
-            <button
-              type="button"
-              onClick={() => setShowSummaryCards(!showSummaryCards)}
-              className="px-2.5 py-1 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-xs transition flex items-center space-x-1 cursor-pointer shadow-2xs"
-            >
-              {showSummaryCards ? (
-                <>
-                  <ChevronUp className="w-3.5 h-3.5 text-gray-500" />
-                  <span>Sembunyikan</span>
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
-                  <span>Tampilkan Ringkasan</span>
-                </>
-              )}
-            </button>
           </div>
         </div>
 
@@ -1193,6 +1272,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
         )}
       </AnimatePresence>
     </div>
+      )}
 
       {/* 3. Collapsible Filter Control Section */}
       <AnimatePresence initial={false}>
@@ -1223,6 +1303,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
           </div>
 
           <form onSubmit={handleApplyFilters} className="space-y-3">
+            <PresetTanggal startDate={filterStartDate} endDate={filterEndDate} onPilih={handlePilihRentang} />
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 text-xs">
               
               {/* Filter 1: Tanggal Dari */}
@@ -1274,6 +1355,19 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* Filter Petani: jumlah bal per kode untuk satu petani (hari itu atau sepanjang masa) */}
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                  Petani
+                </label>
+                <SearchableSelect
+                  value={filterPetani}
+                  onChange={(val) => setFilterPetani(val || 'ALL')}
+                  options={petaniOptions}
+                  placeholder="Semua Petani"
+                />
               </div>
 
               {/* Filter 3b: Kode Bal */}
@@ -1419,6 +1513,16 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
         </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Rekap jumlah bal per kode / per petani; ikut disembunyikan oleh tombol Ringkasan */}
+      {tampilan.tampilRingkasan && (
+        <LaporanBalRekap
+          rows={filteredData}
+          rowsSepanjangMasa={balSepanjangMasa}
+          adaFilterTanggal={Boolean(appliedFilters.startDate || appliedFilters.endDate)}
+          konteks={konteksRekap}
+        />
+      )}
 
       {/* 4. Main Table: Detail Setiap Bal */}
       <div className="bg-white border border-gray-200 rounded-sm shadow-xs overflow-hidden">

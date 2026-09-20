@@ -482,7 +482,7 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
                               <Info className="w-3.5 h-3.5" />
                             </button>
 
-                            {/* Print ID Card Button (Warna merah korporat PR. Sekar Maju Sejahtera) */}
+                            {/* Print ID Card Button (Warna merah korporat PT. Sekar Maju Sejahtera) */}
                             <button
                               onClick={() => onPrintCard(petani)}
                               className="w-7 h-7 rounded bg-red-50/70 hover:bg-red-100 text-[#b81d24] flex items-center justify-center text-[10px] transition-colors cursor-pointer border border-red-200/80 hover:border-red-300"

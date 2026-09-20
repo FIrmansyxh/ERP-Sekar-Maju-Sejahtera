@@ -38,6 +38,7 @@ import {
   authenticateUser as authenticateLocalUser
 } from '../utils/storage';
 import { sortTransaksiItemsByInputOrder } from '../utils/kuponSortir';
+import { antrianSinkron } from './antrianSinkron';
 import { generatePetaniId } from '../utils/formatters';
 
 function mapTanggalPetani(value: unknown): string | undefined {
@@ -357,8 +358,10 @@ export class ErpApiService {
         const res = await api.get<any[]>('/transaksi');
         if (res.status === 'success' && Array.isArray(res.data)) {
           const mapped = res.data.map(t => this.mapBackendTransaksi(t));
-          saveTransaksiData(mapped);
-          return { data: mapped, fromBackend: true };
+          // Perubahan di perangkat ini yang belum sampai ke server tidak boleh tertimpa data server yang lebih lama
+          const gabungan = antrianSinkron.terapkanKeDaftar(mapped);
+          saveTransaksiData(gabungan);
+          return { data: gabungan, fromBackend: true };
         }
       }
     } catch (err) {
@@ -367,149 +370,117 @@ export class ErpApiService {
     return { data: loadTransaksiData(), fromBackend: false };
   }
 
-  public static async storeSortirTransaksi(tx: TransaksiPembelian): Promise<TransaksiPembelian | null> {
-    try {
-      const isOnline = await this.isBackendOnline();
-      if (isOnline) {
-        const payload = {
-          transaksi_id: tx.transaksi_id,
-          no_kupon: tx.no_kupon,
-          petani_id: tx.petani_id,
-          tanggal_transaksi: tx.tanggal_transaksi || new Date().toISOString().split('T')[0],
-          catatan: tx.catatan || '',
-          items: (tx.items && tx.items.length > 0 ? tx.items : [{
-            no_bal: tx.no_bal || '1',
-            kode_grade: tx.kode_grade || 'A',
-            harga_per_kg: (tx.total_harga_beli && tx.berat_kg) ? Math.round(tx.total_harga_beli / tx.berat_kg) : 100000,
-            ganti_tikar: false,
-            berat_bruto_kg: tx.berat_kg || 0,
-            potongan_tara_kg: 0,
-            berat_kg: tx.berat_kg || 0,
-            lokasi_simpan: 'Blok A',
-          }]).map(it => ({
-            no_bal: it.no_bal,
-            kode_bal_pembeli: it.kode_bal_pembeli || null,
-            barcode: it.barcode || null,
-            kode_grade: it.kode_grade,
-            harga_per_kg: it.harga_per_kg,
-            ganti_tikar: Boolean(it.ganti_tikar),
-            berat_bruto_kg: it.berat_bruto_kg || 0,
-            potongan_tara_kg: it.potongan_tara_kg || 0,
-            berat_kg: it.berat_kg || 0,
-            lokasi_simpan: it.lokasi_simpan || 'Blok A',
-            sample_label_code: it.sample_label_code || null,
-          })),
-        };
+  /**
+   * Permintaan kirim kupon ke server. Semuanya MELEMPAR galat bila gagal, supaya antrean sinkron
+   * (antrianSinkron.ts) tahu dan mencoba lagi; dulu galat ditelan dan data hanya tersimpan lokal.
+   */
+  public static async storeSortirTransaksi(tx: TransaksiPembelian): Promise<TransaksiPembelian> {
+    const payload = {
+      transaksi_id: tx.transaksi_id,
+      no_kupon: tx.no_kupon,
+      petani_id: tx.petani_id,
+      tanggal_transaksi: tx.tanggal_transaksi || new Date().toISOString().split('T')[0],
+      catatan: tx.catatan || '',
+      items: (tx.items && tx.items.length > 0 ? tx.items : [{
+        no_bal: tx.no_bal || '1',
+        kode_grade: tx.kode_grade || 'A',
+        harga_per_kg: (tx.total_harga_beli && tx.berat_kg) ? Math.round(tx.total_harga_beli / tx.berat_kg) : 100000,
+        ganti_tikar: false,
+        berat_bruto_kg: tx.berat_kg || 0,
+        potongan_tara_kg: 0,
+        berat_kg: tx.berat_kg || 0,
+        lokasi_simpan: 'Blok A',
+      }]).map(it => ({
+        no_bal: it.no_bal,
+        kode_bal_pembeli: it.kode_bal_pembeli || null,
+        barcode: it.barcode || null,
+        kode_grade: it.kode_grade,
+        harga_per_kg: it.harga_per_kg,
+        ganti_tikar: Boolean(it.ganti_tikar),
+        berat_bruto_kg: it.berat_bruto_kg || 0,
+        potongan_tara_kg: it.potongan_tara_kg || 0,
+        berat_kg: it.berat_kg || 0,
+        lokasi_simpan: it.lokasi_simpan || 'Blok A',
+        sample_label_code: it.sample_label_code || null,
+      })),
+    };
 
-        const res = await api.post<any>('/transaksi/sortir', payload);
-        if (res.status === 'success' && res.data) {
-          return this.mapBackendTransaksi(res.data);
-        }
-      }
-    } catch (err) {
-      console.warn('Gagal simpan transaksi sortir ke backend API:', err);
-    }
-    return null;
+    const res = await api.post<any>('/transaksi/sortir', payload);
+    if (res.status === 'success' && res.data) return this.mapBackendTransaksi(res.data);
+    throw new Error(res.message || 'Server menolak menyimpan kupon baru');
   }
 
-  public static async updateTimbangTransaksi(tx: TransaksiPembelian): Promise<TransaksiPembelian | null> {
-    try {
-      const isOnline = await this.isBackendOnline();
-      if (isOnline && tx.transaksi_id) {
-        const payload = {
-          status_tahap: tx.status_tahap,
-          items: (tx.items || []).map(it => ({
-            item_id: it.item_id,
-            no_bal: it.no_bal,
-            berat_bruto_kg: it.berat_bruto_kg || it.berat_kg || 0,
-            potongan_tara_kg: it.potongan_tara_kg || 0,
-            berat_kg: it.berat_kg || 0,
-            is_netto_manual: Boolean(it.is_netto_manual),
-            lokasi_simpan: (it as any).lokasi_simpan || 'Blok A',
-            ganti_tikar: Boolean(it.ganti_tikar),
-            potongan_tikar: it.ganti_tikar ? (Number(it.potongan_tikar) || 75000) : 0,
-            potongan_kuli: it.potongan_kuli,
-            potongan_tali: it.potongan_tali,
-          })),
-        };
+  public static async updateTimbangTransaksi(tx: TransaksiPembelian): Promise<TransaksiPembelian> {
+    const payload = {
+      status_tahap: tx.status_tahap,
+      items: (tx.items || []).map(it => ({
+        item_id: it.item_id,
+        no_bal: it.no_bal,
+        berat_bruto_kg: it.berat_bruto_kg || it.berat_kg || 0,
+        potongan_tara_kg: it.potongan_tara_kg || 0,
+        berat_kg: it.berat_kg || 0,
+        is_netto_manual: Boolean(it.is_netto_manual),
+        lokasi_simpan: (it as any).lokasi_simpan || 'Blok A',
+        ganti_tikar: Boolean(it.ganti_tikar),
+        potongan_tikar: it.ganti_tikar ? (Number(it.potongan_tikar) || 75000) : 0,
+        potongan_kuli: it.potongan_kuli,
+        potongan_tali: it.potongan_tali,
+      })),
+    };
 
-        const res = await api.put<any>(`/transaksi/${tx.transaksi_id}/timbang`, payload);
-        if (res.status === 'success' && res.data) {
-          return this.mapBackendTransaksi(res.data);
-        }
-      }
-    } catch (err) {
-      console.warn('Gagal update timbangan transaksi ke backend API:', err);
-    }
-    return null;
+    const res = await api.put<any>(`/transaksi/${tx.transaksi_id}/timbang`, payload);
+    if (res.status === 'success' && res.data) return this.mapBackendTransaksi(res.data);
+    throw new Error(res.message || 'Server menolak menyimpan hasil timbang');
   }
 
-  public static async updateSortirItemsTransaksi(tx: TransaksiPembelian): Promise<TransaksiPembelian | null> {
-    try {
-      const isOnline = await this.isBackendOnline();
-      if (isOnline && tx.transaksi_id) {
-        const payload = {
-          catatan: tx.catatan || '',
-          status_tahap: tx.status_tahap,
-          items: (tx.items && tx.items.length > 0 ? tx.items : [{
-            no_bal: tx.no_bal || '1',
-            kode_grade: tx.kode_grade || 'A',
-            harga_per_kg: (tx.total_harga_beli && tx.berat_kg) ? Math.round(tx.total_harga_beli / tx.berat_kg) : 100000,
-            ganti_tikar: false,
-          }]).map(it => ({
-            item_id: it.item_id || null,
-            no_bal: it.no_bal,
-            kode_bal_pembeli: it.kode_bal_pembeli || null,
-            barcode: it.barcode || null,
-            kode_grade: it.kode_grade,
-            harga_per_kg: it.harga_per_kg,
-            ganti_tikar: Boolean(it.ganti_tikar),
-            potongan_tikar: it.ganti_tikar ? (Number(it.potongan_tikar) || 75000) : 0,
-            berat_bruto_kg: it.berat_bruto_kg || 0,
-            potongan_tara_kg: it.potongan_tara_kg || 0,
-            berat_kg: it.berat_kg || 0,
-            lokasi_simpan: it.lokasi_simpan || 'Blok A',
-            sample_label_code: it.sample_label_code || null,
-            potongan_kuli: it.potongan_kuli,
-            potongan_tali: it.potongan_tali,
-          })),
-        };
+  public static async updateSortirItemsTransaksi(tx: TransaksiPembelian): Promise<TransaksiPembelian> {
+    const payload = {
+      catatan: tx.catatan || '',
+      status_tahap: tx.status_tahap,
+      items: (tx.items && tx.items.length > 0 ? tx.items : [{
+        no_bal: tx.no_bal || '1',
+        kode_grade: tx.kode_grade || 'A',
+        harga_per_kg: (tx.total_harga_beli && tx.berat_kg) ? Math.round(tx.total_harga_beli / tx.berat_kg) : 100000,
+        ganti_tikar: false,
+      }]).map(it => ({
+        item_id: it.item_id || null,
+        no_bal: it.no_bal,
+        kode_bal_pembeli: it.kode_bal_pembeli || null,
+        barcode: it.barcode || null,
+        kode_grade: it.kode_grade,
+        harga_per_kg: it.harga_per_kg,
+        ganti_tikar: Boolean(it.ganti_tikar),
+        potongan_tikar: it.ganti_tikar ? (Number(it.potongan_tikar) || 75000) : 0,
+        berat_bruto_kg: it.berat_bruto_kg || 0,
+        potongan_tara_kg: it.potongan_tara_kg || 0,
+        berat_kg: it.berat_kg || 0,
+        lokasi_simpan: it.lokasi_simpan || 'Blok A',
+        sample_label_code: it.sample_label_code || null,
+        potongan_kuli: it.potongan_kuli,
+        potongan_tali: it.potongan_tali,
+      })),
+    };
 
-        const res = await api.put<any>(`/transaksi/${tx.transaksi_id}/sortir-items`, payload);
-        if (res.status === 'success' && res.data) {
-          return this.mapBackendTransaksi(res.data);
-        }
-      }
-    } catch (err) {
-      console.warn('Gagal sync item sortir ke backend API:', err);
-    }
-    return null;
+    const res = await api.put<any>(`/transaksi/${tx.transaksi_id}/sortir-items`, payload);
+    if (res.status === 'success' && res.data) return this.mapBackendTransaksi(res.data);
+    throw new Error(res.message || 'Server menolak menyimpan daftar bal');
   }
 
   public static async bayarTransaksi(
-    txId: string, 
-    metode: 'cash' | 'kredit' = 'cash', 
-    gudangId: string = 'PMK-01', 
+    txId: string,
+    metode: 'cash' | 'kredit' = 'cash',
+    gudangId: string = 'PMK-01',
     catatanKasir?: string
-  ): Promise<TransaksiPembelian | null> {
-    try {
-      const isOnline = await this.isBackendOnline();
-      if (isOnline && txId) {
-        const payload = {
-          metode_pembayaran: metode,
-          gudang_id: gudangId,
-          catatan_kasir: catatanKasir || null,
-        };
+  ): Promise<TransaksiPembelian> {
+    const payload = {
+      metode_pembayaran: metode,
+      gudang_id: gudangId,
+      catatan_kasir: catatanKasir || null,
+    };
 
-        const res = await api.put<any>(`/transaksi/${txId}/bayar`, payload);
-        if (res.status === 'success' && res.data) {
-          return this.mapBackendTransaksi(res.data);
-        }
-      }
-    } catch (err) {
-      console.warn('Gagal pelunasan kasir ke backend API:', err);
-    }
-    return null;
+    const res = await api.put<any>(`/transaksi/${txId}/bayar`, payload);
+    if (res.status === 'success' && res.data) return this.mapBackendTransaksi(res.data);
+    throw new Error(res.message || 'Server menolak pelunasan');
   }
 
   public static async koreksiTransaksi(tx: TransaksiPembelian): Promise<TransaksiPembelian | null> {
@@ -554,84 +525,112 @@ export class ErpApiService {
     return null;
   }
 
+  /** Galat "kupon belum ada di server" (mis. dulu tersimpan lokal saja): jalur ubah harus diganti jalur buat baru. */
+  private static galatBelumAda(err: unknown): boolean {
+    const status = (err as { status?: number } | null)?.status;
+    const pesan = (err instanceof Error ? err.message : String(err)).toLowerCase();
+    return status === 404 || /tidak ditemukan|not found|no query results/.test(pesan);
+  }
+
+  /** Galat "kupon sudah ada di server" (mis. permintaan buat sebelumnya sampai tetapi jawabannya hilang). */
+  private static galatSudahAda(err: unknown): boolean {
+    const status = (err as { status?: number } | null)?.status;
+    const pesan = (err instanceof Error ? err.message : String(err)).toLowerCase();
+    return status === 409 || /sudah (ada|digunakan|terdaftar)|already|unique|duplicate|has already been taken|exists/.test(pesan);
+  }
+
+  /**
+   * Mengirim keadaan terakhir sebuah kupon ke server. Dipanggil oleh antrean sinkron
+   * (antrianSinkron.ts), yang menjamin hanya satu permintaan per kupon berjalan dan mengulang bila gagal.
+   *
+   * Urutan pasti: (buat baru | ubah daftar bal + hasil timbang) lalu pelunasan bila baru dibayar.
+   * Melempar galat bila gagal; fromBackend=false hanya bila server memang tidak terjangkau.
+   */
   public static async syncTransaksi(
-    newTx: TransaksiPembelian, 
-    oldTx?: TransaksiPembelian,
-    options?: { koreksi?: boolean }
+    newTx: TransaksiPembelian,
+    oldTx?: { status_pembayaran?: TransaksiPembelian['status_pembayaran'] },
+    options?: { koreksi?: boolean; tanpaCekKesehatan?: boolean }
   ): Promise<{ syncedTx: TransaksiPembelian; fromBackend: boolean }> {
-    try {
+    // Antrean mencoba permintaan sungguhan; cek kesehatan yang sekali gagal tidak boleh memblokir simpanan
+    if (!options?.tanpaCekKesehatan) {
       const isOnline = await this.isBackendOnline();
-      if (isOnline) {
-        // Koreksi kasir (petani / tanggal / status / bal) — endpoint khusus
-        if (options?.koreksi && oldTx) {
-          const corrected = await this.koreksiTransaksi(newTx);
-          if (corrected) return { syncedTx: corrected, fromBackend: true };
-          throw new Error('Koreksi transaksi gagal disimpan ke server');
-        }
-
-        // Kasus 1: Pelunasan Kasir
-        if (newTx.status_pembayaran === 'lunas' && (!oldTx || oldTx.status_pembayaran !== 'lunas')) {
-          const metode = (newTx.metode_pembayaran === 'cash' || newTx.metode_pembayaran === 'kredit') 
-            ? newTx.metode_pembayaran 
-            : 'cash';
-          const res = await this.bayarTransaksi(newTx.transaksi_id, metode, 'PMK-01', newTx.catatan_kasir);
-          if (res) return { syncedTx: res, fromBackend: true };
-        }
-
-        const hasWeights = Boolean(newTx.items?.some((i) => (i.berat_kg || 0) > 0));
-
-        // Kasus 2: Kupon existing → sync daftar bal sortir, lalu timbang dengan BERAT dari FE (newTx)
-        if (oldTx) {
-          const sortirSynced = await this.updateSortirItemsTransaksi(newTx);
-
-          if (hasWeights) {
-            // Samakan item_id dari BE bila ada, tapi tetap kirim berat/tara dari FE
-            const timbangPayload: TransaksiPembelian = sortirSynced
-              ? {
-                  ...newTx,
-                  transaksi_id: sortirSynced.transaksi_id || newTx.transaksi_id,
-                  items: (newTx.items || []).map((feItem) => {
-                    const beItem = (sortirSynced.items || []).find(
-                      (b) => String(b.no_bal) === String(feItem.no_bal)
-                    );
-                    return beItem ? { ...feItem, item_id: beItem.item_id || feItem.item_id } : feItem;
-                  }),
-                }
-              : newTx;
-
-            const weighed = await this.updateTimbangTransaksi(timbangPayload);
-            if (weighed) return { syncedTx: weighed, fromBackend: true };
-          }
-
-          if (sortirSynced) return { syncedTx: sortirSynced, fromBackend: true };
-        }
-
-        // Kasus 3: Input Baru di Loket Sortir
-        if (!oldTx) {
-          const created = await this.storeSortirTransaksi(newTx);
-          if (created && hasWeights) {
-            const timbangPayload: TransaksiPembelian = {
-              ...newTx,
-              transaksi_id: created.transaksi_id || newTx.transaksi_id,
-              items: (newTx.items || []).map((feItem) => {
-                const beItem = (created.items || []).find(
-                  (b) => String(b.no_bal) === String(feItem.no_bal)
-                );
-                return beItem ? { ...feItem, item_id: beItem.item_id || feItem.item_id } : feItem;
-              }),
-            };
-            const weighed = await this.updateTimbangTransaksi(timbangPayload);
-            if (weighed) return { syncedTx: weighed, fromBackend: true };
-          }
-          if (created) return { syncedTx: created, fromBackend: true };
-        }
-      }
-    } catch (err) {
-      console.warn('Sinkronisasi transaksi ke backend dialihkan ke mode offline:', err);
-      if (options?.koreksi) throw err;
+      if (!isOnline) return { syncedTx: newTx, fromBackend: false };
     }
 
-    return { syncedTx: newTx, fromBackend: false };
+    // Koreksi kasir (petani / tanggal / status / bal) — endpoint khusus
+    if (options?.koreksi && oldTx) {
+      const corrected = await this.koreksiTransaksi(newTx);
+      if (corrected) return { syncedTx: corrected, fromBackend: true };
+      throw new Error('Koreksi transaksi gagal disimpan ke server');
+    }
+
+    const hasWeights = Boolean(newTx.items?.some((i) => (i.berat_kg || 0) > 0));
+    const lunasBaru = newTx.status_pembayaran === 'lunas' && (!oldTx || oldTx.status_pembayaran !== 'lunas');
+
+    // Samakan item_id dengan milik server (dicocokkan lewat No Bal), tetapi berat/tara/tikar tetap dari layar
+    const denganIdServer = (dariServer: TransaksiPembelian): TransaksiPembelian => ({
+      ...newTx,
+      transaksi_id: dariServer.transaksi_id || newTx.transaksi_id,
+      items: (newTx.items || []).map((feItem) => {
+        const beItem = (dariServer.items || []).find((b) => String(b.no_bal) === String(feItem.no_bal));
+        return beItem ? { ...feItem, item_id: beItem.item_id || feItem.item_id } : feItem;
+      }),
+    });
+
+    const kirimBerat = async (dariServer: TransaksiPembelian): Promise<TransaksiPembelian> => {
+      if (!hasWeights) return dariServer;
+      return this.updateTimbangTransaksi(denganIdServer(dariServer));
+    };
+
+    // Kupon sudah ada di server: ganti daftar bal, lalu hasil timbang. Bila ternyata belum ada, buat baru.
+    const perbarui = async (bolehBuat: boolean): Promise<TransaksiPembelian> => {
+      try {
+        return await kirimBerat(await this.updateSortirItemsTransaksi(newTx));
+      } catch (err) {
+        if (bolehBuat && this.galatBelumAda(err)) return buatBaru(false);
+        throw err;
+      }
+    };
+
+    // Kupon belum ada di server. Bila permintaan buat sebelumnya sebenarnya sudah sampai, lanjut sebagai ubah.
+    const buatBaru = async (bolehUbah: boolean): Promise<TransaksiPembelian> => {
+      try {
+        return await kirimBerat(await this.storeSortirTransaksi(newTx));
+      } catch (err) {
+        if (bolehUbah && this.galatSudahAda(err)) return perbarui(false);
+        throw err;
+      }
+    };
+
+    let terakhir: TransaksiPembelian;
+    if (!oldTx) {
+      terakhir = await buatBaru(true);
+    } else if (lunasBaru) {
+      // Bal yang baru ditimbang harus sudah di server sebelum dibayar (antrean bisa menggabung simpanan).
+      // Kegagalan langkah ini tidak boleh menahan pelunasan; antrean memeriksanya lagi sesudahnya.
+      try {
+        terakhir = await perbarui(true);
+      } catch (err) {
+        console.warn('Daftar bal belum terkirim sebelum pelunasan, dilanjutkan ke pelunasan:', err);
+        terakhir = newTx;
+      }
+    } else {
+      terakhir = await perbarui(true);
+    }
+
+    if (lunasBaru) {
+      const metode = (newTx.metode_pembayaran === 'cash' || newTx.metode_pembayaran === 'kredit')
+        ? newTx.metode_pembayaran
+        : 'cash';
+      const dibayar = await this.bayarTransaksi(newTx.transaksi_id, metode, 'PMK-01', newTx.catatan_kasir);
+      // Jawaban pelunasan tidak selalu memuat daftar bal; pakai yang terakhir diterima agar bisa diverifikasi
+      if ((!dibayar.items || dibayar.items.length === 0) && terakhir.items && terakhir.items.length > 0 && terakhir !== newTx) {
+        dibayar.items = terakhir.items;
+      }
+      terakhir = dibayar;
+    }
+
+    return { syncedTx: terakhir, fromBackend: true };
   }
 
   // --- INVENTARIS BARANG / BAL ---

@@ -16,3 +16,6 @@ coverage/
 # Berkas sementara sistem operasi
 .DS_Store
 Thumbs.db
+
+# Data dummy untuk uji manual (tidak boleh masuk repositori/produksi)
+dummy-data/

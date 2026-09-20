@@ -2,7 +2,7 @@
  * Identitas rilis aplikasi.
  * Diperbarui setiap kali versi produksi baru dirilis.
  */
-export const APP_NAME = 'ERP PR. Sekar Maju Sejahtera';
+export const APP_NAME = 'ERP PT. Sekar Maju Sejahtera';
 export const APP_EDITION = 'Desktop Standalone';
 export const APP_VERSION = '3.0.5';
 export const APP_BUILD = '2026.09.19-V6';

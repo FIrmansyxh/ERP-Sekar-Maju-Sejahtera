@@ -2,7 +2,7 @@
   "name": "erp-sekar-maju-sejahtera",
   "version": "3.0.0",
   "private": true,
-  "description": "Sistem ERP gudang tembakau PR. Sekar Maju Sejahtera: master petani, harga, sortir, timbang, kasir, stok bal, dan logistik pengiriman.",
+  "description": "Sistem ERP gudang tembakau PT. Sekar Maju Sejahtera: master petani, harga, sortir, timbang, kasir, stok bal, dan logistik pengiriman.",
   "type": "module",
   "engines": {
     "node": ">=20"

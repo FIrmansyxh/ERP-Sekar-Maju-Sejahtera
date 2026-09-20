@@ -38,6 +38,8 @@ import { Pagination } from '../common/Pagination';
 import { COMPANY_NAME } from '../../config/appInfo';
 import { loadCurrentUser } from '../../utils/storage';
 import { KopSurat } from '../common/KopSurat';
+import { useLaporanTampilan } from '../../hooks/useLaporanTampilan';
+import { LaporanTampilanToggle } from './LaporanTampilanToggle';
 
 interface LaporanPetaniViewProps {
   petaniList: Petani[];
@@ -79,7 +81,16 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
   const [tableSearch, setTableSearch] = useState('');
 
   // UI & Detail Drawer State
-  const [showSummaryCards, setShowSummaryCards] = useState<boolean>(true);
+  // Panel Ringkasan (KPI) dan Filter bisa disembunyikan (pilihan diingat) agar tabel lebih luas
+  const tampilan = useLaporanTampilan('petani');
+  const showSummaryCards = tampilan.tampilRingkasan;
+  const jumlahFilterAktif = [
+    appliedFilters.search,
+    appliedFilters.status !== 'ALL' ? appliedFilters.status : '',
+    appliedFilters.wilayah !== 'ALL' ? appliedFilters.wilayah : '',
+    appliedFilters.startDate,
+    appliedFilters.endDate,
+  ].filter(Boolean).length;
   const [selectedPetaniForDetail, setSelectedPetaniForDetail] = useState<Petani | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -451,26 +462,9 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
           </h1>
         </div>
 
-        {/* Action Controls: Unduh Excel, Unduh PDF, & Toggle Ringkasan */}
+        {/* Action Controls: Tampilan (Filter / Ringkasan / Fokus Tabel), Unduh Excel, Unduh PDF */}
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setShowSummaryCards(!showSummaryCards)}
-            className="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-xs transition flex items-center space-x-1.5 cursor-pointer"
-            title={showSummaryCards ? 'Sembunyikan Ringkasan' : 'Tampilkan Ringkasan'}
-          >
-            {showSummaryCards ? (
-              <>
-                <EyeOff className="w-3.5 h-3.5 text-gray-600" />
-                <span>Sembunyikan Ringkasan</span>
-              </>
-            ) : (
-              <>
-                <Eye className="w-3.5 h-3.5 text-gray-600" />
-                <span>Tampilkan Ringkasan</span>
-              </>
-            )}
-          </button>
+          <LaporanTampilanToggle tampilan={tampilan} jumlahFilterAktif={jumlahFilterAktif} />
 
           <button
             onClick={handleDownloadExcel}
@@ -583,6 +577,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
       )}
 
       {/* 3. Comprehensive Filter Panel */}
+      {tampilan.tampilFilter && (
       <form onSubmit={handleApplyFilter} className="bg-white p-3.5 border border-gray-200 shadow-2xs space-y-3">
         <div className="flex items-center justify-between border-b border-gray-100 pb-2">
           <div className="flex items-center space-x-2 text-xs font-bold text-gray-800 uppercase tracking-wider">
@@ -704,6 +699,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
           </button>
         </div>
       </form>
+      )}
 
       {/* 4. Tab Navigation */}
       <div className="flex items-center space-x-1 border-b border-gray-200">

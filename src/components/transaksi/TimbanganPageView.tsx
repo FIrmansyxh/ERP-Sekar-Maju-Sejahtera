@@ -5,7 +5,6 @@ import {
   ArrowRight, 
   CheckCircle2, 
   AlertCircle, AlertTriangle, 
-  Layers, 
   Warehouse, 
   User, 
   Tag, 
@@ -70,12 +69,6 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
   onNavigateToKasir,
   onNavigateToSortir,
 }) => {
-  // Pending or all transactions
-  const pendingOrRecentTxList = useMemo(() => {
-    const filtered = transaksiList.filter((t) => (t.items || []).length > 0);
-    return filtered.sort((a, b) => b.no_kupon.localeCompare(a.no_kupon));
-  }, [transaksiList]);
-
   // Initial lookup if initialBalNo is provided
   const initialBalMatch = useMemo(() => {
     if (!initialBalNo) return null;
@@ -102,15 +95,6 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     // Default to first pending tx or first tx
     return '';
   });
-  const [kuponInput, setKuponInput] = useState<string>('');
-  const [showKuponDropdown, setShowKuponDropdown] = useState(false);
-  
-  // Sync kuponInput when selectedTxId changes from elsewhere
-  useEffect(() => {
-    const tx = transaksiList.find(t => t.transaksi_id === selectedTxId);
-    if (tx) setKuponInput(tx.no_kupon);
-  }, [selectedTxId, transaksiList]);
-
 
   // Current Transaction object
   const currentTx = useMemo(() => {
@@ -844,10 +828,18 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
       });
     }
 
-    // Mengosongkan isian di layar (Sesuai dengan Requirement form kembali kosong)
+    // Isian dikembalikan seperti halaman timbangan baru dibuka (bruto, netto, ganti tikar), lalu kursor
+    // kembali ke kolom No Bal supaya bal berikutnya bisa langsung discan atau diketik.
     setBeratBrutoInput('');
+    setBeratNettoInput('');
+    setIsNettoManual(false);
     setPotTikarInput('');
     setActiveItemId('');
+    fokusTerakhirRef.current = 'scan';
+    setTimeout(() => {
+      barcodeScannerRef.current?.focus();
+      barcodeScannerRef.current?.select();
+    }, 60);
   };
 
   // SISTEM PENGAMAN ANTI-SCAN PADA INPUT BERAT
@@ -884,9 +876,12 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     if (e.key === 'Enter') {
       e.preventDefault();
 
-      // Jika terdeteksi tembakan scanner (burst scan / ada karakter non-numeric)
-      if (weightKeyBufferRef.current.isBurst && weightKeyBufferRef.current.chars.trim().length >= 2) {
-        const scannedCode = weightKeyBufferRef.current.chars.trim();
+      // Tembakan scanner = ada huruf/simbol, atau deretan 6 angka atau lebih. Dua-tiga angka yang diketik cepat
+      // (mis. 45 atau 45.5 di numpad) adalah berat yang sah dan tidak boleh dibuang.
+      const isiBuffer = weightKeyBufferRef.current.chars.trim();
+      const miripScanner = /[^\d.,]/.test(isiBuffer) || isiBuffer.replace(/[^\d]/g, '').length >= 6;
+      if (weightKeyBufferRef.current.isBurst && isiBuffer.length >= 2 && miripScanner) {
+        const scannedCode = isiBuffer;
         weightKeyBufferRef.current = { chars: '', lastTime: 0, isBurst: false };
         
         // Reset berat agar tidak terkunci dengan angka barcode
@@ -1265,79 +1260,6 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
             })()}
           </div>
 
-          {/* Kupon Batch Selector */}
-          <div className="bg-white border border-gray-200 p-4 shadow-2xs rounded-sm space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2 text-gray-800">
-                <Layers className="w-4 h-4 text-gray-600" />
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-700">
-                  Pilih Kupon Antrian
-                </h3>
-              </div>
-              <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-mono font-medium border border-gray-200">
-                {pendingOrRecentTxList.length} Kupon
-              </span>
-            </div>
-
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Ketik min. 3 karakter No. Kupon..."
-                value={kuponInput}
-                onChange={(e) => {
-                  const val = e.target.value.toUpperCase();
-                  setKuponInput(val);
-                  setShowKuponDropdown(val.length >= 3);
-                }}
-                onFocus={() => {
-                  if (kuponInput.length >= 3) setShowKuponDropdown(true);
-                }}
-                onBlur={() => {
-                  // Small delay to allow click on dropdown to register
-                  setTimeout(() => setShowKuponDropdown(false), 200);
-                }}
-                className="w-full bg-white border border-gray-300 rounded-sm px-2.5 py-2 text-xs font-medium text-gray-900 focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800"
-              />
-              
-              {showKuponDropdown && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-sm shadow-lg overflow-y-auto max-h-60 z-50">
-                  {pendingOrRecentTxList
-                    .filter((tx) => tx.no_kupon.includes(kuponInput))
-                    .map((tx) => {
-                      const items = tx.items || [];
-                      const weighed = items.filter((i) => (i.berat_kg || 0) > 0).length;
-                      const isComplete = items.length > 0 && weighed === items.length;
-                      return (
-                        <div
-                          key={tx.transaksi_id}
-                          onClick={() => {
-                            handleManualChangeKupon(tx.transaksi_id);
-                            setKuponInput(tx.no_kupon);
-                            setShowKuponDropdown(false);
-                          }}
-                          className="px-3 py-2 cursor-pointer hover:bg-[#f8f9fa] border-b border-gray-100 last:border-0"
-                        >
-                          <div className="flex justify-between items-center mb-0.5">
-                            <strong className="text-gray-800 font-mono text-xs">{tx.no_kupon}</strong>
-                            <span className="text-[10px] text-gray-500 font-medium">
-                              {isKuponProsesSortir(tx) ? '✂ SORTIR BERJALAN' : isComplete ? '✓ LENGKAP' : '⏳ PROSES'}
-                            </span>
-                          </div>
-                          <div className="text-[10px] text-gray-600">
-                            {tx.nama_petani} • {weighed}/{items.length} Bal ditimbang
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {pendingOrRecentTxList.filter((tx) => tx.no_kupon.includes(kuponInput)).length === 0 && (
-                      <div className="px-3 py-2 text-xs text-gray-500 text-center">Tidak ada kupon ditemukan</div>
-                    )}
-                </div>
-              )}
-            </div>
-
-          </div>
-
           {/* List of Recently Weighed Bals across all kupons */}
           <div className="bg-white border border-gray-200 shadow-2xs rounded-sm overflow-hidden flex flex-col flex-1">
             <div className="bg-[#f8f9fa] border-b border-gray-200 px-4 py-2.5 flex items-center justify-between">
@@ -1398,7 +1320,15 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                           {beratBrutoItem(item)} Kg Bruto
                         </div>
                         <p className="text-[10px] font-mono text-emerald-700 font-medium">
-                          Netto: {item.berat_kg} Kg {item.potongan_tara_kg ? `(Tara ${item.potongan_tara_kg}kg)` : ''}
+                          Netto: {item.berat_kg} Kg
+                          {(item.ganti_tikar || (item.potongan_tikar || 0) > 0) && (
+                            <span
+                              className="ml-1.5 px-1 py-0.5 bg-amber-50 text-amber-900 border border-amber-200 rounded-xs text-[9px] font-bold leading-none"
+                              title="Ganti Tikar"
+                            >
+                              GT
+                            </span>
+                          )}
                         </p>
                       </div>
                     </button>

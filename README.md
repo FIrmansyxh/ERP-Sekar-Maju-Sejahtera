@@ -1,6 +1,6 @@
-# ERP PR. Sekar Maju Sejahtera
+# ERP PT. Sekar Maju Sejahtera
 
-Sistem Enterprise Resource Planning untuk operasional gudang tembakau PR. Sekar Maju Sejahtera,
+Sistem Enterprise Resource Planning untuk operasional gudang tembakau PT. Sekar Maju Sejahtera,
 Pamekasan, Madura. Aplikasi menangani rantai proses lengkap mulai dari pendaftaran petani,
 sortir mutu, penimbangan bal, pembayaran kasir, pengelolaan stok gudang, sampai pengiriman
 barang dan sample ke pabrik rekanan.
@@ -315,8 +315,9 @@ src/
 │   ├── appInfo.ts           Identitas rilis serta nama dan alamat perusahaan pada dokumen
 │   └── aturanTimbang.ts     Tarif potongan kuli, tali, dan ganti tikar
 ├── services/
-│   ├── apiClient.ts         Alamat API, token, health check, dan pemanggil HTTP
-│   └── erpApi.ts            Sinkronisasi data API dengan cache lokal
+│   ├── apiClient.ts         Alamat API, token, health check, dan pemanggil HTTP (ApiError berisi kode status)
+│   ├── erpApi.ts            Panggilan API dan pemetaan jawaban ke model layar
+│   └── antrianSinkron.ts    Antrean kirim kupon: satu permintaan per kupon, coba ulang, verifikasi hasil
 ├── components/
 │   ├── auth/                Halaman login
 │   ├── Header.tsx           Bilah atas, profil pengguna, dan logout
@@ -330,7 +331,7 @@ src/
 │   ├── laporan/             Dashboard analitik dan seluruh laporan
 │   ├── user/                Manajemen pengguna, matriks peran, dan jejak audit
 │   ├── print/               Tampilan cetak mandiri
-│   └── common/              Kop surat, ikon urutan, modal, paginasi, dan pilihan tercari
+│   └── common/              Kop surat, ikon urutan, modal, paginasi, pilihan tercari, dan lencana status simpanan
 ├── data/                    Data bawaan instalasi, seluruhnya kosong kecuali akun Super Admin
 ├── hooks/                   Hook khusus, antara lain pemindai barcode
 ├── types/                   Definisi tipe domain
@@ -345,6 +346,8 @@ src/
     ├── formatters.ts        Format angka, tanggal, dan penanganan presisi berat
     ├── financialCalculations.ts  Perhitungan nilai transaksi
     ├── kuponSortir.ts       Aturan kupon terbuka Sortir dan Timbangan
+    ├── rekapKodeBal.ts      Rekap jumlah bal per kode bal dan per petani
+    ├── paginasiNota.ts      Pembagian halaman nota agar baris tidak terpotong
     ├── excelExport.ts       Ekspor laporan Excel (.xlsx) siap cetak
     └── printDownload.ts     Ekspor PDF
 ```
@@ -372,8 +375,10 @@ Batasan berikut perlu ditutup dengan prosedur operasional.
 |---|---|
 | `RENCANA_PERBAIKAN_ALUR_FE_BE.md` | Status sinkronisasi per menu antara frontend, backend, dan cache lokal |
 | `PANDUAN_PENGUJIAN_MANUAL.md` | Langkah pengujian manual integrasi frontend dan backend |
+| `DOKUMENTASI_DATABASE.md` | Alur data, relasi tabel, pemetaan field ke kolom, kontrak API, pola query, keandalan sinkronisasi, dan daftar periksa migrasi VPS |
+| `db/usulan-indeks-constraint.sql` | Usulan indeks, constraint, kolom tambahan, dan view untuk PostgreSQL (aditif, aman diulang) |
 
 ---
 
-Hak Cipta © 2026 PR. SEKAR MAJU SEJAHTERA, Pamekasan, Madura, Jawa Timur.
+Hak Cipta © 2026 PT. SEKAR MAJU SEJAHTERA, Pamekasan, Madura, Jawa Timur.
 Perangkat lunak internal perusahaan, bukan untuk distribusi publik.
