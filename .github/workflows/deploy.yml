@@ -4,98 +4,21 @@ on:
   push:
     branches:
       - main
-      - staging
 
 # Cegah build ganda bertumpuk jika ada beberapa push berurutan
 concurrency:
-  group: deploy-frontend-${{ github.ref_name }}
+  group: deploy-frontend-production
   cancel-in-progress: true
 
 jobs:
   # ============================================================
-  # JOB 1: Deploy ke STAGING (branch: staging)
-  # ============================================================
-  deploy-staging:
-    name: Build & Deploy Frontend → Staging
-    runs-on: ubuntu-latest
-    if: github.ref_name == 'staging'
-    environment: staging
-
-    steps:
-    - name: 1. Checkout Repository
-      uses: actions/checkout@v4
-
-    - name: 2. Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: 20
-
-<<<<<<< Updated upstream
-    - name: 3. Install Dependencies
-      run: npm install
-
-    - name: 4. Build Vite (Staging)
-=======
-    - name: 3. Install Dependencies di GitHub Runner (sesuai package-lock.json)
-      run: npm ci
-
-    - name: 4. Jalankan Tes Otomatis (deploy dibatalkan bila ada yang gagal)
-      run: npm test
-
-    - name: 5. Build Vite di GitHub Runner (Super Cepat & Bebas Beban VPS)
->>>>>>> Stashed changes
-      run: npm run build
-      env:
-        VITE_API_URL: ${{ secrets.STAGING_VITE_API_URL }}
-
-    - name: 6. Kompres Hasil Build dist
-      run: tar -czf dist.tar.gz dist/
-
-<<<<<<< Updated upstream
-    - name: 6. Kirim dist.tar.gz ke Staging VPS
-      uses: appleboy/scp-action@v0.1.7
-      with:
-        host: ${{ secrets.STAGING_VPS_HOST }}
-        username: ${{ secrets.STAGING_VPS_USER }}
-        key: ${{ secrets.STAGING_VPS_SSH_KEY }}
-        port: ${{ secrets.STAGING_VPS_PORT || 22 }}
-        source: "dist.tar.gz"
-        target: "/var/www/erp-fe/ERP-Sekar-Maju-Sejahtera"
-        overwrite: true
-
-    - name: 7. Ekstrak di Staging VPS & Reload Nginx
-      uses: appleboy/ssh-action@v1.0.3
-      with:
-        host: ${{ secrets.STAGING_VPS_HOST }}
-        username: ${{ secrets.STAGING_VPS_USER }}
-        key: ${{ secrets.STAGING_VPS_SSH_KEY }}
-        port: ${{ secrets.STAGING_VPS_PORT || 22 }}
-        command_timeout: 5m
-        script: |
-          echo "=== 1. Bersihkan sisa proses build lama ==="
-          pkill -f "vite" || true
-          pkill -f "tsc" || true
-
-          echo "=== 2. Masuk ke folder frontend staging ==="
-          cd /var/www/erp-fe/ERP-Sekar-Maju-Sejahtera
-          git pull origin staging || true
-
-          echo "=== 3. Ekstrak aset terbaru ==="
-          tar -xzf dist.tar.gz
-          rm -f dist.tar.gz
-
-          echo "=== 4. Reload Nginx ==="
-          sudo systemctl reload nginx
-
-          echo "=== DEPLOY FRONTEND STAGING SUKSES! ==="
-
-  # ============================================================
-  # JOB 2: Deploy ke PRODUCTION (branch: main)
+  # Deploy ke PRODUCTION (branch: main)
+  # Catatan: Deploy ke STAGING dilakukan manual lewat script
+  #          deploy-staging.ps1 dari laptop lokal
   # ============================================================
   deploy-production:
     name: Build & Deploy Frontend → Production
     runs-on: ubuntu-latest
-    if: github.ref_name == 'main'
     environment: production
 
     steps:
@@ -119,9 +42,6 @@ jobs:
       run: tar -czf dist.tar.gz dist/
 
     - name: 6. Kirim dist.tar.gz ke Production VPS
-=======
-    - name: 7. Kirim dist.tar.gz ke VPS
->>>>>>> Stashed changes
       uses: appleboy/scp-action@v0.1.7
       with:
         host: ${{ secrets.VPS_HOST }}
@@ -132,11 +52,7 @@ jobs:
         target: "/var/www/erp-fe/ERP-Sekar-Maju-Sejahtera"
         overwrite: true
 
-<<<<<<< Updated upstream
     - name: 7. Ekstrak di Production VPS & Reload Nginx
-=======
-    - name: 8. Ekstrak di VPS & Reload Nginx
->>>>>>> Stashed changes
       uses: appleboy/ssh-action@v1.0.3
       with:
         host: ${{ secrets.VPS_HOST }}
