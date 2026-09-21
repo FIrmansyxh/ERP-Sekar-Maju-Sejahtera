@@ -3,7 +3,9 @@ name: Auto Deploy Frontend to VPS
 on:
   workflow_dispatch: # Auto-deploy dinonaktifkan sementara
   # push:
-  #   branches: [ main ]
+  #   branches:
+  #     - main
+  #     - staging
 
 # Cegah build ganda bertumpuk jika ada beberapa push berurutan
 concurrency:
