@@ -296,12 +296,10 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
             <Lock className="w-6 h-6" />
           </div>
           <h2 className="text-sm font-bold text-gray-900 mb-1">
-            Dokumen Nota Timbang Terkunci
+            Nota Belum Bisa Dicetak
           </h2>
           <p className="text-xs text-gray-600 mb-4 leading-relaxed">
-            Nota untuk transaksi kupon <strong className="text-gray-900 font-mono">{foundTransaksi.no_kupon}</strong> ({foundTransaksi.nama_petani}) belum dapat dicetak atau diunduh karena status pembayaran masih <strong>KREDIT / BELUM LUNAS</strong>.
-            <br className="my-1" />
-            Tombol cetak baru akan terbuka setelah transaksi diselesaikan dan dilunasi di loket kasir.
+            Kupon <strong className="text-gray-900 font-mono">{foundTransaksi.no_kupon}</strong> ({foundTransaksi.nama_petani}) belum lunas.
           </p>
           <div className="flex justify-center space-x-2">
             <button
@@ -344,9 +342,6 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
                   {type === 'nota' ? foundTransaksi?.no_kupon : type === 'sample' ? foundBatch?.kode_batch : foundPengiriman?.no_surat_jalan}
                 </span>
               </div>
-              <p className="text-[11px] text-gray-500 font-medium hidden sm:block">
-                Periksa dokumen, lalu klik <strong className="text-gray-800">{type === 'sample' ? 'Download Excel' : 'Download PDF'}</strong> untuk menyimpan berkas ke komputer.
-              </p>
             </div>
           </div>
 

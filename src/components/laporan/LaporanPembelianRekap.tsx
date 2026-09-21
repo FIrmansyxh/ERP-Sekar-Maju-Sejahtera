@@ -68,7 +68,7 @@ export const LaporanPembelianRekap: React.FC<LaporanPembelianRekapProps> = ({
           <h2 className="text-xs font-bold text-gray-900 uppercase tracking-wide">Rekap Ganti Tikar, Jasa &amp; Nilai Kotor</h2>
         </div>
         <p className="text-[11px] text-gray-500 mt-0.5">
-          {konteks} · Seluruh kupon dihitung, termasuk yang belum dibayar.
+          {konteks}
         </p>
       </div>
 

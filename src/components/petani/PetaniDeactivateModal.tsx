@@ -44,11 +44,8 @@ export const PetaniDeactivateModal: React.FC<PetaniDeactivateModalProps> = ({
             )}
             <div className="min-w-0">
               <h2 className="text-sm font-bold text-gray-900 tracking-tight truncate">
-                {isDeactivating ? 'Konfirmasi Nonaktifkan Petani' : 'Konfirmasi Aktifkan Kembali Petani'}
+                {isDeactivating ? 'Nonaktifkan Petani' : 'Aktifkan Petani'}
               </h2>
-              <p className="text-[11px] text-gray-500 font-medium">
-                ID: {petani.petani_id} • ID Petani: {petani.petani_id}
-              </p>
             </div>
           </div>
 
@@ -68,7 +65,7 @@ export const PetaniDeactivateModal: React.FC<PetaniDeactivateModalProps> = ({
               className={`px-4 py-1.5 text-xs font-bold text-white rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs whitespace-nowrap ${
                 isDeactivating
                   ? 'bg-[#b81d24] hover:bg-[#a0181e]'
-                  : 'bg-[#28a745] hover:bg-[#218838]'
+                  : 'bg-[#b81d24] hover:bg-[#a0181e]'
               }`}
             >
               {isDeactivating ? 'Nonaktifkan' : 'Aktifkan'}
@@ -100,28 +97,20 @@ export const PetaniDeactivateModal: React.FC<PetaniDeactivateModalProps> = ({
 
           {isDeactivating ? (
             <div className="space-y-3">
-              <div className="bg-[#f8f9fa] border border-gray-300 p-2.5 text-xs text-gray-700 leading-relaxed">
-                <strong>Catatan Sistem:</strong> Petani yang dinonaktifkan tidak akan muncul di loket timbang, namun seluruh data historis dan data tetap tersimpan aman.
-              </div>
-
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1">
-                  Alasan Penonaktifan (Opsional):
+                  Alasan (Opsional)
                 </label>
                 <textarea
                   rows={2}
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
-                  placeholder="Misal: Pergantian komoditas tanaman, lahan istirahat panen, kartu ditarik sementara."
+                  placeholder="Alasan penonaktifan"
                   className="w-full text-xs rounded-sm px-2.5 py-1.5 border border-[#ced4da] focus:border-[#b81d24] focus:outline-none bg-white text-gray-900"
                 />
               </div>
             </div>
-          ) : (
-            <p className="text-xs text-gray-600 leading-relaxed">
-              Petani akan diaktifkan kembali dan ID Petani dapat langsung digunakan untuk proses loket timbangan penerimaan.
-            </p>
-          )}
+          ) : null}
 
         </div>
 

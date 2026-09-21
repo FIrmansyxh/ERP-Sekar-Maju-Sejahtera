@@ -28,9 +28,8 @@ export interface DasarServer {
   metode_pembayaran?: TransaksiPembelian['metode_pembayaran'];
 }
 
-export interface OpsiSinkron {
-  koreksi?: boolean;
-}
+/** Opsi tambahan kirim kupon (saat ini belum ada; tugas lama di peramban mungkin masih membawa { koreksi }). */
+export type OpsiSinkron = Record<string, unknown>;
 
 export interface HasilKirim {
   syncedTx: TransaksiPembelian;

@@ -18,7 +18,7 @@ import { downloadExcelReport, periodeInfo, todayStamp, ExcelCellValue, ExcelRowK
 import { isTransaksiLunas, labelStatusBayar } from '../../utils/statusBayar';
 import { SortIcon } from '../common/SortIcon';
 import { formatDateHariBulanTahun, extractKodeBalPrefix } from '../../utils/formatters';
-import { hitungNilaiBal, hitungModalTransaksi } from '../../utils/finance';
+import { hitungJumlahBayarBal, hitungNilaiBal, hitungModalTransaksi } from '../../utils/finance';
 import { POTONGAN_GANTI_TIKAR, POTONGAN_KULI_PER_BAL, POTONGAN_TALI_PER_BAL } from '../../config/aturanTimbang';
 import { useLaporanTampilan } from '../../hooks/useLaporanTampilan';
 import { LaporanTampilanToggle } from './LaporanTampilanToggle';
@@ -111,7 +111,8 @@ interface RingkasanKupon {
 /**
  * Rincian setiap bal dan subtotal satu kupon.
  * Per bal: Nilai Beli = Harga Beli × Netto;
- * Jumlah Bayar = Nilai Beli − Kuli − Tali − Tikar (tikar hanya bila ganti tikar).
+ * Jumlah Bayar = Nilai Beli − Kuli − Tali − Tikar (tikar hanya bila ganti tikar); bal yang belum ditimbang
+ * belum dibayar (0), sama dengan Jumlah Bayar di Kasir dan Nota.
  * Subtotal kupon adalah penjumlahan baris bal, sehingga tabel selalu cocok bila dihitung manual.
  */
 function ringkasKupon(row: TransaksiPembelian): RingkasanKupon {
@@ -135,7 +136,7 @@ function ringkasKupon(row: TransaksiPembelian): RingkasanKupon {
           kuli,
           tikar,
           nilaiBeli,
-          jumlahBayar: nilaiBeli - kuli - tali - tikar,
+          jumlahBayar: hitungJumlahBayarBal(nilaiBeli, netto, kuli + tali + tikar),
         };
       })
     : (() => {
@@ -156,7 +157,7 @@ function ringkasKupon(row: TransaksiPembelian): RingkasanKupon {
           kuli,
           tikar,
           nilaiBeli,
-          jumlahBayar: nilaiBeli - kuli - tali - tikar,
+          jumlahBayar: hitungJumlahBayarBal(nilaiBeli, Number(row.berat_kg || 0), kuli + tali + tikar),
         }];
       })();
 
@@ -811,7 +812,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
           <SortableHeader title="Kuli (Rp)" widthClass="" align="right" sortField="potongan_kuli" sortConfigs={sortConfigs} onSort={handleSort} />
           <SortableHeader title="Tikar (Rp)" widthClass="" align="right" sortField="potongan_tikar" sortConfigs={sortConfigs} onSort={handleSort} />
           <SortableHeader title="Nilai Beli (Rp)" widthClass="" align="right" sortField="total_harga" sortConfigs={sortConfigs} onSort={handleSort} />
-          <SortableHeader title="Jumlah Bayar (Rp)" widthClass="" align="right" className="bg-red-50/50 font-extrabold text-[#b81d24]" sortField="jumlah_bayar" sortConfigs={sortConfigs} onSort={handleSort} />
+          <SortableHeader title="Jumlah Bayar (Rp)" widthClass="" align="right" className="font-extrabold text-[#b81d24]" sortField="jumlah_bayar" sortConfigs={sortConfigs} onSort={handleSort} />
         </tr>
       </thead>
 
@@ -820,8 +821,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
           <tr>
             <td colSpan={13} className="py-10 text-center text-gray-500">
               <FileText className="w-8 h-8 mx-auto text-gray-300 mb-2" />
-              <p className="font-semibold">Tidak ada data transaksi yang cocok dengan pencarian.</p>
-              <p className="text-[11px] text-gray-400 mt-1">Coba periksa kata kunci pencarian atau bersihkan kolom pencarian.</p>
+              <p className="font-semibold">Tidak ada data transaksi</p>
             </td>
           </tr>
         </tbody>
@@ -851,7 +851,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
                   <span className="font-semibold text-gray-700">{r.jumlahBal} bal</span>
                   <span
                     className={`ml-2 px-1.5 py-0.5 rounded-xs text-[10px] font-bold border ${
-                      lunas ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-[#b81d24] border-red-200'
+                      lunas ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-800 border-amber-200'
                     }`}
                   >
                     {labelStatusBayar(row)}
@@ -861,34 +861,34 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
 
               {/* 2. Rincian setiap bal */}
               {r.rincian.map((bal, balIdx) => (
-                <tr key={bal.key} className="bg-white hover:bg-amber-50/40 transition-colors">
+                <tr key={bal.key} className="bg-white hover:bg-gray-50 transition-colors">
                   {/* Nomor urut bal, mulai dari 1 pada setiap kupon */}
                   <td className="py-1.5 px-2 text-center font-mono text-[11px] text-gray-500 whitespace-nowrap">{balIdx + 1}</td>
                   <td colSpan={3} className="bg-white"></td>
                   <td className="py-1.5 px-2.5 text-center font-mono font-semibold text-gray-800 whitespace-nowrap">{bal.noBal}</td>
                   <td className="py-1.5 px-2 text-right font-mono text-gray-700 whitespace-nowrap">{formatRp(bal.hargaBeli)}</td>
                   <td className="py-1.5 px-2 text-right font-mono text-gray-700 whitespace-nowrap">{formatKg(bal.bruto)}</td>
-                  <td className="py-1.5 px-2 text-right font-mono font-semibold text-gray-900 bg-blue-50/20 whitespace-nowrap">{formatKg(bal.netto)}</td>
-                  <td className="py-1.5 px-2 text-right font-mono text-amber-800 whitespace-nowrap">{formatRp(bal.tali)}</td>
-                  <td className="py-1.5 px-2 text-right font-mono text-amber-800 whitespace-nowrap">{formatRp(bal.kuli)}</td>
-                  <td className="py-1.5 px-2 text-right font-mono text-amber-800 whitespace-nowrap">{formatRp(bal.tikar)}</td>
+                  <td className="py-1.5 px-2 text-right font-mono font-semibold text-gray-900 whitespace-nowrap">{formatKg(bal.netto)}</td>
+                  <td className="py-1.5 px-2 text-right font-mono text-gray-900 whitespace-nowrap">{formatRp(bal.tali)}</td>
+                  <td className="py-1.5 px-2 text-right font-mono text-gray-900 whitespace-nowrap">{formatRp(bal.kuli)}</td>
+                  <td className="py-1.5 px-2 text-right font-mono text-gray-900 whitespace-nowrap">{formatRp(bal.tikar)}</td>
                   <td className="py-1.5 px-2 text-right font-mono font-semibold text-gray-900 whitespace-nowrap">{formatRp(bal.nilaiBeli)}</td>
                   <td className="py-1.5 px-2.5 text-right font-mono font-semibold text-[#b81d24] whitespace-nowrap">{formatRp(bal.jumlahBayar)}</td>
                 </tr>
               ))}
 
               {/* 3. Total per kupon */}
-              <tr className="bg-amber-50/70 font-bold text-gray-900 border-t border-amber-200">
-                <td colSpan={6} className="py-2 px-3 text-right text-[11px] uppercase tracking-wide text-amber-900 whitespace-nowrap">
+              <tr className="bg-gray-50 font-bold text-gray-900 border-t border-gray-200">
+                <td colSpan={6} className="py-2 px-3 text-right text-[11px] uppercase tracking-wide text-gray-900 whitespace-nowrap">
                   Total {row.no_kupon || 'Kupon'} ({r.jumlahBal} bal)
                 </td>
                 <td className="py-2 px-2 text-right font-mono whitespace-nowrap">{formatKg(r.bruto)}</td>
-                <td className="py-2 px-2 text-right font-mono text-blue-950 whitespace-nowrap">{formatKg(r.netto)}</td>
-                <td className="py-2 px-2 text-right font-mono text-amber-900 whitespace-nowrap">{formatRp(r.tali)}</td>
-                <td className="py-2 px-2 text-right font-mono text-amber-900 whitespace-nowrap">{formatRp(r.kuli)}</td>
-                <td className="py-2 px-2 text-right font-mono text-amber-900 whitespace-nowrap">{formatRp(r.tikar)}</td>
+                <td className="py-2 px-2 text-right font-mono text-gray-900 whitespace-nowrap">{formatKg(r.netto)}</td>
+                <td className="py-2 px-2 text-right font-mono text-gray-900 whitespace-nowrap">{formatRp(r.tali)}</td>
+                <td className="py-2 px-2 text-right font-mono text-gray-900 whitespace-nowrap">{formatRp(r.kuli)}</td>
+                <td className="py-2 px-2 text-right font-mono text-gray-900 whitespace-nowrap">{formatRp(r.tikar)}</td>
                 <td className="py-2 px-2 text-right font-mono whitespace-nowrap">{formatRp(r.nilaiBeli)}</td>
-                <td className="py-2 px-2.5 text-right font-mono text-[#b81d24] bg-red-50/60 whitespace-nowrap">{formatRp(r.jumlahBayar)}</td>
+                <td className="py-2 px-2.5 text-right font-mono text-[#b81d24] whitespace-nowrap">{formatRp(r.jumlahBayar)}</td>
               </tr>
             </tbody>
           );
@@ -903,10 +903,10 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
               Total Keseluruhan ({totals.count} kupon, {totals.totalBal} bal)
             </td>
             <td className="py-3 px-2 text-right font-mono whitespace-nowrap">{formatKg(totals.totalBruto)}</td>
-            <td className="py-3 px-2 text-right font-mono text-blue-950 whitespace-nowrap">{formatKg(totals.totalNetto)}</td>
-            <td className="py-3 px-2 text-right font-mono text-amber-950 whitespace-nowrap">{formatRp(totals.totalPotonganTali)}</td>
-            <td className="py-3 px-2 text-right font-mono text-amber-950 whitespace-nowrap">{formatRp(totals.totalPotonganKuli)}</td>
-            <td className="py-3 px-2 text-right font-mono text-amber-950 whitespace-nowrap">{formatRp(totals.totalPotonganTikar)}</td>
+            <td className="py-3 px-2 text-right font-mono text-gray-900 whitespace-nowrap">{formatKg(totals.totalNetto)}</td>
+            <td className="py-3 px-2 text-right font-mono text-gray-900 whitespace-nowrap">{formatRp(totals.totalPotonganTali)}</td>
+            <td className="py-3 px-2 text-right font-mono text-gray-900 whitespace-nowrap">{formatRp(totals.totalPotonganKuli)}</td>
+            <td className="py-3 px-2 text-right font-mono text-gray-900 whitespace-nowrap">{formatRp(totals.totalPotonganTikar)}</td>
             <td className="py-3 px-2 text-right font-mono whitespace-nowrap">{formatRp(totals.totalNilaiHargaBeli)}</td>
             <td className="py-3 px-2.5 text-right font-mono text-[#b81d24] bg-red-100 font-black text-sm whitespace-nowrap">{formatRp(totals.totalJumlahBayar)}</td>
           </tr>
@@ -924,9 +924,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
           <div className="w-10 h-10 bg-[#b81d24] text-white rounded-sm flex items-center justify-center shadow-xs shrink-0">
             <FileSpreadsheet className="w-5 h-5" />
           </div>
-          <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">
-            Laporan Pembelian Barang
-          </h1>
+          <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">Laporan Pembelian</h1>
         </div>
 
         {/* Tampilan (Filter / Ringkasan / Fokus Tabel) dan tombol unduh */}
@@ -939,7 +937,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
             className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
           >
             <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
-            <span>Export Excel</span>
+            <span>Unduh Excel</span>
           </button>
         </div>
       </div>
@@ -954,8 +952,8 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
               {sortedData.length} <span className="text-sm font-medium text-gray-500 font-sans">Kupon</span> <span className="text-gray-300 mx-1">|</span> {totals.totalBal} <span className="text-sm font-medium text-gray-500 font-sans">Bal</span>
             </p>
           </div>
-          <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center border border-blue-100">
-            <FileText className="w-5 h-5 text-blue-600" />
+          <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center border border-slate-100">
+            <FileText className="w-5 h-5 text-slate-600" />
           </div>
         </div>
         <div className="bg-white p-3 border border-gray-200 shadow-xs flex items-center justify-between">
@@ -972,7 +970,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
         <div className="bg-white p-3 border border-gray-200 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Total Pembayaran Lunas</p>
-            <p className="text-lg font-black text-emerald-700 font-mono mt-0.5">
+            <p className="text-lg font-black text-gray-900 font-mono mt-0.5">
               Rp {Math.round(totals.totalJumlahBayarLunas).toLocaleString('id-ID')}
             </p>
           </div>
@@ -983,7 +981,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
         <div className="bg-white p-3 border border-gray-200 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Total Pembayaran Kredit</p>
-            <p className="text-lg font-black text-[#b81d24] font-mono mt-0.5">
+            <p className="text-lg font-black text-gray-900 font-mono mt-0.5">
               Rp {Math.round(totals.totalJumlahBayarKredit).toLocaleString('id-ID')}
             </p>
           </div>
@@ -999,12 +997,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
       <div className="bg-white p-4 border border-gray-200 shadow-xs">
         <div className="flex items-center space-x-2 pb-3 mb-3 border-b border-gray-100">
           <Filter className="w-4 h-4 text-[#b81d24]" />
-          <span className="text-xs font-bold text-gray-800 uppercase tracking-wide">
-            Filter & Parameter Pencarian
-          </span>
-          <span className="text-[11px] text-gray-400">
-            (Sesuaikan kriteria data lalu klik "Cari Data")
-          </span>
+          <span className="text-xs font-bold text-gray-800 uppercase tracking-wide">Filter</span>
         </div>
 
         <PresetTanggal className="mb-3" startDate={filterStartDate} endDate={filterEndDate} onPilih={handlePilihRentang} />
@@ -1051,7 +1044,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
               list="kupon-list"
               value={filterKupon}
               onChange={(e) => setFilterKupon(e.target.value)}
-              placeholder="Ketik/Pilih Kupon..."
+              placeholder="Kupon"
               className="w-full text-xs px-2.5 py-1.5 bg-gray-50 border border-gray-300 focus:bg-white focus:border-[#b81d24] focus:outline-none rounded-none"
             />
             <datalist id="kupon-list">
@@ -1072,7 +1065,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
               list="grade-list"
               value={filterGrade}
               onChange={(e) => setFilterGrade(e.target.value)}
-              placeholder="Ketik/Pilih Kode Beli..."
+              placeholder="Kode beli"
               className="w-full text-xs px-2.5 py-1.5 bg-gray-50 border border-gray-300 focus:bg-white focus:border-[#b81d24] focus:outline-none rounded-none"
             />
             <datalist id="grade-list">
@@ -1093,7 +1086,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
               list="kode-bal-list"
               value={filterKodeBal}
               onChange={(e) => setFilterKodeBal(e.target.value)}
-              placeholder="Ketik/Pilih Kode Bal..."
+              placeholder="Kode bal"
               className="w-full text-xs px-2.5 py-1.5 bg-gray-50 border border-gray-300 focus:bg-white focus:border-[#b81d24] focus:outline-none rounded-none uppercase"
             />
             <datalist id="kode-bal-list">
@@ -1111,7 +1104,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
             </label>
             <input
               type="text"
-              placeholder="Semua Bal / Cari..."
+              placeholder="Semua bal"
               value={filterNoBall}
               onChange={(e) => setFilterNoBall(e.target.value)}
               className="w-full text-xs px-2.5 py-1.5 bg-gray-50 border border-gray-300 focus:bg-white focus:border-[#b81d24] focus:outline-none rounded-none"
@@ -1128,7 +1121,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
               list="supplier-list"
               value={filterSupplier}
               onChange={(e) => setFilterSupplier(e.target.value)}
-              placeholder="Ketik/Pilih Petani..."
+              placeholder="Petani"
               className="w-full text-xs px-2.5 py-1.5 bg-gray-50 border border-gray-300 focus:bg-white focus:border-[#b81d24] focus:outline-none rounded-none truncate"
             />
             <datalist id="supplier-list">
@@ -1172,25 +1165,25 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
         </div>
         <div className="bg-white p-2.5 border border-gray-200">
           <div className="text-gray-500 text-[11px]">Total Netto Timbang</div>
-          <div className="text-base font-bold text-blue-900 mt-0.5">
+          <div className="text-base font-bold text-slate-900 mt-0.5">
             {totals.totalNetto.toLocaleString('id-ID')} <span className="text-xs font-normal text-gray-500">kg</span>
           </div>
         </div>
         <div className="bg-white p-2.5 border border-gray-200">
           <div className="text-gray-500 text-[11px]">Total Potongan Tali</div>
-          <div className="text-base font-bold text-amber-700 mt-0.5">
+          <div className="text-base font-bold text-gray-900 mt-0.5">
             Rp {Math.round(totals.totalPotonganTali).toLocaleString('id-ID')}
           </div>
         </div>
         <div className="bg-white p-2.5 border border-gray-200">
           <div className="text-gray-500 text-[11px]">Total Potongan Kuli</div>
-          <div className="text-base font-bold text-amber-700 mt-0.5">
+          <div className="text-base font-bold text-gray-900 mt-0.5">
             Rp {totals.totalPotonganKuli.toLocaleString('id-ID')}
           </div>
         </div>
         <div className="bg-white p-2.5 border border-gray-200">
           <div className="text-gray-500 text-[11px]">Total Potongan Tikar</div>
-          <div className="text-base font-bold text-amber-700 mt-0.5">
+          <div className="text-base font-bold text-gray-900 mt-0.5">
             Rp {totals.totalPotonganTikar.toLocaleString('id-ID')}
           </div>
         </div>
@@ -1218,7 +1211,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
         <div className="p-3 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white text-xs">
           <div className="flex flex-wrap items-center gap-2.5">
             <span className="text-xs font-bold text-gray-800 uppercase tracking-wider">
-              Tabel Rekapitulasi Pembelian Barang
+              Rekap Pembelian
             </span>
             <span className="text-[11px] text-gray-500 font-medium">
               {tableSearch.trim() ? (
@@ -1238,7 +1231,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
               <input
                 id="search-laporan-pembelian-table-input"
                 type="text"
-                placeholder="Cari cepat (Kupon, Petani, No Bal, Grade)..."
+                placeholder="Cari kupon, petani, no bal, grade"
                 value={tableSearch}
                 onChange={(e) => setTableSearch(e.target.value)}
                 className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-300 rounded-sm pl-8 pr-8 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-[#b81d24] focus:ring-1 focus:ring-[#b81d24] transition shadow-2xs"

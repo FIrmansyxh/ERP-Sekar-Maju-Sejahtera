@@ -887,7 +887,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
         // Reset berat agar tidak terkunci dengan angka barcode
         setBeratBrutoInput('');
         setAntiScanAlert({
-          text: `🛡️ PENGAMAN ANTI-SCAN AKTIF: Terdeteksi tembakan barcode saat kursor berada di kolom berat. Data scan "${scannedCode}" otomatis dialihkan ke pencarian No Bal agar berat tidak terkunci salah.`,
+          text: `Scan "${scannedCode}" di kolom berat dialihkan ke pencarian No Bal.`,
           code: scannedCode,
         });
 
@@ -1009,9 +1009,6 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
             <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
             <div>
               <p className="font-bold text-amber-900">{antiScanAlert.text}</p>
-              <p className="text-[11px] text-amber-700 mt-0.5">
-                Sistem pengaman aktif: Kolom berat timbangan dilindungi dari input tembakan barcode scanner agar berat bal tidak terisi angka barcode yang salah.
-              </p>
             </div>
           </div>
           <button
@@ -1091,7 +1088,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                         setIsDropdownOpen(false);
                       }
                     }}
-                    placeholder="Ketik nomor bal, kupon, atau scan barcode..."
+                    placeholder="No bal / kupon"
                     className={`w-full bg-white border border-r-0 rounded-l-sm pl-8 pr-7 py-2.5 text-xl font-mono font-extrabold tracking-wide text-gray-900 placeholder:text-xs focus:outline-none focus:ring-1 transition ${
                       scanFeedback?.isError
                         ? 'border-red-300 focus:border-red-500 focus:ring-red-500 bg-red-50/20'
@@ -1271,9 +1268,6 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                 <div className="p-8 text-center text-gray-400 space-y-1.5">
                   <Scale className="w-8 h-8 mx-auto text-gray-300 stroke-1" />
                   <p className="text-xs font-semibold text-gray-600">Belum ada bal yang ditimbang</p>
-                  <p className="text-[11px] text-gray-400 max-w-xs mx-auto">
-                    Ketik nomor bal atau scan barcode di kolom pencarian atas untuk memulai penimbangan.
-                  </p>
                 </div>
               ) : (
                 balTerakhirDitimbangList.map(({ item, tx }, index) => {
@@ -1420,9 +1414,6 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                             <span className="font-semibold text-gray-900 font-mono">{liveBruto} kg Bruto</span>{' '}
                             (<span className="font-mono text-gray-700">{liveNetto} kg Netto</span>) melebihi batas standar maksimal untuk Grade SB.
                           </p>
-                          <p className="text-[11px] text-gray-500">
-                            Kurangi muatan fisik tembakau pada bal ini hingga bobot ≤ 50 kg sebelum menyimpan hasil timbangan.
-                          </p>
                         </div>
                       </div>
                       <button
@@ -1437,33 +1428,13 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                   </div>
                 )}
 
-                {/* Status Sesuai Standar Grade SB */}
-                {isGradeSB && !isOverCapacitySB && liveBruto > 0 && (
-                  <div className="bg-white border-l-4 border-l-emerald-600 border-y border-r border-gray-200 rounded-r-xs p-3 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 animate-in fade-in">
-                    <div className="flex items-center space-x-2.5">
-                      <div className="p-1 bg-emerald-50 text-emerald-700 rounded-xs shrink-0 border border-emerald-100">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                      </div>
-                      <p className="text-xs text-gray-700">
-                        <span className="font-bold text-gray-900">Kapasitas Sesuai Standar:</span>{' '}
-                        Bal Grade SB berbobot{' '}
-                        <span className="font-mono font-semibold text-gray-900">{liveBruto} kg Bruto</span>{' '}
-                        (<span className="font-mono text-gray-700">{liveNetto} kg Netto</span>) memenuhi toleransi operasional.
-                      </p>
-                    </div>
-                    <span className="self-start sm:self-auto text-[10px] font-mono font-semibold px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xs shrink-0">
-                      Standar Terpenuhi (≤ 50 kg)
-                    </span>
-                  </div>
-                )}
-
                 <div className="p-4 bg-[#f8f9fa] border border-gray-200 rounded-sm space-y-4">
                   {/* Grid Inputs: Bruto & Netto side-by-side */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {/* Bruto Input */}
                     <div className="space-y-1.5">
                       <label className="block text-xs font-semibold text-gray-700">
-                        Berat Kotor (Bruto) <span className="text-rose-500">*</span>
+                        Berat Kotor (Bruto) <span className="text-red-500">*</span>
                       </label>
                       <div className="relative">
                         <input
@@ -1483,13 +1454,6 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                           <span className="text-gray-500 font-semibold text-xs">KG</span>
                         </div>
                       </div>
-                      <p className="text-[11px] text-gray-500">
-                        {alasanKuponTerbayar
-                          ? `${alasanKuponTerbayar} Bal hanya bisa dilihat.`
-                          : isActiveBalWeighed
-                            ? 'Bal telah tersimpan & terkunci. Klik "Buka Kunci" untuk menimbang ulang.'
-                            : 'Ketik berat kotor lalu tekan Enter untuk simpan.'}
-                      </p>
                     </div>
 
                     {/* Netto Display & Edit */}
@@ -1505,7 +1469,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                               setIsNettoManual(false);
                               setBeratNettoInput('');
                             }}
-                            className="text-[10px] text-[#b81d24] hover:text-rose-800 font-medium"
+                            className="text-[10px] text-[#b81d24] hover:text-red-800 font-medium"
                           >
                             Reset Auto
                           </button>
@@ -1532,15 +1496,11 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                       </div>
                       <div className="pt-1 space-y-1.5">
                         <div className="flex justify-between items-center text-[11px]">
-                          <span className="text-gray-500 font-medium">Potongan Tara (Otomatis):</span>
+                          <span className="text-gray-500 font-medium">Potongan Tara:</span>
                           <span className="font-bold text-gray-800">
                             {liveBruto ? liveTara : (infoAturanTara.kode === 'SB' ? 2 : 0)} KG{' '}
                             {isNettoManual ? <span className="text-amber-600 font-normal">(Manual)</span> : ''}
                           </span>
-                        </div>
-                        <div className="flex items-center justify-between text-[10px] bg-slate-50 px-2 py-1 rounded-xs border border-slate-200">
-                          <span className="font-semibold text-slate-700">{infoAturanTara.label}</span>
-                          <span className="text-slate-600">{infoAturanTara.keterangan}</span>
                         </div>
                       </div>
                     </div>
@@ -1601,9 +1561,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                       <Unlock className="w-3.5 h-3.5 mr-1.5 text-amber-700" />
                       Buka Kunci (Edit Ulang)
                     </button>
-                  ) : (
-                    <p className="text-xs text-gray-500">Pastikan timbangan fisik stabil sebelum menyimpan.</p>
-                  )}
+                  ) : null}
                 </div>
                 <div className="flex space-x-2">
                   <button
@@ -1636,7 +1594,6 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
             <div className="bg-white border border-gray-200 p-12 text-center text-slate-400 rounded-sm flex flex-col items-center justify-center h-full">
               <Scale className="w-16 h-16 mb-4 text-slate-200" />
               <h3 className="text-base font-bold text-gray-700">Tidak ada bal dipilih</h3>
-              <p className="text-xs text-gray-500 mt-1">Scan barcode atau ketik nomor bal di kolom pencarian untuk mulai menimbang.</p>
             </div>
           )}
         </div>

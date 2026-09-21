@@ -48,6 +48,14 @@ export function hitungNilaiBal(
 }
 
 /**
+ * Jumlah bayar satu bal = Nilai Beli - (kuli + tali + tikar), sama dengan subtotal_bersih yang dipakai Kasir dan Nota.
+ * Bal yang belum ditimbang belum bernilai sehingga jumlah bayarnya 0, dan jumlah bayar tidak pernah negatif.
+ */
+export function hitungJumlahBayarBal(nilaiBeli: number, netto: number, potongan: number): number {
+  return netto > 0 ? Math.max(0, nilaiBeli - potongan) : 0;
+}
+
+/**
  * Menghitung total modal murni satu transaksi pembelian:
  * Total Modal = Total Berat Netto Bal * Harga Beli masing-masing bal
  * Murni mengabaikan potongan kuli, tali, atau tikar (bukan harga_final).

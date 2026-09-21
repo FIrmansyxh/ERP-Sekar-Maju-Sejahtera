@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, UserPlus, UserCheck, Shield, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { X, UserPlus, UserCheck, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { SearchableSelect } from '../common/SearchableSelect';
 import { User, UserRole } from '../../types';
 import { ALL_ROLES, ROLE_DEFINITIONS } from '../../utils/rbac';
@@ -135,7 +135,6 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
     onClose();
   };
 
-  const selectedRoleInfo = ROLE_DEFINITIONS[role];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -149,11 +148,9 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
             </div>
             <div className="min-w-0">
               <h2 className="text-sm font-bold text-gray-900 tracking-tight truncate">
-                {isEdit ? 'Perbarui Data Pengguna' : 'Tambah Pengguna Baru (RBAC)'}
+                {isEdit ? 'Edit Pengguna' : 'Tambah Pengguna'}
               </h2>
-              <p className="text-[11px] text-gray-500 font-medium">
-                {isEdit ? `Akun: @${editingUser?.username}` : 'Registrasi akun staf & wewenang operasional'}
-              </p>
+              {isEdit && <p className="text-[11px] text-gray-500 font-medium">@{editingUser?.username}</p>}
             </div>
           </div>
           <button
@@ -190,12 +187,11 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                   setUsername(e.target.value);
                   setError(null);
                 }}
-                placeholder="misal: sitirahayu"
+                placeholder="username"
                 className="w-full px-3 py-2 border border-gray-300 rounded-sm focus:ring-1 focus:ring-red-500 focus:border-red-500 text-xs font-mono"
                 required
                 autoComplete="off"
               />
-              <p className="text-[10px] text-gray-500 mt-0.5">Digunakan untuk login (tanpa spasi)</p>
             </div>
 
             {/* Password */}
@@ -240,13 +236,12 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                 }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-sm focus:ring-1 focus:ring-red-500 focus:border-red-500 text-xs"
               />
-              <p className="text-[10px] text-gray-500 mt-0.5">Boleh dikosongkan. Bila kosong, username dipakai sebagai nama di dokumen.</p>
             </div>
 
             {/* Role RBAC Selector */}
             <div className="sm:col-span-2">
               <label className="block font-semibold text-gray-700 mb-1">
-                Role & Hak Akses (RBAC) <span className="text-red-500">*</span>
+                Role <span className="text-[#b81d24]">*</span>
               </label>
               <SearchableSelect
                 value={role}
@@ -255,30 +250,18 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
                 placeholder="Pilih Role..."
               />
 
-              {/* Role description preview box */}
-              {selectedRoleInfo && (
-                <div className={`mt-2 p-2.5 border rounded-sm text-[11px] ${selectedRoleInfo.badgeBg} ${selectedRoleInfo.badgeBorder}`}>
-                  <div className="flex items-center space-x-1.5 font-bold mb-1 text-[#b81d24]">
-                    <Shield className="w-3.5 h-3.5" />
-                    <span>Cakupan Wewenang: {selectedRoleInfo.label}</span>
-                  </div>
-                  <p className="text-gray-700 leading-normal">
-                    {selectedRoleInfo.deskripsi}
-                  </p>
-                </div>
-              )}
             </div>
 
             {/* Email */}
             <div>
               <label className="block font-semibold text-gray-700 mb-1">
-                Alamat Email (Opsional)
+                Email (Opsional)
               </label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="nama@sekarmajusejahtera.co.id"
+                placeholder="Email"
                 className="w-full px-3 py-2 border border-gray-300 rounded-sm focus:ring-1 focus:ring-red-500 focus:border-red-500 text-xs"
               />
             </div>
@@ -286,13 +269,13 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
             {/* No HP */}
             <div>
               <label className="block font-semibold text-gray-700 mb-1">
-                Nomor WhatsApp / HP (Opsional)
+                No. HP (Opsional)
               </label>
               <input
                 type="tel"
                 value={noHp}
                 onChange={(e) => setNoHp(e.target.value)}
-                placeholder="0812-xxxx-xxxx"
+                placeholder="No. HP"
                 className="w-full px-3 py-2 border border-gray-300 rounded-sm focus:ring-1 focus:ring-red-500 focus:border-red-500 text-xs"
               />
             </div>
@@ -300,8 +283,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
             {/* Status Aktif Switch */}
             <div className="sm:col-span-2 pt-2 border-t border-gray-100 flex items-center justify-between">
               <div>
-                <span className="font-semibold text-gray-900 block">Status Keaktifan Akun</span>
-                <span className="text-[11px] text-gray-500">Akun nonaktif tidak akan dapat login ke sistem.</span>
+                <span className="font-semibold text-gray-900 block">Status Aktif</span>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
                 <input

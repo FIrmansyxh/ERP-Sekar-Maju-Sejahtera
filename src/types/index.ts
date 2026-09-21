@@ -222,8 +222,6 @@ export interface SaveTransaksiMeta {
    * termasuk bal yang dihapus atau diganti nomornya, tanpa digabung dengan versi sebelumnya.
    */
   timpaPenuh?: boolean;
-  /** Simpan via PUT /transaksi/{id}/koreksi (Kasir Edit Modal) */
-  koreksi?: boolean;
 }
 
 export type StatusSample ='sample' | 'dikirim' | 'diterima' | 'disetujui' | 'ditolak' | 'nego';

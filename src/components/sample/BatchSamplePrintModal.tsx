@@ -68,7 +68,7 @@ export const BatchSamplePrintModal: React.FC<BatchSamplePrintModalProps> = ({
               <FlaskConical className="w-4 h-4 text-[#b81d24]" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-sm font-bold text-gray-900 tracking-tight truncate">Dokumen Pengantar & Uji Sample Batch Tembakau</h2>
+              <h2 className="text-sm font-bold text-gray-900 tracking-tight truncate">Surat Pengiriman Sample</h2>
               <p className="text-[11px] text-gray-500 font-medium">
                 No. Surat Sample: <span className="font-mono font-bold text-gray-900">{batch.kode_batch}</span>
               </p>

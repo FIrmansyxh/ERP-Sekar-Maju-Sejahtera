@@ -428,9 +428,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
           <div className="w-10 h-10 bg-[#b81d24] text-white rounded-sm flex items-center justify-center shadow-xs shrink-0">
             <Users className="w-5 h-5" />
           </div>
-          <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">
-            Laporan Petani & Rekapitulasi Setoran Tembakau
-          </h1>
+          <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">Laporan Petani</h1>
         </div>
 
         {/* Action Controls: Tampilan (Filter / Ringkasan / Fokus Tabel), dan Unduh Excel */}
@@ -473,9 +471,6 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
               <div className="text-xl font-bold font-mono text-gray-900">
                 {overallKPIs.petaniPenyetorAktif.toLocaleString('id-ID')}
               </div>
-              <div className="text-[10px] text-gray-500 font-medium mt-0.5">
-                Tercatat Transaksi
-              </div>
             </div>
           </div>
 
@@ -487,9 +482,6 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
               <div className="text-xl font-bold font-mono text-gray-900">
                 {overallKPIs.totalBalSetor.toLocaleString('id-ID')}
               </div>
-              <div className="text-[10px] text-gray-500 font-medium mt-0.5">
-                Bal Tembakau Masuk
-              </div>
             </div>
           </div>
 
@@ -498,7 +490,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
               Total Tonase (Kg)
             </div>
             <div className="mt-1">
-              <div className="text-xl font-bold font-mono text-blue-900">
+              <div className="text-xl font-bold font-mono text-slate-900">
                 {overallKPIs.totalKgSetor.toLocaleString('id-ID')}
               </div>
               <div className="text-[10px] text-gray-500 font-medium mt-0.5">
@@ -516,7 +508,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
                 Rp {overallKPIs.totalNilaiRp.toLocaleString('id-ID')}
               </div>
               <div className="text-[10px] text-gray-500 font-medium mt-0.5 truncate">
-                Lunas • Kredit: Rp {overallKPIs.totalKreditRp.toLocaleString('id-ID')}
+                Kredit: Rp {overallKPIs.totalKreditRp.toLocaleString('id-ID')}
               </div>
             </div>
           </div>
@@ -543,7 +535,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
         <div className="flex items-center justify-between border-b border-gray-100 pb-2">
           <div className="flex items-center space-x-2 text-xs font-bold text-gray-800 uppercase tracking-wider">
             <Filter className="w-3.5 h-3.5 text-gray-500" />
-            <span>Filter Data & Parameter Analisis Petani</span>
+            <span>Filter</span>
           </div>
           <span className="text-[11px] text-gray-500">
             Ditemukan <strong>{filteredPetaniData.length}</strong> petani sesuai filter
@@ -589,7 +581,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
               list="wilayah-desa-list"
               value={filterWilayah}
               onChange={(e) => setFilterWilayah(e.target.value)}
-              placeholder="Ketik/Pilih Wilayah..."
+              placeholder="Wilayah"
               className="w-full px-2 py-1.5 text-xs bg-gray-50 border border-gray-300 rounded-xs focus:bg-white focus:outline-none focus:border-[#b81d24]"
             />
             <datalist id="wilayah-desa-list">
@@ -744,7 +736,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
                 <input
                   id="search-laporan-petani-input"
                   type="text"
-                  placeholder="Cari cepat (Nama, ID, No HP, Desa)..."
+                  placeholder="Cari nama, ID, no HP, desa"
                   value={tableSearch}
                   onChange={(e) => {
                     setTableSearch(e.target.value);
@@ -839,7 +831,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
                         <td className="py-2.5 px-3 text-right font-mono font-semibold text-slate-900">
                           {p.totalNilaiRp > 0 ? `Rp ${p.totalNilaiRp.toLocaleString('id-ID')}` : 'Rp 0'}
                           {p.totalKreditRp > 0 && (
-                            <span className="block text-[10px] font-medium text-rose-700">
+                            <span className="block text-[10px] font-medium text-red-700">
                               Kredit: Rp {p.totalKreditRp.toLocaleString('id-ID')}
                             </span>
                           )}
@@ -899,12 +891,9 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
             <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-100">
               <div>
                 <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center space-x-1.5">
-                  <Award className="w-4 h-4 text-amber-500" />
-                  <span>Peringkat 10 Petani Penyetor Terbesar (Volume Tonase)</span>
+                  <Award className="w-4 h-4 text-gray-500" />
+                  <span>10 Petani Penyetor Terbesar</span>
                 </h3>
-                <p className="text-[11px] text-gray-500 mt-0.5">
-                  Petani mitra dengan kontribusi volume pasokan tembakau dan nilai transaksi tertinggi
-                </p>
               </div>
             </div>
 

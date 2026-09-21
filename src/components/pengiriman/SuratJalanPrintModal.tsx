@@ -76,7 +76,7 @@ export const SuratJalanPrintModal: React.FC<SuratJalanPrintModalProps> = ({
             </div>
             <div className="min-w-0">
               <h2 className="text-sm font-bold text-gray-900 tracking-tight truncate">
-                Dokumen Surat Jalan Pengiriman / Delivery Order (DO)
+                Surat Jalan
               </h2>
               <p className="text-[11px] text-gray-500 font-medium">
                 No. DO: <span className="font-mono font-bold text-gray-900">{pengiriman.no_surat_jalan}</span> •

@@ -146,9 +146,16 @@ export async function kirimStatusBarang(b: Barang): Promise<Barang> {
 }
 
 // ---------- Batch sample ----------
-function payloadBatchSample(b: BatchPengirimanSample) {
+/** null = belum diketahui; false = server menolak status Draft sehingga Draft dikirim sebagai 'sample'. */
+let serverTerimaDraft: boolean | null = null;
+/** Hanya untuk tes */
+export const aturUlangDukunganDraft = (): void => {
+  serverTerimaDraft = null;
+};
+
+function payloadBatchSample(b: BatchPengirimanSample, terimaDraft = serverTerimaDraft !== false) {
   return {
-    status: statusKeServer(b.status),
+    status: statusKeServer(b.status, terimaDraft),
     kode_batch: b.kode_batch,
     dikirim_oleh: b.dikirim_oleh,
     tujuan_buyer: b.tujuan_buyer,
@@ -186,14 +193,29 @@ export async function kirimBatchSample(b: BatchPengirimanSample, baru: boolean):
     const server = ErpApiService.mapBackendBatchSample(ambilData(res, 'Server tidak mengembalikan batch sample'));
     return { server, gabungan: ErpApiService.gabungBatchServer(b, server) };
   };
-  const buat = async () => dariServer(await api.post<unknown>('/sample-batch', payloadBatchSample(b)));
-  const ubah = async () => dariServer(await api.put<unknown>(`/sample-batch/${b.batch_id}`, payloadBatchSample(b)));
+  const kirim = async (terimaDraft: boolean) => {
+    const buat = async () => dariServer(await api.post<unknown>('/sample-batch', payloadBatchSample(b, terimaDraft)));
+    const ubah = async () => dariServer(await api.put<unknown>(`/sample-batch/${b.batch_id}`, payloadBatchSample(b, terimaDraft)));
+    try {
+      return await (baru ? buat() : ubah());
+    } catch (err) {
+      if (baru && galatSudahAda(err)) return ubah();
+      if (!baru && barisSudahTiada(err)) return buat();
+      throw err;
+    }
+  };
+
+  if (b.status !== 'draft' || serverTerimaDraft === false) return kirim(false);
   try {
-    return await (baru ? buat() : ubah());
+    const hasil = await kirim(true);
+    serverTerimaDraft = true;
+    return hasil;
   } catch (err) {
-    if (baru && galatSudahAda(err)) return ubah();
-    if (!baru && barisSudahTiada(err)) return buat();
-    throw err;
+    // Server menjawab dengan penolakan: coba sekali lagi sebagai 'sample'. Bila berhasil, server memang belum mengenal Draft.
+    if (typeof (err as { status?: number } | null)?.status !== 'number') throw err;
+    const hasil = await kirim(false);
+    serverTerimaDraft = false;
+    return hasil;
   }
 }
 

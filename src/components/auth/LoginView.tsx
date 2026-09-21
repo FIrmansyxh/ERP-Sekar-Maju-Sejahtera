@@ -1,16 +1,5 @@
 import React, { useState } from 'react';
-import {
-  Lock,
-  User as UserIcon,
-  Eye,
-  EyeOff,
-  ArrowRight,
-  AlertCircle,
-  Building2,
-  CheckCircle2,
-  ShieldCheck,
-  Monitor
-} from 'lucide-react';
+import { Lock, User as UserIcon, Eye, EyeOff, ArrowRight, AlertCircle, Monitor } from 'lucide-react';
 import { User } from '../../types';
 import { ErpApiService } from '../../services/erpApi';
 import { APP_BUILD, APP_EDITION, APP_VERSION } from '../../config/appInfo';
@@ -25,11 +14,10 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim()) {
       setError('Masukkan username atau email Anda.');
@@ -43,15 +31,13 @@ export const LoginView: React.FC<LoginViewProps> = ({
     setIsLoading(true);
     setError(null);
 
-    setTimeout(async () => {
-      const result = await ErpApiService.login(username, password);
-      setIsLoading(false);
-      if (result.success && result.user) {
-        onLoginSuccess(result.user);
-      } else {
-        setError(result.message || 'Login gagal. Periksa kembali username dan password.');
-      }
-    }, 200);
+    const result = await ErpApiService.login(username, password);
+    setIsLoading(false);
+    if (result.success && result.user) {
+      onLoginSuccess(result.user);
+    } else {
+      setError(result.message || 'Login gagal. Periksa kembali username dan password.');
+    }
   };
   return (
     <div className="min-h-screen bg-[#eaedf1] flex flex-col justify-between font-sans text-gray-800">
@@ -82,38 +68,12 @@ export const LoginView: React.FC<LoginViewProps> = ({
           {/* Left Panel (Red Brand Area) */}
           <div className="md:col-span-5 bg-[#b81d24] p-7 text-white flex flex-col justify-between relative bg-[radial-gradient(#ffffff0a_1px,transparent_1px)] [background-size:12px_12px]">
             <div>
-              {/* Badge */}
-              <div className="inline-flex items-center space-x-1.5 px-3 py-1 bg-black/20 border border-white/20 rounded-xs text-[11px] font-medium text-white/95 mb-6">
-                <Building2 className="w-3.5 h-3.5 text-white/80" />
-                <span>Pusat Pergudangan Tembakau</span>
-              </div>
-
-              {/* Title */}
               <h1 className="text-3xl font-black tracking-tight text-white mb-3 leading-tight">
                 PT. SEKAR MAJU SEJAHTERA
               </h1>
-              <p className="text-sm text-red-100/90 leading-relaxed mb-8 font-normal pr-4">
-                Sistem Enterprise Resource Planning (ERP) Manajemen Data Petani, Stok Bal, Intake Timbangan, & Logistik.
-              </p>
-
-              {/* Feature Points */}
-              <div className="space-y-4 text-sm font-medium">
-                <div className="flex items-start space-x-3 text-white/95">
-                  <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-                  <span className="leading-snug">Otorisasi Berjenjang (RBAC 7 Roles)</span>
-                </div>
-                <div className="flex items-start space-x-3 text-white/95">
-                  <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-                  <span className="leading-snug">Manajemen Stok Bal Gudang & Status Pembayaran</span>
-                </div>
-                <div className="flex items-start space-x-3 text-white/95">
-                  <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-                  <span className="leading-snug">Pelacakan Pengiriman & QC Lab Terintegrasi</span>
-                </div>
-              </div>
+              <p className="text-sm text-red-100/90 font-medium">Sistem Data Gudang Tembakau</p>
             </div>
 
-            {/* Bottom Left Info */}
             <div className="pt-6 mt-8 border-t border-white/15 text-[11px] text-red-200/90 leading-relaxed font-sans">
               <div>Pamekasan, Madura - Jawa Timur</div>
               <div className="font-mono text-red-200/70 mt-1">Build {APP_BUILD}</div>
@@ -125,10 +85,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
             <div>
               {/* Form Header */}
               <div className="mb-5">
-                <h2 className="text-base font-bold text-gray-900 tracking-tight">
-                  Masuk ke Sistem Gudang
-                </h2>
-                
+                <h2 className="text-base font-bold text-gray-900 tracking-tight">Masuk</h2>
               </div>
 
               {/* Error Box */}
@@ -155,7 +112,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                         setUsername(e.target.value);
                         setError(null);
                       }}
-                      placeholder="Masukkan username terdaftar"
+                      placeholder="Username"
                       className="w-full pl-9 pr-3 py-2 bg-white border border-gray-300 rounded-xs focus:outline-none focus:border-[#b81d24] text-xs text-gray-900"
                       required
                       autoFocus
@@ -166,7 +123,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 {/* Password */}
                 <div>
                   <label className="block font-semibold text-gray-700 mb-1 text-xs">
-                    Kata Sandi (Password)
+                    Kata Sandi
                   </label>
                   <div className="relative">
                     <Lock className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
@@ -177,7 +134,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                         setPassword(e.target.value);
                         setError(null);
                       }}
-                      placeholder="Masukkan kata sandi..."
+                      placeholder="Kata sandi"
                       className="w-full pl-9 pr-10 py-2 bg-white border border-gray-300 rounded-xs focus:outline-none focus:border-[#b81d24] text-xs text-gray-900"
                       required
                     />
@@ -190,19 +147,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
-                </div>
-
-                {/* Options */}
-                <div className="flex items-center justify-between pt-0.5 text-xs">
-                  <label className="flex items-center space-x-1.5 text-gray-700 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={rememberMe}
-                      onChange={(e) => setRememberMe(e.target.checked)}
-                      className="rounded-xs border-gray-300 text-[#b81d24] focus:ring-[#b81d24]"
-                    />
-                    <span className="text-[11px] font-medium">Ingat Sesi di Komputer Ini</span>
-                  </label>
                 </div>
 
                 {/* Submit Button */}
@@ -218,21 +162,12 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     </>
                   ) : (
                     <>
-                      <span>Masuk ke Sistem ERP</span>
+                      <span>Masuk</span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}
                 </button>
               </form>
-
-              {/* Security Notice */}
-              <div className="mt-5 pt-3.5 border-t border-gray-200 flex items-start space-x-2 text-[11px] text-gray-500 leading-relaxed">
-                <ShieldCheck className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-0.5" />
-                <span>
-                  Akses sistem dibatasi untuk staf terdaftar PT. Sekar Maju Sejahtera. Seluruh aktivitas
-                  akun tercatat pada log audit. Hubungi Administrator Gudang bila kredensial Anda bermasalah.
-                </span>
-              </div>
 
             </div>
           </div>
@@ -242,7 +177,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
       {/* Bottom Footer */}
       <footer className="py-2.5 px-6 text-center text-[11px] text-gray-500">
-        Hak Cipta © 2026 PT. SEKAR MAJU SEJAHTERA Pamekasan. Seluruh hak cipta dilindungi undang-undang.
+        © 2026 PT. SEKAR MAJU SEJAHTERA
       </footer>
 
     </div>

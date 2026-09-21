@@ -257,7 +257,7 @@ return (
               <input
                 id="search-harga-jual-input"
                 type="text"
-                placeholder="Cari master harga jual (Kode, Grade)..."
+                placeholder="Cari kode"
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
@@ -301,11 +301,6 @@ return (
                 <tr>
                   <td colSpan={6} className="py-8 text-center text-slate-500 bg-white">
                     <div className="text-sm font-semibold text-slate-700">Tidak ada data Master Harga Jual</div>
-                    <div className="mt-1">
-                      {statusFilter !== 'all' || searchTerm
-                        ? 'Coba sesuaikan kata kunci pencarian atau reset filter status'
-                        : 'Klik tombol Tambah Master untuk membuat data baru'}
-                    </div>
                     {(statusFilter !== 'all' || searchTerm) && (
                       <button
                         onClick={() => {
@@ -394,11 +389,8 @@ return (
                 </div>
                 <div className="min-w-0">
                   <h2 className="text-sm font-bold text-gray-900 tracking-tight truncate">
-                    {editingItem ? 'Edit Master Harga Jual' : 'Tambah Master Harga Jual Baru'}
+                    {editingItem ? 'Edit Harga Jual' : 'Tambah Harga Jual'}
                   </h2>
-                  <p className="text-[11px] text-gray-500 font-medium">
-                    Kode harga untuk pengiriman sample & DO
-                  </p>
                 </div>
               </div>
               <button
@@ -427,15 +419,12 @@ return (
                 </label>
                 <input
                   type="text"
-                  placeholder="Contoh: HJ-45, HJ-43, HJ-SUPER-150"
+                  placeholder="Kode harga jual"
                   value={formKode}
                   onChange={(e) => setFormKode(e.target.value)}
                   className="w-full bg-white border border-gray-300 rounded-sm px-3 py-2 text-xs font-mono font-bold uppercase placeholder:normal-case placeholder:font-sans placeholder:font-normal text-gray-900 focus:outline-none focus:border-[#b81d24]"
                   required
                 />
-                <p className="text-[10px] text-gray-500 mt-1">
-                  Kode ini yang akan muncul pada pilihan dropdown di pengiriman sample & DO.
-                </p>
               </div>
 
               {/* Harga Jual */}
@@ -450,7 +439,7 @@ return (
                   <input
                     type="number"
                     min="0"
-                    placeholder="Contoh: 45000"
+                    placeholder="0"
                     value={formHargaJual}
                     onChange={(e) => setFormHargaJual(e.target.value === '' ? '' : Number(e.target.value))}
                     className="w-full bg-white border border-gray-300 rounded-sm pl-9 pr-12 py-2 text-xs font-bold text-gray-900 placeholder:font-normal focus:outline-none focus:border-[#b81d24]"
@@ -487,9 +476,6 @@ return (
                   <label htmlFor="chk-status-aktif" className="text-xs font-semibold text-gray-700 block cursor-pointer">
                     Status Kode Harga
                   </label>
-                  <p className="text-[11px] text-gray-500">
-                    Kode aktif tampil pada dropdown pemilihan harga jual
-                  </p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer shrink-0">
                   <input

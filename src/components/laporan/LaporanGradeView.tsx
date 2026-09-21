@@ -14,26 +14,15 @@ import {
   MasterHargaJual,
   Barang, 
   TransaksiPembelian, 
-  PengirimanBarang, 
-  PengirimanSample, 
+  PengirimanBarang,
   UserRole 
 } from '../../types';
 import { formatNumber, formatRupiah } from '../../utils/formatters';
 import { downloadExcelReport, labelStatusStok, todayStamp } from '../../utils/excelExport';
 import { isTransaksiLunas } from '../../utils/statusBayar';
-import { COMPANY_NAME } from '../../config/appInfo';
 import { useLaporanTampilan } from '../../hooks/useLaporanTampilan';
 import { LaporanTampilanToggle } from './LaporanTampilanToggle';
 import { SortIcon } from '../common/SortIcon';
-
-// Keep export for DashboardAnalyticView compatibility
-export const GRADE_PALETTE = [
-  { name: 'Hitam', bg: 'bg-zinc-900', text: 'text-zinc-900', border: 'border-zinc-900', hex: '#18181b', badgeBg: 'bg-zinc-900 text-white', lightBg: 'bg-zinc-100 text-zinc-900 border-zinc-300' },
-];
-
-export function getGradePalette(_index?: number) {
-  return { name: 'Hitam', bg: 'bg-zinc-900', text: 'text-zinc-900', border: 'border-zinc-900', hex: '#18181b', badgeBg: 'bg-zinc-900 text-white', lightBg: 'bg-zinc-100 text-zinc-900 border-zinc-300' };
-}
 
 export interface LaporanGradeViewProps {
   hargaList: TabelHarga[];
@@ -41,7 +30,6 @@ export interface LaporanGradeViewProps {
   barangList: Barang[];
   transaksiList?: TransaksiPembelian[];
   pengirimanList?: PengirimanBarang[];
-  sampleList?: PengirimanSample[];
   userRole?: UserRole;
   initialTab?: 'beli' | 'jual';
   onNavigateToHarga?: () => void;
@@ -760,20 +748,9 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
           <div className="w-10 h-10 bg-[#b81d24] text-white rounded-sm flex items-center justify-center shrink-0 shadow-xs">
             <Tag className="w-5 h-5" />
           </div>
-          <div>
-            <div className="flex items-center space-x-2">
-              <span className="px-1.5 py-0.5 bg-slate-100 text-slate-800 font-bold text-[10px] rounded-none uppercase tracking-wider">
-                LAPORAN HARGA TEMBAKAU
-              </span>
-              <span className="text-[11px] text-gray-500 font-medium">
-                {COMPANY_NAME}
-              </span>
-            </div>
-            <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">
-              Laporan Harga {activeTab === 'beli' ? 'Beli' : 'Jual'}
-            </h1>
-            <p className="text-[11px] text-gray-500">Hanya bal dari kupon yang sudah lunas; bal yang belum dibayar masih kredit.</p>
-          </div>
+          <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">
+            Laporan Harga {activeTab === 'beli' ? 'Beli' : 'Jual'}
+          </h1>
         </div>
         
         {/* Right Controls: Tab Switcher & Excel Export */}
@@ -833,9 +810,9 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
             <span className="text-gray-300">|</span>
             <span><strong className="text-gray-900 font-mono">{formatNumber(totals.jumlah_bal)}</strong> Bal</span>
             <span className="text-gray-300">|</span>
-            <span>Netto: <strong className="text-blue-700 font-mono">{formatNumber(totals.berat_netto)}</strong> Kg</span>
+            <span>Netto: <strong className="text-slate-700 font-mono">{formatNumber(totals.berat_netto)}</strong> Kg</span>
             <span className="text-gray-300">|</span>
-            <span>Nilai: <strong className="text-emerald-700 font-mono">{formatRupiah(totals.total_nilai)}</strong></span>
+            <span>Nilai: <strong className="text-gray-900 font-mono">{formatRupiah(totals.total_nilai)}</strong></span>
           </div>
           <div className="w-full sm:w-72 md:w-80">
             <div className="relative">
@@ -875,10 +852,10 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
                   const gradeBadgeClass =
                     gs.kode === 'A' ? 'bg-zinc-900 text-white' :
                     gs.kode === 'B' ? 'bg-zinc-800 text-zinc-100' :
-                    gs.kode === 'C' ? 'bg-blue-100 text-blue-900 font-bold' :
-                    gs.kode === 'D' ? 'bg-purple-100 text-purple-900 font-bold' :
+                    gs.kode === 'C' ? 'bg-slate-100 text-slate-900 font-bold' :
+                    gs.kode === 'D' ? 'bg-slate-100 text-slate-900 font-bold' :
                     gs.kode === 'E' ? 'bg-gray-200 text-gray-800 font-bold' :
-                    'bg-red-100 text-red-900 font-bold';
+                    'bg-gray-100 text-gray-900 font-bold border border-gray-200';
 
                   return (
                     <div
@@ -889,7 +866,7 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
                         <span className={`px-2 py-0.5 text-xs font-bold rounded-xs ${gradeBadgeClass}`}>
                           Grade {gs.kode}
                         </span>
-                        <span className="text-[10px] font-mono font-bold text-blue-800 bg-blue-50 px-1.5 py-0.5 rounded-xs border border-blue-100">
+                        <span className="text-[10px] font-mono font-bold text-slate-800 bg-slate-50 px-1.5 py-0.5 rounded-xs border border-slate-100">
                           {pct}%
                         </span>
                       </div>
@@ -994,22 +971,22 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
 
                 {/* 7. Di Gudang */}
                 <th 
-                  className="sticky top-0 z-20 bg-emerald-50 py-3 px-4 border-r border-emerald-200 text-right cursor-pointer hover:bg-emerald-100 select-none w-36 transition-colors"
+                  className="sticky top-0 z-20 bg-[#f8f9fa] py-3 px-4 border-r border-gray-200 text-right cursor-pointer hover:bg-gray-100 select-none w-36 transition-colors"
                   onClick={() => handleSort('bal_gudang')}
                 >
                   <div className="flex items-center justify-end">
-                    <span className="text-emerald-950 font-bold">Di Gudang</span>
+                    <span className="font-bold">Di Gudang</span>
                     {renderSortIcon('bal_gudang')}
                   </div>
                 </th>
 
                 {/* 8. Dikirimkan */}
                 <th 
-                  className="sticky top-0 z-20 bg-blue-50 py-3 px-4 border-r border-blue-200 text-right cursor-pointer hover:bg-blue-100 select-none w-36 transition-colors"
+                  className="sticky top-0 z-20 bg-[#f8f9fa] py-3 px-4 border-r border-gray-200 text-right cursor-pointer hover:bg-gray-100 select-none w-36 transition-colors"
                   onClick={() => handleSort('bal_kirim')}
                 >
                   <div className="flex items-center justify-end">
-                    <span className="text-blue-950 font-bold">Dikirimkan</span>
+                    <span className="font-bold">Dikirimkan</span>
                     {renderSortIcon('bal_kirim')}
                   </div>
                 </th>
@@ -1086,7 +1063,7 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
                         </td>
 
                         {/* 5. Netto */}
-                        <td className="py-2.5 px-4 border-r border-gray-200 text-right font-medium text-blue-700">
+                        <td className="py-2.5 px-4 border-r border-gray-200 text-right font-medium text-slate-700">
                           <span className="font-mono font-bold">
                             {row.berat_netto > 0 ? row.berat_netto.toFixed(1) : '-'}
                           </span>
@@ -1094,28 +1071,28 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
                         </td>
 
                         {/* 6. Nilai */}
-                        <td className="py-2.5 px-4 border-r border-gray-200 text-right font-bold text-emerald-700 font-mono">
+                        <td className="py-2.5 px-4 border-r border-gray-200 text-right font-bold text-gray-900 font-mono">
                           {formatRupiah(row.total_nilai)}
                         </td>
 
                         {/* 7. Di Gudang */}
-                        <td className="py-2.5 px-4 border-r border-gray-200 text-right bg-emerald-50/15">
+                        <td className="py-2.5 px-4 border-r border-gray-200 text-right">
                           <div className="font-mono font-semibold text-gray-900">
                             {formatNumber(row.bal_gudang)}{' '}
                             <span className="text-gray-400 text-xs font-normal">Bal</span>
                           </div>
-                          <div className="text-[11px] font-bold text-emerald-700">
+                          <div className="text-[11px] font-semibold text-gray-600">
                             {row.persen_gudang.toFixed(1)}%
                           </div>
                         </td>
 
                         {/* 8. Dikirimkan */}
-                        <td className="py-2.5 px-4 border-r border-gray-200 text-right bg-blue-50/15">
+                        <td className="py-2.5 px-4 border-r border-gray-200 text-right">
                           <div className="font-mono font-semibold text-gray-900">
                             {formatNumber(row.bal_kirim)}{' '}
                             <span className="text-gray-400 text-xs font-normal">Bal</span>
                           </div>
-                          <div className="text-[11px] font-bold text-blue-700">
+                          <div className="text-[11px] font-semibold text-gray-600">
                             {row.persen_kirim.toFixed(1)}%
                           </div>
                         </td>
@@ -1130,7 +1107,7 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
                                 title={`Di Gudang: ${row.persen_gudang.toFixed(1)}% (${row.bal_gudang} Bal)`}
                               />
                               <div 
-                                className="bg-blue-600 h-full transition-all" 
+                                className="bg-slate-600 h-full transition-all" 
                                 style={{ width: `${row.persen_kirim}%` }} 
                                 title={`Dikirimkan: ${row.persen_kirim.toFixed(1)}% (${row.bal_kirim} Bal)`}
                               />
@@ -1139,7 +1116,7 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
                               <span className="text-emerald-700 font-semibold" title="Masih di Gudang">
                                 {row.persen_gudang.toFixed(0)}% Gdg
                               </span>
-                              <span className="text-blue-700 font-semibold" title="Sudah Dikirimkan">
+                              <span className="text-slate-700 font-semibold" title="Sudah Dikirimkan">
                                 {row.persen_kirim.toFixed(0)}% Krm
                               </span>
                             </div>
@@ -1190,10 +1167,10 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
                                         <td className="py-1.5 px-3 text-right font-mono text-gray-600">
                                           {bItem.berat_bruto > 0 ? bItem.berat_bruto.toFixed(1) : '-'}
                                         </td>
-                                        <td className="py-1.5 px-3 text-right font-mono font-bold text-blue-700">
+                                        <td className="py-1.5 px-3 text-right font-mono font-bold text-slate-700">
                                           {bItem.berat_netto.toFixed(1)}
                                         </td>
-                                        <td className="py-1.5 px-3 text-right font-mono font-medium text-emerald-700">
+                                        <td className="py-1.5 px-3 text-right font-mono font-medium text-gray-900">
                                           {formatRupiah(bItem.total_nilai)}
                                         </td>
                                         <td className="py-1.5 px-3 text-center">
@@ -1202,7 +1179,7 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
                                               Di Gudang
                                             </span>
                                           ) : (
-                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800" title={bItem.no_surat_jalan ? `Surat Jalan: ${bItem.no_surat_jalan}` : undefined}>
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-800" title={bItem.no_surat_jalan ? `Surat Jalan: ${bItem.no_surat_jalan}` : undefined}>
                                               Terkirim {bItem.no_surat_jalan ? `(${bItem.no_surat_jalan})` : ''}
                                             </span>
                                           )}
@@ -1234,21 +1211,21 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
                   <td className="py-3 px-4 border-r border-gray-200 text-right font-mono">
                     {formatNumber(totals.berat_bruto)} Kg
                   </td>
-                  <td className="py-3 px-4 border-r border-gray-200 text-right text-blue-800 font-mono">
+                  <td className="py-3 px-4 border-r border-gray-200 text-right text-slate-800 font-mono">
                     {formatNumber(totals.berat_netto)} Kg
                   </td>
-                  <td className="py-3 px-4 border-r border-gray-200 text-right font-mono text-emerald-800">
+                  <td className="py-3 px-4 border-r border-gray-200 text-right font-mono text-gray-900">
                     {formatRupiah(totals.total_nilai)}
                   </td>
-                  <td className="py-3 px-4 border-r border-emerald-200 text-right bg-emerald-50/40">
+                  <td className="py-3 px-4 border-r border-gray-200 text-right">
                     <div className="font-mono">{formatNumber(totals.bal_gudang)} Bal</div>
-                    <div className="text-[11px] text-emerald-800 font-bold">
+                    <div className="text-[11px] text-gray-600 font-bold">
                       {totalPersenGudang.toFixed(1)}%
                     </div>
                   </td>
-                  <td className="py-3 px-4 border-r border-blue-200 text-right bg-blue-50/40">
+                  <td className="py-3 px-4 border-r border-gray-200 text-right">
                     <div className="font-mono">{formatNumber(totals.bal_kirim)} Bal</div>
-                    <div className="text-[11px] text-blue-800 font-bold">
+                    <div className="text-[11px] text-gray-600 font-bold">
                       {totalPersenKirim.toFixed(1)}%
                     </div>
                   </td>
@@ -1261,7 +1238,7 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
                           title={`Total Di Gudang: ${totalPersenGudang.toFixed(1)}%`}
                         />
                         <div 
-                          className="bg-blue-600 h-full" 
+                          className="bg-slate-600 h-full" 
                           style={{ width: `${totalPersenKirim}%` }} 
                           title={`Total Dikirimkan: ${totalPersenKirim.toFixed(1)}%`}
                         />
@@ -1270,7 +1247,7 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
                         <span className="text-emerald-800 font-bold">
                           {totalPersenGudang.toFixed(0)}% Gdg
                         </span>
-                        <span className="text-blue-800 font-bold">
+                        <span className="text-slate-800 font-bold">
                           {totalPersenKirim.toFixed(0)}% Krm
                         </span>
                       </div>

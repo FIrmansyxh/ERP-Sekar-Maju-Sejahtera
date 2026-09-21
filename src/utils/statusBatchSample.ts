@@ -1,4 +1,4 @@
-import { BatchPengirimanSample, StatusBatchSample } from '../types';
+import { BatchPengirimanSample, PengirimanSample, StatusBatchSample } from '../types';
 
 /**
  * Batch sample / Reclass berstatus Draft: bal dan harga jual masih bisa disesuaikan kapan saja. Setelah
@@ -24,10 +24,11 @@ export function alasanBatchBelumFinal(
 }
 
 /**
- * Backend hanya mengenal status batch yang lama. Draft dikirim sebagai 'sample' supaya tidak ditolak,
- * sedangkan status Draft yang sebenarnya dijaga di sisi aplikasi (lihat statusSetelahSinkron).
+ * Status batch yang dikirim ke server. Draft dikirim apa adanya; bila server belum mengenal Draft (menolaknya),
+ * pengirim mengulang dengan 'sample' dan status Draft dijaga di sisi aplikasi (lihat statusSetelahSinkron).
  */
-export const statusKeServer = (status: StatusBatchSample): StatusBatchSample => (status === 'draft' ? 'sample' : status);
+export const statusKeServer = (status: StatusBatchSample, serverTerimaDraft = true): StatusBatchSample =>
+  status === 'draft' && !serverTerimaDraft ? 'sample' : status;
 
 /**
  * Status batch setelah digabung dengan data server. Server tidak mengenal Draft dan membalas 'sample',
@@ -36,4 +37,42 @@ export const statusKeServer = (status: StatusBatchSample): StatusBatchSample => 
 export function statusSetelahSinkron(lokal: StatusBatchSample | undefined, server: StatusBatchSample | undefined): StatusBatchSample {
   if (lokal === 'draft' && (!server || server === 'sample' || server === 'draft')) return 'draft';
   return server || lokal || 'sample';
+}
+
+/**
+ * Baris sample per bal untuk laporan (Dashboard, Laporan Pengiriman), diturunkan dari batch sample yang tersimpan di
+ * server. Batch Draft belum dikirim ke pembeli dan batch yang dibatalkan tidak dihitung.
+ */
+export function barisSampleDariBatch(batchList: BatchPengirimanSample[]): PengirimanSample[] {
+  return batchList
+    .filter((batch) => batch.status !== 'draft' && batch.status !== 'dibatalkan')
+    .flatMap((batch) =>
+      (batch.items || []).map((it) => ({
+        sample_id: it.sample_item_id,
+        batch_id: batch.batch_id,
+        barang_id: it.barang_id,
+        no_bal: it.no_bal,
+        kode_grade: it.kode_grade,
+        sumber: batch.sumber_gudang,
+        tujuan: batch.tujuan_buyer,
+        berat_sample_gram: it.berat_sample_gram || 0,
+        berat_bal_kg: it.berat_bal_kg,
+        berat_bruto_kg: it.berat_bruto_kg,
+        potongan_tara_kg: it.potongan_tara_kg,
+        harga_beli_kg: it.harga_beli_kg,
+        harga_tawaran_kg: it.harga_tawaran_kg,
+        harga_deal_kg: it.harga_deal_kg,
+        tanggal_kirim: batch.tanggal_kirim,
+        tanggal_respon: it.tanggal_evaluasi || batch.tanggal_respon,
+        status: it.status_item,
+        alasan_tolak: it.alasan_tolak,
+        catatan_nego: it.catatan_nego,
+        catatan: batch.catatan,
+        dikirim_oleh: batch.dikirim_oleh,
+        nama_petani: it.nama_petani,
+        sudah_dikirim_do: it.sudah_dikirim_do,
+        no_surat_jalan_do: it.no_surat_jalan_do,
+        permintaan_buyer: batch.permintaan_buyer,
+      }))
+    );
 }

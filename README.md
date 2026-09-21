@@ -29,7 +29,8 @@ barang dan sample ke pabrik rekanan.
 8. [Pencadangan dan pemulihan data](#pencadangan-dan-pemulihan-data)
 9. [Struktur proyek](#struktur-proyek)
 10. [Catatan keamanan](#catatan-keamanan)
-11. [Dokumen terkait](#dokumen-terkait)
+11. [Standar tampilan](#standar-tampilan)
+12. [Dokumen terkait](#dokumen-terkait)
 
 ---
 
@@ -59,9 +60,14 @@ Konsekuensi penting:
   yang dibuat di alamat Vercel hanya tersimpan di peramban tempat data itu dibuat dan tidak
   terlihat di komputer lain.
 - **Operasi harian memakai alamat VPS** agar semua komputer berbagi data yang sama.
-- **Belum semua proses tersinkron penuh ke server.** Jejak audit masih lokal, dan sebagian
-  perubahan status sample, surat jalan, serta penghapusan data masih tersimpan lokal. Rincian
-  per menu dan urutan perbaikannya ada di `RENCANA_PERBAIKAN_ALUR_FE_BE.md`.
+- **Setiap perubahan dikirim ke server lewat antrean.** Kupon memakai `antrianSinkron`, perubahan lain
+  (petani, harga, pengguna, status bal, batch sample, Surat Jalan, penghapusan) memakai `antrianMutasi`.
+  Layar langsung berubah, lalu perubahan dikirim, dicoba ulang sampai berhasil, dan jawaban server
+  dicocokkan. Selama ada yang belum sampai, Header menampilkan lencana "N simpanan belum sampai ke server".
+- **Yang masih bergantung pada backend.** Beberapa endpoint belum tersedia di backend (hapus kupon, hapus
+  batch sample, edit/hapus/status Surat Jalan, ganti ID kartu petani, status Draft batch). Perubahan itu
+  tetap tersimpan di antrean dan terlihat di Header sampai endpoint-nya ada. Jejak audit masih per
+  peramban. Daftar lengkap ada di `DOKUMENTASI_DATABASE.md` bagian 5.3.
 
 ## Modul aplikasi
 
@@ -93,9 +99,9 @@ Konsekuensi penting:
 
 | Modul | Fungsi |
 |---|---|
-| Dashboard Analytic | Ringkasan eksekutif, pembelian, penjualan, laba, dan valuasi stok |
-| Laporan Bal, Kode Bal, Harga | Analisis stok, kode bal, dan grade per kategori |
-| Laporan Pembelian, Petani, Pengiriman | Rekapitulasi dengan filter dinamis, unduhan Excel, dan cetak PDF berkop surat |
+| Dashboard Analytic | Ringkasan pembelian, penjualan, laba, valuasi stok, tren, sample disetujui, dan unduhan Excel |
+| Laporan Bal, Laporan Harga | Detail bal (termasuk rekap per kode bal) dan analisis per kode harga beli/jual |
+| Laporan Pembelian, Petani, Pengiriman | Rekapitulasi dengan filter, ringkasan, dan unduhan Excel |
 | Manajemen Pengguna | Pembuatan akun, penetapan peran, reset kata sandi, dan jejak audit |
 
 ## Peran pengguna dan hak akses
@@ -120,15 +126,17 @@ pergantian akun tanpa kata sandi.
 
 **Satu gudang.** Sistem tidak memakai lokasi atau blok gudang.
 
-**Potongan tara berdasarkan berat bruto.** Nilai tara ditentukan bertingkat mengikuti berat
-bruto bal, dengan pengecualian khusus untuk bal bertanda SB.
+**Potongan tara berdasarkan kode bal dan berat bruto.** Aturannya didefinisikan satu kali di
+`src/config/aturanTimbang.ts` dan `hitungPotonganTaraKg` (`src/utils/formatters.ts`).
 
-| Kondisi berat bruto | Potongan tara |
-|---|---|
-| Bal bertanda SB | 2 kg |
-| Sampai dengan 49 kg | 3 kg |
-| 50 kg sampai 59 kg | 5 kg |
-| 60 kg ke atas | 6 kg |
+| Kode bal | Di bawah 50 kg | 50 kg sampai batas atas | Di atas batas atas |
+|---|---|---|---|
+| SB | 2 kg | 2 kg | 2 kg |
+| TS dan T (batas atas 60,0 kg termasuk) | 4 kg | 5 kg | 6 kg |
+| HF dan kode lain (batas atas di bawah 60 kg) | 3 kg | 5 kg | 6 kg |
+
+Artinya bal TS/T seberat tepat 60,0 kg kena tara 5 kg, sedangkan HF 60,0 kg kena 6 kg. Perbedaan ini
+masih menunggu konfirmasi pemilik (ada `it.todo` di `src/utils/potonganTara.test.ts`).
 
 **Potongan biaya per bal.** Kuli Rp 7.000, tali Rp 3.000, dan ganti tikar Rp 75.000 bila
 dipilih pada transaksi. Tarif ini didefinisikan satu kali di `src/config/aturanTimbang.ts`.
@@ -158,9 +166,15 @@ dan saran nomor berikutnya, misalnya setelah `PJM0001` disarankan `PJM0002`.
 No. Bal, No. Surat Jalan, No. Surat Sample, dan username. ID internal sistem tetap disimpan
 sebagai kunci data tetapi tidak ditampilkan.
 
-**Data yang sudah dikirim tidak dapat dihapus.** Nota pembelian tidak dapat dihapus bila salah
-satu balnya sudah keluar gudang atau tercantum pada surat jalan. Surat jalan hanya dapat
-dihapus selama masih berstatus dimuat. Pengiriman sample tetap dapat dihapus.
+**Jumlah bayar sama di semua layar.** Jumlah bayar per bal = nilai beli − kuli − tali − tikar; bal
+yang belum ditimbang belum dibayar (0) dan jumlah bayar tidak pernah negatif. Kasir, Nota, dan
+Laporan Pembelian memakai rumus yang sama (`hitungJumlahBayarBal`), sehingga total lunas dan kredit
+di ketiganya selalu cocok.
+
+**Data yang sudah dikirim tidak dapat dihapus.** Kupon tidak dapat dihapus bila salah satu balnya
+sudah tercantum pada Surat Jalan. Surat Jalan dapat diedit atau dibatalkan selama belum Selesai;
+status Selesai bersifat final dan baru saat itulah nilai penjualannya masuk laporan. Batch sample
+dapat dihapus selama belum dibuatkan Surat Jalan; balnya tetap di stok gudang.
 
 **Harga jual boleh di bawah harga beli.** Sistem tidak memblokir penetapan harga jual yang
 lebih rendah dari harga beli, karena kondisi tersebut sah pada kesepakatan khusus atau
@@ -238,18 +252,27 @@ Hasil build berada di direktori `dist/`. Uji hasilnya secara lokal sebelum diung
 npm run preview
 ```
 
-### VPS (produksi)
+### VPS (staging dan produksi)
 
-Setiap push ke branch `main` menjalankan GitHub Actions `.github/workflows/deploy.yml`.
-Workflow membangun di GitHub Actions (`npm ci`, `npm test`, `npm run build`); deploy dibatalkan bila tes atau
-build gagal. Hasil `dist/` dikirim ke VPS di `/var/www/erp-fe/ERP-Sekar-Maju-Sejahtera`, lalu Nginx dimuat ulang, sehingga VPS
-tidak menanggung beban build.
+`.github/workflows/deploy.yml` berjalan pada setiap push:
+
+| Branch | Job | Lingkungan GitHub | Secret |
+|---|---|---|---|
+| `staging` | `deploy-staging` | `staging` | `STAGING_VPS_HOST`, `STAGING_VPS_USER`, `STAGING_VPS_SSH_KEY`, `STAGING_VPS_PORT` (opsional, bawaan 22) |
+| `main` | `deploy-production` | `production` | `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `VPS_PORT` (opsional, bawaan 22) |
+
+Kedua job membangun di GitHub Actions (`npm ci`, `npm test`, `npm run build`); deploy dibatalkan bila tes atau
+build gagal. Hasil `dist/` dikirim ke `/var/www/erp-fe/ERP-Sekar-Maju-Sejahtera` di VPS masing-masing, diekstrak di
+atas `dist/` yang lama, lalu Nginx dimuat ulang. Berkas versi lama sengaja tidak dihapus agar tab yang masih
+membuka versi sebelumnya tetap bisa memuat potongan kodenya. VPS tidak menjalankan build, `git pull`, atau Node.
+
+Alamat API tidak diatur saat build: aplikasi memakai `{origin}/api/v1` dari domain yang sedang dibuka. Bila
+frontend dan API berada di domain berbeda, tambahkan env `VITE_API_BASE_URL` (lengkap dengan `/api/v1`) pada
+langkah build di workflow. Catatan: workflow lama mengisi `VITE_API_URL`, variabel yang tidak pernah dibaca
+aplikasi, sehingga sudah dihapus.
 
 Workflow `.github/workflows/ci.yml` menjalankan pemeriksaan yang sama (tipe, tes, build) untuk setiap pull request dan
-push ke branch selain `main`, tanpa deploy.
-
-Secret repositori yang dibutuhkan: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, dan `VPS_PORT`
-(opsional, bawaan 22).
+push ke branch selain `main` dan `staging` (keduanya sudah diperiksa `deploy.yml`), tanpa deploy.
 
 Konfigurasikan Nginx agar setiap permintaan yang tidak cocok dengan berkas nyata diarahkan ke
 `index.html`, dan rute `/api/` diteruskan ke aplikasi Laravel. Bila `/api/v1/health` tidak
@@ -343,7 +366,10 @@ src/
 ├── services/
 │   ├── apiClient.ts         Alamat API, token, health check, dan pemanggil HTTP (ApiError berisi kode status)
 │   ├── erpApi.ts            Panggilan API dan pemetaan jawaban ke model layar
-│   └── antrianSinkron.ts    Antrean kirim kupon: satu permintaan per kupon, coba ulang, verifikasi hasil
+│   ├── antrianSinkron.ts    Antrean kirim kupon: satu permintaan per kupon, coba ulang, verifikasi hasil
+│   ├── antrianMutasi.ts     Antrean perubahan lain (petani, harga, pengguna, bal, batch sample, Surat Jalan, hapus)
+│   ├── kirimMutasi.ts       Pengirim per entitas untuk antrean mutasi beserta verifikasi jawaban server
+│   └── overlayDaftar.ts     Perubahan yang belum sampai server ditimpakan ke daftar yang baru dimuat
 ├── components/
 │   ├── auth/                Halaman login
 │   ├── Header.tsx           Bilah atas, profil pengguna, dan logout
@@ -367,6 +393,7 @@ src/
     ├── rbac.ts              Definisi peran dan pemeriksaan hak akses
     ├── crypto.ts            Hash kata sandi SHA-256
     ├── statusBayar.ts       Penentuan status lunas dan kredit
+    ├── statusBatchSample.ts Status Draft batch sample dan baris sample per bal untuk laporan
     ├── nomorDokumen.ts      Validasi nomor surat manual dan saran nomor berikutnya
     ├── kunciHapus.ts        Aturan kunci: Surat Jalan Selesai final dan satu-satunya yang dihitung sebagai penjualan
     ├── alurPengiriman.ts    Perubahan stok bal dan status batch sample saat Surat Jalan diedit atau dibatalkan
@@ -404,12 +431,33 @@ Batasan berikut perlu ditutup dengan prosedur operasional.
   terutama bila repositori dapat diakses pihak luar.
 - Gunakan satu akun untuk satu orang. Akun bersama membuat jejak audit kehilangan maknanya.
 
+## Standar tampilan
+
+Aturan ini dijaga di seluruh menu agar aplikasi terlihat satu sistem. Ikuti saat menambah atau mengubah layar.
+
+- **Tidak ada teks penjelasan di layar.** Fungsi, alur, dan aturan dijelaskan saat pelatihan, bukan lewat subjudul,
+  kotak "Info/Catatan/Aturan", atau teks kecil di bawah kolom. Yang tetap tampil: label, satuan, data, pesan galat
+  atau penolakan (singkat, tanpa emoji dan tanpa huruf kapital semua), dan konfirmasi untuk tindakan yang tidak bisa
+  dibatalkan. Tooltip (`title`) boleh dipakai untuk alasan tombol yang terkunci.
+- **Judul sama dengan nama menu.** Header, banner halaman, Beranda, dan Matriks Wewenang memakai nama yang sama
+  dengan menu samping (mis. "Kasir", bukan "Data Pembelian Barang (Kasir & Cetak Nota)").
+- **Warna.** Merah perusahaan `#b81d24` untuk tombol utama, menu aktif, dan angka total terpenting. Abu-abu (gray/slate)
+  untuk teks, garis, tombol sekunder (putih bergaris), dan grafik (batang terbesar merah, sisanya abu-abu). Warna
+  lain hanya untuk status: hijau = selesai/lunas/aktif, kuning (amber) = menunggu/kredit/nego/dalam perjalanan,
+  merah = ditolak/galat. Biru, ungu, indigo, dan sky tidak dipakai.
+- **Tabel.** Semua tabel bergaris kolom dengan judul kolom rata tengah (diatur global di `src/index.css`); kolom tidak
+  diberi latar berwarna.
+- **Modal.** Kepala putih bergaris bawah, kotak ikon `bg-red-50` dengan ikon merah, tombol Batal putih bergaris,
+  tombol utama merah.
+- **Notifikasi.** Toast hijau (centang) untuk berhasil, ikon kuning untuk pemberitahuan, penolakan, dan kegagalan.
+
 ## Dokumen terkait
 
 | Berkas | Isi |
 |---|---|
+| `LAPORAN_AUDIT_2026-09-21.md` | Hasil audit menyeluruh (UI/UX, frontend, backend, DevOps, QA): temuan, perbaikan, dan pekerjaan yang masih menunggu backend |
 | `RENCANA_PERBAIKAN_ALUR_FE_BE.md` | Status sinkronisasi per menu antara frontend, backend, dan cache lokal |
-| `PANDUAN_PENGUJIAN_MANUAL.md` | Langkah pengujian manual integrasi frontend dan backend |
+| `PANDUAN_PENGUJIAN_MANUAL.md` | Skenario uji manual per menu (UAT) untuk trial dan pelatihan, termasuk cara membuktikan data tersimpan di server |
 | `DOKUMENTASI_DATABASE.md` | Alur data, relasi tabel, pemetaan field ke kolom, kontrak API, pola query, keandalan sinkronisasi, dan daftar periksa migrasi VPS |
 | `db/usulan-indeks-constraint.sql` | Usulan indeks, constraint, kolom tambahan, dan view untuk PostgreSQL (aditif, aman diulang) |
 

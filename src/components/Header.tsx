@@ -13,11 +13,7 @@ import { getRoleInfo, canUserPerform } from '../utils/rbac';
 import { IndikatorSinkron } from './common/IndikatorSinkron';
 
 interface HeaderProps {
-  totalPetani: number;
-  totalAktif: number;
-  totalNonaktif: number;
   pageTitle?: string;
-  pageBreadcrumb?: string;
   onToggleSidebar?: () => void;
   onMouseEnterToggle?: () => void;
   onMouseLeaveToggle?: () => void;
@@ -28,11 +24,7 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  totalPetani,
-  totalAktif,
-  totalNonaktif,
-  pageTitle = 'Sistem Data Gudang',
-  pageBreadcrumb = 'PT. SEKAR MAJU SEJAHTERA / Sistem Data Gudang',
+  pageTitle = 'Home',
   onToggleSidebar,
   onMouseEnterToggle,
   onMouseLeaveToggle,
@@ -161,7 +153,7 @@ export const Header: React.FC<HeaderProps> = ({
                           className="w-full text-left px-3.5 py-2 text-slate-700 hover:text-slate-900 hover:bg-slate-50 flex items-center space-x-2.5 cursor-pointer font-medium transition-colors"
                         >
                           <Users className="w-4 h-4 text-slate-500" />
-                          <span>Kelola Pengguna (RBAC)</span>
+                          <span>Kelola Pengguna</span>
                         </button>
                       )}
                     </div>
@@ -175,10 +167,10 @@ export const Header: React.FC<HeaderProps> = ({
                             setIsProfileOpen(false);
                             onLogout();
                           }}
-                          className="w-full text-left px-3.5 py-2 text-rose-600 hover:bg-rose-50/60 flex items-center space-x-2.5 cursor-pointer font-medium transition-colors"
+                          className="w-full text-left px-3.5 py-2 text-red-600 hover:bg-red-50/60 flex items-center space-x-2.5 cursor-pointer font-medium transition-colors"
                         >
-                          <LogOut className="w-4 h-4 text-rose-500" />
-                          <span>Keluar (Logout)</span>
+                          <LogOut className="w-4 h-4 text-red-500" />
+                          <span>Keluar</span>
                         </button>
                       </div>
                     )}

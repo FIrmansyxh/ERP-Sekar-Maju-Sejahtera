@@ -309,7 +309,7 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
               <input
                 id="search-petani-input"
                 type="text"
-                placeholder="Cari petani (Nama, ID, No. HP, Alamat)..."
+                placeholder="Cari nama, ID, no. HP, alamat"
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);

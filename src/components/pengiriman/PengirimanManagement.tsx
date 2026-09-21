@@ -25,7 +25,6 @@ import {
 import {
   PengirimanBarang,
   Barang,
-  PengirimanSample,
   BatchPengirimanSample,
   Petani,
   UserRole,
@@ -33,7 +32,7 @@ import {
   TransaksiPembelian,
   MasterHargaJual
 } from '../../types';
-import { loadHargaJualData, loadBatchSampleData, loadCurrentUser } from '../../utils/storage';
+import { loadCurrentUser } from '../../utils/storage';
 import { SuratJalanPrintModal } from './SuratJalanPrintModal';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { formatNumber, formatRupiah, normalizeKg } from '../../utils/formatters';
@@ -42,7 +41,7 @@ import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
 
 import { useSessionDraft } from '../../hooks/useSessionDraft';
 import { beratBrutoBal, beratBrutoItemSample } from '../../utils/beratKirim';
-import { AturanNettoBaris, NettoJualHasil, barisAturanBaru, bacaAturanNetto, hitungNettoJual, labelRentang } from '../../utils/aturanNetto';
+import { AturanNettoBaris, NettoJualHasil, barisAturanBaru, bacaAturanNetto, hitungNettoJual } from '../../utils/aturanNetto';
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
 import { isSuratJalanTerkunci } from '../../utils/kunciHapus';
 
@@ -56,7 +55,6 @@ const BelumAdaHarga: React.FC = () => (
 interface PengirimanManagementProps {
   pengirimanList: PengirimanBarang[];
   barangList: Barang[];
-  sampleList?: PengirimanSample[];
   batchSampleList?: BatchPengirimanSample[];
   selectedBatchId?: string;
   petaniList?: Petani[];
@@ -78,7 +76,6 @@ interface PengirimanManagementProps {
 export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   pengirimanList = [],
   barangList = [],
-  sampleList = [],
   batchSampleList = [],
   selectedBatchId,
   petaniList = [],
@@ -93,7 +90,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   editPengirimanId = null,
   onSelesaiEdit,
 }) => {
-  const activeHargaJualList = (hargaJualList && hargaJualList.length > 0) ? hargaJualList : loadHargaJualData();
+  const activeHargaJualList = hargaJualList;
 
   const [editingPengirimanId, setEditingPengirimanId] = useState<string | null>(null);
   // Surat Jalan yang menunggu konfirmasi karena draf Surat Jalan baru akan tergantikan
@@ -179,10 +176,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
 
   const scannerInputRef = useRef<HTMLInputElement>(null);
 
-  // Active batches fallback to localStorage if prop is empty
-  const activeBatchSampleList = useMemo(() => {
-    return (batchSampleList && batchSampleList.length > 0) ? batchSampleList : loadBatchSampleData();
-  }, [batchSampleList]);
+  const activeBatchSampleList = batchSampleList;
 
   // Helper to check if a batch is already shipped (sudah dikirim) or currently being shipped (sedang dikirim)
   const getBatchShipmentStatus = (batch: BatchPengirimanSample) => {
@@ -393,7 +387,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       const sjListStr = batchShipments.map((s) => s.no_surat_jalan).join(', ') || 'DO Selesai';
       setScanAlert({
         type: 'error',
-        message: `⚠️ PERINGATAN PENGIRIMAN GANDA: Batch ${targetBatch.kode_batch} SUDAH DALAM STATUS PENGIRIMAN (${sjListStr})! Surat Jalan telah diterbitkan sebelumnya. Harap periksa kembali untuk menghindari pengiriman ganda.`,
+        message: `Batch ${targetBatch.kode_batch} sudah punya Surat Jalan (${sjListStr}).`,
       });
     } else if (items.length === 0) {
       setScanAlert({
@@ -626,7 +620,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
         const sjListStr = statusInfo.linkedShipments.map((s) => s.no_surat_jalan).join(', ') || 'DO Selesai';
         setScanAlert({
           type: 'error',
-          message: `⚠️ BATCH SUDAH DIKIRIM: Batch ${matchedBatch.kode_batch} sudah selesai dikirim (${sjListStr}) dan tidak dapat dipilih untuk pengiriman reguler baru.`,
+          message: `Batch ${matchedBatch.kode_batch} sudah selesai dikirim (${sjListStr}).`,
         });
         setScanInputText('');
         return;
@@ -634,7 +628,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       if (statusInfo.isCurrentlyShipping) {
         setScanAlert({
           type: 'error',
-          message: `⚠️ BATCH SEDANG DIKIRIM: Batch ${matchedBatch.kode_batch} sedang dalam proses perjalanan logistik ekspedisi. Tidak dapat dibuatkan DO baru.`,
+          message: `Batch ${matchedBatch.kode_batch} sedang dikirim.`,
         });
         setScanInputText('');
         return;
@@ -1391,17 +1385,10 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
             <Truck className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">
-              Pengiriman Reguler (Input No. Bal Muatan)
-            </h1>
-            <p className="text-xs text-gray-500">
-              Input nomor bal yang akan dikirimkan baik dari list sample yang disetujui maupun pengiriman langsung tanpa sample
-            </p>
+            <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">Pengiriman Reguler (DO)</h1>
           </div>
         </div>
 
-        <div className="flex items-center space-x-2">
-        </div>
       </div>
 
       {/* Banner Mode Edit Surat Jalan */}
@@ -1415,10 +1402,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
               <h4 className="text-sm font-bold text-amber-900">
                 Mengedit Surat Jalan {suratJalanDiedit?.no_surat_jalan || ''}
               </h4>
-              <p className="text-xs text-amber-800">
-                Anda dapat menambah atau mengeluarkan bal, mengubah bruto timbang ulang, harga jual, Atur Netto, tujuan, sopir, dan data lain.
-                Perubahan baru berlaku setelah disimpan. Surat Jalan yang sudah Selesai tidak dapat diedit.
-              </p>
             </div>
           </div>
           <button
@@ -1443,8 +1426,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                 Surat Jalan {successNotification.noSuratJalan} Berhasil {successNotification.diperbarui ? 'Diperbarui' : 'Diterbitkan'}!
               </h4>
               <p className="text-xs text-emerald-800">
-                Total <strong>{successNotification.totalBal} Bal</strong> ({formatNumber(successNotification.totalBerat, 1)} Kg) siap dikirim ke <strong>{successNotification.tujuan}</strong>.
-                Informasi status pengiriman & riwayat dapat dipantau langsung di menu <strong>Status & Detail Batch Pengiriman</strong>.
+                <strong>{successNotification.totalBal} Bal</strong> ({formatNumber(successNotification.totalBerat, 1)} Kg) • {successNotification.tujuan}
               </p>
             </div>
           </div>
@@ -1453,10 +1435,10 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
               <button
                 type="button"
                 onClick={onNavigateToStatusBatch}
-                className="px-3 py-1.5 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-xs transition flex items-center space-x-1 cursor-pointer shadow-xs"
+                className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-xs transition flex items-center space-x-1 cursor-pointer shadow-xs"
               >
                 <Layers className="w-3.5 h-3.5" />
-                <span>Buka Status Batch →</span>
+                <span>Status & Detail Batch</span>
               </button>
             )}
             <button
@@ -1475,13 +1457,11 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
           <div className="bg-white p-4 border border-gray-300 rounded-sm shadow-xs space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-200 pb-3">
               <div className="font-bold text-xs text-gray-900 flex items-center space-x-2">
-                <span>Pilih Sumber Pengiriman Bal:</span>
+                <span>Sumber Bal</span>
               </div>
 
               {editingPengirimanId ? (
-                <span className="text-[11px] font-semibold text-gray-600">
-                  Sumber bal terkunci selama edit. Tambah bal lewat kolom scan barcode / input ID bal.
-                </span>
+                <span className="text-[11px] font-semibold text-gray-600">{sourceMode === 'sample_batch' ? 'Batch Sample' : 'Stok Gudang'}</span>
               ) : (
               <div className="flex items-center space-x-2">
                 <button
@@ -1496,7 +1476,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                   }`}
                 >
                   <FlaskConical className="w-3.5 h-3.5" />
-                  <span>Tarik dari Batch Sample ({availableBatches.length} Batch Tersedia)</span>
+                  <span>Batch Sample ({availableBatches.length})</span>
                 </button>
 
                 <button
@@ -1514,7 +1494,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                   }`}
                 >
                   <Scale className="w-3.5 h-3.5" />
-                  <span>Pilih Bebas dari Stok Gudang (Reguler)</span>
+                  <span>Stok Gudang</span>
                 </button>
               </div>
               )}
@@ -1528,11 +1508,8 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                     <div className="text-xs space-y-0.5">
                       <div className="font-bold text-slate-900 flex items-center space-x-1.5">
                         <AlertCircle className="w-4 h-4 text-slate-600 shrink-0" />
-                        <span>Tidak Ada Batch Sample Siap Kirim (0 Batch Tersedia)</span>
+                        <span>Tidak ada batch sample siap kirim</span>
                       </div>
-                      <p className="text-slate-600 text-[11px]">
-                        Semua batch sample saat ini berstatus <strong>Sedang Dikirim / Dalam Perjalanan</strong> atau <strong>Sudah Selesai Dikirim (DO Terbit)</strong>.
-                      </p>
                     </div>
                     <button
                       type="button"
@@ -1542,9 +1519,9 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                         setSelectedBalIds([]);
                         setRegulerManifestBalIds([]);
                       }}
-                      className="px-3.5 py-1.5 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#b81d24] rounded-xs whitespace-nowrap cursor-pointer shadow-xs transition"
+                      className="px-3.5 py-1.5 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#a0181e] rounded-xs whitespace-nowrap cursor-pointer shadow-xs transition"
                     >
-                      Pilih Bebas dari Stok Gudang →
+                      Pilih dari Stok Gudang
                     </button>
                   </div>
                 ) : (
@@ -1562,7 +1539,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                             <input
                               ref={inputBatchRef}
                               type="text"
-                              placeholder="Ketik kode batch siap kirim..."
+                              placeholder="Kode batch"
                               value={scanBatchId}
                               onChange={(e) => {
                                 setScanBatchId(e.target.value);
@@ -1663,7 +1640,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                                             ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                                             : accCount > 0
                                             ? 'bg-slate-100 text-slate-800 border border-slate-300'
-                                            : 'bg-rose-100 text-rose-800 border border-rose-300'
+                                            : 'bg-red-100 text-red-800 border border-red-300'
                                         }`}>
                                           {accCount > 0 && accCount === items.length
                                             ? 'ACC Semua'
@@ -1678,7 +1655,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                                       {accCount > 0 ? (
                                         <span className="text-emerald-700 font-bold">Di-ACC: {accCount} Bal</span>
                                       ) : (
-                                        <span className="text-rose-700 font-medium">Siap Muat: {items.length} Bal</span>
+                                        <span className="text-red-700 font-medium">Siap Muat: {items.length} Bal</span>
                                       )}
                                       <span className="text-gray-300">|</span>
                                       <span>Tgl Kirim: {b.tanggal_kirim}</span>
@@ -1695,7 +1672,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                             ) : (
                               <div className="p-4 text-xs text-gray-500 text-center space-y-1">
                                 <div>Tidak ada batch siap kirim yang cocok dengan "<strong>{scanBatchId}</strong>"</div>
-                                <div className="text-[11px] text-gray-400">Batch yang sedang dikirim atau sudah selesai dikirim disembunyikan.</div>
                               </div>
                             )}
                           </div>
@@ -1725,10 +1701,10 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                     <AlertOctagon className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
                     <div className="text-xs space-y-1">
                       <div className="font-bold text-sm text-red-700 flex items-center space-x-1.5">
-                        <span>⚠️ PERINGATAN: BATCH INI SUDAH DALAM STATUS PENGIRIMAN!</span>
+                        <span>Batch ini sudah punya Surat Jalan</span>
                       </div>
                       <p className="text-red-800">
-                        Batch <strong>{activeBatchObj?.kode_batch}</strong> tercatat sudah memiliki riwayat Surat Jalan aktif sebelumnya
+                        Batch <strong>{activeBatchObj?.kode_batch}</strong>
                         {existingShipmentsForBatch.length > 0 ? (
                           <span className="font-semibold font-mono ml-1">
                             ({existingShipmentsForBatch.map(s => `${s.no_surat_jalan} tgl ${s.tanggal_kirim}`).join(', ')})
@@ -1736,7 +1712,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                         ) : (
                           <span className="font-semibold ml-1">(Status: Selesai)</span>
                         )}
-                        . Harap pastikan kembali ke pihak gudang/logistik agar <strong>tidak terjadi pengiriman ganda (double shipment)</strong>.
+
                       </p>
                     </div>
                   </div>
@@ -1744,7 +1720,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
 
                 {activeBatchObj?.permintaan_buyer && (
                   <div className="text-[11px] text-slate-700 bg-white p-2 rounded-xs border border-slate-200">
-                    <strong>Catatan Permintaan Buyer:</strong> {activeBatchObj.permintaan_buyer}
+                    <strong>Permintaan Buyer:</strong> {activeBatchObj.permintaan_buyer}
                   </div>
                 )}
 
@@ -1799,7 +1775,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
           <div className="bg-white p-4 sm:p-5 border border-gray-300 rounded-sm shadow-xs space-y-4">
             <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider border-b border-gray-200 pb-2 flex items-center space-x-1.5">
               <FileText className="w-4 h-4 text-gray-700" />
-              <span>Informasi Surat Jalan (Delivery Order)</span>
+              <span>Surat Jalan</span>
             </h3>
 
             {errorMessage && (
@@ -1814,7 +1790,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
               {/* No Surat Jalan */}
               <div className="space-y-1">
                 <label className="block font-semibold text-gray-700">
-                  No. Surat Jalan (DO): <span className="text-red-500">*</span>
+                  No. Surat Jalan <span className="text-[#b81d24]">*</span>
                 </label>
                 <input
                   type="text"
@@ -1832,14 +1808,12 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                   <p className="text-[10px] text-gray-500">
                     Nomor terakhir: <span className="font-mono font-semibold text-gray-700">{cekNoSuratJalan.terakhir}</span>
                   </p>
-                ) : (
-                  <p className="text-[10px] text-gray-500">Wajib diisi manual, tidak boleh sama dengan surat jalan lain.</p>
-                )}
+                ) : null}
               </div>
 
               {/* Tanggal Kirim */}
               <div className="space-y-1">
-                <label className="block font-semibold text-gray-700">Tanggal Pengiriman:</label>
+                <label className="block font-semibold text-gray-700">Tanggal Pengiriman</label>
                 <input
                   type="date"
                   value={tanggalKirim}
@@ -1851,28 +1825,23 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
               {/* Tujuan Pabrik / Gudang */}
               <div className="space-y-1">
                 <label className="block font-semibold text-gray-700">
-                  Tujuan Gudang / Pabrik Buyer: <span className="text-red-500">*</span>
+                  Tujuan Gudang / Pabrik <span className="text-[#b81d24]">*</span>
                 </label>
                 <input
                   type="text"
-                  placeholder="Ketik tujuan gudang / pabrik buyer..."
+                  placeholder="Tujuan"
                   value={tujuanBuyer}
                   onChange={(e) => setTujuanBuyer(e.target.value)}
                   required
                   className="w-full px-2.5 py-1.5 bg-white border border-gray-300 rounded-xs text-xs text-gray-900 focus:outline-none focus:border-gray-800"
                 />
-                {!tujuanBuyer.trim() && (
-                  <p className="text-[10px] text-red-600 font-medium">
-                    * Wajib diisi, ketik tujuan gudang secara manual (bukan dropdown).
-                  </p>
-                )}
               </div>
 
               
 
               {/* Nama Supir */}
               <div className="space-y-1">
-                <label className="block font-semibold text-gray-700">Nama Supir / Driver Ekspedisi:</label>
+                <label className="block font-semibold text-gray-700">Nama Sopir</label>
                 <input
                   type="text"
                   value={driverNama}
@@ -1883,7 +1852,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
 
               {/* Plat Nomor */}
               <div className="space-y-1">
-                <label className="block font-semibold text-gray-700">Nomor Polisi Truk (Nopol):</label>
+                <label className="block font-semibold text-gray-700">No. Polisi Truk</label>
                 <input
                   type="text"
                   value={platNomor}
@@ -1901,7 +1870,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-200 pb-2">
               <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center space-x-1.5">
                 <Scissors className="w-4 h-4 text-gray-700" />
-                <span>Atur Netto (Potongan Bruto ke Netto Jual)</span>
+                <span>Atur Netto</span>
               </h3>
               <div className="flex items-center gap-2 flex-wrap">
                 {aturanNettoBaris.length === 0 && aturanTerakhir && (
@@ -1926,10 +1895,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
             </div>
 
             {aturanNettoBaris.length === 0 ? (
-              <div className="p-3 bg-gray-50 border border-dashed border-gray-300 text-xs text-gray-600 rounded-xs">
-                Belum ada aturan, jadi Netto Jual sama dengan Bruto Timbang Ulang (tanpa potongan).
-                Klik <strong>Tambah Baris</strong> bila pembeli memotong berat.
-              </div>
+              <div className="p-3 bg-gray-50 border border-dashed border-gray-300 text-xs text-gray-600 rounded-xs">Tanpa potongan</div>
             ) : (
               <div className="space-y-1.5 max-w-xl">
                 <div className="grid grid-cols-[1fr_1fr_1fr_2rem] gap-2 text-[10px] font-bold uppercase text-gray-500">
@@ -1994,17 +1960,11 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
               </ul>
             )}
 
-            {aturanNetto.masalah.length === 0 && aturanNetto.aturan.length > 0 && (
-              <p className="text-[11px] font-semibold text-emerald-800">
-                Aturan aktif: {aturanNetto.aturan.map((a) => `${labelRentang(a)} dipotong ${formatNumber(a.potongan)} kg`).join(' • ')}
-              </p>
-            )}
-
             {aturanNetto.aturan.length > 0 && balDiLuarAturan.length > 0 && (
               <p className="text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded-xs">
                 {balDiLuarAturan.length} bal di luar semua rentang aturan (tanpa potongan):{' '}
                 {balDiLuarAturan.slice(0, 6).map((b) => `#${b.no_bal || b.barang_id}`).join(', ')}
-                {balDiLuarAturan.length > 6 ? ', ...' : ''}. Tambahkan baris untuk berat tersebut sebelum menerbitkan Surat Jalan.
+                {balDiLuarAturan.length > 6 ? ', ...' : ''}
               </p>
             )}
           </div>
@@ -2018,7 +1978,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
               <div>
                 <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center space-x-2">
                   <Barcode className="w-4 h-4 text-[#b81d24]" />
-                  <span>Scan Barcode / Input ID Bal Tembakau yang Dikeluarkan</span>
+                  <span>Muatan Bal</span>
                 </h3>
               </div>
 
@@ -2026,7 +1986,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
               <div className="flex items-center space-x-3">
                 <div className="text-right">
                   <div className="text-[11px] font-bold text-gray-700">
-                    Status Bal Siap Muat:
+                    Bal Siap Muat
                   </div>
                   <div className="text-xs font-mono font-bold text-emerald-700">
                     {sourceMode === 'sample_batch'
@@ -2046,7 +2006,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                     <input
                       ref={scannerInputRef}
                       type="text"
-                      placeholder="Scan Barcode / ketik No Bal / ID Batch..."
+                      placeholder="Scan / ketik No Bal"
                       value={scanInputText}
                       onChange={(e) => {
                         setScanInputText(e.target.value);
@@ -2123,7 +2083,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                   >
                     <div className="px-3 py-1.5 bg-gray-50 text-[11px] font-bold text-gray-600 uppercase tracking-wider flex items-center justify-between border-b border-gray-200">
                       <span>Rekomendasi Bal Muatan ({scanBalSuggestions.length}):</span>
-                      <span className="text-[10px] text-gray-400 font-normal lowercase">Gunakan tombol ↑ ↓ & Enter atau klik untuk memilih</span>
                     </div>
 
                     {scanBalSuggestions.length > 0 ? (
@@ -2262,7 +2221,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
 
                 {/* Bulk Master Price Code Selector */}
                 <div className="flex items-center space-x-2 ml-auto flex-wrap">
-                  <span className="text-[11px] font-bold text-gray-700">Terapkan Harga Jual Massal:</span>
+                  <span className="text-[11px] font-bold text-gray-700">Harga Jual Semua Bal</span>
                   <select
                     value={bulkKodeHarga}
                     onChange={(e) => setBulkKodeHarga(e.target.value)}
@@ -2324,7 +2283,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                       <th className="p-2 text-center">Harga Jual /Kg</th>
                       <th className="p-2 text-center">
                         Total Nilai
-                        <span className="block text-[10px] font-medium text-gray-500">Netto Jual × Harga</span>
                       </th>
                       {sourceMode === 'gudang_reguler' && <th className="p-2 text-center">Aksi</th>}
                     </tr>
@@ -2342,11 +2300,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                               <div className="text-sm font-bold text-gray-800">
                                 {!selectedBatchSampleId ? 'Belum Ada Batch Sample yang Dipilih' : 'Tidak ada bal pada batch ini'}
                               </div>
-                              <p className="text-xs text-gray-500">
-                                {!selectedBatchSampleId
-                                  ? 'Silakan cari atau pilih kode batch sample pada kolom pencarian di atas untuk memuat daftar bal tembakau.'
-                                  : 'Silakan pilih batch sample lainnya pada dropdown di atas.'}
-                              </p>
                             </div>
                           </td>
                         </tr>
@@ -2412,7 +2365,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                                     ✕ Ditolak
                                   </span>
                                 ) : (
-                                  <span className="px-2 py-0.5 bg-rose-100 text-rose-800 border border-rose-300 rounded-xs font-semibold text-[10px]">
+                                  <span className="px-2 py-0.5 bg-red-100 text-red-800 border border-red-300 rounded-xs font-semibold text-[10px]">
                                     Sample Dikirim
                                   </span>
                                 )}
@@ -2451,10 +2404,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                           <td colSpan={8} className="p-8 text-center bg-gray-50/50">
                             <div className="max-w-md mx-auto space-y-2.5">
                               <Package className="w-9 h-9 mx-auto text-gray-300" />
-                              <div className="text-sm font-bold text-gray-800">Tabel Muatan Masih Kosong</div>
-                              <p className="text-xs text-gray-500">
-                                Scan barcode bal tembakau atau ketik nomor bal/ID di atas untuk memasukkan bal ke dalam daftar muatan surat jalan.
-                              </p>
+                              <div className="text-sm font-bold text-gray-800">Muatan masih kosong</div>
                             </div>
                           </td>
                         </tr>
@@ -2570,19 +2520,19 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
           <div className="bg-white p-4 border border-gray-300 rounded-sm shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="space-y-1">
               <div className="text-xs text-gray-600">
-                Muatan Siap Kirim: <strong className="text-gray-900">{totalSelectedBal} Bal</strong> ({formatNumber(totalSelectedBerat, 1)} Kg bruto{totalPotongan > 0 ? `, ${formatNumber(totalNettoJual, 1)} Kg netto jual` : ''}) tujuan <strong className={tujuanBuyer ? 'text-gray-900' : 'text-red-600 italic'}>{tujuanBuyer || '(Wajib diisi)'}</strong>.
+                Muatan Siap Kirim: <strong className="text-gray-900">{totalSelectedBal} Bal</strong> ({formatNumber(totalSelectedBerat, 1)} Kg bruto{totalPotongan > 0 ? `, ${formatNumber(totalNettoJual, 1)} Kg netto jual` : ''}) tujuan <strong className={tujuanBuyer ? 'text-gray-900' : 'text-red-600'}>{tujuanBuyer || '-'}</strong>
               </div>
               {!canSubmitShipment && (
                 <div className="text-[11px] font-semibold text-slate-700 bg-slate-50 px-2.5 py-1 rounded-xs border border-slate-200 inline-flex items-center space-x-1.5">
                   <AlertTriangle className="w-3.5 h-3.5 text-slate-600 shrink-0" />
                   <span>
                     {!tujuanBuyer.trim()
-                      ? 'Tujuan gudang / pabrik buyer wajib diisi sebelum menerbitkan surat jalan.'
+                      ? 'Tujuan belum diisi'
                       : sourceMode === 'sample_batch'
-                      ? `Belum semua bal dicentang (${checkedEligibleCount}/${eligibleBatchItems.length} Bal). Centang atau scan seluruh bal muatan sebelum menerbitkan surat jalan.`
+                      ? `Bal dicentang ${checkedEligibleCount}/${eligibleBatchItems.length}`
                       : regulerManifestBalIds.length === 0
-                      ? 'Tabel muatan masih kosong. Silakan scan barcode atau masukkan bal tembakau terlebih dahulu.'
-                      : `Belum semua bal dicentang (${selectedBalObjects.length}/${regulerManifestBalIds.length} Bal). Centang atau scan seluruh bal muatan sebelum menerbitkan surat jalan.`}
+                      ? 'Muatan masih kosong'
+                      : `Bal dicentang ${selectedBalObjects.length}/${regulerManifestBalIds.length}`}
                   </span>
                 </div>
               )}

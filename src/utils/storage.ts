@@ -6,7 +6,6 @@ import {
   TabelHarga,
   MasterHargaJual,
   TransaksiPembelian,
-  PengirimanSample,
   BatchPengirimanSample,
   PengirimanBarang,
   User,
@@ -19,7 +18,7 @@ import { INITIAL_BARANG_DATA } from '../data/initialBarangData';
 import { INITIAL_HARGA_DATA } from '../data/initialHargaData';
 import { INITIAL_HARGA_JUAL_DATA } from '../data/initialHargaJualData';
 import { INITIAL_TRANSAKSI_DATA } from '../data/initialTransaksiData';
-import { INITIAL_SAMPLE_DATA, INITIAL_BATCH_SAMPLE_DATA } from '../data/initialSampleData';
+import { INITIAL_BATCH_SAMPLE_DATA } from '../data/initialSampleData';
 import { INITIAL_PENGIRIMAN_DATA } from '../data/initialPengirimanData';
 import { INITIAL_USER_DATA } from '../data/initialUserData';
 
@@ -38,7 +37,6 @@ const KEY_BARANG = `${NS}barang_${STORAGE_VERSION}`;
 const KEY_HARGA = `${NS}harga_${STORAGE_VERSION}`;
 const KEY_HARGA_JUAL = `${NS}harga_jual_${STORAGE_VERSION}`;
 const KEY_TRANSAKSI = `${NS}transaksi_${STORAGE_VERSION}`;
-const KEY_SAMPLE = `${NS}sample_${STORAGE_VERSION}`;
 const KEY_BATCH_SAMPLE = `${NS}batch_sample_${STORAGE_VERSION}`;
 const KEY_PENGIRIMAN = `${NS}pengiriman_${STORAGE_VERSION}`;
 const KEY_USERS = `${NS}users_${STORAGE_VERSION}`;
@@ -63,7 +61,6 @@ const DATA_KEYS = [
   KEY_HARGA,
   KEY_HARGA_JUAL,
   KEY_TRANSAKSI,
-  KEY_SAMPLE,
   KEY_BATCH_SAMPLE,
   KEY_PENGIRIMAN,
   KEY_USERS,
@@ -336,15 +333,6 @@ export function saveTransaksiData(data: TransaksiPembelian[]): void {
   safeSetItem(KEY_TRANSAKSI, data);
 }
 
-// --- PENGIRIMAN SAMPLE ---
-export function loadSampleData(): PengirimanSample[] {
-  return readList<PengirimanSample>(KEY_SAMPLE) ?? INITIAL_SAMPLE_DATA;
-}
-
-export function saveSampleData(data: PengirimanSample[]): void {
-  safeSetItem(KEY_SAMPLE, data);
-}
-
 // --- BATCH PENGIRIMAN SAMPLE ---
 export function loadBatchSampleData(): BatchPengirimanSample[] {
   return readList<BatchPengirimanSample>(KEY_BATCH_SAMPLE) ?? INITIAL_BATCH_SAMPLE_DATA;
@@ -387,25 +375,4 @@ export function recordAuditLog(entry: Omit<AuditLogEntry, 'log_id' | 'timestamp'
   } catch (err) {
     console.error('Gagal mencatat log audit:', err);
   }
-}
-
-/**
- * Mengosongkan seluruh data operasional dan master pada peramban ini,
- * lalu mengembalikan sistem ke kondisi instalasi baru.
- *
- * Sesi login dan daftar pengguna ikut dikosongkan, sehingga setelah dipanggil
- * pengguna harus login ulang memakai akun Super Admin bawaan.
- */
-export function resetAllERPData(): void {
-  savePetaniData([]);
-  saveBarangData([]);
-  saveHargaData([]);
-  saveHargaJualData([]);
-  saveTransaksiData([]);
-  saveSampleData([]);
-  saveBatchSampleData([]);
-  savePengirimanData([]);
-  saveAuditLogData([]);
-  saveUserData(INITIAL_USER_DATA);
-  saveCurrentUser(null);
 }

@@ -1,5 +1,8 @@
 name: Auto Deploy Frontend to VPS
 
+# Build, tes, dan kompres dilakukan di GitHub Actions; VPS hanya menerima hasil build (dist/).
+# Alamat API tidak perlu diatur saat build: aplikasi memakai {origin}/api/v1 dari domain yang dibuka.
+# Bila frontend dan API berbeda domain, tambahkan env VITE_API_BASE_URL (lengkap dengan /api/v1) pada langkah build.
 on:
   push:
     branches:
@@ -29,30 +32,21 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: 20
+        cache: npm
 
-<<<<<<< Updated upstream
-    - name: 3. Install Dependencies
-      run: npm install
-
-    - name: 4. Build Vite (Staging)
-=======
-    - name: 3. Install Dependencies di GitHub Runner (sesuai package-lock.json)
+    - name: 3. Install Dependencies (sesuai package-lock.json)
       run: npm ci
 
-    - name: 4. Jalankan Tes Otomatis (deploy dibatalkan bila ada yang gagal)
+    - name: 4. Tes Otomatis (deploy dibatalkan bila ada yang gagal)
       run: npm test
 
-    - name: 5. Build Vite di GitHub Runner (Super Cepat & Bebas Beban VPS)
->>>>>>> Stashed changes
+    - name: 5. Build Vite (Staging)
       run: npm run build
-      env:
-        VITE_API_URL: ${{ secrets.STAGING_VITE_API_URL }}
 
     - name: 6. Kompres Hasil Build dist
       run: tar -czf dist.tar.gz dist/
 
-<<<<<<< Updated upstream
-    - name: 6. Kirim dist.tar.gz ke Staging VPS
+    - name: 7. Kirim dist.tar.gz ke Staging VPS
       uses: appleboy/scp-action@v0.1.7
       with:
         host: ${{ secrets.STAGING_VPS_HOST }}
@@ -63,7 +57,7 @@ jobs:
         target: "/var/www/erp-fe/ERP-Sekar-Maju-Sejahtera"
         overwrite: true
 
-    - name: 7. Ekstrak di Staging VPS & Reload Nginx
+    - name: 8. Ekstrak di Staging VPS & Reload Nginx
       uses: appleboy/ssh-action@v1.0.3
       with:
         host: ${{ secrets.STAGING_VPS_HOST }}
@@ -72,22 +66,13 @@ jobs:
         port: ${{ secrets.STAGING_VPS_PORT || 22 }}
         command_timeout: 5m
         script: |
-          echo "=== 1. Bersihkan sisa proses build lama ==="
-          pkill -f "vite" || true
-          pkill -f "tsc" || true
-
-          echo "=== 2. Masuk ke folder frontend staging ==="
+          set -e
           cd /var/www/erp-fe/ERP-Sekar-Maju-Sejahtera
-          git pull origin staging || true
-
-          echo "=== 3. Ekstrak aset terbaru ==="
+          # Berkas lama sengaja tidak dihapus: tab yang masih membuka versi sebelumnya tetap bisa memuat potongan kodenya
           tar -xzf dist.tar.gz
           rm -f dist.tar.gz
-
-          echo "=== 4. Reload Nginx ==="
           sudo systemctl reload nginx
-
-          echo "=== DEPLOY FRONTEND STAGING SUKSES! ==="
+          echo "=== DEPLOY FRONTEND STAGING SUKSES ==="
 
   # ============================================================
   # JOB 2: Deploy ke PRODUCTION (branch: main)
@@ -106,22 +91,21 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: 20
+        cache: npm
 
-    - name: 3. Install Dependencies
-      run: npm install
+    - name: 3. Install Dependencies (sesuai package-lock.json)
+      run: npm ci
 
-    - name: 4. Build Vite (Production)
+    - name: 4. Tes Otomatis (deploy dibatalkan bila ada yang gagal)
+      run: npm test
+
+    - name: 5. Build Vite (Production)
       run: npm run build
-      env:
-        VITE_API_URL: ${{ secrets.VITE_API_URL }}
 
-    - name: 5. Kompres Hasil Build dist
+    - name: 6. Kompres Hasil Build dist
       run: tar -czf dist.tar.gz dist/
 
-    - name: 6. Kirim dist.tar.gz ke Production VPS
-=======
-    - name: 7. Kirim dist.tar.gz ke VPS
->>>>>>> Stashed changes
+    - name: 7. Kirim dist.tar.gz ke Production VPS
       uses: appleboy/scp-action@v0.1.7
       with:
         host: ${{ secrets.VPS_HOST }}
@@ -132,11 +116,7 @@ jobs:
         target: "/var/www/erp-fe/ERP-Sekar-Maju-Sejahtera"
         overwrite: true
 
-<<<<<<< Updated upstream
-    - name: 7. Ekstrak di Production VPS & Reload Nginx
-=======
-    - name: 8. Ekstrak di VPS & Reload Nginx
->>>>>>> Stashed changes
+    - name: 8. Ekstrak di Production VPS & Reload Nginx
       uses: appleboy/ssh-action@v1.0.3
       with:
         host: ${{ secrets.VPS_HOST }}
@@ -145,19 +125,10 @@ jobs:
         port: ${{ secrets.VPS_PORT || 22 }}
         command_timeout: 5m
         script: |
-          echo "=== 1. Bersihkan sisa proses build lama ==="
-          pkill -f "vite" || true
-          pkill -f "tsc" || true
-
-          echo "=== 2. Masuk ke folder frontend & sinkronkan Git ==="
+          set -e
           cd /var/www/erp-fe/ERP-Sekar-Maju-Sejahtera
-          git pull origin main || true
-
-          echo "=== 3. Ekstrak aset produksi terbaru ==="
+          # Berkas lama sengaja tidak dihapus: tab yang masih membuka versi sebelumnya tetap bisa memuat potongan kodenya
           tar -xzf dist.tar.gz
           rm -f dist.tar.gz
-
-          echo "=== 4. Reload Nginx ==="
           sudo systemctl reload nginx
-
-          echo "=== DEPLOY FRONTEND PRODUCTION SUKSES! ==="
+          echo "=== DEPLOY FRONTEND PRODUCTION SUKSES ==="

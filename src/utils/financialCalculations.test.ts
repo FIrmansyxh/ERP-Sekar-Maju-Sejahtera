@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Barang, PengirimanBarang } from '../types';
-import { hitungProfitPengiriman } from './financialCalculations';
+import { hitungJumlahBayarBal, hitungProfitPengiriman } from './financialCalculations';
 
 const bal = { barang_id: 'B1', no_bal: 'SB0001', kode_grade: 'A', berat_kg: 50, harga_per_kg: 100000, berat_bruto_kg: 52, status_stok: 'keluar' } as unknown as Barang;
 
@@ -44,5 +44,16 @@ describe('hitungProfitPengiriman: penjualan baru masuk saat Surat Jalan Selesai'
   it('hanya Surat Jalan selesai yang ikut ketika status bercampur', () => {
     const hasil = hitungProfitPengiriman([suratJalan('dikirim'), suratJalan('selesai')], [bal], [], []);
     expect(hasil.validShippedDO.map((p) => p.status)).toEqual(['selesai']);
+  });
+});
+
+describe('hitungJumlahBayarBal: sama dengan Jumlah Bayar di Kasir', () => {
+  it('nilai beli dikurangi kuli, tali, dan tikar', () => {
+    expect(hitungJumlahBayarBal(2_400_000, 40, 10_000)).toBe(2_390_000);
+    expect(hitungJumlahBayarBal(2_400_000, 40, 85_000)).toBe(2_315_000);
+  });
+  it('bal yang belum ditimbang belum dibayar, dan tidak pernah negatif', () => {
+    expect(hitungJumlahBayarBal(0, 0, 10_000)).toBe(0);
+    expect(hitungJumlahBayarBal(5_000, 0.1, 10_000)).toBe(0);
   });
 });

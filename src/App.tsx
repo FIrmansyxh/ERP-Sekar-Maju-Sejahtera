@@ -3,8 +3,7 @@ import {
   Petani, 
   Barang, 
   TabelHarga, 
-  TransaksiPembelian, 
-  PengirimanSample, 
+  TransaksiPembelian,
   PengirimanBarang,
   User,
   UserRole,
@@ -23,8 +22,6 @@ import {
   saveHargaJualData,
   loadTransaksiData, 
   saveTransaksiData,
-  loadSampleData, 
-  saveSampleData,
   loadBatchSampleData,
   saveBatchSampleData,
   loadPengirimanData, 
@@ -40,6 +37,7 @@ import {
 } from './utils/storage';
 import { mergeKuponParalel, normalizeStatusBal, resolveStatusStok } from './utils/kuponSortir';
 import { filterBarangLunas } from './utils/statusBayar';
+import { barisSampleDariBatch } from './utils/statusBatchSample';
 import { balTerkirimDariTransaksi, isSuratJalanTerkunci, pesanSuratJalanTerkunci, pesanTransaksiTerkunci } from './utils/kunciHapus';
 import {
   cariSuratJalanBentrok,
@@ -53,6 +51,7 @@ import { hasModuleAccess } from './utils/rbac';
 import { antrianSinkron } from './services/antrianSinkron';
 import { normalizeKg, generatePetaniId } from './utils/formatters';
 import { hashPassword } from './utils/crypto';
+import { POTONGAN_GANTI_TIKAR } from './config/aturanTimbang';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 
@@ -73,43 +72,14 @@ import {
 } from './services/overlayDaftar';
 import type { HasilBatchSample } from './services/kirimMutasi';
 
-// User Management 
-
-// Home Dashboard 
 import { HomeDashboardView } from './components/home/HomeDashboardView';
-
-//  Dashboard Laporan & Analytic ERP
-
-// Laporan Bal Tembakau
-
-// Laporan Detail Bal Tembakau
-
-// Laporan Mutu Grade & Analisis Stok Inventaris
-
-//  Laporan Pembelian Barang
-
-// Laporan Petani & Rekapitulasi Setoran
-
-// Laporan Pengiriman & Distribusi Tembakau
-
-// PRD 4.1: Master Petani
 import { PetaniFormModal } from './components/petani/PetaniFormModal';
 import { PetaniCardPrintModal } from './components/petani/PetaniCardPrintModal';
 import { PetaniDetailDrawer } from './components/petani/PetaniDetailDrawer';
 import { PetaniDeactivateModal } from './components/petani/PetaniDeactivateModal';
 import { PetaniResetCardModal } from './components/petani/PetaniResetCardModal';
 import { PetaniImportExportModal } from './components/petani/PetaniImportExportModal';
-
-// PRD 4.2: Master Harga Beli
-
-//  Transaksi Pembelian Timbang & Kupon (3 Sub-menus: Sortir, Timbangan, Kasir)
-
-// PRD 6.1: Pengiriman Reguler (DO Luar)
-
-// PRD 6.2: Pengiriman Sample
-
-
-import { CheckCircle2 } from 'lucide-react';
+import { AlertCircle, CheckCircle2 } from 'lucide-react';
 import { lazyNamed } from './utils/lazyHalaman';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { MemuatHalaman } from './components/common/MemuatHalaman';
@@ -261,15 +231,14 @@ export default function App() {
 
   // ERP State collections
   const [petaniList, setPetaniList] = useState<Petani[]>(() => loadPetaniData());
-  const [barangList, setBarangList] = useState<Barang[]>(() => loadBarangData());
+  const [barangList, setBarangList] = useState<Barang[]>(() => normalizeStatusBal(loadBarangData()));
   const [hargaList, setHargaList] = useState<TabelHarga[]>(() => loadHargaData());
   const [transaksiList, setTransaksiList] = useState<TransaksiPembelian[]>(() => loadTransaksiData());
-  const [sampleList, setSampleList] = useState<PengirimanSample[]>(() => loadSampleData());
   const [pengirimanList, setPengirimanList] = useState<PengirimanBarang[]>(() => loadPengirimanData());
-
-  
   const [hargaJualList, setHargaJualList] = useState<MasterHargaJual[]>(() => loadHargaJualData());
   const [batchSampleList, setBatchSampleList] = useState<BatchPengirimanSample[]>(() => loadBatchSampleData());
+  // Baris sample per bal untuk laporan, diturunkan dari batch sample (tersimpan di server)
+  const sampleRows = useMemo(() => barisSampleDariBatch(batchSampleList), [batchSampleList]);
   const [selectedBatchIdForShipment, setSelectedBatchIdForShipment] = useState<string>('');
   // Surat Jalan yang sedang diedit di halaman Pengiriman Reguler (dipilih dari Status Pengiriman)
   const [editPengirimanId, setEditPengirimanId] = useState<string | null>(null);
@@ -384,7 +353,7 @@ export default function App() {
   // Antrean sinkron kupon: mengirim ulang simpanan yang tertinggal (juga dari sesi sebelumnya) sampai berhasil
   useEffect(() => {
     if (!currentUser) return;
-    antrianSinkron.pasang((tx, dasar, opsi) => ErpApiService.syncTransaksi(tx, dasar, { ...opsi, tanpaCekKesehatan: true }));
+    antrianSinkron.pasang((tx, dasar) => ErpApiService.syncTransaksi(tx, dasar, { tanpaCekKesehatan: true }));
   }, [currentUser]);
 
   // Antrean perubahan lain (petani, harga, batch sample, Surat Jalan, status bal, kupon dihapus): dikirim ulang sampai
@@ -478,33 +447,6 @@ export default function App() {
     return () => window.removeEventListener('beforeunload', peringatan);
   }, []);
 
-  const [dashboardServerStats, setDashboardServerStats] = useState<{
-    transaksi: {
-      total_transaksi: number;
-      total_bal: number;
-      total_berat_kg: number;
-      total_pembelian: number;
-    } | null;
-    stok_valuasi: Array<{
-      gudang_id?: string;
-      kode_grade?: string;
-      bal_di_gudang?: number;
-      kg_di_gudang?: number;
-      valuasi_beli?: number;
-    }>;
-    pengiriman: {
-      total_pengiriman: number;
-      total_bal_terkirim: number;
-      total_berat_terkirim: number;
-      total_nilai_deal: number;
-    } | null;
-    pengiriman_terkirim?: {
-      total_pengiriman: number;
-      total_bal_terkirim: number;
-      total_berat_terkirim: number;
-      total_nilai_deal: number;
-    } | null;
-  } | null>(null);
   const [laporanRefreshing, setLaporanRefreshing] = useState(false);
 
   // Saat buka modul laporan: refresh list sumber dari BE agar angka tidak usang
@@ -515,12 +457,6 @@ export default function App() {
     (async () => {
       try {
         await refreshOperationalLists();
-        if (activeModuleId === 'modul-6-dashboard-analytic') {
-          const statsRes = await ErpApiService.getDashboardStats();
-          if (!cancelled) {
-            setDashboardServerStats(statsRes.fromBackend ? statsRes.data : null);
-          }
-        }
       } finally {
         if (!cancelled) setLaporanRefreshing(false);
       }
@@ -559,25 +495,14 @@ export default function App() {
 
   // Toast Notification
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // 'info' dipakai untuk pemberitahuan, penolakan, dan kegagalan; tampil dengan ikon peringatan, bukan centang
   const showToast = (message: string, type: 'success' | 'info' = 'success') => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ message, type });
-    setTimeout(() => setToast(null), 3500);
+    toastTimerRef.current = setTimeout(() => setToast(null), type === 'info' ? 6000 : 3500);
   };
-
-  // Initial Load from localStorage
-  useEffect(() => {
-    setUserList(loadUserData());
-    setPetaniList(loadPetaniData());
-    setBarangList(normalizeStatusBal(loadBarangData()));
-    setHargaList(loadHargaData());
-    setTransaksiList(loadTransaksiData());
-    setSampleList(loadSampleData());
-    setPengirimanList(loadPengirimanData());
-    setHargaJualList(loadHargaJualData());
-    setBatchSampleList(loadBatchSampleData());
-
-  }, []);
 
   // Kupon yang dikerjakan paralel (mis. Sortir dan Timbangan di tab/jendela lain)
   // langsung ikut diperbarui begitu tab lain menyimpan perubahan.
@@ -705,15 +630,16 @@ export default function App() {
     resetIdleTimer();
 
     // Listen to standard activity events
-    const activityEvents = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'];
+    // Fase capture: gulir di dalam area menu (bukan jendela) juga dihitung aktivitas; scroll tidak menggelembung
+    const activityEvents = ['mousemove', 'mousedown', 'keydown', 'wheel', 'scroll', 'touchstart'];
     activityEvents.forEach((eventName) => {
-      window.addEventListener(eventName, handleUserActivity);
+      window.addEventListener(eventName, handleUserActivity, { capture: true, passive: true });
     });
 
     return () => {
       clearTimeout(idleTimer);
       activityEvents.forEach((eventName) => {
-        window.removeEventListener(eventName, handleUserActivity);
+        window.removeEventListener(eventName, handleUserActivity, { capture: true });
       });
     };
   }, [currentUser]);
@@ -1157,7 +1083,7 @@ export default function App() {
       recordAuditLog({
         user_nama: currentUser?.nama_lengkap || 'Sistem',
         user_role: currentRole,
-        modul: meta.koreksi ? 'Koreksi Transaksi' : 'Transaksi Pembelian',
+        modul: 'Transaksi Pembelian',
         aksi: meta.audit.aksi,
         target_id: newTx.no_kupon,
         deskripsi: meta.audit.deskripsi,
@@ -1218,7 +1144,7 @@ export default function App() {
     //    diverifikasi. Merge hasil tanpa menghapus bal paralel. Simpanan yang tergantikan simpanan lebih baru
     //    tidak perlu digabung ke layar karena hasil simpanan terbarulah yang membawa keadaan akhir.
     try {
-      const hasilAntrian = await antrianSinkron.masukkan(newTx, oldTx, { koreksi: Boolean(meta.koreksi) });
+      const hasilAntrian = await antrianSinkron.masukkan(newTx, oldTx);
       const syncResult =
         hasilAntrian.terbaru && hasilAntrian.hasil ? hasilAntrian.hasil : { syncedTx: newTx, fromBackend: false };
       if (syncResult.fromBackend && syncResult.syncedTx) {
@@ -1244,7 +1170,7 @@ export default function App() {
               return {
                 ...base,
                 ganti_tikar: gantiTikar,
-                potongan_tikar: gantiTikar ? potTikar || 75000 : 0,
+                potongan_tikar: gantiTikar ? potTikar || POTONGAN_GANTI_TIKAR : 0,
               };
             })
           : [...beItems];
@@ -1267,22 +1193,19 @@ export default function App() {
 
         commitLocalTx(syncedTx, false, Boolean(meta.timpaPenuh));
 
-        if (syncedTx.status_pembayaran === 'lunas' || meta.koreksi) {
+        // Setelah dibayar server menerbitkan stok bal; daftar bal diambil ulang dari server
+        if (syncedTx.status_pembayaran === 'lunas') {
           try {
             const barangRes = await ErpApiService.getBarangList();
             if (barangRes.fromBackend) setBarangList(normalizeStatusBal(barangRes.data));
           } catch (err) {
-            console.warn('Gagal refresh barang setelah simpan/koreksi:', err);
+            console.warn('Gagal memuat ulang bal setelah pembayaran:', err);
           }
         }
-      } else if (meta.koreksi) {
-        showToast('Koreksi tersimpan lokal. Server offline — sync ulang saat online.', 'info');
       }
     } catch (err) {
-      console.warn('Gagal sinkronisasi transaksi ke backend API, data lokal tetap dipakai:', err);
-      if (meta.koreksi) {
-        showToast(`Koreksi lokal OK, gagal sync server: ${err instanceof Error ? err.message : 'error'}`, 'info');
-      }
+      // Simpanan tetap di antrean dan dicoba ulang otomatis; statusnya tampil di Header
+      console.warn('Kupon belum terkirim ke server, dicoba ulang otomatis:', err);
     }
   };
 
@@ -1367,36 +1290,6 @@ export default function App() {
 
     
     showToast(`Transaksi ${transaksiId} dan data bal terkait berhasil dihapus.`);
-  };
-
-  // --- PRD 6.2: Pengiriman Sample Handlers ---
-  const handleSaveNewSample = (sample: PengirimanSample) => {
-    if (currentUser?.status_aktif === false) return showToast('Akun Anda dinonaktifkan.', 'info');
-    const updated = [sample, ...sampleList];
-    setSampleList(updated);
-    saveSampleData(updated);
-    showToast(`Sample bal ${sample.no_bal || "-"} berhasil dikirim.`);
-  };
-
-  const handleSaveBatchSamples = (newSamples: PengirimanSample[], updatedBarangs: Barang[]) => {
-    if (currentUser?.status_aktif === false) return showToast('Akun Anda dinonaktifkan.', 'info');
-    const updatedSampleList = [...newSamples, ...sampleList];
-    setSampleList(updatedSampleList);
-    saveSampleData(updatedSampleList);
-
-    const updatedBarangMap = new Map(updatedBarangs.map((b) => [b.barang_id, b]));
-    const updatedBarangList = barangList.map((b) => updatedBarangMap.get(b.barang_id) || b);
-    setBarangList(updatedBarangList);
-    saveBarangData(updatedBarangList);
-
-    showToast(`${newSamples.length} sampel tembakau berhasil diproses kirim ke Lab QC!`);
-  };
-
-  const handleUpdateSample = (sample: PengirimanSample) => {
-    const updated = sampleList.map((s) => (s.sample_id === sample.sample_id ? sample : s));
-    setSampleList(updated);
-    saveSampleData(updated);
-    showToast(`Status sampel bal ${sample.no_bal || "-"} diupdate menjadi "${sample.status.toUpperCase()}".`);
   };
 
   // --- PRD 6.1: Pengiriman Barang (DO) Handlers ---
@@ -1730,53 +1623,29 @@ export default function App() {
   const barangLunasList = useMemo(() => filterBarangLunas(barangList, transaksiList), [barangList, transaksiList]);
 
   const totalPetani = petaniList.length;
-  const totalAktif = petaniList.filter((p) => p.status_aktif).length;
-  const totalNonaktif = totalPetani - totalAktif;
 
-  // Breadcrumb title map
-  const getPageTitleAndBreadcrumb = () => {
-    switch (activeModuleId) {
-      case 'modul-home':
-        return { title: 'Dasbor Menu Utama', breadcrumb: 'PT. SEKAR MAJU SEJAHTERA / Beranda' };
-      case 'modul-6-dashboard-analytic':
-        return { title: 'Dashboard Laporan & Analytic ERP', breadcrumb: 'Beranda / Dashboard Analytic' };
-      case 'modul-6-laporan-bal':
-        return { title: 'Laporan Bal Tembakau', breadcrumb: 'Beranda / Laporan Bal' };
-      case 'modul-6-laporan-grade':
-        return { title: 'Laporan Harga', breadcrumb: 'Beranda / Laporan Harga' };
-      case 'modul-6-laporan-pembelian':
-        return { title: 'Laporan Pembelian Barang', breadcrumb: 'Beranda / Laporan Pembelian' };
-      case 'modul-6-laporan-petani':
-        return { title: 'Laporan Petani & Rekapitulasi Setoran', breadcrumb: 'Beranda / Laporan Petani' };
-      case 'modul-6-laporan-pengiriman':
-        return { title: 'Laporan Pengiriman & Distribusi Tembakau', breadcrumb: 'Beranda / Laporan Pengiriman' };
-      case 'modul-1-petani':
-        return { title: 'Master Data Petani', breadcrumb: 'Beranda / Master Petani' };
-      case 'modul-3-harga':
-        return { title: 'Master Harga Beli', breadcrumb: 'Beranda / Master Harga' };
-      case 'modul-3-harga-jual':
-        return { title: 'Master Harga Jual Pabrik', breadcrumb: 'Beranda / Master Harga Jual' };
-      case 'modul-0-sortir':
-        return { title: 'Sortir Mutu Grade & Sample Bal', breadcrumb: 'Beranda / Pembelian / Sortir' };
-      case 'modul-0-timbangan':
-        return { title: 'Meja Timbangan Bal', breadcrumb: 'Beranda / Pembelian / Timbangan' };
-      case 'modul-0-kasir':
-      case 'modul-0-transaksi':
-        return { title: 'Data Pembelian Barang (Kasir & Cetak Nota)', breadcrumb: 'Beranda / Pembelian / Kasir' };
-      case 'modul-5-pengiriman':
-        return { title: 'Pengiriman Reguler (DO Luar)', breadcrumb: 'Beranda / Pengiriman DO' };
-      case 'modul-4-sample':
-        return { title: 'Pengiriman Sample', breadcrumb: 'Beranda / Pengiriman Sample' };
-      case 'modul-status-batch':
-        return { title: 'Status & Detail Batch Sample', breadcrumb: 'Beranda / Status Batch' };
-      case 'modul-users':
-        return { title: 'Manajemen Pengguna (RBAC)', breadcrumb: 'Beranda / Manajemen Pengguna' };
-      default:
-        return { title: 'Sistem Data Gudang Tembakau', breadcrumb: 'PT. SEKAR MAJU SEJAHTERA / Sistem Data Gudang' };
-    }
+  // Judul di Header sama dengan nama menu di Sidebar
+  const JUDUL_MODUL: Record<string, string> = {
+    'modul-home': 'Home',
+    'modul-6-dashboard-analytic': 'Dashboard Analytic',
+    'modul-6-laporan-bal': 'Laporan Bal',
+    'modul-6-laporan-grade': 'Laporan Harga',
+    'modul-6-laporan-pembelian': 'Laporan Pembelian',
+    'modul-6-laporan-petani': 'Laporan Petani',
+    'modul-6-laporan-pengiriman': 'Laporan Pengiriman',
+    'modul-1-petani': 'Master Petani',
+    'modul-3-harga': 'Master Harga Beli',
+    'modul-3-harga-jual': 'Master Harga Jual',
+    'modul-0-sortir': 'Sortir',
+    'modul-0-timbangan': 'Timbangan',
+    'modul-0-kasir': 'Kasir',
+    'modul-0-transaksi': 'Kasir',
+    'modul-4-sample': 'Pengiriman Sample',
+    'modul-status-batch': 'Status & Detail Batch',
+    'modul-5-pengiriman': 'Pengiriman Reguler (DO)',
+    'modul-users': 'Manajemen Pengguna',
   };
-
-  const pageInfo = getPageTitleAndBreadcrumb();
+  const pageTitle = JUDUL_MODUL[activeModuleId] || 'Home';
 
   // Seluruh halaman berada di balik autentikasi, termasuk rute cetak mandiri.
   if (!currentUser) {
@@ -1810,11 +1679,7 @@ export default function App() {
       
       {/* Top Professional ERP Header */}
       <Header
-        totalPetani={totalPetani}
-        totalAktif={totalAktif}
-        totalNonaktif={totalNonaktif}
-        pageTitle={pageInfo.title}
-        pageBreadcrumb={pageInfo.breadcrumb}
+        pageTitle={pageTitle}
         currentUser={currentUser}
         onLogout={handleLogout}
         onOpenUsers={() => handleSelectModule('modul-users')}
@@ -1836,7 +1701,7 @@ export default function App() {
             }}
             petaniCount={totalPetani}
             transaksiCount={transaksiList.length}
-            sampleCount={sampleList.length}
+            sampleCount={batchSampleList.length}
             pengirimanCount={pengirimanList.length}
             hargaJualCount={hargaJualList.length}
             hargaCount={hargaList.length}
@@ -1859,7 +1724,7 @@ export default function App() {
               }}
               petaniCount={totalPetani}
               transaksiCount={transaksiList.length}
-              sampleCount={sampleList.length}
+              sampleCount={batchSampleList.length}
               pengirimanCount={pengirimanList.length}
               hargaJualCount={hargaJualList.length}
               hargaCount={hargaList.length}
@@ -1871,7 +1736,7 @@ export default function App() {
 
         {/* Center Main Stage */}
         <main className="flex-1 overflow-y-auto p-3 sm:p-4 bg-gray-50/40">
-          <ErrorBoundary key={activeModuleId} area={pageInfo.title}>
+          <ErrorBoundary key={activeModuleId} area={pageTitle}>
           <Suspense fallback={<MemuatHalaman />}>
           <div className="w-full space-y-2.5">
 
@@ -1879,11 +1744,6 @@ export default function App() {
             {activeModuleId === 'modul-home' && (
               <HomeDashboardView
                 onNavigate={(modId) => handleSelectModule(modId)}
-                petaniList={petaniList}
-                barangList={barangList}
-                transaksiList={transaksiList}
-                sampleList={sampleList}
-                pengirimanList={pengirimanList}
                 currentUser={currentUser}
                 userCount={userList.length}
               />
@@ -1894,11 +1754,11 @@ export default function App() {
               <DashboardAnalyticView
                 transaksiList={transaksiList}
                 barangList={barangList}
-                sampleList={sampleList}
+                sampleList={sampleRows}
+                batchSampleList={batchSampleList}
                 pengirimanList={pengirimanList}
                 hargaList={hargaList}
                 hargaJualList={hargaJualList}
-                serverStats={dashboardServerStats}
                 isRefreshing={laporanRefreshing}
                 userRole={currentRole}
                 onNavigateToModule={(modId) => handleSelectModule(modId)}
@@ -1906,8 +1766,6 @@ export default function App() {
                   setLaporanRefreshing(true);
                   try {
                     await refreshOperationalLists();
-                    const statsRes = await ErpApiService.getDashboardStats();
-                    setDashboardServerStats(statsRes.fromBackend ? statsRes.data : null);
                   } finally {
                     setLaporanRefreshing(false);
                   }
@@ -1936,7 +1794,6 @@ export default function App() {
                 barangList={barangLunasList}
                 transaksiList={transaksiList}
                 pengirimanList={pengirimanList}
-                sampleList={sampleList}
                 userRole={currentRole}
                 onNavigateToHarga={() => handleSelectModule('modul-3-harga')}
                 onNavigateToHargaJual={() => handleSelectModule('modul-3-harga-jual')}
@@ -1968,7 +1825,7 @@ export default function App() {
             {activeModuleId === 'modul-6-laporan-pengiriman' && (
               <LaporanPengirimanView
                 pengirimanList={pengirimanList}
-                sampleList={sampleList}
+                sampleList={sampleRows}
                 barangList={barangList}
                 userRole={currentRole}
                 onNavigateToSample={() => handleSelectModule('modul-4-sample')}
@@ -2113,7 +1970,6 @@ export default function App() {
             {/* PRD 6.2: Pengiriman Sample */}
             {activeModuleId === 'modul-4-sample' && (
               <SampleManagement
-                sampleList={sampleList}
                 batchSampleList={batchSampleList}
                 barangList={barangList}
                 
@@ -2122,12 +1978,8 @@ export default function App() {
                 hargaList={hargaList}
                 transaksiList={transaksiList}
                 userRole={currentRole}
-                onSaveNewSample={handleSaveNewSample}
-                onSaveBatchSamples={handleSaveBatchSamples}
-
                 onSaveBatchSample={handleSaveBatchSample}
                 onUpdateBatchSample={handleUpdateBatchSample}
-                onUpdateSample={handleUpdateSample}
                 onNavigateToPengiriman={(batchId) => {
                   if (batchId) {
                     setSelectedBatchIdForShipment(batchId);
@@ -2147,7 +1999,6 @@ export default function App() {
               <PengirimanManagement
                 pengirimanList={pengirimanList}
                 barangList={barangList}
-                sampleList={sampleList}
                 batchSampleList={batchSampleList}
                 selectedBatchId={selectedBatchIdForShipment}
                 
@@ -2294,9 +2145,16 @@ export default function App() {
 
       {/* Toast Notification Popup */}
       {toast && (
-        <div className="fixed bottom-5 right-5 z-50 flex items-center space-x-2 bg-slate-900 text-white px-4 py-3 rounded-sm shadow-xl border border-slate-800 animate-in slide-in-from-bottom-5 duration-150">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span className="text-xs font-semibold">{toast.message}</span>
+        <div
+          className="fixed bottom-5 right-5 z-50 max-w-md flex items-start space-x-2 bg-slate-900 text-white px-4 py-3 rounded-sm shadow-xl border border-slate-800"
+          role={toast.type === 'info' ? 'alert' : 'status'}
+        >
+          {toast.type === 'info' ? (
+            <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-px" />
+          ) : (
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-px" />
+          )}
+          <span className="text-xs font-semibold leading-relaxed">{toast.message}</span>
         </div>
       )}
 

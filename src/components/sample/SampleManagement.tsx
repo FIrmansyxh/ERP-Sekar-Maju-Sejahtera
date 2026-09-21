@@ -10,7 +10,6 @@ import {
   Package
 } from 'lucide-react';
 import {
-  PengirimanSample,
   BatchPengirimanSample,
   SampleItemDetail,
   Barang,
@@ -21,8 +20,6 @@ import {
   TransaksiPembelian,
   StatusBatchSample
 } from '../../types';
-import { loadHargaJualData, loadBatchSampleData, loadHargaData, loadTransaksiData } from '../../utils/storage';
-import { SampleStatusUpdateModal } from './SampleStatusUpdateModal';
 import { ConfirmModal } from '../common/ConfirmModal';
 
 import { generateBatchSampleId, generateSampleId, formatRupiah, formatNumber } from '../../utils/formatters';
@@ -34,7 +31,6 @@ import { useSessionDraft } from '../../hooks/useSessionDraft';
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
 
 interface SampleManagementProps {
-  sampleList: PengirimanSample[];
   batchSampleList?: BatchPengirimanSample[];
   barangList: Barang[];
   petaniList?: Petani[];
@@ -42,11 +38,8 @@ interface SampleManagementProps {
   hargaList?: TabelHarga[];
   transaksiList?: TransaksiPembelian[];
   userRole: UserRole;
-  onSaveNewSample?: (sample: PengirimanSample) => void;
-  onSaveBatchSamples: (samples: PengirimanSample[], updatedBarangs: Barang[]) => void;
-  onSaveBatchSample?: (newBatch: BatchPengirimanSample, updatedBarangs: Barang[]) => void;
-  onUpdateBatchSample?: (updatedBatch: BatchPengirimanSample, updatedBarangs?: Barang[]) => void;
-  onUpdateSample: (sample: PengirimanSample) => void;
+  onSaveBatchSample: (newBatch: BatchPengirimanSample, updatedBarangs: Barang[]) => void;
+  onUpdateBatchSample: (updatedBatch: BatchPengirimanSample, updatedBarangs?: Barang[]) => void;
   onNavigateToPengiriman?: (batchId?: string) => void;
   /** Membuka halaman Status & Detail Batch (daftar batch, status, hasil sortir, cetak, batal). */
   onNavigateToStatusBatch?: () => void;
@@ -57,7 +50,6 @@ interface SampleManagementProps {
 }
 
 export const SampleManagement: React.FC<SampleManagementProps> = ({
-  sampleList = [],
   batchSampleList = [],
   barangList = [],
   petaniList = [],
@@ -65,25 +57,17 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
   hargaList = [],
   transaksiList = [],
   userRole,
-  onSaveNewSample,
-  onSaveBatchSamples,
   onSaveBatchSample,
   onUpdateBatchSample,
-  onUpdateSample,
   onNavigateToPengiriman,
   onNavigateToStatusBatch,
   editBatchId = null,
   onSelesaiEdit,
 }) => {
-  // Master Harga Jual reference list
-  const activeHargaJualList = (hargaJualList && hargaJualList.length > 0) ? hargaJualList : loadHargaJualData();
-  const activeHargaList = (hargaList && hargaList.length > 0) ? hargaList : loadHargaData();
-  const activeTransaksiList = (transaksiList && transaksiList.length > 0) ? transaksiList : loadTransaksiData();
-
-  // Active batches fallback to localStorage if prop is empty
-  const activeBatchSampleList = useMemo(() => {
-    return (batchSampleList && batchSampleList.length > 0) ? batchSampleList : loadBatchSampleData();
-  }, [batchSampleList]);
+  const activeHargaJualList = hargaJualList;
+  const activeHargaList = hargaList;
+  const activeTransaksiList = transaksiList;
+  const activeBatchSampleList = batchSampleList;
 
   // Transaksi item map to resolve purchase price (harga_beli) and farmer info
   const txItemMap = useMemo(() => {
@@ -224,7 +208,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
         statusType: 'in_current_batch' as const,
         badgeText: 'SUDAH DIPILIH',
         badgeClass: 'bg-amber-100 text-amber-800 border-amber-300',
-        message: `⚠️ BAL SUDAH DIPILIH: Bal #${bal.no_bal || bal.barang_id} sudah ada dalam tabel draft sample batch ini!`,
+        message: `Bal ${bal.no_bal || bal.barang_id} sudah ada di batch ini.`,
         detail: 'Sudah tercantum di tabel draft di bawah.',
       };
     }
@@ -263,7 +247,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
         statusType: 'used_in_batch' as const,
         badgeText: `SUDAH DIPAKAI: ${matchedBatch.kode_batch}`,
         badgeClass: 'bg-red-100 text-red-800 border-red-300',
-        message: `⚠️ NO BAL SUDAH DIPAKAI: Bal #${bal.no_bal || bal.barang_id} SUDAH DIGUNAKAN pada Batch Sample "${matchedBatch.kode_batch}" (Tujuan: ${matchedBatch.tujuan_buyer} • Status: ${statusText} • Tgl Kirim: ${matchedBatch.tanggal_kirim || '-'})!`,
+        message: `Bal ${bal.no_bal || bal.barang_id} sudah dipakai di Batch Sample ${matchedBatch.kode_batch} (${matchedBatch.tujuan_buyer} • ${statusText}).`,
         detail: `Batch: ${matchedBatch.kode_batch} (${matchedBatch.tujuan_buyer})`,
         batch: matchedBatch,
       };
@@ -279,7 +263,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
         statusType: 'not_in_warehouse' as const,
         badgeText: `STATUS: ${bal.status_stok.toUpperCase()}`,
         badgeClass: 'bg-gray-100 text-gray-700 border-gray-300',
-        message: `⚠️ BAL TIDAK TERSEDIA DI GUDANG: Bal #${bal.no_bal || bal.barang_id} tidak dapat dijadikan sample (${alasan})`,
+        message: `Bal ${bal.no_bal || bal.barang_id} tidak tersedia: ${alasan}`,
         detail: alasan,
       };
     }
@@ -362,7 +346,6 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
       .sort((a, b) => (a.tanggal_kirim || '').localeCompare(b.tanggal_kirim || ''))
       .map((b) => b.kode_batch || '')
   );
-  const [updatingSingleSample, setUpdatingSingleSample] = useState<PengirimanSample | null>(null);
 
   // Create Batch Form State
   const [tujuanBuyer, setTujuanBuyer] = useSessionDraft<string>('sample_tujuan_buyer', undefined, '');
@@ -370,7 +353,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
   const [sumberGudang, setSumberGudang] = useState('Gudang Utama Pamekasan');
   const [tanggalKirim, setTanggalKirim] = useState(new Date().toISOString().split('T')[0]);
   const [dikirimOleh, setDikirimOleh] = useState('');
-  const [catatanBatchForm, setCatatanBatchForm] = useState('Sample batch resmi untuk evaluasi organoleptik dan uji kadar air sebelum DO.');
+  const [catatanBatchForm, setCatatanBatchForm] = useState('');
 
   // Bal selection filters inside Create Form
       
@@ -398,7 +381,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
     if (!targetBal) {
       setScanSampleAlert({
         type: 'error',
-        message: `❌ BAL TIDAK DITEMUKAN: Nomor Bal "${trimmed}" tidak terdaftar di database!`,
+        message: `No Bal "${trimmed}" tidak ditemukan.`,
       });
       setScanGudang('');
       setTimeout(() => inputGudangRef.current?.focus(), 100);
@@ -596,7 +579,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
     setSumberGudang('Gudang Utama Pamekasan');
     setTanggalKirim(new Date().toISOString().split('T')[0]);
     setDikirimOleh('');
-    setCatatanBatchForm('Sample batch resmi untuk evaluasi organoleptik dan uji kadar air sebelum DO.');
+    setCatatanBatchForm('');
     setErrorMessage('');
     setScanSampleAlert(null);
     setPendingScanBal(null);
@@ -775,36 +758,12 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
     // Bal baru keluar dari gudang saat masuk Surat Jalan / DO.
     const updatedBarangs: Barang[] = [];
 
-    const sedangEdit = Boolean(editingBatchId && onUpdateBatchSample);
-    if (editingBatchId && onUpdateBatchSample) {
+    const sedangEdit = Boolean(editingBatchId);
+    if (sedangEdit) {
       onUpdateBatchSample(newBatch, updatedBarangs);
-    } else if (onSaveBatchSample) {
-      onSaveBatchSample(newBatch, updatedBarangs);
     } else {
-      // Fallback
-      const flatSamples: PengirimanSample[] = items.map((it) => ({
-        sample_id: it.sample_item_id,
-        batch_id: newBatch.batch_id,
-        barang_id: it.barang_id,
-        no_bal: it.no_bal,
-        kode_grade: it.kode_grade,
-        sumber: newBatch.sumber_gudang,
-        tujuan: newBatch.tujuan_buyer,
-        berat_sample_gram: it.berat_sample_gram || 0,
-        berat_bal_kg: it.berat_bal_kg,
-        berat_bruto_kg: it.berat_bruto_kg,
-        potongan_tara_kg: it.potongan_tara_kg,
-        harga_beli_kg: it.harga_beli_kg,
-        harga_tawaran_kg: it.harga_tawaran_kg,
-        tanggal_kirim: newBatch.tanggal_kirim,
-        status: 'sample',
-        catatan: newBatch.catatan,
-        dikirim_oleh: newBatch.dikirim_oleh,
-        nama_petani: it.nama_petani,
-      }));
-      onSaveBatchSamples(flatSamples, updatedBarangs);
+      onSaveBatchSample(newBatch, updatedBarangs);
     }
-
     setIsConfirmCreateOpen(false);
     setSuccessNotification({
       kodeBatch: kodeBatch,
@@ -834,12 +793,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
               <FlaskConical className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-gray-900 tracking-tight">
-                Pengiriman Sample & Evaluasi Sortir QC Pabrik
-              </h1>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Input bal sample yang dikirim ke buyer. Daftar batch, status, hasil sortir, cetak, dan edit ada di Status & Detail Batch.
-              </p>
+              <h1 className="text-lg font-bold text-gray-900 tracking-tight">Pengiriman Sample</h1>
             </div>
           </div>
         </div>
@@ -862,11 +816,6 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                   </span>
                 )}
               </h4>
-              <p className="text-xs text-amber-800">
-                Anda dapat menambah atau mengeluarkan bal, mengubah harga tawaran, tujuan, tanggal, petugas, dan data lain.
-                Perubahan baru berlaku setelah disimpan. Batch yang sudah dibuatkan Surat Jalan tidak dapat diedit.
-                {isBatchDraft(batchDiedit) && ' Batch ini masih Draft: simpan sebagai Draft lagi, atau finalkan bila sudah siap dipakai dan dicetak.'}
-              </p>
             </div>
           </div>
           <button
@@ -892,17 +841,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                 {successNotification.draft ? ' sebagai Draft' : ''}!
               </h4>
               <p className="text-xs text-emerald-800">
-                {successNotification.draft ? (
-                  <>
-                    Total <strong>{successNotification.totalBal} Bal</strong> disiapkan untuk <strong>{successNotification.tujuan}</strong>.
-                    Bal masih bisa ditambah atau harga jualnya diubah kapan saja. Surat baru bisa dicetak setelah batch difinalkan di menu <strong>Status & Detail Batch</strong>.
-                  </>
-                ) : (
-                  <>
-                    Total <strong>{successNotification.totalBal} Bal</strong> dikirim ke <strong>{successNotification.tujuan}</strong>.
-                    Status, hasil sortir pembeli, cetak surat, dan perubahan batch dapat dilihat di menu <strong>Status & Detail Batch</strong>.
-                  </>
-                )}
+                <strong>{successNotification.totalBal} Bal</strong> • {successNotification.tujuan}
               </p>
             </div>
           </div>
@@ -911,9 +850,9 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
               <button
                 type="button"
                 onClick={onNavigateToStatusBatch}
-                className="px-3 py-1.5 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-xs transition cursor-pointer shadow-xs"
+                className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-xs transition cursor-pointer shadow-xs"
               >
-                Buka Status & Detail Batch →
+                Status & Detail Batch
               </button>
             )}
             <button
@@ -933,8 +872,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
           
           <div className="border-b border-gray-200 pb-3 flex items-center justify-between">
             <div>
-              <h2 className="text-sm font-bold text-gray-900">Form Pengiriman 1 Batch Sample Tembakau</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Pilih atau scan bal tembakau yang akan dikirimkan untuk uji lab mutu buyer</p>
+              <h2 className="text-sm font-bold text-gray-900">Batch Sample</h2>
             </div>
           </div>
 
@@ -951,7 +889,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
             {/* No. Surat Pengiriman Sample (manual) */}
             <div className="space-y-1">
               <label className="block text-xs font-semibold text-gray-700">
-                No. Surat Pengiriman Sample: <span className="text-red-500">*</span>
+                No. Surat Pengiriman Sample <span className="text-[#b81d24]">*</span>
               </label>
               <input
                 type="text"
@@ -969,36 +907,29 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                 <p className="text-[10px] text-gray-500">
                   Nomor terakhir: <span className="font-mono font-semibold text-gray-700">{cekNoSuratSample.terakhir}</span>
                 </p>
-              ) : (
-                <p className="text-[10px] text-gray-500">Wajib diisi manual, tidak boleh sama dengan surat sample lain.</p>
-              )}
+              ) : null}
             </div>
 
             {/* Buyer Destination */}
             <div className="space-y-1">
               <label className="block text-xs font-semibold text-gray-700">
-                Tujuan Gudang / Pabrik Penerima: <span className="text-red-500">*</span>
+                Tujuan Gudang / Pabrik <span className="text-[#b81d24]">*</span>
               </label>
               <input
                 type="text"
-                placeholder="Ketik tujuan gudang / pabrik penerima..."
+                placeholder="Tujuan"
                 value={tujuanBuyer}
                 onChange={(e) => setTujuanBuyer(e.target.value)}
                 required
                 className="w-full px-2.5 py-1.5 text-xs bg-white border border-gray-300 rounded-xs focus:ring-1 focus:ring-gray-700 text-gray-900"
               />
-              {!tujuanBuyer.trim() && (
-                <p className="text-[10px] text-red-600 font-medium">
-                  * Wajib diisi, ketik nama tujuan gudang secara manual.
-                </p>
-              )}
             </div>
 
             
 
             {/* Tanggal Kirim */}
             <div className="space-y-1">
-              <label className="block text-xs font-semibold text-gray-700">Tanggal Pengiriman:</label>
+              <label className="block text-xs font-semibold text-gray-700">Tanggal Pengiriman</label>
               <input
                 type="date"
                 value={tanggalKirim}
@@ -1009,7 +940,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
 
             {/* Dikirim Oleh */}
             <div className="space-y-1">
-              <label className="block text-xs font-semibold text-gray-700">Petugas QC / Pengirim:</label>
+              <label className="block text-xs font-semibold text-gray-700">Petugas Pengirim</label>
               <input
                 type="text"
                 value={dikirimOleh}
@@ -1127,7 +1058,6 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                       >
                         <div className="px-3 py-1.5 bg-gray-50 text-[11px] font-bold text-gray-600 uppercase tracking-wider flex items-center justify-between border-b border-gray-200">
                           <span>Rekomendasi Bal Gudang ({balSuggestions.length}):</span>
-                          <span className="text-[10px] text-gray-400 font-normal lowercase">Pilih dgn Enter atau Klik</span>
                         </div>
                         {balSuggestions.length > 0 ? (
                           balSuggestions.map((bal, idx) => {
@@ -1357,7 +1287,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
               <div className="w-full sm:w-1/2">
                 <input
                   type="text"
-                  placeholder="Opsional: Catatan untuk pihak QC pengirim..."
+                  placeholder="Catatan (opsional)"
                   value={catatanBatchForm}
                   onChange={(e) => setCatatanBatchForm(e.target.value)}
                   className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-300 rounded-sm focus:bg-white transition"
@@ -1384,7 +1314,6 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                       handleSaveBatchForm('draft');
                     }}
                     className="px-4 py-2 text-xs font-bold text-slate-800 bg-white hover:bg-slate-100 border border-slate-400 disabled:opacity-50 disabled:cursor-not-allowed rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
-                    title="Simpan dulu sebagai Draft: bal dan harga jual masih bisa disesuaikan, surat belum bisa dicetak"
                   >
                     <Edit3 className="w-4 h-4" />
                     <span>{`Simpan sebagai Draft (${selectedBalItems.length} Bal)`}</span>
@@ -1431,16 +1360,6 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
       
       
 
-      {/* Modal 3: Single Item Update Modal */}
-      <SampleStatusUpdateModal
-        isOpen={!!updatingSingleSample}
-        onClose={() => setUpdatingSingleSample(null)}
-        sample={updatingSingleSample}
-        onSaveStatus={(updated) => {
-          onUpdateSample(updated);
-          setUpdatingSingleSample(null);
-        }}
-      />
 
       <ConfirmModal
         isOpen={isConfirmCreateOpen}

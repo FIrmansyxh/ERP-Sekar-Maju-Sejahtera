@@ -497,13 +497,13 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
         );
       case 'dikirim':
         return (
-          <span className="px-2 py-0.5 bg-sky-50 text-sky-700 border border-sky-200 rounded-xs text-[10px] font-bold">
+          <span className="px-2 py-0.5 bg-slate-50 text-slate-700 border border-slate-200 rounded-xs text-[10px] font-bold">
             Dikirim
           </span>
         );
       case 'dalam_perjalanan':
         return (
-          <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-xs text-[10px] font-bold">
+          <span className="px-2 py-0.5 bg-slate-50 text-slate-700 border border-slate-200 rounded-xs text-[10px] font-bold">
             Dalam Perjalanan
           </span>
         );
@@ -582,9 +582,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
           <div className="w-10 h-10 bg-[#b81d24] text-white rounded-sm flex items-center justify-center shadow-xs shrink-0">
             <Truck className="w-5 h-5" />
           </div>
-          <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">
-            Laporan Pengiriman & Distribusi Tembakau (DO)
-          </h1>
+          <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">Laporan Pengiriman</h1>
         </div>
 
         {/* Action Controls: Tampilan (Filter / Ringkasan / Fokus Tabel), dan Unduh Excel */}
@@ -614,9 +612,6 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
             <div className="text-xl font-bold font-mono text-gray-900">
               {overallKPIs.totalDO} DO
             </div>
-            <div className="text-[10px] text-gray-500 font-medium mt-0.5">
-              Trip Pengiriman
-            </div>
           </div>
         </div>
 
@@ -628,9 +623,6 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
             <div className="text-xl font-bold font-mono text-gray-900">
               {overallKPIs.totalBalKirim.toLocaleString('id-ID')}
             </div>
-            <div className="text-[10px] text-gray-500 font-medium mt-0.5">
-              Bal Keluar Gudang
-            </div>
           </div>
         </div>
 
@@ -639,7 +631,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
             Total Tonase Keluar
           </div>
           <div className="mt-1">
-            <div className="text-xl font-bold font-mono text-blue-900">
+            <div className="text-xl font-bold font-mono text-slate-900">
               {overallKPIs.totalKgKirim.toLocaleString('id-ID')} kg
             </div>
             <div className="text-[10px] text-gray-500 font-medium mt-0.5">
@@ -656,9 +648,6 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
             <div className="text-xl font-bold font-mono text-emerald-600">
               {overallKPIs.countDiterima} DO
             </div>
-            <div className="text-[10px] text-emerald-700 font-semibold mt-0.5">
-              Pengiriman Sukses
-            </div>
           </div>
         </div>
 
@@ -670,22 +659,19 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
             <div className="text-xl font-bold font-mono text-amber-600">
               {overallKPIs.countDalamPerjalanan + overallKPIs.countDimuat} DO
             </div>
-            <div className="text-[10px] text-gray-500 font-medium mt-0.5">
-              Dikirim, dimuat & di jalan
-            </div>
           </div>
         </div>
 
         <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
           <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-            Sample QC Lab
+            Sample
           </div>
           <div className="mt-1">
-            <div className="text-xl font-bold font-mono text-purple-900">
-              {overallKPIs.totalSample} Sample
+            <div className="text-xl font-bold font-mono text-slate-900">
+              {overallKPIs.totalSample} Bal
             </div>
-            <div className="text-[10px] text-purple-700 font-semibold mt-0.5">
-              {overallKPIs.sampleApproved} Disetujui Pabrik
+            <div className="text-[10px] text-slate-700 font-semibold mt-0.5">
+              {overallKPIs.sampleApproved} Disetujui
             </div>
           </div>
         </div>
@@ -699,7 +685,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
         <div className="flex items-center justify-between border-b border-gray-100 pb-2">
           <div className="flex items-center space-x-2 text-xs font-bold text-gray-800 uppercase tracking-wider">
             <Filter className="w-3.5 h-3.5 text-gray-500" />
-            <span>Filter Data & Parameter Pengiriman Barang</span>
+            <span>Filter</span>
           </div>
           <span className="text-[11px] text-gray-500">
             Ditemukan <strong>{filteredPengirimanList.length}</strong> pengiriman sesuai filter
@@ -714,7 +700,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
             <div className="relative">
               <input
                 type="text"
-                placeholder="No SJ / Driver / Plat..."
+                placeholder="No SJ / sopir / nopol"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-7 pr-2 py-1.5 text-xs bg-gray-50 border border-gray-300 rounded-xs focus:bg-white focus:outline-none focus:border-[#b81d24]"
@@ -731,7 +717,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
               list="pabrik-tujuan-list"
               value={filterPabrik}
               onChange={(e) => setFilterPabrik(e.target.value)}
-              placeholder="Ketik/Pilih Pabrik Tujuan..."
+              placeholder="Pabrik tujuan"
               className="w-full px-2 py-1.5 text-xs bg-gray-50 border border-gray-300 rounded-xs focus:bg-white focus:outline-none focus:border-[#b81d24]"
             />
             <datalist id="pabrik-tujuan-list">
@@ -931,7 +917,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
                 <input
                   id="search-laporan-pengiriman-input"
                   type="text"
-                  placeholder="Cari cepat (No SJ, Pabrik, Driver, Plat)..."
+                  placeholder="Cari no SJ, pabrik, sopir, nopol"
                   value={tableSearch}
                   onChange={(e) => {
                     setTableSearch(e.target.value);
@@ -1009,7 +995,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
                         <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono font-bold text-gray-900">
                           {p.total_bal} Bal
                         </td>
-                        <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono font-bold text-blue-900">
+                        <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono font-bold text-slate-900">
                           {p.total_berat_kg.toLocaleString('id-ID')} kg
                         </td>
                         <td className="py-2.5 px-3 border-r border-gray-200 text-center">
@@ -1041,11 +1027,6 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
                 <div className="text-xs text-gray-600">
                   Menampilkan <strong>{(currentPage - 1) * (itemsPerPage >= 100000 ? searchedPengirimanList.length : itemsPerPage) + 1}</strong> - <strong>{Math.min(currentPage * (itemsPerPage >= 100000 ? searchedPengirimanList.length : itemsPerPage), searchedPengirimanList.length)}</strong> dari <strong>{searchedPengirimanList.length}</strong> pengiriman
                 </div>
-                {itemsPerPage >= 100000 && (
-                  <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-xs border border-emerald-200 font-semibold">
-                    Semua {searchedPengirimanList.length} data ditampilkan dalam 1 halaman
-                  </span>
-                )}
               </div>
 
               {itemsPerPage < 100000 && totalPages > 1 && (
@@ -1106,7 +1087,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
                       <td className="py-2.5 px-4 border-r border-gray-200 text-center font-mono font-bold text-gray-900">
                         {item.totalBal} Bal
                       </td>
-                      <td className="py-2.5 px-4 border-r border-gray-200 text-right font-mono font-bold text-blue-900">
+                      <td className="py-2.5 px-4 border-r border-gray-200 text-right font-mono font-bold text-slate-900">
                         {item.totalKg.toLocaleString('id-ID')} kg
                       </td>
                       <td className="py-2.5 px-4 border-r border-gray-200 text-right font-mono text-gray-700">
@@ -1134,7 +1115,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
         <div className="bg-white border border-gray-200 shadow-2xs overflow-hidden">
           <div className="p-3 border-b border-gray-200 bg-gray-50 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
-              Log Pengiriman Sampel Uji Laboratorium & Quality Control ({sampleList.length} Data)
+              Pengiriman Sample ({sampleList.length} Bal)
             </h3>
             <div className="flex items-center space-x-3">
               <div className="flex items-center space-x-1.5 text-xs text-gray-600">
@@ -1214,20 +1195,24 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
                         <td className="py-2.5 px-3 border-r border-gray-200 text-center">
                           {s.status === 'disetujui' ? (
                             <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xs text-[10px] font-bold">
-                              Disetujui Lab
+                              Disetujui
                             </span>
                           ) : s.status === 'ditolak' ? (
                             <span className="px-2 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded-xs text-[10px] font-bold">
                               Ditolak
                             </span>
+                          ) : s.status === 'nego' ? (
+                            <span className="px-2 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-xs text-[10px] font-bold">
+                              Nego
+                            </span>
                           ) : (
-                            <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-xs text-[10px] font-bold">
-                              Dalam Pengujian
+                            <span className="px-2 py-0.5 bg-slate-50 text-slate-700 border border-slate-200 rounded-xs text-[10px] font-bold">
+                              Menunggu
                             </span>
                           )}
                         </td>
                         <td className="py-2.5 px-3 border-r border-gray-200 text-gray-600">{s.dikirim_oleh}</td>
-                        <td className="py-2.5 px-3 text-gray-500 text-[11px] italic">{s.catatan || '-'}</td>
+                        <td className="py-2.5 px-3 text-gray-500 text-[11px]">{s.alasan_tolak || s.catatan_nego || s.catatan || '-'}</td>
                       </tr>
                     );
                   })
@@ -1263,11 +1248,6 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
                 <div className="text-xs text-gray-600">
                   Menampilkan <strong>{(sampleCurrentPage - 1) * (sampleItemsPerPage >= 100000 ? sampleList.length : sampleItemsPerPage) + 1}</strong> - <strong>{Math.min(sampleCurrentPage * (sampleItemsPerPage >= 100000 ? sampleList.length : sampleItemsPerPage), sampleList.length)}</strong> dari <strong>{sampleList.length}</strong> sampel
                 </div>
-                {sampleItemsPerPage >= 100000 && (
-                  <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-xs border border-emerald-200 font-semibold">
-                    Semua {sampleList.length} data sampel ditampilkan dalam 1 halaman
-                  </span>
-                )}
               </div>
 
               {sampleItemsPerPage < 100000 && sampleTotalPages > 1 && (
@@ -1389,11 +1369,6 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
                 <div className="text-xs text-gray-600">
                   Menampilkan <strong>{(balCurrentPage - 1) * (balItemsPerPage >= 100000 ? balKeluarList.length : balItemsPerPage) + 1}</strong> - <strong>{Math.min(balCurrentPage * (balItemsPerPage >= 100000 ? balKeluarList.length : balItemsPerPage), balKeluarList.length)}</strong> dari <strong>{balKeluarList.length}</strong> bal fisik
                 </div>
-                {balItemsPerPage >= 100000 && (
-                  <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-xs border border-emerald-200 font-semibold">
-                    Semua {balKeluarList.length} bal ditampilkan dalam 1 halaman
-                  </span>
-                )}
               </div>
 
               {balItemsPerPage < 100000 && balTotalPages > 1 && (
@@ -1501,7 +1476,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
                 </div>
               ) : (
                 <div className="p-4 text-center text-gray-500 italic bg-gray-50 border border-gray-200">
-                  Rincian bal tercantum pada lembar fisik surat jalan asli.
+                  Tidak ada rincian bal
                 </div>
               )}
 

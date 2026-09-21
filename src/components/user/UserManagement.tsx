@@ -7,7 +7,6 @@ import {
   Edit3,
   ChevronDown,
   ChevronUp,
-  RefreshCw,
   X,
   Ban,
   CheckCircle,
@@ -247,20 +246,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({
 
             <button
               onClick={() => {
-                setSearchQuery('');
-                setRoleFilter('all');
-                setStatusFilter('all');
-                setUnitFilter('all');
-                setCurrentPage(1);
-              }}
-              className="px-3 py-1.5 text-xs font-semibold text-white bg-[#545b62] hover:bg-[#464c52] rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Muat Ulang</span>
-            </button>
-
-            <button
-              onClick={() => {
                 setEditingUser(null);
                 setIsFormOpen(true);
               }}
@@ -308,7 +293,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
               <input
                 id="search-user-input"
                 type="text"
-                placeholder="Cari pengguna (Nama, Username, Unit, Role)..."
+                placeholder="Cari nama, username, unit, role"
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);

@@ -4,6 +4,7 @@ import { ErpApiService } from './erpApi';
 import { antrianMutasi } from './antrianMutasi';
 import { buatBal, buatBatch, buatItemSample, buatSuratJalan } from '../test/fixtures';
 import {
+  aturUlangDukunganDraft,
   catatStatusBal,
   handlerMutasi,
   hapusBatchSample,
@@ -115,10 +116,32 @@ describe('kirimBatchSample: perubahan bal dan harga ikut terkirim, dan server ya
     ]);
   });
 
-  it('Draft dikirim ke server sebagai sample', async () => {
+  it('Draft dikirim apa adanya bila server menerimanya', async () => {
+    aturUlangDukunganDraft();
     const ubah = vi.spyOn(apiClient.api, 'put').mockResolvedValue({ status: 'success', data: rawBatch('SPL0001', 'SS-01', ['B1']) });
     await kirimBatchSample({ ...batch, status: 'draft' }, false);
-    expect((ubah.mock.calls[0][1] as { status: string }).status).toBe('sample');
+    expect((ubah.mock.calls[0][1] as { status: string }).status).toBe('draft');
+  });
+
+  it('server yang belum mengenal Draft: dikirim ulang sebagai sample, lalu langsung sample untuk berikutnya', async () => {
+    aturUlangDukunganDraft();
+    const ubah = vi
+      .spyOn(apiClient.api, 'put')
+      .mockRejectedValueOnce(galat(422, 'The selected status is invalid.'))
+      .mockResolvedValue({ status: 'success', data: rawBatch('SPL0001', 'SS-01', ['B1']) });
+    await kirimBatchSample({ ...batch, status: 'draft' }, false);
+    expect(ubah.mock.calls.map((c) => (c[1] as { status: string }).status)).toEqual(['draft', 'sample']);
+
+    await kirimBatchSample({ ...batch, status: 'draft' }, false);
+    expect((ubah.mock.calls[2][1] as { status: string }).status).toBe('sample');
+    aturUlangDukunganDraft();
+  });
+
+  it('gangguan jaringan pada Draft tidak dianggap penolakan: galat diteruskan ke antrean', async () => {
+    aturUlangDukunganDraft();
+    const ubah = vi.spyOn(apiClient.api, 'put').mockRejectedValue(new Error('Failed to fetch'));
+    await expect(kirimBatchSample({ ...batch, status: 'draft' }, false)).rejects.toThrow('Failed to fetch');
+    expect(ubah).toHaveBeenCalledTimes(1);
   });
 
   it('server hanya menyimpan sebagian (bal tambahan hilang, harga lama): selisihnya dilaporkan', async () => {

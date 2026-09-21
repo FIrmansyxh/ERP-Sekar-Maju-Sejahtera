@@ -20,7 +20,6 @@ import { downloadExcelReport, labelStatusStok, periodeInfo, todayStamp } from '.
 import { hitungNilaiBal } from '../../utils/finance';
 import { Pagination } from '../common/Pagination';
 import { SortIcon } from '../common/SortIcon';
-import { COMPANY_NAME } from '../../config/appInfo';
 import { useLaporanTampilan } from '../../hooks/useLaporanTampilan';
 import { LaporanTampilanToggle } from './LaporanTampilanToggle';
 import { LaporanBalRekap } from './LaporanBalRekap';
@@ -737,10 +736,10 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
     const g = grade.trim().toUpperCase();
     if (g === 'A') return 'bg-zinc-900 text-white';
     if (g === 'B') return 'bg-zinc-800 text-zinc-100';
-    if (g === 'C') return 'bg-blue-100 text-blue-900 font-bold';
-    if (g === 'D') return 'bg-purple-100 text-purple-900 font-bold';
+    if (g === 'C') return 'bg-slate-100 text-slate-900 font-bold';
+    if (g === 'D') return 'bg-slate-100 text-slate-900 font-bold';
     if (g === 'E') return 'bg-gray-200 text-gray-800 font-bold';
-    return 'bg-red-100 text-red-900 font-bold';
+    return 'bg-gray-100 text-gray-900 font-bold border border-gray-200';
   };
 
   const getStatusBayarBadge = (statusBayar: string) => {
@@ -753,7 +752,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
     }
     if (statusBayar === 'belum_lunas') {
       return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-xs text-[10px] font-bold bg-rose-50 text-rose-800 border border-rose-200">
+        <span className="inline-flex items-center px-2 py-0.5 rounded-xs text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
           Belum Lunas
         </span>
       );
@@ -778,7 +777,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
         );
       case 'siap_kirim':
         return (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-xs text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-300">
+          <span className="inline-flex items-center px-2 py-0.5 rounded-xs text-[10px] font-bold bg-slate-100 text-slate-800 border border-slate-300">
             Siap Kirim DO
           </span>
         );
@@ -934,19 +933,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
           <div className="w-10 h-10 bg-[#b81d24] text-white rounded-sm flex items-center justify-center shadow-xs shrink-0">
             <Package className="w-5 h-5" />
           </div>
-          <div>
-            <div className="flex items-center space-x-2">
-              <span className="px-1.5 py-0.5 bg-slate-100 text-slate-800 font-bold text-[10px] rounded-none uppercase tracking-wider">
-                LAPORAN INVENTARIS FISIK
-              </span>
-              <span className="text-[11px] text-gray-500 font-medium">
-                {COMPANY_NAME}
-              </span>
-            </div>
-            <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">
-              Laporan Detail Bal Tembakau
-            </h1>
-          </div>
+          <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">Laporan Bal</h1>
         </div>
 
         {/* Action Buttons: Tampilan (Filter / Ringkasan / Fokus Tabel) dan Excel */}
@@ -961,7 +948,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
             title="Download laporan dalam format Excel"
           >
             <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
-            <span>Export Excel</span>
+            <span>Unduh Excel</span>
           </button>
         </div>
       </div>
@@ -973,7 +960,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
           <div className="flex items-center space-x-2">
             <TrendingUp className="w-4 h-4 text-[#b81d24]" />
             <h2 className="text-xs font-bold text-gray-900 uppercase tracking-wide">
-              Ringkasan & Metrik Analisis Bal Tembakau
+              Ringkasan
             </h2>
             <span className="px-2 py-0.5 text-[10px] font-bold bg-white text-gray-700 border border-gray-300 rounded-xs">
               {totals.totalBal} Bal Terdata
@@ -1002,22 +989,20 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                 {totals.totalBal.toLocaleString('id-ID')}{' '}
                 <span className="text-xs font-normal text-gray-500 font-sans">Bal</span>
               </div>
-              <div className="text-[10px] text-gray-500">
-                Terfilter dari {barangList.length} total bal master
-              </div>
+              <div className="text-[10px] text-gray-500">dari {barangList.length} bal</div>
             </div>
 
             {/* Card 2: Total Tonase Netto */}
-            <div className="bg-white p-3.5 border border-gray-200 rounded-none shadow-xs space-y-1 bg-blue-50/20 hover:border-blue-300 transition">
-              <div className="flex items-center justify-between text-blue-900 text-[11px] font-semibold">
+            <div className="bg-white p-3.5 border border-gray-200 rounded-none shadow-xs space-y-1 hover:border-gray-300 transition">
+              <div className="flex items-center justify-between text-slate-900 text-[11px] font-semibold">
                 <span>Total Berat Netto (Lunas)</span>
-                <Scale className="w-4 h-4 text-blue-700" />
+                <Scale className="w-4 h-4 text-slate-700" />
               </div>
-              <div className="text-xl font-black font-mono text-blue-950">
+              <div className="text-xl font-black font-mono text-gray-900">
                 {totals.totalNetto.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}{' '}
-                <span className="text-xs font-bold text-blue-700 font-sans">Kg</span>
+                <span className="text-xs font-bold text-slate-700 font-sans">Kg</span>
               </div>
-              <div className="text-[10px] text-blue-800 font-medium">
+              <div className="text-[10px] text-slate-800 font-medium">
                 ≈ {(totals.totalNetto / 1000).toFixed(2)} Ton (Bruto: {totals.totalBruto.toFixed(1)} kg)
               </div>
             </div>
@@ -1041,9 +1026,9 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
             <div className="bg-white p-3.5 border border-gray-200 rounded-none shadow-xs space-y-1 hover:border-gray-300 transition">
               <div className="flex items-center justify-between text-gray-500 text-[11px] font-medium">
                 <span>Rata-rata Harga Beli</span>
-                <DollarSign className="w-4 h-4 text-emerald-700" />
+                <DollarSign className="w-4 h-4 text-gray-500" />
               </div>
-              <div className="text-xl font-bold font-mono text-emerald-900">
+              <div className="text-xl font-bold font-mono text-gray-900">
                 Rp {Math.round(totals.avgHargaKg).toLocaleString('id-ID')}{' '}
                 <span className="text-xs font-normal text-gray-500 font-sans">/kg</span>
               </div>
@@ -1053,7 +1038,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
             </div>
 
             {/* Card 5: Total Nilai Pembelian */}
-            <div className="bg-white p-3.5 border border-gray-200 rounded-none shadow-xs space-y-1 bg-red-50/20 col-span-2 sm:col-span-1 hover:border-red-300 transition">
+            <div className="bg-white p-3.5 border border-gray-200 rounded-none shadow-xs space-y-1 col-span-2 sm:col-span-1 hover:border-gray-300 transition">
               <div className="flex items-center justify-between text-[#b81d24] text-[11px] font-bold">
                 <span>Total Nilai Pembelian (Lunas)</span>
                 <DollarSign className="w-4 h-4 text-[#b81d24]" />
@@ -1062,7 +1047,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                 Rp {Math.round(totals.totalNilai).toLocaleString('id-ID')}
               </div>
               <div className="text-[10px] text-gray-600 font-medium">
-                Hanya bal lunas • Kredit: Rp {Math.round(totals.totalNilaiKredit).toLocaleString('id-ID')}
+                Kredit: Rp {Math.round(totals.totalNilaiKredit).toLocaleString('id-ID')}
               </div>
             </div>
           </div>
@@ -1080,7 +1065,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
           <div className="flex items-center space-x-2">
             <SlidersHorizontal className="w-4 h-4 text-slate-700" />
             <span className="text-xs font-bold text-gray-900 uppercase tracking-wide">
-              Filter Data & Parameter Analisis Bal
+              Filter
             </span>
           </div>
           <button
@@ -1499,23 +1484,23 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                 {/* 8. Berat Netto (kg) [PRIMARY SORT TARGET] */}
                 <th
                   onClick={() => handleHeaderSort('berat_kg')}
-                  className="py-2.5 px-3 text-right border-r border-gray-200 cursor-pointer hover:bg-blue-100 transition group select-none bg-blue-50/70"
+                  className="py-2.5 px-3 text-right border-r border-gray-200 cursor-pointer hover:bg-slate-100 transition group select-none bg-slate-50/70"
                   title="Klik untuk urutkan Paling Berat / Paling Ringan"
                 >
                   <div className="flex items-center justify-end space-x-1.5">
                     {renderSortIndicator('berat_kg')}
-                    <span className="text-blue-950 font-black">Netto (kg)</span>
+                    <span className="font-black">Netto (kg)</span>
                   </div>
                 </th>
 
                 {/* 10. Harga Beli / kg (Rp) [PRIMARY SORT TARGET] */}
                 <th
                   onClick={() => handleHeaderSort('harga_per_kg')}
-                  className="py-2.5 px-3 text-right border-r border-gray-200 cursor-pointer hover:bg-emerald-100 transition group select-none bg-emerald-50/70"
+                  className="py-2.5 px-3 text-right border-r border-gray-200 cursor-pointer hover:bg-gray-100 transition group select-none"
                   title="Klik untuk urutkan Harga Terendah ke Tertinggi"
                 >
                   <div className="flex items-center justify-end space-x-1">
-                    <span className="text-emerald-950 font-black">Harga/kg (Rp)</span>
+                    <span className="font-black">Harga/kg (Rp)</span>
                     {renderSortIndicator('harga_per_kg')}
                   </div>
                 </th>
@@ -1523,7 +1508,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                 {/* 11. Total Harga Beli (Rp) [PRIMARY SORT TARGET] */}
                 <th
                   onClick={() => handleHeaderSort('total_harga')}
-                  className="py-2.5 px-3 text-right border-r border-gray-200 cursor-pointer hover:bg-red-100 transition group select-none bg-red-50/70"
+                  className="py-2.5 px-3 text-right border-r border-gray-200 cursor-pointer hover:bg-gray-100 transition group select-none"
                   title="Klik untuk urutkan Total Harga Beli"
                 >
                   <div className="flex items-center justify-end space-x-1">
@@ -1555,8 +1540,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                   <td colSpan={14} className="py-12 text-center text-gray-500 bg-white">
                     <div className="flex flex-col items-center justify-center space-y-2">
                       <Package className="w-8 h-8 text-gray-300" />
-                      <p className="font-semibold text-gray-700">Tidak ada data bal yang cocok dengan filter.</p>
-                      <p className="text-[11px] text-gray-400">Silakan ubah parameter pencarian atau klik reset filter.</p>
+                      <p className="font-semibold text-gray-700">Tidak ada data bal</p>
                       <button
                         type="button"
                         onClick={handleResetFilters}
@@ -1618,7 +1602,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                           {bal.nama_petani || '-'}
                         </div>
                         {bal.no_kupon && bal.no_kupon !== '-' && (
-                          <span className="text-[10px] text-blue-700 font-mono">
+                          <span className="text-[10px] text-slate-700 font-mono">
                             Kupon: {bal.no_kupon}
                           </span>
                         )}
@@ -1643,7 +1627,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                       </td>
 
                       {/* 8. Netto [HIGHLIGHT] */}
-                      <td className="py-2 px-3 text-right font-mono font-black text-blue-950 border-r border-gray-100 bg-blue-50/30 whitespace-nowrap">
+                      <td className="py-2 px-3 text-right font-mono font-black text-gray-900 border-r border-gray-100 whitespace-nowrap">
                         {ditimbang ? (
                           <>
                             {(bal.berat_kg || 0).toFixed(1)} <span className="text-[10px] font-normal text-gray-500">kg</span>
@@ -1654,12 +1638,12 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                       </td>
 
                       {/* 10. Harga/kg [HIGHLIGHT] */}
-                      <td className="py-2 px-3 text-right font-mono font-bold text-emerald-900 border-r border-gray-100 bg-emerald-50/20 whitespace-nowrap">
+                      <td className="py-2 px-3 text-right font-mono font-bold text-gray-900 border-r border-gray-100 whitespace-nowrap">
                         Rp {Math.round(bal.harga_per_kg || 0).toLocaleString('id-ID')}
                       </td>
 
                       {/* 11. Total Harga [HIGHLIGHT] */}
-                      <td className="py-2 px-3 text-right font-mono font-black text-[#b81d24] border-r border-gray-100 bg-red-50/30 whitespace-nowrap">
+                      <td className="py-2 px-3 text-right font-mono font-black text-[#b81d24] border-r border-gray-100 whitespace-nowrap">
                         {ditimbang ? `Rp ${Math.round(bal.total_harga || 0).toLocaleString('id-ID')}` : <span className="font-normal text-gray-400">-</span>}
                       </td>
 
@@ -1688,13 +1672,13 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                   <td className="py-3 px-3 text-right font-mono border-r border-gray-300 whitespace-nowrap">
                     {totals.totalBruto.toFixed(1)} kg
                   </td>
-                  <td className="py-3 px-3 text-right font-mono text-blue-950 border-r border-gray-300 whitespace-nowrap bg-blue-100/70 font-black">
+                  <td className="py-3 px-3 text-right font-mono text-gray-900 border-r border-gray-300 whitespace-nowrap font-black">
                     {totals.totalNetto.toFixed(1)} kg
                   </td>
-                  <td className="py-3 px-3 text-right font-mono text-emerald-950 border-r border-gray-300 whitespace-nowrap bg-emerald-100/70 font-bold">
+                  <td className="py-3 px-3 text-right font-mono text-gray-900 border-r border-gray-300 whitespace-nowrap font-bold">
                     Rata²: Rp {Math.round(totals.avgHargaKg).toLocaleString('id-ID')}
                   </td>
-                  <td className="py-3 px-3 text-right font-mono text-[#b81d24] border-r border-gray-300 whitespace-nowrap bg-red-100 font-black text-sm">
+                  <td className="py-3 px-3 text-right font-mono text-[#b81d24] border-r border-gray-300 whitespace-nowrap font-black text-sm">
                     Rp {Math.round(totals.totalNilai).toLocaleString('id-ID')}
                   </td>
                   <td colSpan={2} className="py-3 px-3 text-center bg-gray-200/80 text-[11px] text-gray-700">
@@ -1726,11 +1710,6 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                 <option value={100}>100</option>
                 <option value={-1}>All</option>
               </select>
-              {itemsPerPage === -1 && (
-                <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-xs border border-emerald-200 font-semibold">
-                  Semua {searchedData.length} bal ditampilkan dalam 1 halaman
-                </span>
-              )}
             </div>
 
             {itemsPerPage !== -1 && totalPages > 1 && (

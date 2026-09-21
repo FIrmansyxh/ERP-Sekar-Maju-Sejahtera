@@ -403,7 +403,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
     );
     if (!openTx) setOpenTxId(updatedTx.transaksi_id);
     setScanFeedback({
-      text: `✓ Bal "${cleanedBalCode}" Grade ${selectedGrade} tersimpan di Kupon ${updatedTx.no_kupon} dan sudah bisa ditimbang.`,
+      text: `Bal "${cleanedBalCode}" (Grade ${selectedGrade}) tersimpan di Kupon ${updatedTx.no_kupon}.`,
       isError: false,
     });
     
@@ -511,7 +511,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
     setEditNoBal('');
     setEditGrade('');
     setScanFeedback({
-      text: `✓ Perubahan Bal "${cleanedNoBal}" (Grade ${trimmedGrade} • ${formatRupiah(newHarga)}/kg) berhasil disimpan!`,
+      text: `Bal "${cleanedNoBal}" diperbarui (Grade ${trimmedGrade} • ${formatRupiah(newHarga)}/kg).`,
       isError: false,
     });
   };
@@ -680,18 +680,11 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
 
       {/* Mode edit kupon: kupon yang sortirnya sudah selesai dibuka lagi (dari Kasir) untuk tambah, ubah, atau hapus bal */}
       {isSusulan && openTx && (
-        <div className="bg-amber-50 border border-amber-300 p-3.5 rounded-sm flex items-start space-x-2.5">
-          <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-          <div className="text-xs text-amber-900 space-y-0.5">
-            <p className="font-bold">
-              Mode Edit Kupon • Kupon <span className="font-mono">{openTx.no_kupon}</span> • {openTx.nama_petani}
-            </p>
-            <p className="text-[11px] leading-relaxed">
-              Kupon ini belum dibayar, jadi bal boleh ditambah, diubah (nomor bal &amp; grade), atau dihapus. Berat bal yang sudah ditimbang
-              tidak berubah; koreksi berat dilakukan di Timbangan. Bal baru langsung masuk daftar Timbangan, dan tombol Bayar di Kasir
-              terkunci sampai semua bal selesai ditimbang. Tekan <strong>Selesai Edit</strong> bila perubahan sudah lengkap.
-            </p>
-          </div>
+        <div className="bg-amber-50 border border-amber-300 px-3.5 py-2.5 rounded-sm flex items-center space-x-2.5">
+          <Info className="w-4 h-4 text-amber-600 shrink-0" />
+          <p className="text-xs text-amber-900 font-bold">
+            Mode Edit Kupon • <span className="font-mono">{openTx.no_kupon}</span> • {openTx.nama_petani}
+          </p>
         </div>
       )}
 
@@ -729,17 +722,12 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
         <div className="bg-gray-100/80 px-4 py-2.5 border-b border-gray-200 flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <Layers className="w-4 h-4 text-[#b81d24]" />
-            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-800">
-              Formulir Input Data Sortir
-            </h3>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-800">Input Sortir</h3>
           </div>
           <div className="flex items-center gap-2">
             {openTx && (
-              <span
-                className="px-2 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded-xs text-[10px] font-bold"
-                title="Setiap bal langsung tersimpan dan bisa ditimbang di Timbangan"
-              >
-                {isSusulan ? 'Edit Kupon' : 'Kupon'} {openTx.no_kupon} terbuka • tersimpan otomatis
+              <span className="px-2 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded-xs text-[10px] font-bold">
+                {isSusulan ? 'Edit Kupon' : 'Kupon'} {openTx.no_kupon} terbuka
               </span>
             )}
             <span className="text-[11px] text-gray-500 font-medium">
@@ -757,10 +745,10 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-xs font-semibold text-slate-700">
-                  1. No. Kupon Antrian <span className="text-rose-500">*</span>
+                  1. No. Kupon Antrian <span className="text-red-500">*</span>
                 </label>
                 {isKuponExists && (
-                  <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.2 border border-rose-200 rounded-2xs">
+                  <span className="text-[10px] font-bold text-red-600 bg-red-50 px-1.5 py-0.2 border border-red-200 rounded-2xs">
                     Duplikat!
                   </span>
                 )}
@@ -771,38 +759,36 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                 onChange={(e) => setNoKupon(formatNoKupon(e.target.value))}
                 disabled={Boolean(openTx)}
                 title={openTx ? 'Nomor kupon terkunci selama kupon terbuka' : undefined}
-                className={`w-full bg-white border rounded-sm px-3 py-1.5 text-xs text-slate-900 font-mono font-semibold focus:outline-none focus:ring-1 disabled:bg-slate-100 disabled:text-slate-600 disabled:cursor-not-allowed ${isKuponExists ? 'border-rose-500 focus:border-rose-600 focus:ring-rose-600 ring-1 ring-rose-200 bg-rose-50/40' : 'border-slate-300 focus:border-slate-800 focus:ring-slate-800'}`}
-                placeholder="Contoh: KUP0001"
+                className={`w-full bg-white border rounded-sm px-3 py-1.5 text-xs text-slate-900 font-mono font-semibold focus:outline-none focus:ring-1 disabled:bg-slate-100 disabled:text-slate-600 disabled:cursor-not-allowed ${isKuponExists ? 'border-red-500 focus:border-red-600 focus:ring-red-600 ring-1 ring-red-200 bg-red-50/40' : 'border-slate-300 focus:border-slate-800 focus:ring-slate-800'}`}
+                placeholder="No. kupon"
                 required
               />
               {isKuponExists && duplicateKuponTx ? (
-                <div className="mt-1 p-2 bg-rose-50 border border-rose-300 rounded-xs text-[11px] text-rose-950 space-y-1.5 shadow-2xs">
-                  <div className="flex items-center space-x-1.5 font-bold text-rose-700">
-                    <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                <div className="mt-1 p-2 bg-red-50 border border-red-300 rounded-xs text-[11px] text-red-950 space-y-1.5 shadow-2xs">
+                  <div className="flex items-center space-x-1.5 font-bold text-red-700">
+                    <AlertTriangle className="w-3.5 h-3.5 text-red-600 shrink-0" />
                     <span>Kupon Sudah Terdaftar!</span>
                   </div>
-                  <p className="leading-tight text-[10px] text-rose-900">
+                  <p className="leading-tight text-[10px] text-red-900">
                     Kupon <strong className="font-mono">{noKupon}</strong> sudah dipakai (Petani: <strong>{duplicateKuponTx.nama_petani}</strong>).
                   </p>
                   <button
                     type="button"
                     onClick={handleGenerateNextKupon}
-                    className="inline-flex items-center space-x-1 text-[10px] font-bold text-white bg-[#b81d24] hover:bg-rose-800 px-2 py-0.5 rounded-xs transition cursor-pointer"
+                    className="inline-flex items-center space-x-1 text-[10px] font-bold text-white bg-[#b81d24] hover:bg-red-800 px-2 py-0.5 rounded-xs transition cursor-pointer"
                   >
                     <RotateCcw className="w-3 h-3" />
-                    <span>Gunakan Kupon Bebas Berikutnya</span>
+                    <span>Pakai Nomor Berikutnya</span>
                   </button>
                 </div>
-              ) : (
-                <p className="text-[10px] text-slate-400 mt-1">Sesuai nomor kupon antrian fisik petani</p>
-              )}
+              ) : null}
             </div>
 
             {/* 2. Petani Penyetor */}
             <div className="sm:col-span-1 md:col-span-1">
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-xs font-semibold text-slate-700">
-                  2. Petani Penyetor <span className="text-rose-500">*</span>
+                  2. Petani Penyetor <span className="text-red-500">*</span>
                 </label>
                 {onAddPetani && !openTx && (
                   <button
@@ -841,7 +827,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
             {/* 3. Tanggal Masuk */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                3. Tanggal Masuk <span className="text-rose-500">*</span>
+                3. Tanggal Masuk <span className="text-red-500">*</span>
               </label>
               <input
                 type="date"
@@ -874,13 +860,9 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Layers className="w-4 h-4 text-slate-700" />
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-900">
-                  Input Bal & Penentuan Grade
-                </h4>
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-900">Input Bal</h4>
               </div>
-              <span className="text-[11px] text-slate-500 bg-white px-2 py-0.5 border border-slate-200 rounded-xs">
-                Standby: barcode yang discan otomatis terisi No Bal
-              </span>
+
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 md:grid-cols-2 gap-3 items-end">
@@ -888,7 +870,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
               {/* No Bal Input */}
               <div className="lg:col-span-3 relative">
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  No Bal <span className="text-rose-500">*</span>
+                  No Bal <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <input
@@ -905,7 +887,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                         document.getElementById('grade-input')?.focus();
                       }
                     }}
-                    placeholder={`Contoh: ${getNextSuggestedNoBal().replace(/-/g, '')}`}
+                    placeholder={getNextSuggestedNoBal().replace(/-/g, '')}
                     className="w-full bg-white border border-slate-300 rounded-sm px-3 py-2 text-xs font-mono font-semibold text-slate-900 focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800 uppercase"
                   />
                   {inputNoBal && (
@@ -925,7 +907,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
               </div>
               <div className="lg:col-span-3">
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Mutu Barang <span className="text-rose-500">*</span>
+                  Mutu Barang <span className="text-red-500">*</span>
                 </label>
                 <SearchableSelect
                   inputId="grade-input"
@@ -945,7 +927,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                       value: h.kode_grade,
                       label: `Grade ${h.kode_grade} — ${formatRupiah(h.harga_per_kg)}/kg`,
                     }))}
-                  placeholder="Pilih / ketik kode mutu (contoh: A, B, 50)..."
+                  placeholder="Pilih / ketik kode mutu"
                   className="w-full"
                 />
               </div>
@@ -984,7 +966,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
             {/* Adder Feedback */}
             {scanFeedback && (
               <div className={`text-xs px-3 py-1.5 rounded-sm font-medium flex items-center space-x-2 ${
-                scanFeedback.isError ? 'bg-rose-50 text-rose-800 border border-rose-200' : 'bg-slate-100 text-slate-800 border border-slate-200'
+                scanFeedback.isError ? 'bg-red-50 text-red-800 border border-red-200' : 'bg-slate-100 text-slate-800 border border-slate-200'
               }`}>
                 <span>{scanFeedback.text}</span>
               </div>
@@ -996,14 +978,11 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-800 flex items-center space-x-2">
-                <span>Daftar Bal Ter-Sortir pada Kupon Ini</span>
+                <span>Daftar Bal</span>
                 <span className="px-2 py-0.5 bg-slate-100 text-slate-800 border border-slate-200 rounded-xs text-[10px] font-semibold">
                   {balItems.length} Bal
                 </span>
               </h4>
-              <p className="text-[11px] text-slate-500">
-                Bal terbaru muncul di atas. Setiap bal langsung tersimpan dan bisa ditimbang tanpa menunggu sortir selesai.
-              </p>
             </div>
 
             <div className="border border-slate-200 rounded-md overflow-x-auto bg-white">
@@ -1024,10 +1003,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                     <tr>
                       <td colSpan={6} className="py-10 text-center text-slate-400">
                         <Layers className="w-8 h-8 mx-auto text-slate-300 mb-2" />
-                        <p className="font-semibold text-slate-700 text-xs">Belum ada bal yang ditambahkan pada kupon ini</p>
-                        <p className="text-[11px] text-slate-400 mt-0.5">
-                          Scan barcode stiker bal atau masukkan nomor bal di atas. Kupon tersimpan otomatis sejak bal pertama.
-                        </p>
+                        <p className="font-semibold text-slate-700 text-xs">Belum ada bal</p>
                       </td>
                     </tr>
                   ) : (
@@ -1154,7 +1130,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                               <button
                                 type="button"
                                 onClick={() => handleStartEdit(item)}
-                                className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors cursor-pointer"
+                                className="p-1 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded transition-colors cursor-pointer"
                                 title="Edit Nomor Bal & Mutu Grade"
                               >
                                 <Pencil className="w-3.5 h-3.5" />
@@ -1163,7 +1139,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                                 type="button"
                                 onClick={() => handleRemoveItem(item.item_id)}
                                 disabled={ditimbang && !isSusulan}
-                                className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-400"
+                                className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-400"
                                 title={ditimbang && !isSusulan ? 'Bal sudah ditimbang, tidak bisa dihapus dari Sortir' : 'Hapus bal ini dari kupon'}
                               >
                                 <Trash2 className="w-3.5 h-3.5" />

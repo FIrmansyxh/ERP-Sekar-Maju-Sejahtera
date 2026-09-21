@@ -4,8 +4,7 @@ import {
   Upload,
   FileSpreadsheet,
   Check,
-  ArrowLeft,
-  AlertTriangle
+  ArrowLeft
 } from 'lucide-react';
 import { Petani } from '../../types';
 import { downloadExcelReport, todayStamp } from '../../utils/excelExport';
@@ -38,7 +37,6 @@ export const PetaniImportExportModal: React.FC<PetaniImportExportModalProps> = (
   const [csvText, setCsvText] = useState<string>('');
   const [importErrors, setImportErrors] = useState<string[]>([]);
   const [successCount, setSuccessCount] = useState<number | null>(null);
-  const [showExportConfirm, setShowExportConfirm] = useState(false);
 
   if (!isOpen) return null;
 
@@ -202,34 +200,22 @@ export const PetaniImportExportModal: React.FC<PetaniImportExportModalProps> = (
         <div className="p-4 space-y-4 max-h-[75vh] overflow-y-auto">
           {tab === 'export' ? (
             <div className="space-y-4">
-              <p className="text-xs text-gray-600 leading-relaxed">
-                Unduh seluruh data registrasi master petani ({petaniList.length} petani aktif/terdaftar) ke dalam file Excel (.xlsx) yang sudah rapi dan siap cetak.
-              </p>
-
-              <div className="bg-[#f8f9fa] p-3 border border-gray-200 space-y-2">
-                <span className="font-bold text-gray-800 block text-xs">Kolom yang disertakan:</span>
-                <p className="text-[11px] text-gray-600 leading-relaxed">
-                  No, ID Petani, Nama Petani, No HP, Alamat, Desa / Kecamatan, Status, Tanggal Daftar, Catatan
-                </p>
-              </div>
-
-              <div className="flex justify-end">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-700">
+                  <strong>{petaniList.length}</strong> petani
+                </span>
                 <button
                   type="button"
-                  onClick={() => setShowExportConfirm(true)}
+                  onClick={handleExportExcel}
                   className="px-4 py-2 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#a0181e] rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
                 >
                   <Download className="w-3.5 h-3.5" />
-                  <span>Download File Excel Master Petani</span>
+                  <span>Unduh Excel</span>
                 </button>
               </div>
             </div>
           ) : (
             <div className="space-y-3.5">
-              <p className="text-xs text-gray-600 leading-relaxed">
-                Pilih file CSV atau tempel daftar nama petani, satu nama per baris. Bisa juga salinan dari Excel dengan baris judul kolom (minimal kolom Nama Petani; No HP, Alamat, dan Desa / Kecamatan boleh kosong). ID Petani diterbitkan sistem berurutan sesuai urutan baris: baris pertama mendapat ID paling awal.
-              </p>
-
               <label className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-sm cursor-pointer shadow-xs">
                 <FileSpreadsheet className="w-3.5 h-3.5 text-[#b81d24]" />
                 <span>Pilih File CSV / TXT</span>
@@ -262,7 +248,7 @@ export const PetaniImportExportModal: React.FC<PetaniImportExportModalProps> = (
               {successCount !== null && (
                 <div className="p-2.5 bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold flex items-center space-x-2">
                   <Check className="w-4 h-4" />
-                  <span>Berhasil mengimpor {successCount} petani baru ke master data!</span>
+                  <span>{successCount} petani berhasil diimpor.</span>
                 </div>
               )}
 
@@ -282,52 +268,13 @@ export const PetaniImportExportModal: React.FC<PetaniImportExportModalProps> = (
                   className="px-4 py-2 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#a0181e] rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
                 >
                   <Upload className="w-3.5 h-3.5" />
-                  <span>Proses Import Data</span>
+                  <span>Impor</span>
                 </button>
               </div>
             </div>
           )}
         </div>
 
-        {/* Modal Konfirmasi Ekspor */}
-        {showExportConfirm && (
-          <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white border border-gray-300 w-full max-w-sm rounded-none shadow-xl flex flex-col overflow-hidden">
-              <div className="p-4 border-b border-gray-200 flex items-center space-x-2 bg-yellow-50">
-                <AlertTriangle className="w-4 h-4 text-yellow-700" />
-                <h2 className="text-sm font-bold text-yellow-900 tracking-tight">Konfirmasi Ekspor Data</h2>
-              </div>
-              <div className="p-4 space-y-2">
-                <p className="text-xs text-gray-700 leading-relaxed">
-                  Apakah Anda yakin ingin mengekspor seluruh data master petani?
-                </p>
-                <p className="text-[11px] font-medium text-yellow-800 bg-yellow-100/50 p-2 border border-yellow-200">
-                  Data yang diekspor berisi informasi yang mungkin bersifat sensitif (Nomor HP, Alamat, dll). Pastikan Anda menjaga kerahasiaan file unduhan.
-                </p>
-              </div>
-              <div className="bg-[#f8f9fa] px-4 py-3 border-t border-gray-200 flex justify-end space-x-2">
-                <button
-                  type="button"
-                  onClick={() => setShowExportConfirm(false)}
-                  className="px-3 py-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-sm text-xs font-bold transition cursor-pointer"
-                >
-                  Batal
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleExportExcel();
-                    setShowExportConfirm(false);
-                  }}
-                  className="px-3 py-1.5 bg-[#b81d24] hover:bg-[#a0181e] text-white rounded-sm text-xs font-bold transition cursor-pointer shadow-xs flex items-center space-x-1.5"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Ya, Ekspor Data</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

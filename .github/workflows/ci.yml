@@ -2,10 +2,11 @@ name: CI
 
 # Pemeriksaan otomatis untuk setiap perubahan sebelum digabung ke main:
 # tipe (tsc strict), tes otomatis, dan build produksi. Tidak melakukan deploy.
+# Push ke main dan staging diperiksa oleh deploy.yml (tes + build sebelum deploy), jadi tidak diulang di sini.
 on:
   pull_request:
   push:
-    branches-ignore: [ main ]
+    branches-ignore: [ main, staging ]
 
 concurrency:
   group: ci-${{ github.ref }}

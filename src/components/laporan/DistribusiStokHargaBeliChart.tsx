@@ -17,7 +17,6 @@ import {
   Layers,
   Scale,
   Package,
-  Info,
   ChevronRight,
   FileSpreadsheet
 } from 'lucide-react';
@@ -35,32 +34,14 @@ type MetricMode = 'bal' | 'tonase' | 'nilai';
 type ViewMode = 'bar' | 'donut' | 'dual' | 'table';
 type StockScope = 'aktif' | 'semua';
 
-// Palette warna profesional & berkarakter untuk setiap kode harga beli tembakau
-const GRADE_COLORS: Record<string, string> = {
-  A: '#18181b', // Zinc 900 / Super Grade
-  B: '#0369a1', // Sky 700 / Premium Grade
-  C: '#b45309', // Amber 700 / Standar Grade (Tobacco Gold)
-  D: '#7c3aed', // Violet 600 / Medium Grade
-  E: '#c2410c', // Orange 700 / Ekonomis
-  F: '#4b5563', // Gray 600 / Campuran
-  A1: '#0f766e', // Teal 700
-  A2: '#047857', // Emerald 700
-  B1: '#1d4ed8', // Blue 700
-  C1: '#d97706', // Amber 600
-};
-
-const FALLBACK_PALETTE = [
-  '#18181b',
-  '#0369a1',
-  '#b45309',
-  '#0f766e',
-  '#7c3aed',
-  '#c2410c',
-  '#b81d24',
-  '#4b5563',
-  '#0d9488',
-  '#6366f1',
-];
+/**
+ * Warna grafik mengikuti tema: kode dengan bal terbanyak merah perusahaan, sisanya gradasi abu-abu
+ * (bergiliran agar potongan donat yang bersebelahan tetap terbedakan).
+ */
+const WARNA_UTAMA = '#b81d24';
+const GRADASI_NETRAL = ['#1f2937', '#6b7280', '#374151', '#9ca3af', '#4b5563', '#d1d5db'];
+/** Grafik batang: satu warna abu, batang terbesar merah */
+const WARNA_BATANG = '#6b7280';
 
 // Helper pemotongan teks (truncate) untuk label pada sumbu X agar tidak saling bertumpuk
 const truncateLabel = (value: string | undefined | null, maxLength: number = 12): string => {
@@ -128,10 +109,9 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
     >();
 
     // Tambahkan dulu semua grade aktif dari master harga beli agar urutan dan kategori lengkap
-    hargaList.forEach((h, idx) => {
+    hargaList.forEach((h) => {
       const code = (h.kode_grade || '').trim().toUpperCase();
       if (code && !code.includes('MULTI')) {
-        const color = GRADE_COLORS[code] || FALLBACK_PALETTE[idx % FALLBACK_PALETTE.length];
         groupMap.set(code, {
           kode_grade: code,
           nama_grade: h.nama_grade || `Grade ${code}`,
@@ -141,7 +121,7 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
           totalNilai: 0,
           diGudangCount: 0,
           siapKirimCount: 0,
-          color,
+          color: '',
         });
       }
     });
@@ -173,8 +153,6 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
           existing.harga_per_kg = hargaPerKg;
         }
       } else {
-        const colorIndex = groupMap.size % FALLBACK_PALETTE.length;
-        const color = GRADE_COLORS[code] || FALLBACK_PALETTE[colorIndex];
         groupMap.set(code, {
           kode_grade: code,
           nama_grade: masterHargaMap.get(code)?.nama || `Grade ${code}`,
@@ -184,12 +162,17 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
           totalNilai: subtotalNilai,
           diGudangCount: b.status_stok === 'siap_kirim' ? 0 : 1,
           siapKirimCount: b.status_stok === 'siap_kirim' ? 1 : 0,
-          color,
+          color: '',
         });
       }
     });
 
     const rawList = Array.from(groupMap.values());
+    [...rawList]
+      .sort((a, b) => b.balCount - a.balCount)
+      .forEach((item, peringkat) => {
+        item.color = peringkat === 0 ? WARNA_UTAMA : GRADASI_NETRAL[(peringkat - 1) % GRADASI_NETRAL.length];
+      });
 
     // Hitung total keseluruhan untuk kalkulasi persentase
     const grandTotalBal = rawList.reduce((sum, item) => sum + item.balCount, 0);
@@ -344,9 +327,9 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
               className="w-3 h-3 rounded-full inline-block shrink-0 border border-white/40"
               style={{ backgroundColor: data.color }}
             />
-            <span className="font-bold text-sm text-amber-300">Grade {data.kode_grade}</span>
+            <span className="font-bold text-sm text-white">Grade {data.kode_grade}</span>
           </div>
-          <span className="font-mono text-[11px] text-amber-200 bg-slate-800 px-2 py-0.5 rounded-xs font-bold border border-slate-700">
+          <span className="font-mono text-[11px] text-slate-200 bg-slate-800 px-2 py-0.5 rounded-xs font-bold border border-slate-700">
             {formatRupiah(data.harga_per_kg)}/kg
           </span>
         </div>
@@ -367,7 +350,7 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
           <div className="mt-1.5">
             <div className="flex justify-between text-[10px] text-slate-400 mb-0.5 font-mono">
               <span>Pangsa Stok:</span>
-              <span className="font-bold text-amber-300">{activePct}%</span>
+              <span className="font-bold text-white">{activePct}%</span>
             </div>
             <div className="w-full bg-slate-700 h-1.5 rounded-full overflow-hidden">
               <div
@@ -385,7 +368,7 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
         <div className="space-y-1.5 text-[11px]">
           <div className="flex justify-between items-center text-slate-300">
             <span className="flex items-center space-x-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-400 inline-block" />
               <span>Jumlah Bal:</span>
             </span>
             <span className="font-mono font-bold text-white">
@@ -395,20 +378,20 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
 
           <div className="flex justify-between items-center text-slate-300">
             <span className="flex items-center space-x-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 inline-block" />
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-400 inline-block" />
               <span>Total Tonase:</span>
             </span>
-            <span className="font-mono font-bold text-blue-300">
+            <span className="font-mono font-bold text-slate-300">
               {data.totalKg.toLocaleString('id-ID')} kg <span className="text-[10px] text-slate-400 font-normal">({(data.totalKg / 1000).toFixed(2)} Ton)</span>
             </span>
           </div>
 
           <div className="flex justify-between items-center text-slate-300">
             <span className="flex items-center space-x-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-400 inline-block" />
               <span>Valuasi Modal:</span>
             </span>
-            <span className="font-mono font-bold text-emerald-400">
+            <span className="font-mono font-bold text-white">
               {formatRupiah(data.totalNilai)}
             </span>
           </div>
@@ -444,13 +427,8 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
               <span className="p-1.5 bg-red-50 text-[#b81d24] rounded-xs">
                 <BarChart3 className="w-4 h-4" />
               </span>
-              <h2 className="text-sm font-bold text-gray-900 tracking-tight">
-                Distribusi Stok Bal Berdasarkan Kode Harga Beli Tembakau
-              </h2>
+              <h2 className="text-sm font-bold text-gray-900 tracking-tight">Distribusi Stok per Kode Harga Beli</h2>
             </div>
-            <p className="text-[11px] text-gray-500 mt-1">
-              Visualisasi sebaran inventaris bal fisik, tonase, dan nilai modal berdasarkan kode grade & tarif harga beli petani.
-            </p>
           </div>
 
           {/* Quick Toolbar */}
@@ -519,7 +497,7 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
               title="Unduh data distribusi stok per kode harga beli dalam format Excel"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
-              <span>Export Excel</span>
+              <span>Unduh Excel</span>
             </button>
           </div>
         </div>
@@ -528,13 +506,13 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
         <div className="mt-3 pt-3 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
           {/* Metrik Toggle */}
           <div className="flex items-center space-x-1 text-xs">
-            <span className="text-[11px] font-medium text-gray-500 mr-1.5">Tampilkan Berdasarkan:</span>
+            <span className="text-[11px] font-medium text-gray-500 mr-1.5">Tampilkan:</span>
             <button
               type="button"
               onClick={() => setMetricMode('bal')}
               className={`px-2.5 py-1 text-[11px] font-bold rounded-xs transition cursor-pointer flex items-center space-x-1 ${
                 metricMode === 'bal'
-                  ? 'bg-zinc-900 text-white'
+                  ? 'bg-[#b81d24] text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
@@ -546,7 +524,7 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
               onClick={() => setMetricMode('tonase')}
               className={`px-2.5 py-1 text-[11px] font-bold rounded-xs transition cursor-pointer flex items-center space-x-1 ${
                 metricMode === 'tonase'
-                  ? 'bg-blue-800 text-white'
+                  ? 'bg-[#b81d24] text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
@@ -558,7 +536,7 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
               onClick={() => setMetricMode('nilai')}
               className={`px-2.5 py-1 text-[11px] font-bold rounded-xs transition cursor-pointer flex items-center space-x-1 ${
                 metricMode === 'nilai'
-                  ? 'bg-emerald-800 text-white'
+                  ? 'bg-[#b81d24] text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
@@ -623,7 +601,7 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
             <span className="text-xs font-normal text-gray-500">Bal</span>
           </div>
           <div className="text-[10px] text-gray-500 mt-0.5">
-            {stockScope === 'aktif' ? 'Status: Di Gudang / Siap Kirim' : 'Seluruh status intake'}
+            {stockScope === 'aktif' ? 'Stok aktif' : 'Semua status'}
           </div>
         </div>
 
@@ -631,7 +609,7 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
           <div className="text-[11px] font-medium text-gray-500 uppercase tracking-wider">
             Total Tonase Tersimpan
           </div>
-          <div className="text-base font-bold text-blue-900 mt-0.5">
+          <div className="text-base font-bold text-slate-900 mt-0.5">
             {aggregatedData.grandTotalKg.toLocaleString('id-ID')}{' '}
             <span className="text-xs font-normal text-gray-500">
               kg ({(aggregatedData.grandTotalKg / 1000).toFixed(2)} Ton)
@@ -646,7 +624,7 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
           <div className="text-[11px] font-medium text-gray-500 uppercase tracking-wider">
             Valuasi Stok Modal
           </div>
-          <div className="text-base font-bold text-emerald-800 mt-0.5">
+          <div className="text-base font-bold text-gray-900 mt-0.5">
             Rp {aggregatedData.grandTotalNilai.toLocaleString('id-ID')}
           </div>
           <div className="text-[10px] text-gray-500 mt-0.5">
@@ -693,15 +671,7 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
                       <span className="text-xs font-bold text-gray-800">
                         Grafik Perbandingan: {currentMetricLabel} per Kode Harga
                       </span>
-                      {chartItems.length > 8 && (
-                        <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-xs font-medium">
-                          ↔ Geser grafik
-                        </span>
-                      )}
                     </div>
-                    <span className="text-[11px] text-gray-500">
-                      Urutan: Tarif Tertinggi → Terendah
-                    </span>
                   </div>
                   <div className="w-full h-72 overflow-x-auto overflow-y-hidden">
                     <div
@@ -748,7 +718,7 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
                             maxBarSize={48}
                           >
                             {chartItems.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={entry.color} />
+                              <Cell key={`cell-${index}`} fill={entry.color === WARNA_UTAMA ? WARNA_UTAMA : WARNA_BATANG} />
                             ))}
                           </Bar>
                         </BarChart>
@@ -800,11 +770,6 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
                     <span className="text-xs font-bold text-gray-900">
                       Grafik Batang: Distribusi {currentMetricLabel} Berdasarkan Kode Harga Beli
                     </span>
-                    {chartItems.length > 12 && (
-                      <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-xs font-medium">
-                        ↔ Geser horizontal untuk melihat seluruh {chartItems.length} grade
-                      </span>
-                    )}
                   </div>
                   <span className="text-xs font-mono font-semibold text-gray-600">
                     Total: {formatMetricValue(
@@ -862,7 +827,7 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
                           maxBarSize={56}
                         >
                           {chartItems.map((entry, index) => (
-                            <Cell key={`cell-bar-${index}`} fill={entry.color} />
+                            <Cell key={`cell-bar-${index}`} fill={entry.color === WARNA_UTAMA ? WARNA_UTAMA : WARNA_BATANG} />
                           ))}
                         </Bar>
                       </BarChart>
@@ -959,25 +924,18 @@ export const DistribusiStokHargaBeliChart: React.FC<DistribusiStokHargaBeliChart
         )}
       </div>
 
-      {/* Footer Info Notice */}
-      <div className="px-4 py-2.5 bg-gray-50 border-t border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-gray-500">
-        <div className="flex items-center space-x-1.5">
-          <Info className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-          <span>
-            Tarif dan ketentuan grade terintegrasi langsung dengan Master Tabel Harga Beli Tembakau.
-          </span>
-        </div>
-        {onNavigateToHarga && (
+      {onNavigateToHarga && (
+      <div className="px-4 py-2.5 bg-gray-50 border-t border-gray-200 flex justify-end text-[11px]">
           <button
             type="button"
             onClick={onNavigateToHarga}
             className="text-[#b81d24] hover:underline font-semibold flex items-center space-x-1 cursor-pointer self-start sm:self-auto"
           >
-            <span>Buka Master Harga Beli</span>
+            <span>Laporan Harga</span>
             <ChevronRight className="w-3 h-3" />
           </button>
-        )}
       </div>
+      )}
     </div>
   );
 };

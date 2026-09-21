@@ -77,7 +77,7 @@ describe('Pengiriman Reguler: mode edit Surat Jalan yang belum Selesai', () => {
     const props = buatProps();
     render(<PengirimanManagement {...props} />);
 
-    const kolomScan = screen.getByPlaceholderText(/Scan Barcode \/ ketik No Bal/);
+    const kolomScan = screen.getByPlaceholderText(/Scan \/ ketik No Bal/);
     await userEvent.type(kolomScan, 'B3{Enter}');
     await userEvent.click(screen.getByRole('button', { name: /Simpan Perubahan Surat Jalan \(3 Bal\)/ }));
 
@@ -95,7 +95,7 @@ describe('Pengiriman Reguler: mode edit Surat Jalan yang belum Selesai', () => {
     });
     render(<PengirimanManagement {...props} />);
 
-    await userEvent.type(screen.getByPlaceholderText(/Scan Barcode \/ ketik No Bal/), 'B9{Enter}');
+    await userEvent.type(screen.getByPlaceholderText(/Scan \/ ketik No Bal/), 'B9{Enter}');
     expect(screen.getByText(/sudah berstatus KELUAR/)).toBeInTheDocument();
   });
 

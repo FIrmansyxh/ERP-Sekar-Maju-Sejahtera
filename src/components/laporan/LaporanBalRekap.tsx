@@ -151,7 +151,7 @@ export const LaporanBalRekap: React.FC<LaporanBalRekapProps> = ({ rows, rowsSepa
             </span>
           </div>
           <p className="text-[11px] text-gray-500 mt-0.5">
-            {konteks} · Jumlah bal termasuk yang baru disortir; berat dan nilai hanya dari bal yang sudah ditimbang dan lunas, bal yang belum dibayar masih kredit.
+            {konteks}
           </p>
         </div>
 
@@ -179,7 +179,6 @@ export const LaporanBalRekap: React.FC<LaporanBalRekapProps> = ({ rows, rowsSepa
       {rows.length === 0 ? (
         <div className="py-8 text-center text-xs text-gray-500">
           <p className="font-semibold text-gray-700">Tidak ada bal pada filter ini.</p>
-          <p className="text-[11px] text-gray-400 mt-0.5">Ubah tanggal, petani, atau kode bal lalu terapkan filter.</p>
         </div>
       ) : mode === 'kode' ? (
         <>
@@ -254,7 +253,7 @@ export const LaporanBalRekap: React.FC<LaporanBalRekapProps> = ({ rows, rowsSepa
                       <td className="py-2.5 px-4 border-r border-gray-200 text-right font-medium">
                         {formatNumber(r.berat_bruto)} <span className="text-gray-400 text-xs font-normal">Kg</span>
                       </td>
-                      <td className="py-2.5 px-4 border-r border-gray-200 text-right font-medium text-blue-700">
+                      <td className="py-2.5 px-4 border-r border-gray-200 text-right font-medium text-slate-700">
                         {formatNumber(r.berat_netto)} <span className="text-gray-400 text-xs font-normal">Kg</span>
                       </td>
                       <td className="py-2.5 px-4 border-r border-gray-200 text-right font-mono text-gray-700">{formatRupiah(r.avg_harga)}</td>
@@ -276,7 +275,7 @@ export const LaporanBalRekap: React.FC<LaporanBalRekapProps> = ({ rows, rowsSepa
                     <td className="py-3 px-4 border-r border-gray-200">TOTAL</td>
                     <td className="py-3 px-4 border-r border-gray-200 text-right">{formatNumber(total.jumlah_bal)} Bal</td>
                     <td className="py-3 px-4 border-r border-gray-200 text-right">{formatNumber(total.berat_bruto)} Kg</td>
-                    <td className="py-3 px-4 border-r border-gray-200 text-right text-blue-800">{formatNumber(total.berat_netto)} Kg</td>
+                    <td className="py-3 px-4 border-r border-gray-200 text-right text-slate-800">{formatNumber(total.berat_netto)} Kg</td>
                     <td className="py-3 px-4 border-r border-gray-200 text-right font-mono">{formatRupiah(total.avg_harga)}</td>
                     <td className={`py-3 px-4 text-right font-mono text-emerald-800 ${adaFilterTanggal ? 'border-r border-gray-200' : ''}`}>
                       {formatRupiah(total.total_nilai)}

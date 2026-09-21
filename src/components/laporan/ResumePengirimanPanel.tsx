@@ -71,8 +71,8 @@ export const ResumePengirimanPanel: React.FC<ResumePengirimanPanelProps> = ({ re
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
         <Kartu judul="Surat Jalan (DO)" nilai={formatNumber(r.jumlahDO)} ket={`${formatNumber(r.jumlahPabrik)} pabrik tujuan`} />
         <Kartu judul="Total Bal" nilai={formatNumber(r.totalBal)} ket={`~ ${formatNumber(r.rataBalPerDO, 1)} bal per DO`} />
-        <Kartu judul="Bruto Dikirim" nilai={`${formatNumber(r.brutoKirim, 1)} kg`} ket={`${formatNumber(r.brutoKirim / 1000, 2)} ton • ~ ${formatNumber(r.rataKgPerDO, 0)} kg per DO`} warna="text-blue-900" />
-        <Kartu judul="Netto Jual" nilai={`${formatNumber(r.nettoJual, 1)} kg`} ket={`Potongan netto ${formatNumber(r.potonganNetto, 1)} kg`} warna="text-blue-900" />
+        <Kartu judul="Bruto Dikirim" nilai={`${formatNumber(r.brutoKirim, 1)} kg`} ket={`${formatNumber(r.brutoKirim / 1000, 2)} ton • ~ ${formatNumber(r.rataKgPerDO, 0)} kg per DO`} warna="text-slate-900" />
+        <Kartu judul="Netto Jual" nilai={`${formatNumber(r.nettoJual, 1)} kg`} ket={`Potongan netto ${formatNumber(r.potonganNetto, 1)} kg`} warna="text-slate-900" />
         <Kartu
           judul="Selisih Timbang Ulang"
           nilai={`${r.selisihTimbangUlang > 0 ? '+' : ''}${formatNumber(r.selisihTimbangUlang, 1)} kg`}
@@ -295,7 +295,7 @@ export const ResumePengirimanPanel: React.FC<ResumePengirimanPanelProps> = ({ re
 
       {r.tanggalAwal && (
         <p className="text-[11px] text-gray-500">
-          Rentang tanggal kirim pada data: {formatDateIndo(r.tanggalAwal)} s.d. {formatDateIndo(r.tanggalAkhir)}. Angka mengikuti filter yang sedang diterapkan.
+          Tanggal kirim: {formatDateIndo(r.tanggalAwal)} s.d. {formatDateIndo(r.tanggalAkhir)}
         </p>
       )}
     </div>
