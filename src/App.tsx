@@ -2082,6 +2082,7 @@ export default function App() {
           isEmbedded={true}
           transaksiList={transaksiList}
           pengirimanList={pengirimanList}
+          batchSampleList={batchSampleList}
           barangList={barangList}
           petaniList={petaniList}
           tabelHarga={hargaList}

@@ -1005,6 +1005,7 @@ export class ErpApiService {
     const hargaDealMap: Record<string, number> = {};
     const kodeHargaJualMap: Record<string, string> = {};
     const beratKirimMap: Record<string, number> = {};
+    const nettoJualMap: Record<string, number> = {};
     let totalBerat = 0;
     let totalNilai = 0;
 
@@ -1025,10 +1026,13 @@ export class ErpApiService {
         : Number(it.barang?.item?.berat_kg ?? it.barang?.berat_kg ?? it.berat_kg ?? 0);
       const hargaDeal = Number(it.harga_deal_per_kg ?? 0);
       totalBerat += berat;
-      totalNilai += berat * hargaDeal;
+      // Netto jual hanya ada bila server menyimpannya; selain itu nilai memakai bruto kirim
+      const nettoJual = Number(it.netto_jual_kg ?? 0);
+      totalNilai += (nettoJual > 0 ? nettoJual : berat) * hargaDeal;
 
       if (barangId) {
         beratKirimMap[barangId] = berat;
+        if (nettoJual > 0) nettoJualMap[barangId] = nettoJual;
         if (hargaDeal > 0) hargaDealMap[barangId] = hargaDeal;
         if (it.kode_harga_jual) kodeHargaJualMap[barangId] = String(it.kode_harga_jual);
       }
@@ -1053,6 +1057,7 @@ export class ErpApiService {
       harga_deal_map: Object.keys(hargaDealMap).length ? hargaDealMap : undefined,
       kode_harga_jual_map: Object.keys(kodeHargaJualMap).length ? kodeHargaJualMap : undefined,
       berat_kirim_map: Object.keys(beratKirimMap).length ? beratKirimMap : undefined,
+      netto_jual_map: Object.keys(nettoJualMap).length ? nettoJualMap : undefined,
     };
   }
 
@@ -1079,6 +1084,13 @@ export class ErpApiService {
       hasil.berat_kirim_map = lokal.berat_kirim_map;
     }
     if (lokal.total_berat_kg) hasil.total_berat_kg = lokal.total_berat_kg;
+    // Netto jual dan aturan potongan hanya diketahui frontend: nilai DO yang dihitung darinya tidak boleh
+    // diganti nilai server yang dihitung dari bruto.
+    if (lokal.netto_jual_map && Object.keys(lokal.netto_jual_map).length > 0) {
+      hasil.netto_jual_map = lokal.netto_jual_map;
+      if (lokal.total_nilai_deal) hasil.total_nilai_deal = lokal.total_nilai_deal;
+    }
+    if (lokal.aturan_netto) hasil.aturan_netto = lokal.aturan_netto;
     return hasil;
   }
 
@@ -1310,12 +1322,15 @@ export class ErpApiService {
           batch_sample_id_ref: pengiriman.batch_sample_id_ref,
           nomor_kontrak: pengiriman.nomor_kontrak,
           catatan: pengiriman.catatan,
+          aturan_netto: pengiriman.aturan_netto,
           items: items.map(it => {
             const bId = typeof it === 'string' ? it : it.barang_id;
             return {
               barang_id: bId,
               kode_harga_jual: it.kode_harga_jual || pengiriman.kode_harga_jual_map?.[bId],
               harga_deal_per_kg: it.harga_deal_per_kg || pengiriman.harga_deal_map?.[bId] || 0,
+              berat_kirim_kg: pengiriman.berat_kirim_map?.[bId],
+              netto_jual_kg: pengiriman.netto_jual_map?.[bId],
             };
           }),
         };

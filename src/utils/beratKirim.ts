@@ -25,11 +25,33 @@ export function beratBrutoItemSample(
   return netto > 0 ? normalizeKg(netto + (item.potongan_tara_kg || 0)) : 0;
 }
 
-/** Berat bruto saat dikirim pada Surat Jalan: berat yang tersimpan di DO, atau bruto bal. */
+/** Bruto timbang ulang saat dikirim pada Surat Jalan: berat yang tersimpan di DO, atau bruto bal. */
 export function beratKirimBal(
   pengiriman: Pick<PengirimanBarang, 'berat_kirim_map'>,
   barangId: string,
   bal?: Partial<Pick<Barang, 'berat_bruto_kg' | 'berat_kg' | 'potongan_tara_kg'>> | null
 ): number {
   return pengiriman.berat_kirim_map?.[barangId] ?? beratBrutoBal(bal);
+}
+
+/**
+ * Netto jual satu bal pada Surat Jalan (bruto timbang ulang dikurangi potongan aturan netto pembeli).
+ * DO lama tanpa aturan netto memakai bruto kirim, sehingga nilainya tidak berubah.
+ */
+export function nettoJualBal(
+  pengiriman: Pick<PengirimanBarang, 'berat_kirim_map' | 'netto_jual_map'>,
+  barangId: string,
+  bal?: Partial<Pick<Barang, 'berat_bruto_kg' | 'berat_kg' | 'potongan_tara_kg'>> | null
+): number {
+  return pengiriman.netto_jual_map?.[barangId] ?? beratKirimBal(pengiriman, barangId, bal);
+}
+
+/** Nilai satu bal pada Surat Jalan: netto jual x harga jual per kg. */
+export function nilaiBalDO(
+  pengiriman: Pick<PengirimanBarang, 'berat_kirim_map' | 'netto_jual_map'>,
+  barangId: string,
+  bal: Partial<Pick<Barang, 'berat_bruto_kg' | 'berat_kg' | 'potongan_tara_kg'>> | null | undefined,
+  hargaPerKg: number
+): number {
+  return Math.round(nettoJualBal(pengiriman, barangId, bal) * hargaPerKg);
 }
