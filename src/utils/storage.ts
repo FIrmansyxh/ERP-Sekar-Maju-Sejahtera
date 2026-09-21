@@ -1,4 +1,5 @@
 import { hashPassword } from './crypto';
+import { peringatanSimpanan } from './peringatanSimpanan';
 import {
   Petani,
   Barang,
@@ -12,6 +13,7 @@ import {
   AuditLogEntry,
 } from '../types';
 import LZString from 'lz-string';
+import { pulihkanStatusSampleLama } from './kuponSortir';
 
 import { INITIAL_BARANG_DATA } from '../data/initialBarangData';
 import { INITIAL_HARGA_DATA } from '../data/initialHargaData';
@@ -81,6 +83,7 @@ const safeSetItem = (key: string, data: unknown) => {
     } catch (storageErr) {
       console.warn(`Kuota localStorage penuh untuk ${key}, memakai penyimpanan memori.`, storageErr);
       memoryStore.set(key, compressed);
+      peringatanSimpanan.laporkanKuotaPenuh(key);
     }
   } catch (err) {
     console.error(`Gagal menyimpan data ${key}:`, err);
@@ -278,7 +281,8 @@ export function savePetaniData(data: Petani[]): void {
 
 // --- STOK BAL (BARANG) ---
 export function loadBarangData(): Barang[] {
-  return readList<Barang>(KEY_BARANG) ?? INITIAL_BARANG_DATA;
+  // Status 'terkirim_sample' dari data lama dipulihkan: Batch Sample tidak mengubah status bal
+  return (readList<Barang>(KEY_BARANG) ?? INITIAL_BARANG_DATA).map(pulihkanStatusSampleLama);
 }
 
 export function saveBarangData(data: Barang[]): void {

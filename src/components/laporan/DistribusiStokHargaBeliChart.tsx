@@ -9,25 +9,17 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
-  Legend,
+  Tooltip
 } from 'recharts';
 import {
   BarChart3,
   PieChart as PieChartIcon,
-  Table as TableIcon,
   Layers,
-  DollarSign,
   Scale,
   Package,
-  Filter,
-  Download,
   Info,
   ChevronRight,
-  TrendingUp,
-  Tag,
-  Warehouse,
-  FileSpreadsheet,
+  FileSpreadsheet
 } from 'lucide-react';
 import { Barang, TabelHarga } from '../../types';
 import { formatRupiah } from '../../utils/formatters';

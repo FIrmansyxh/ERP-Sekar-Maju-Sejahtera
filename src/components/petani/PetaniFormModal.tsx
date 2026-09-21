@@ -1,13 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Save, 
-  User, 
+import {
+  Save,
+  User,
   ArrowLeft,
-  CheckCircle2,
-  Phone,
-  MapPin,
-  FileText,
-  BadgeAlert
+  CheckCircle2
 } from 'lucide-react';
 import { Petani } from '../../types';
 import { generatePetaniId } from '../../utils/formatters';

@@ -1,19 +1,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { motion, AnimatePresence } from "framer-motion";
-import { 
-  Tag, 
-  Download, 
-  Search, 
-  ArrowUpDown, 
-  ArrowUp, 
-  ArrowDown, 
+import {
+  Tag,
+  Search,
+  ArrowUp,
+  ArrowDown,
   X,
-  ChevronDown, ChevronUp,
+  ChevronDown,
   ChevronRight,
-  Warehouse,
-  Truck,
-  Layers,
-  Filter,
   FileSpreadsheet
 } from 'lucide-react';
 import { 
@@ -872,68 +865,60 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
         </div>
 
         {/* Collapsible Content: Visual Cards */}
-        <AnimatePresence initial={false}>
-          {showGradeSummary && filteredAndSortedData.length > 0 && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.3, ease: "easeInOut" }}
-              className="overflow-hidden"
-            >
-              <div className="p-4 bg-[#fafafa] border-b border-gray-200">
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
-                  {filteredAndSortedData.map((gs) => {
-                    const pct = totals.berat_netto > 0 ? ((gs.berat_netto / totals.berat_netto) * 100).toFixed(1) : '0';
-                    const avg = gs.jumlah_bal > 0 ? (gs.berat_netto / gs.jumlah_bal).toFixed(1) : '0';
-                    const gradeBadgeClass =
-                      gs.kode === 'A' ? 'bg-zinc-900 text-white' :
-                      gs.kode === 'B' ? 'bg-zinc-800 text-zinc-100' :
-                      gs.kode === 'C' ? 'bg-blue-100 text-blue-900 font-bold' :
-                      gs.kode === 'D' ? 'bg-purple-100 text-purple-900 font-bold' :
-                      gs.kode === 'E' ? 'bg-gray-200 text-gray-800 font-bold' :
-                      'bg-red-100 text-red-900 font-bold';
+        {showGradeSummary && filteredAndSortedData.length > 0 && (
+          <div className="overflow-hidden">
+            <div className="p-4 bg-[#fafafa] border-b border-gray-200">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
+                {filteredAndSortedData.map((gs) => {
+                  const pct = totals.berat_netto > 0 ? ((gs.berat_netto / totals.berat_netto) * 100).toFixed(1) : '0';
+                  const avg = gs.jumlah_bal > 0 ? (gs.berat_netto / gs.jumlah_bal).toFixed(1) : '0';
+                  const gradeBadgeClass =
+                    gs.kode === 'A' ? 'bg-zinc-900 text-white' :
+                    gs.kode === 'B' ? 'bg-zinc-800 text-zinc-100' :
+                    gs.kode === 'C' ? 'bg-blue-100 text-blue-900 font-bold' :
+                    gs.kode === 'D' ? 'bg-purple-100 text-purple-900 font-bold' :
+                    gs.kode === 'E' ? 'bg-gray-200 text-gray-800 font-bold' :
+                    'bg-red-100 text-red-900 font-bold';
 
-                    return (
-                      <div
-                        key={gs.kode}
-                        className="bg-white border border-gray-200 p-2.5 rounded-xs flex flex-col justify-between space-y-1.5 shadow-2xs hover:border-gray-300 transition"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className={`px-2 py-0.5 text-xs font-bold rounded-xs ${gradeBadgeClass}`}>
-                            Grade {gs.kode}
-                          </span>
-                          <span className="text-[10px] font-mono font-bold text-blue-800 bg-blue-50 px-1.5 py-0.5 rounded-xs border border-blue-100">
-                            {pct}%
+                  return (
+                    <div
+                      key={gs.kode}
+                      className="bg-white border border-gray-200 p-2.5 rounded-xs flex flex-col justify-between space-y-1.5 shadow-2xs hover:border-gray-300 transition"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className={`px-2 py-0.5 text-xs font-bold rounded-xs ${gradeBadgeClass}`}>
+                          Grade {gs.kode}
+                        </span>
+                        <span className="text-[10px] font-mono font-bold text-blue-800 bg-blue-50 px-1.5 py-0.5 rounded-xs border border-blue-100">
+                          {pct}%
+                        </span>
+                      </div>
+                      <div className="pt-1 space-y-0.5">
+                        <div className="flex items-baseline justify-between">
+                          <span className="text-[11px] text-gray-500 font-medium">Total Berat:</span>
+                          <span className="text-xs font-bold font-mono text-gray-900">
+                            {gs.berat_netto.toFixed(1)} <span className="text-[10px] font-normal text-gray-500">kg</span>
                           </span>
                         </div>
-                        <div className="pt-1 space-y-0.5">
-                          <div className="flex items-baseline justify-between">
-                            <span className="text-[11px] text-gray-500 font-medium">Total Berat:</span>
-                            <span className="text-xs font-bold font-mono text-gray-900">
-                              {gs.berat_netto.toFixed(1)} <span className="text-[10px] font-normal text-gray-500">kg</span>
-                            </span>
-                          </div>
-                          <div className="flex items-baseline justify-between text-[10px] text-gray-500">
-                            <span>Populasi:</span>
-                            <span className="font-mono font-semibold text-gray-700">{gs.jumlah_bal} Bal</span>
-                          </div>
-                          <div className="flex items-baseline justify-between text-[10px] text-gray-500">
-                            <span>Rata-rata:</span>
-                            <span className="font-mono text-gray-700">{avg} kg/bal</span>
-                          </div>
+                        <div className="flex items-baseline justify-between text-[10px] text-gray-500">
+                          <span>Populasi:</span>
+                          <span className="font-mono font-semibold text-gray-700">{gs.jumlah_bal} Bal</span>
                         </div>
-                        <div className="pt-1 border-t border-gray-100 text-[11px] text-right font-mono font-bold text-[#b81d24]">
-                          Rp {Math.round(gs.total_nilai).toLocaleString('id-ID')}
+                        <div className="flex items-baseline justify-between text-[10px] text-gray-500">
+                          <span>Rata-rata:</span>
+                          <span className="font-mono text-gray-700">{avg} kg/bal</span>
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
+                      <div className="pt-1 border-t border-gray-100 text-[11px] text-right font-mono font-bold text-[#b81d24]">
+                        Rp {Math.round(gs.total_nilai).toLocaleString('id-ID')}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            </div>
+          </div>
+        )}
 
         {/* The Clean Report Table - Sticky Header ONLY (thead) */}
         <div ref={tableContainerRef} className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-210px)] min-h-[350px]">

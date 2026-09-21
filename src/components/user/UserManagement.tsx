@@ -1,22 +1,22 @@
 import React, { useState, useMemo } from 'react';
-import { 
-  Users, 
-  UserPlus, 
-  Search, 
-  ShieldCheck, 
-  KeyRound, 
-  Edit3, 
-  ChevronDown, 
-  ChevronUp, 
-  RefreshCw, 
-  X, 
-  Ban, 
+import {
+  Users,
+  Search,
+  ShieldCheck,
+  KeyRound,
+  Edit3,
+  ChevronDown,
+  ChevronUp,
+  RefreshCw,
+  X,
+  Ban,
   CheckCircle,
   Plus
 } from 'lucide-react';
-import { User, UserRole } from '../../types';
+import { User } from '../../types';
 import { ALL_ROLES, ROLE_DEFINITIONS, getRoleInfo } from '../../utils/rbac';
 import { formatDateTimeIndo } from '../../utils/formatters';
+import { tampilkanInfo } from '../../utils/dialog';
 import { UserFormModal } from './UserFormModal';
 import { UserResetPasswordModal } from './UserResetPasswordModal';
 import { RoleMatrixModal } from './RoleMatrixModal';
@@ -403,7 +403,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                           type="button"
                           onClick={() => {
                             if (isCurrent) {
-                              alert('Anda tidak dapat menonaktifkan akun yang sedang aktif digunakan.');
+                              tampilkanInfo('Anda tidak dapat menonaktifkan akun yang sedang aktif digunakan.');
                               return;
                             }
                             onToggleStatus(user.user_id);
@@ -457,7 +457,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                           <button
                             onClick={() => {
                               if (isCurrent) {
-                                alert('Anda tidak dapat mengubah status akun yang sedang aktif digunakan.');
+                                tampilkanInfo('Anda tidak dapat mengubah status akun yang sedang aktif digunakan.');
                                 return;
                               }
                               onToggleStatus(user.user_id);

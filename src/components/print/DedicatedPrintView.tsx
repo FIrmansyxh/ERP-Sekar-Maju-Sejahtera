@@ -1,27 +1,20 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
-import { 
-  Printer, 
-  Download, 
-  X, 
-  FileText, 
-  ZoomIn, 
-  ZoomOut, 
+import {
+  Download,
+  FileSpreadsheet,
+  X,
+  FileText,
+  ZoomIn,
+  ZoomOut,
   RotateCcw,
-  CheckCircle2, 
   AlertCircle,
-  Lock,
-  Truck,
-  Building2,
-  Calendar,
-  UserCheck
+  Lock
 } from 'lucide-react';
-import { 
-  loadTransaksiData, 
-  loadPengirimanData, 
-  loadBarangData, 
-  loadBatchSampleData,
-  loadPetaniData,
-  loadCurrentUser
+import {
+  loadTransaksiData,
+  loadPengirimanData,
+  loadBarangData,
+  loadBatchSampleData
 } from '../../utils/storage';
 import { 
   TransaksiPembelian, 
@@ -31,10 +24,13 @@ import {
   Petani, 
   TabelHarga 
 } from '../../types';
+import { isTransaksiLunas } from '../../utils/statusBayar';
 import { downloadElementAsPdf } from '../../utils/printDownload';
+import { unduhSuratSampleExcel } from '../../utils/excelSuratSample';
 import { NotaTimbangContent } from '../transaksi/NotaTimbangContent';
 import { SuratJalanDokumen } from '../pengiriman/SuratJalanDokumen';
 import { SuratSampleDokumen } from '../sample/SuratSampleDokumen';
+import { alasanBatchBelumFinal } from '../../utils/statusBatchSample';
 
 export interface DedicatedPrintViewProps {
   type: 'nota' | 'surat_jalan' | 'sample' | 'bon_produksi';
@@ -89,12 +85,7 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
       : loadBarangData();
   }, [propBarangList]);
 
-  const activePetaniList = useMemo(() => {
-    return propPetaniList && propPetaniList.length > 0
-      ? propPetaniList
-      : loadPetaniData();
-  }, [propPetaniList]);
-
+  
 
   // Find exact document
   const cleanId = (id || '').trim();
@@ -173,8 +164,18 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
   }, []);
 
   // Action: Trigger browser print dialog (for connected physical printer)
-  const handleTriggerPrint = () => {
-    window.print();
+  
+  // Surat sample diunduh sebagai Excel (kode harga jual, tanpa nilai rupiah)
+  const handleDownloadExcelSample = async () => {
+    if (!foundBatch) return;
+    setIsGeneratingPdf(true);
+    try {
+      await unduhSuratSampleExcel(foundBatch);
+    } catch (err) {
+      console.error('Excel download error:', err);
+    } finally {
+      setIsGeneratingPdf(false);
+    }
   };
 
   // Action: Generate and download element directly as PDF
@@ -193,15 +194,11 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
       const filename =
         type === 'nota' && foundTransaksi
           ? `NOTA_TIMBANG_${aman(foundTransaksi.no_kupon)}.pdf`
-          : type === 'sample'
-          ? `SURAT_SAMPLE_${aman(foundBatch?.kode_batch || id)}.pdf`
           : `SURAT_JALAN_${aman(foundPengiriman?.no_surat_jalan || id)}.pdf`;
 
       const judulLanjutan =
         type === 'nota' && foundTransaksi
           ? `Nota Pembelian ${foundTransaksi.no_kupon}`
-          : type === 'sample'
-          ? `Surat Sample ${foundBatch?.kode_batch || ''}`.trim()
           : `Surat Jalan ${foundPengiriman?.no_surat_jalan || ''}`.trim();
       await downloadElementAsPdf(printAreaRef.current, filename, { orientation: 'portrait', judulLanjutan });
     } catch (err) {
@@ -261,9 +258,34 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
     );
   }
 
+  // DRAFT LOCK STATE FOR SURAT SAMPLE (hanya batch yang sudah final yang boleh dicetak)
+  const alasanDraft = type === 'sample' ? alasanBatchBelumFinal(foundBatch, 'cetak') : null;
+  if (alasanDraft) {
+    return (
+      <div className="print-modal-backdrop fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm font-sans">
+        <div className="bg-white border border-gray-300 rounded-none p-6 max-w-md w-full text-center shadow-2xl animate-in zoom-in-95 duration-150">
+          <div className="w-12 h-12 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center mx-auto mb-3 text-amber-700">
+            <Lock className="w-6 h-6" />
+          </div>
+          <h2 className="text-sm font-bold text-gray-900 mb-1">Surat Sample Belum Bisa Dicetak</h2>
+          <p className="text-xs text-gray-600 mb-4 leading-relaxed">{alasanDraft}</p>
+          <div className="flex justify-center space-x-2">
+            <button
+              type="button"
+              onClick={handleClose}
+              className="px-4 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-sm transition cursor-pointer shadow-xs"
+            >
+              Kembali / Tutup Pratinjau
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // UNPAID LOCK STATE FOR NOTA (Nota can ONLY be printed when status is Lunas)
   const isNotaLunas = foundTransaksi 
-    ? (foundTransaksi.status_pembayaran === 'lunas' || foundTransaksi.metode_pembayaran === 'cash')
+    ? (isTransaksiLunas(foundTransaksi))
     : false;
 
   if (type === 'nota' && foundTransaksi && !isNotaLunas) {
@@ -323,7 +345,7 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
                 </span>
               </div>
               <p className="text-[11px] text-gray-500 font-medium hidden sm:block">
-                Periksa dokumen, lalu klik <strong className="text-gray-800">Download PDF</strong> untuk menyimpan berkas ke komputer.
+                Periksa dokumen, lalu klik <strong className="text-gray-800">{type === 'sample' ? 'Download Excel' : 'Download PDF'}</strong> untuk menyimpan berkas ke komputer.
               </p>
             </div>
           </div>
@@ -359,7 +381,7 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
             </button>
           </div>
 
-          {/* Right: Tutup + Download PDF */}
+          {/* Right: Tutup + Download (Excel untuk surat sample, PDF untuk dokumen lain) */}
           <div className="flex items-center space-x-2 shrink-0">
             <button
               type="button"
@@ -374,12 +396,16 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
             <button
               type="button"
               disabled={isGeneratingPdf}
-              onClick={handleDownloadPdf}
+              onClick={type === 'sample' ? handleDownloadExcelSample : handleDownloadPdf}
               className="px-4 py-1.5 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#a0181e] rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs disabled:opacity-50"
-              title="Unduh dokumen dalam format PDF"
+              title={type === 'sample' ? 'Unduh surat sample dalam format Excel' : 'Unduh dokumen dalam format PDF'}
             >
-              <Download className="w-3.5 h-3.5" />
-              <span>{isGeneratingPdf ? 'Membuat PDF...' : 'Download PDF'}</span>
+              {type === 'sample' ? <FileSpreadsheet className="w-3.5 h-3.5" /> : <Download className="w-3.5 h-3.5" />}
+              <span>
+                {type === 'sample'
+                  ? isGeneratingPdf ? 'Membuat Excel...' : 'Download Excel'
+                  : isGeneratingPdf ? 'Membuat PDF...' : 'Download PDF'}
+              </span>
             </button>
           </div>
         </div>

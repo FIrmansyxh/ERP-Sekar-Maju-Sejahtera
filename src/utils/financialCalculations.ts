@@ -6,6 +6,7 @@ import {
   TabelHarga,
 } from '../types';
 import { beratKirimBal, nettoJualBal } from './beratKirim';
+import { isPenjualanMasuk } from './kunciHapus';
 
 /**
  * Interface hasil kalkulasi metrik barang terkirim dan keuntungan bersih
@@ -128,7 +129,8 @@ export function hitungValuasiStokGudang(
  * - Total Penjualan = Berat Bruto Bal Terkirim * Harga Jual Deal
  * - Total Modal Bal Terkirim = Berat Netto Bal Terkirim * Harga Beli Bal
  * - Keuntungan Bersih = Total Penjualan - Total Modal Bal Terkirim
- * Sesuai aturan: hanya menghitung DO yang sudah dikirim / dalam perjalanan / sampai.
+ * Sesuai aturan: nilai penjualan baru masuk setelah Surat Jalan berstatus Selesai;
+ * DO yang masih dimuat / dikirim / dalam perjalanan / tiba di pabrik belum dihitung.
  */
 export function hitungProfitPengiriman(
   pengirimanList: PengirimanBarang[],
@@ -152,9 +154,7 @@ export function hitungProfitPengiriman(
     if (hj.harga_jual_id) masterHargaJualByKode.set(hj.harga_jual_id, hj.harga_jual);
   });
 
-  const validShippedDO = pengirimanList.filter((p) =>
-    ['dikirim', 'dalam_perjalanan', 'diterima', 'selesai'].includes(p.status)
-  );
+  const validShippedDO = pengirimanList.filter(isPenjualanMasuk);
 
   let totalBalTerkirim = 0;
   let totalBeratTerkirimKg = 0;

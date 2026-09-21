@@ -1,41 +1,28 @@
-import { formatDateHariBulanTahun } from '../../utils/formatters';
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Truck, 
-  Search, 
-  RotateCcw, 
-  Download, 
-  Calendar, 
-  MapPin, 
-  Package, 
-  Building2, 
-  CheckCircle2, 
-  Clock, 
-  Filter, 
-  ChevronRight, 
-  X, 
-  FileText, 
-  FileSpreadsheet, 
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  Truck,
+  Search,
+  RotateCcw,
+  Package,
+  Building2,
+  Filter,
+  X,
+  FileSpreadsheet,
   ExternalLink,
   FlaskConical,
-  ShieldCheck,
-  AlertCircle,
-  TrendingUp,
-  UserCheck,
-  Eye,
-  EyeOff,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  ClipboardList
 } from 'lucide-react';
 import { PengirimanBarang, PengirimanSample, Barang, UserRole } from '../../types';
-import { downloadElementAsPdf } from '../../utils/printDownload';
 import { downloadExcelReport, periodeInfo, todayStamp } from '../../utils/excelExport';
 import { Pagination } from '../common/Pagination';
-import { KopSurat } from '../common/KopSurat';
 import { beratBrutoBal, beratKirimBal, nettoJualBal } from '../../utils/beratKirim';
+import { isPenjualanMasuk } from '../../utils/kunciHapus';
 import { useLaporanTampilan } from '../../hooks/useLaporanTampilan';
 import { LaporanTampilanToggle } from './LaporanTampilanToggle';
+import { ResumePengirimanPanel } from './ResumePengirimanPanel';
+import { hitungResumePengiriman, susunBarisExcelResume } from '../../utils/resumePengiriman';
 
 interface LaporanPengirimanViewProps {
   pengirimanList: PengirimanBarang[];
@@ -52,8 +39,8 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
   userRole = 'superadmin',
   onNavigateToSample,
 }) => {
-  // Tabs: 'surat-jalan' | 'rekap-pabrik' | 'sample-qc' | 'log-bal'
-  const [activeTab, setActiveTab] = useState<'surat-jalan' | 'rekap-pabrik' | 'sample-qc' | 'log-bal'>('surat-jalan');
+  // Tabs: 'resume' | 'surat-jalan' | 'rekap-pabrik' | 'sample-qc' | 'log-bal'
+  const [activeTab, setActiveTab] = useState<'resume' | 'surat-jalan' | 'rekap-pabrik' | 'sample-qc' | 'log-bal'>('resume');
 
   // Filter States
   const [searchQuery, setSearchQuery] = useState('');
@@ -101,8 +88,6 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
   const [balCurrentPage, setBalCurrentPage] = useState(1);
   const [balItemsPerPage, setBalItemsPerPage] = useState(10);
 
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
-
   // Scroll Position State for Scroll-To-Top and Scroll-To-Bottom buttons (seperti pada menu Laporan Pembelian)
   const [showScrollButtons, setShowScrollButtons] = useState(false);
 
@@ -145,8 +130,6 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
       behavior: 'smooth',
     });
   };
-
-  const printDocumentRef = useRef<HTMLDivElement>(null);
 
   // List of Unique Pabrik Destinations for Filter
   const uniquePabrikList = useMemo(() => {
@@ -240,6 +223,24 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
     };
   }, [pengirimanList, filteredPengirimanList, sampleList]);
 
+  // Sample QC yang ikut resume: mengikuti periode dan pabrik terfilter (status DO tidak berlaku untuk sample)
+  const sampleTerfilter = useMemo(() => {
+    const { startDate, endDate, pabrik } = appliedFilters;
+    return sampleList.filter((s) => {
+      const tgl = (s.tanggal_kirim || '').slice(0, 10);
+      if (tgl && startDate && tgl < startDate) return false;
+      if (tgl && endDate && tgl > endDate) return false;
+      if (pabrik && pabrik !== 'ALL' && !(s.tujuan || '').toLowerCase().includes(pabrik.toLowerCase())) return false;
+      return true;
+    });
+  }, [sampleList, appliedFilters]);
+
+  // Resume Pengiriman: satu sumber angka untuk tab Resume dan Excel
+  const resume = useMemo(
+    () => hitungResumePengiriman(filteredPengirimanList, barangList, sampleTerfilter),
+    [filteredPengirimanList, barangList, sampleTerfilter]
+  );
+
   // Aggregation per Pabrik Buyer (Tab 2)
   const pabrikAggregates = useMemo(() => {
     const map = new Map<string, { pabrik: string; countDO: number; totalBal: number; totalKg: number; diterimaCount: number; pendingCount: number }>();
@@ -319,7 +320,10 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
     ];
 
     const barangMap = new Map(barangList.map((b) => [b.barang_id, b]));
-    const totalNilaiDO = filteredPengirimanList.reduce((sum, p) => sum + (p.total_nilai_deal || 0), 0);
+    // Nilai penjualan baru dihitung setelah Surat Jalan berstatus Selesai
+    const totalNilaiDO = filteredPengirimanList
+      .filter(isPenjualanMasuk)
+      .reduce((sum, p) => sum + (p.total_nilai_deal || 0), 0);
 
     const rincianBal = filteredPengirimanList.flatMap((p) =>
       (p.barang_ids || []).map((id) => {
@@ -332,7 +336,21 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
       })
     );
 
+    const resumeExcel = susunBarisExcelResume(resume);
+
     downloadExcelReport(`Laporan_Pengiriman_DO_${todayStamp()}`, [
+      {
+        name: 'Resume',
+        title: 'Resume Laporan Pengiriman',
+        info,
+        columns: [
+          { header: 'Uraian', width: 44 },
+          { header: 'Nilai', align: 'right', width: 22 },
+          { header: 'Keterangan', width: 70 },
+        ],
+        rows: resumeExcel.rows,
+        rowKinds: resumeExcel.rowKinds,
+      },
       {
         name: 'Surat Jalan DO',
         title: 'Laporan Pengiriman Barang (Surat Jalan DO)',
@@ -366,7 +384,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
           p.petugas || p.dibuat_oleh || '-',
         ]),
         totalRow: [
-          `TOTAL (${filteredPengirimanList.length} DO)`, '', '', '', '', '',
+          `TOTAL (${filteredPengirimanList.length} DO; nilai hanya DO Selesai)`, '', '', '', '', '',
           overallKPIs.totalBalKirim,
           overallKPIs.totalKgKirim,
           totalNilaiDO,
@@ -465,21 +483,6 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
     if (status === 'dalam_perjalanan') return 'Dalam Perjalanan';
     if (status === 'selesai') return 'Selesai';
     return 'Sedang Dimuat';
-  };
-
-  // Download PDF (Direct Download)
-  const handleDownloadPdf = async () => {
-    if (!printDocumentRef.current) return;
-    setIsGeneratingPdf(true);
-    try {
-      await downloadElementAsPdf(
-        printDocumentRef.current,
-        `Laporan_Pengiriman_Tembakau_${new Date().toISOString().slice(0, 10)}.pdf`,
-        { orientation: 'landscape' }
-      );
-    } finally {
-      setIsGeneratingPdf(false);
-    }
   };
 
   // Status Badge Helper
@@ -584,7 +587,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
           </h1>
         </div>
 
-        {/* Action Controls: Tampilan (Filter / Ringkasan / Fokus Tabel), Unduh Excel & Unduh PDF */}
+        {/* Action Controls: Tampilan (Filter / Ringkasan / Fokus Tabel), dan Unduh Excel */}
         <div className="flex flex-wrap items-center gap-2">
           <LaporanTampilanToggle tampilan={tampilan} jumlahFilterAktif={jumlahFilterAktif} />
 
@@ -596,117 +599,99 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
             <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
             <span>Unduh Excel</span>
           </button>
-
-          <button
-            onClick={handleDownloadPdf}
-            disabled={isGeneratingPdf}
-            className="px-3 py-1.5 bg-[#b81d24] hover:bg-[#991b1b] text-white text-xs font-bold rounded-xs transition flex items-center space-x-1.5 cursor-pointer shadow-2xs disabled:opacity-50"
-            title="Unduh Laporan Dokumen PDF Resmi"
-          >
-            <FileText className="w-3.5 h-3.5" />
-            <span>{isGeneratingPdf ? 'Memproses PDF...' : 'Unduh PDF Resmi'}</span>
-          </button>
         </div>
       </div>
 
       {/* 2. Executive KPI Cards */}
-      <AnimatePresence initial={false}>
-        {showSummaryCards && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="overflow-hidden"
-          >
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-          <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
-            <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-              Total Surat Jalan
-            </div>
-            <div className="mt-1">
-              <div className="text-xl font-bold font-mono text-gray-900">
-                {overallKPIs.totalDO} DO
-              </div>
-              <div className="text-[10px] text-gray-500 font-medium mt-0.5">
-                Trip Pengiriman
-              </div>
-            </div>
+      {showSummaryCards && (
+        <div className="overflow-hidden">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+        <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
+          <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+            Total Surat Jalan
           </div>
-
-          <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
-            <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-              Total Bal Terkirim
+          <div className="mt-1">
+            <div className="text-xl font-bold font-mono text-gray-900">
+              {overallKPIs.totalDO} DO
             </div>
-            <div className="mt-1">
-              <div className="text-xl font-bold font-mono text-gray-900">
-                {overallKPIs.totalBalKirim.toLocaleString('id-ID')}
-              </div>
-              <div className="text-[10px] text-gray-500 font-medium mt-0.5">
-                Bal Keluar Gudang
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
-            <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-              Total Tonase Keluar
-            </div>
-            <div className="mt-1">
-              <div className="text-xl font-bold font-mono text-blue-900">
-                {overallKPIs.totalKgKirim.toLocaleString('id-ID')} kg
-              </div>
-              <div className="text-[10px] text-gray-500 font-medium mt-0.5">
-                {(overallKPIs.totalKgKirim / 1000).toFixed(2)} Ton Bruto
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
-            <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-              Diterima Pabrik
-            </div>
-            <div className="mt-1">
-              <div className="text-xl font-bold font-mono text-emerald-600">
-                {overallKPIs.countDiterima} DO
-              </div>
-              <div className="text-[10px] text-emerald-700 font-semibold mt-0.5">
-                Pengiriman Sukses
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
-            <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-              Dalam Perjalanan
-            </div>
-            <div className="mt-1">
-              <div className="text-xl font-bold font-mono text-amber-600">
-                {overallKPIs.countDalamPerjalanan + overallKPIs.countDimuat} DO
-              </div>
-              <div className="text-[10px] text-gray-500 font-medium mt-0.5">
-                Dikirim, dimuat & di jalan
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
-            <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-              Sample QC Lab
-            </div>
-            <div className="mt-1">
-              <div className="text-xl font-bold font-mono text-purple-900">
-                {overallKPIs.totalSample} Sample
-              </div>
-              <div className="text-[10px] text-purple-700 font-semibold mt-0.5">
-                {overallKPIs.sampleApproved} Disetujui Pabrik
-              </div>
+            <div className="text-[10px] text-gray-500 font-medium mt-0.5">
+              Trip Pengiriman
             </div>
           </div>
         </div>
-        </motion.div>
-      )}
-      </AnimatePresence>
+
+        <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
+          <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+            Total Bal Terkirim
+          </div>
+          <div className="mt-1">
+            <div className="text-xl font-bold font-mono text-gray-900">
+              {overallKPIs.totalBalKirim.toLocaleString('id-ID')}
+            </div>
+            <div className="text-[10px] text-gray-500 font-medium mt-0.5">
+              Bal Keluar Gudang
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
+          <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+            Total Tonase Keluar
+          </div>
+          <div className="mt-1">
+            <div className="text-xl font-bold font-mono text-blue-900">
+              {overallKPIs.totalKgKirim.toLocaleString('id-ID')} kg
+            </div>
+            <div className="text-[10px] text-gray-500 font-medium mt-0.5">
+              {(overallKPIs.totalKgKirim / 1000).toFixed(2)} Ton Bruto
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
+          <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+            Diterima Pabrik
+          </div>
+          <div className="mt-1">
+            <div className="text-xl font-bold font-mono text-emerald-600">
+              {overallKPIs.countDiterima} DO
+            </div>
+            <div className="text-[10px] text-emerald-700 font-semibold mt-0.5">
+              Pengiriman Sukses
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
+          <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+            Dalam Perjalanan
+          </div>
+          <div className="mt-1">
+            <div className="text-xl font-bold font-mono text-amber-600">
+              {overallKPIs.countDalamPerjalanan + overallKPIs.countDimuat} DO
+            </div>
+            <div className="text-[10px] text-gray-500 font-medium mt-0.5">
+              Dikirim, dimuat & di jalan
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
+          <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+            Sample QC Lab
+          </div>
+          <div className="mt-1">
+            <div className="text-xl font-bold font-mono text-purple-900">
+              {overallKPIs.totalSample} Sample
+            </div>
+            <div className="text-[10px] text-purple-700 font-semibold mt-0.5">
+              {overallKPIs.sampleApproved} Disetujui Pabrik
+            </div>
+          </div>
+        </div>
+      </div>
+      </div>
+    )}
 
       {/* 3. Filter Controls Panel */}
       {tampilan.tampilFilter && (
@@ -838,6 +823,18 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
       {/* 4. Tab Navigation */}
       <div className="flex items-center space-x-1 border-b border-gray-200">
         <button
+          onClick={() => setActiveTab('resume')}
+          className={`px-4 py-2 text-xs font-bold cursor-pointer transition border-b-2 flex items-center space-x-1.5 ${
+            activeTab === 'resume'
+              ? 'border-[#b81d24] text-[#b81d24] bg-white'
+              : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+          }`}
+        >
+          <ClipboardList className="w-3.5 h-3.5" />
+          <span>Resume</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('surat-jalan')}
           className={`px-4 py-2 text-xs font-bold cursor-pointer transition border-b-2 ${
             activeTab === 'surat-jalan'
@@ -884,6 +881,9 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
           <span>Log Bal Fisik Terkirim ({balKeluarList.length})</span>
         </button>
       </div>
+
+      {/* 4b. Tab Content: Resume Pengiriman */}
+      {activeTab === 'resume' && <ResumePengirimanPanel resume={resume} />}
 
       {/* 5. Tab Content 1: Surat Jalan Table */}
       {activeTab === 'surat-jalan' && (
@@ -1525,95 +1525,6 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
           </div>
         </div>
       )}
-
-      {/* 10. Offscreen Printable Document for High-Fidelity PDF Generation */}
-      <div className="hidden">
-        <div ref={printDocumentRef} className="p-8 bg-white text-gray-900 font-sans" style={{ width: '1080px' }}>
-          
-          <KopSurat judul="Laporan Pengiriman & Distribusi" className="mb-2" />
-          <div className="mb-4 flex items-center justify-between text-[10px] text-gray-500">
-            <span>
-              Tujuan: {appliedFilters.pabrik !== 'ALL' ? appliedFilters.pabrik : 'Semua Pabrik'} • Status: {appliedFilters.status !== 'ALL' ? labelStatusDO(appliedFilters.status) : 'Semua Status'}
-            </span>
-            <span>Tanggal Ekspor: {formatDateHariBulanTahun(new Date().toISOString())}</span>
-          </div>
-
-          {/* KPI Summary Block */}
-          <div className="grid grid-cols-4 gap-2 mb-4 p-3 bg-gray-50 border border-gray-300">
-            <div>
-              <div className="text-[10px] text-gray-500 uppercase font-bold">Total Surat Jalan (DO)</div>
-              <div className="text-sm font-bold font-mono text-gray-900">{overallKPIs.totalDO} Trip</div>
-            </div>
-            <div>
-              <div className="text-[10px] text-gray-500 uppercase font-bold">Total Bal Terkirim</div>
-              <div className="text-sm font-bold font-mono text-gray-900">{overallKPIs.totalBalKirim} Bal</div>
-            </div>
-            <div>
-              <div className="text-[10px] text-gray-500 uppercase font-bold">Total Tonase Bruto</div>
-              <div className="text-sm font-bold font-mono text-blue-900">{overallKPIs.totalKgKirim.toLocaleString('id-ID')} kg</div>
-            </div>
-            <div>
-              <div className="text-[10px] text-gray-500 uppercase font-bold">Realisasi Diterima</div>
-              <div className="text-sm font-bold font-mono text-emerald-700">{overallKPIs.countDiterima} DO Sukses</div>
-            </div>
-          </div>
-
-          {/* Main Data Table */}
-          <table className="w-full text-left text-[11px] border-collapse border border-gray-400 mb-6">
-            <thead>
-              <tr className="bg-gray-100 font-bold text-gray-900 border-b border-gray-400">
-                <th className="p-2 border border-gray-300 text-center w-8">No</th>
-                <th className="p-2 border border-gray-300">No. Surat Jalan</th>
-                <th className="p-2 border border-gray-300">Tanggal Kirim</th>
-                <th className="p-2 border border-gray-300">Pabrik Rekanan Tujuan</th>
-                <th className="p-2 border border-gray-300">Nama Sopir</th>
-                <th className="p-2 border border-gray-300">No. Kendaraan</th>
-                <th className="p-2 border border-gray-300 text-center">Total Bal</th>
-                <th className="p-2 border border-gray-300 text-right">Bruto (Kg)</th>
-                <th className="p-2 border border-gray-300 text-center">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredPengirimanList.map((p, idx) => (
-                <tr key={p.pengiriman_id} className={idx % 2 === 1 ? 'bg-gray-50' : 'bg-white'}>
-                  <td className="p-1.5 border border-gray-300 text-center font-mono">{idx + 1}</td>
-                  <td className="p-1.5 border border-gray-300 font-mono font-bold">{p.no_surat_jalan}</td>
-                  <td className="p-1.5 border border-gray-300 font-mono">{p.tanggal_kirim ? p.tanggal_kirim.split('T')[0] : '-'}</td>
-                  <td className="p-1.5 border border-gray-300 font-semibold">{p.tujuan}</td>
-                  <td className="p-1.5 border border-gray-300">{p.driver_nama}</td>
-                  <td className="p-1.5 border border-gray-300 font-mono">{p.plat_nomor}</td>
-                  <td className="p-1.5 border border-gray-300 text-center font-mono font-bold">{p.total_bal}</td>
-                  <td className="p-1.5 border border-gray-300 text-right font-mono font-bold text-blue-900">{p.total_berat_kg.toLocaleString('id-ID')}</td>
-                  <td className="p-1.5 border border-gray-300 text-center font-semibold">{p.status}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          {/* Formal Signatures */}
-          <div className="grid grid-cols-3 gap-8 pt-6 text-center text-xs avoid-page-break">
-            <div>
-              <div className="text-gray-500">Petugas Logistik / Pengirim,</div>
-              <div className="font-bold text-gray-900 mt-0.5">Staff Ekspedisi</div>
-              <div className="h-16"></div>
-              <div className="font-semibold text-gray-800 border-t border-gray-400 pt-1 min-h-[22px]">&nbsp;</div>
-            </div>
-            <div>
-              <div className="text-gray-500">Diperiksa Oleh,</div>
-              <div className="font-bold text-gray-900 mt-0.5">Kepala Gudang Tembakau</div>
-              <div className="h-16"></div>
-              <div className="font-semibold text-gray-800 border-t border-gray-400 pt-1 min-h-[22px]">&nbsp;</div>
-            </div>
-            <div>
-              <div className="text-gray-500">Diterima Oleh,</div>
-              <div className="font-bold text-gray-900 mt-0.5">Pihak Pabrik Rekanan</div>
-              <div className="h-16"></div>
-              <div className="font-semibold text-gray-800 border-t border-gray-400 pt-1 min-h-[22px]">&nbsp;</div>
-            </div>
-          </div>
-
-        </div>
-      </div>
 
     </div>
   );

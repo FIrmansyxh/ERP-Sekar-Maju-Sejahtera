@@ -1,51 +1,32 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Package, 
-  Search, 
-  RotateCcw, 
-  Download, 
-  Calendar, 
-  Tag, 
-  Building2, 
-  Filter, 
-  ArrowUpDown, 
-  ArrowUp, 
-  ArrowDown, 
-  CheckCircle2, 
-  Scale, 
-  DollarSign, 
-  Layers, 
-  FileSpreadsheet, 
-  Printer, 
-  Warehouse, 
-  Info,
+import React, { useState, useMemo, useEffect } from 'react';
+import {
+  Package,
+  Search,
+  RotateCcw,
+  Calendar,
+  ArrowUp,
+  ArrowDown,
+  Scale,
+  DollarSign,
+  FileSpreadsheet,
   TrendingUp,
-  Sparkles,
   SlidersHorizontal,
-  ChevronDown,
-  ChevronUp,
-  ChevronRight,
-  ChevronLeft,
   X
 } from 'lucide-react';
 import { Barang, Petani, TransaksiPembelian, TabelHarga, UserRole } from '../../types';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell } from 'recharts';
-import { formatRupiah, formatNumber, formatDateHariBulanTahun, extractKodeBalPrefix } from '../../utils/formatters';
-import { downloadElementAsPdf } from '../../utils/printDownload';
+import { isTransaksiLunas } from '../../utils/statusBayar';
+import { extractKodeBalPrefix } from '../../utils/formatters';
 import { downloadExcelReport, labelStatusStok, periodeInfo, todayStamp } from '../../utils/excelExport';
 import { hitungNilaiBal } from '../../utils/finance';
 import { Pagination } from '../common/Pagination';
-import { KopSurat } from '../common/KopSurat';
 import { SortIcon } from '../common/SortIcon';
 import { COMPANY_NAME } from '../../config/appInfo';
-import { loadCurrentUser } from '../../utils/storage';
 import { useLaporanTampilan } from '../../hooks/useLaporanTampilan';
 import { LaporanTampilanToggle } from './LaporanTampilanToggle';
 import { LaporanBalRekap } from './LaporanBalRekap';
 import { PresetTanggal } from './PresetTanggal';
 import { SearchableSelect } from '../common/SearchableSelect';
-import { rekapPerKode, totalRekapKode } from '../../utils/rekapKodeBal';
+import { rataHargaRekap, rekapPerKode, totalRekapKode } from '../../utils/rekapKodeBal';
 
 interface LaporanBalViewProps {
   barangList: Barang[];
@@ -68,8 +49,6 @@ type SortField =
   | 'nama_petani'
   | 'ganti_tikar'
   | 'status_stok';
-
-type SortDirection = 'asc' | 'desc' | 'none';
 
 export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
   barangList = [],
@@ -124,7 +103,6 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
   const jumlahFilterAktif = Object.values(appliedFilters).filter((v) => v !== '' && v !== 'ALL').length;
   const [itemsPerPage, setItemsPerPage] = useState<number>(20);
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   // Scroll Position State for Scroll-To-Top and Scroll-To-Bottom buttons
   const [showScrollButtons, setShowScrollButtons] = useState(false);
@@ -165,8 +143,6 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
       behavior: 'smooth',
     });
   };
-
-  const printDocumentRef = useRef<HTMLDivElement>(null);
 
   // Unique Lists for Dropdown Filter Options
   const uniqueGrades = useMemo(() => {
@@ -417,7 +393,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
         metode_pembayaran: txInfo?.metode_pembayaran || '',
         status_bayar: !txInfo
           ? 'tanpa_transaksi'
-          : txInfo.status_pembayaran === 'lunas' || txInfo.metode_pembayaran === 'cash'
+          : isTransaksiLunas(txInfo)
             ? 'lunas'
             : 'belum_lunas',
         has_tx: !!txInfo,
@@ -463,7 +439,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
           status_pembayaran: tx.status_pembayaran || 'belum_lunas',
           metode_pembayaran: tx.metode_pembayaran || '',
           status_bayar:
-            tx.status_pembayaran === 'lunas' || tx.metode_pembayaran === 'cash' ? 'lunas' : 'belum_lunas',
+            isTransaksiLunas(tx) ? 'lunas' : 'belum_lunas',
           has_tx: true,
           kode_bal_prefix: extractKodeBalPrefix(it.no_bal),
           ganti_tikar: isTikar,
@@ -731,37 +707,17 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
     };
   }, [sortedData]);
 
-  // Sub-Ringkasan per Grade
-  const gradeBreakdown = useMemo(() => {
-    const map: Record<string, { grade: string; balCount: number; balDitimbang: number; totalNetto: number; totalNilai: number }> = {};
-    sortedData.forEach((b) => {
-      // Ringkasan nilai per grade hanya dari bal yang kuponnya sudah lunas
-      if (b.status_bayar === 'belum_lunas') return;
-      const g = (b.kode_grade || 'LAINNYA').trim().toUpperCase();
-      if (!map[g]) {
-        map[g] = { grade: g, balCount: 0, balDitimbang: 0, totalNetto: 0, totalNilai: 0 };
-      }
-      map[g].balCount += 1;
-      if ((b.berat_kg || 0) > 0) map[g].balDitimbang += 1;
-      map[g].totalNetto += b.berat_kg || 0;
-      map[g].totalNilai += hitungNilaiBal(b);
-    });
-    return Object.values(map).sort((a, b) => a.grade.localeCompare(b.grade));
-  }, [sortedData]);
-
   // Real-time table search within sorted results
   const searchedData = useMemo(() => {
     if (!tableSearch.trim()) return sortedData;
     const q = tableSearch.toLowerCase().trim();
     return sortedData.filter((item) => {
       const matchNoBal = (item.no_bal || '').toLowerCase().includes(q);
-      const matchKodeBal = (item.kode_bal || '').toLowerCase().includes(q);
+      const matchKodeBal = (item.kode_bal_prefix || '').toLowerCase().includes(q);
       const matchBarangId = (item.barang_id || '').toLowerCase().includes(q);
       const matchGrade = (item.kode_grade || '').toLowerCase().includes(q);
       const matchPetani = (item.nama_petani || item.petani_id || '').toLowerCase().includes(q);
-      const matchSJ = (item.no_surat_jalan || '').toLowerCase().includes(q);
-      const matchPabrik = (item.tujuan_pabrik || '').toLowerCase().includes(q);
-      return matchNoBal || matchKodeBal || matchBarangId || matchGrade || matchPetani || matchSJ || matchPabrik;
+      return matchNoBal || matchKodeBal || matchBarangId || matchGrade || matchPetani;
     });
   }, [sortedData, tableSearch]);
 
@@ -830,12 +786,6 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
         return (
           <span className="inline-flex items-center px-2 py-0.5 rounded-xs text-[10px] font-bold bg-gray-100 text-gray-800 border border-gray-300">
             Dikirim
-          </span>
-        );
-      case 'terkirim_sample':
-        return (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-xs text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-300">
-            Sample
           </span>
         );
       default:
@@ -947,7 +897,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
       {
         name: 'Rekap Kode Bal',
         title: 'Rekap Jumlah Bal per Kode',
-        info: [...info, 'Semua bal dihitung, termasuk yang belum ditimbang dan belum dibayar.'],
+        info: [...info, 'Jumlah bal mencakup semua bal (termasuk yang belum ditimbang dan belum dibayar); berat dan nilai hanya dari bal yang sudah ditimbang dan lunas.'],
         columns: [
           { header: 'No', type: 'integer', align: 'center' },
           { header: 'Kode Bal', align: 'center' },
@@ -955,61 +905,24 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
           { header: 'Belum Ditimbang', type: 'integer' },
           { header: 'Ditimbang, Belum Lunas', type: 'integer' },
           { header: 'Lunas', type: 'integer' },
-          { header: 'Netto (Kg)', type: 'kg' },
+          { header: 'Berat Bruto Lunas (Kg)', type: 'kg' },
+          { header: 'Berat Netto Lunas (Kg)', type: 'kg' },
+          { header: 'AVG Harga (Rp/Kg)', type: 'rupiah' },
+          { header: 'Total Nilai Lunas (Rp)', type: 'rupiah' },
           { header: 'Total Bal Sepanjang Masa', type: 'integer' },
         ],
         rows: (() => {
           const semua = new Map(rekapPerKode(balSepanjangMasa).map((r) => [r.kode, r] as const));
           return rekapPerKode(filteredData).map((r, idx) => [
-            idx + 1, r.kode, r.total, r.belumTimbang, r.kredit, r.lunas, r.netto, semua.get(r.kode)?.total ?? r.total,
+            idx + 1, r.kode, r.total, r.belumTimbang, r.kredit, r.lunas, r.brutoLunas, r.nettoLunas, rataHargaRekap(r), r.nilaiLunas, semua.get(r.kode)?.total ?? r.total,
           ]);
         })(),
         totalRow: (() => {
           const t = totalRekapKode(rekapPerKode(filteredData));
-          return ['TOTAL', '', t.total, t.belumTimbang, t.kredit, t.lunas, t.netto, totalRekapKode(rekapPerKode(balSepanjangMasa)).total];
+          return ['TOTAL', '', t.total, t.belumTimbang, t.kredit, t.lunas, t.brutoLunas, t.nettoLunas, rataHargaRekap(t), t.nilaiLunas, totalRekapKode(rekapPerKode(balSepanjangMasa)).total];
         })(),
       },
-      {
-        name: 'Ringkasan per Grade',
-        title: 'Sub-Ringkasan Berat & Nilai per Grade',
-        info,
-        columns: [
-          { header: 'No', type: 'integer', align: 'center' },
-          { header: 'Kode Grade', align: 'center' },
-          { header: 'Jumlah Bal', type: 'integer' },
-          { header: 'Total Netto (Kg)', type: 'kg' },
-          { header: 'Rata-rata (Kg/Bal)', type: 'kg' },
-          { header: 'Kontribusi Netto', type: 'percent' },
-          { header: 'Total Nilai Pembelian (Rp)', type: 'rupiah' },
-        ],
-        rows: gradeBreakdown.map((gb, idx) => [
-          idx + 1,
-          gb.grade,
-          gb.balCount,
-          gb.totalNetto,
-          gb.balDitimbang > 0 ? gb.totalNetto / gb.balDitimbang : 0,
-          totals.totalNetto > 0 ? (gb.totalNetto / totals.totalNetto) * 100 : 0,
-          gb.totalNilai,
-        ]),
-        totalRow: ['TOTAL LUNAS', '', totals.totalBalLunas, totals.totalNetto, totals.avgNetto, totals.totalNetto > 0 ? 100 : 0, totals.totalNilai],
-      },
     ]);
-  };
-
-  // Export PDF / Print
-  const handleExportPDF = async () => {
-    if (!printDocumentRef.current) return;
-    setIsExportingPdf(true);
-    try {
-      await downloadElementAsPdf(
-        printDocumentRef.current,
-        `Laporan_Detail_Bal_${new Date().toISOString().slice(0, 10)}.pdf`
-      );
-    } catch (err) {
-      console.error('Error generating PDF:', err);
-    } finally {
-      setIsExportingPdf(false);
-    }
   };
 
   return (
@@ -1036,7 +949,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
           </div>
         </div>
 
-        {/* Action Buttons: Tampilan (Filter / Ringkasan / Fokus Tabel), Excel, Print */}
+        {/* Action Buttons: Tampilan (Filter / Ringkasan / Fokus Tabel) dan Excel */}
         <div className="flex flex-wrap items-center gap-2">
           <LaporanTampilanToggle tampilan={tampilan} jumlahFilterAktif={jumlahFilterAktif} />
 
@@ -1049,17 +962,6 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
           >
             <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
             <span>Export Excel</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleExportPDF}
-            disabled={sortedData.length === 0 || isExportingPdf}
-            className="px-3.5 py-1.5 bg-[#b81d24] hover:bg-[#a0181e] disabled:opacity-50 text-white rounded-sm font-bold text-xs flex items-center space-x-1.5 shadow-xs transition cursor-pointer"
-            title="Cetak Laporan / Simpan PDF"
-          >
-            <Printer className="w-3.5 h-3.5" />
-            <span>{isExportingPdf ? 'Memproses...' : 'Cetak / PDF'}</span>
           </button>
         </div>
       </div>
@@ -1085,434 +987,321 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
         </div>
 
         {/* Collapsible Content */}
-        <AnimatePresence initial={false}>
-          {showSummaryCards && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.3, ease: "easeInOut" }}
-              className="overflow-hidden"
-            >
-              <div className="p-4 space-y-4">
-            {/* Key Metrics Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-              {/* Card 1: Total Bal */}
-              <div className="bg-white p-3.5 border border-gray-200 rounded-none shadow-xs space-y-1 hover:border-gray-300 transition">
-                <div className="flex items-center justify-between text-gray-500 text-[11px] font-medium">
-                  <span>Total Populasi Bal</span>
-                  <Package className="w-4 h-4 text-slate-700" />
-                </div>
-                <div className="text-xl font-bold font-mono text-gray-950">
-                  {totals.totalBal.toLocaleString('id-ID')}{' '}
-                  <span className="text-xs font-normal text-gray-500 font-sans">Bal</span>
-                </div>
-                <div className="text-[10px] text-gray-500">
-                  Terfilter dari {barangList.length} total bal master
-                </div>
+        {showSummaryCards && (
+          <div className="overflow-hidden">
+            <div className="p-4 space-y-4">
+          {/* Key Metrics Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            {/* Card 1: Total Bal */}
+            <div className="bg-white p-3.5 border border-gray-200 rounded-none shadow-xs space-y-1 hover:border-gray-300 transition">
+              <div className="flex items-center justify-between text-gray-500 text-[11px] font-medium">
+                <span>Total Populasi Bal</span>
+                <Package className="w-4 h-4 text-slate-700" />
               </div>
-
-              {/* Card 2: Total Tonase Netto */}
-              <div className="bg-white p-3.5 border border-gray-200 rounded-none shadow-xs space-y-1 bg-blue-50/20 hover:border-blue-300 transition">
-                <div className="flex items-center justify-between text-blue-900 text-[11px] font-semibold">
-                  <span>Total Berat Netto (Lunas)</span>
-                  <Scale className="w-4 h-4 text-blue-700" />
-                </div>
-                <div className="text-xl font-black font-mono text-blue-950">
-                  {totals.totalNetto.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}{' '}
-                  <span className="text-xs font-bold text-blue-700 font-sans">Kg</span>
-                </div>
-                <div className="text-[10px] text-blue-800 font-medium">
-                  ≈ {(totals.totalNetto / 1000).toFixed(2)} Ton (Bruto: {totals.totalBruto.toFixed(1)} kg)
-                </div>
+              <div className="text-xl font-bold font-mono text-gray-950">
+                {totals.totalBal.toLocaleString('id-ID')}{' '}
+                <span className="text-xs font-normal text-gray-500 font-sans">Bal</span>
               </div>
-
-              {/* Card 3: Rata-rata Berat / Bal */}
-              <div className="bg-white p-3.5 border border-gray-200 rounded-none shadow-xs space-y-1 hover:border-gray-300 transition">
-                <div className="flex items-center justify-between text-gray-500 text-[11px] font-medium">
-                  <span>Rata-rata Berat / Bal</span>
-                  <TrendingUp className="w-4 h-4 text-slate-700" />
-                </div>
-                <div className="text-xl font-bold font-mono text-gray-950">
-                  {totals.avgNetto.toFixed(1)}{' '}
-                  <span className="text-xs font-normal text-gray-500 font-sans">Kg/bal</span>
-                </div>
-                <div className="text-[10px] text-gray-500">
-                  Min: {totals.minBerat.toFixed(1)} kg • Max: {totals.maxBerat.toFixed(1)} kg
-                </div>
-              </div>
-
-              {/* Card 4: Rata-rata Harga Beli */}
-              <div className="bg-white p-3.5 border border-gray-200 rounded-none shadow-xs space-y-1 hover:border-gray-300 transition">
-                <div className="flex items-center justify-between text-gray-500 text-[11px] font-medium">
-                  <span>Rata-rata Harga Beli</span>
-                  <DollarSign className="w-4 h-4 text-emerald-700" />
-                </div>
-                <div className="text-xl font-bold font-mono text-emerald-900">
-                  Rp {Math.round(totals.avgHargaKg).toLocaleString('id-ID')}{' '}
-                  <span className="text-xs font-normal text-gray-500 font-sans">/kg</span>
-                </div>
-                <div className="text-[10px] text-gray-500">
-                  Min: Rp {totals.minHarga.toLocaleString('id-ID')} • Max: Rp {totals.maxHarga.toLocaleString('id-ID')}
-                </div>
-              </div>
-
-              {/* Card 5: Total Nilai Pembelian */}
-              <div className="bg-white p-3.5 border border-gray-200 rounded-none shadow-xs space-y-1 bg-red-50/20 col-span-2 sm:col-span-1 hover:border-red-300 transition">
-                <div className="flex items-center justify-between text-[#b81d24] text-[11px] font-bold">
-                  <span>Total Nilai Pembelian (Lunas)</span>
-                  <DollarSign className="w-4 h-4 text-[#b81d24]" />
-                </div>
-                <div className="text-lg sm:text-xl font-black font-mono text-[#b81d24]">
-                  Rp {Math.round(totals.totalNilai).toLocaleString('id-ID')}
-                </div>
-                <div className="text-[10px] text-gray-600 font-medium">
-                  Hanya bal lunas • Kredit: Rp {Math.round(totals.totalNilaiKredit).toLocaleString('id-ID')}
-                </div>
+              <div className="text-[10px] text-gray-500">
+                Terfilter dari {barangList.length} total bal master
               </div>
             </div>
 
-            {/* Sub-Ringkasan Grade Breakdown */}
-            {sortedData.length > 0 && gradeBreakdown.length > 0 && (
-              <div className="border-t border-gray-200 pt-3">
-                <div className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-2 flex items-center space-x-1.5">
-                  <Tag className="w-3.5 h-3.5 text-slate-700" />
-                  <span>Sub-Ringkasan Akumulasi per Grade</span>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
-                  {gradeBreakdown.map((gb) => {
-                    const pct = totals.totalNetto > 0 ? ((gb.totalNetto / totals.totalNetto) * 100).toFixed(1) : '0';
-                    const avg = gb.balDitimbang > 0 ? (gb.totalNetto / gb.balDitimbang).toFixed(1) : '0';
-
-                    return (
-                      <div
-                        key={gb.grade}
-                        className="bg-white border border-gray-200 p-2.5 rounded-xs flex flex-col justify-between space-y-1.5 shadow-2xs hover:border-gray-300 transition"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className={`px-2 py-0.5 text-xs font-bold rounded-xs ${getGradeBadgeClass(gb.grade)}`}>
-                            Grade {gb.grade}
-                          </span>
-                          <span className="text-[10px] font-mono font-bold text-blue-800 bg-blue-50 px-1.5 py-0.5 rounded-xs border border-blue-100">
-                            {pct}%
-                          </span>
-                        </div>
-
-                        <div className="pt-1 space-y-0.5">
-                          <div className="flex items-baseline justify-between">
-                            <span className="text-[11px] text-gray-500 font-medium">Total Netto:</span>
-                            <span className="text-xs font-bold font-mono text-gray-900">
-                              {gb.totalNetto.toFixed(1)} <span className="text-[10px] font-normal text-gray-500">kg</span>
-                            </span>
-                          </div>
-                          <div className="flex items-baseline justify-between text-[10px] text-gray-500">
-                            <span>Populasi:</span>
-                            <span className="font-mono font-semibold text-gray-700">{gb.balCount} Bal</span>
-                          </div>
-                          <div className="flex items-baseline justify-between text-[10px] text-gray-500">
-                            <span>Rata-rata:</span>
-                            <span className="font-mono text-gray-700">{avg} kg/bal</span>
-                          </div>
-                        </div>
-
-                        <div className="pt-1 border-t border-gray-100 text-[11px] text-right font-mono font-bold text-[#b81d24]">
-                          Rp {Math.round(gb.totalNilai).toLocaleString('id-ID')}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Visualisasi Distribusi Grade */}
-                <div className="mt-6 border border-gray-200 rounded-sm p-4 bg-[#f8f9fa] shadow-2xs">
-                  <div className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-4 text-center">
-                    Distribusi Jumlah Bal Berdasarkan Grade
-                  </div>
-                  <div className="h-64 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={gradeBreakdown} margin={{ top: 10, right: 30, left: 0, bottom: 20 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                        <XAxis 
-                          dataKey="grade" 
-                          tick={{ fontSize: 11, fontWeight: 'bold' }} 
-                          tickLine={false}
-                          axisLine={{ stroke: '#d1d5db' }}
-                        />
-                        <YAxis 
-                          allowDecimals={false}
-                          tick={{ fontSize: 11 }}
-                          tickLine={false}
-                          axisLine={false}
-                        />
-                        <RechartsTooltip 
-                          cursor={{ fill: '#f3f4f6' }}
-                          contentStyle={{ borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', border: '1px solid #e5e7eb', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}
-                          formatter={(value) => [`${value} Bal`, 'Jumlah Bal']}
-                          labelFormatter={(label) => `Grade ${label}`}
-                        />
-                        <Bar 
-                          dataKey="balCount" 
-                          name="Jumlah Bal" 
-                          radius={[4, 4, 0, 0]}
-                          barSize={40}
-                        >
-                          {gradeBreakdown.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill="#b81d24" />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
+            {/* Card 2: Total Tonase Netto */}
+            <div className="bg-white p-3.5 border border-gray-200 rounded-none shadow-xs space-y-1 bg-blue-50/20 hover:border-blue-300 transition">
+              <div className="flex items-center justify-between text-blue-900 text-[11px] font-semibold">
+                <span>Total Berat Netto (Lunas)</span>
+                <Scale className="w-4 h-4 text-blue-700" />
               </div>
-            )}
+              <div className="text-xl font-black font-mono text-blue-950">
+                {totals.totalNetto.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}{' '}
+                <span className="text-xs font-bold text-blue-700 font-sans">Kg</span>
+              </div>
+              <div className="text-[10px] text-blue-800 font-medium">
+                ≈ {(totals.totalNetto / 1000).toFixed(2)} Ton (Bruto: {totals.totalBruto.toFixed(1)} kg)
+              </div>
+            </div>
+
+            {/* Card 3: Rata-rata Berat / Bal */}
+            <div className="bg-white p-3.5 border border-gray-200 rounded-none shadow-xs space-y-1 hover:border-gray-300 transition">
+              <div className="flex items-center justify-between text-gray-500 text-[11px] font-medium">
+                <span>Rata-rata Berat / Bal</span>
+                <TrendingUp className="w-4 h-4 text-slate-700" />
+              </div>
+              <div className="text-xl font-bold font-mono text-gray-950">
+                {totals.avgNetto.toFixed(1)}{' '}
+                <span className="text-xs font-normal text-gray-500 font-sans">Kg/bal</span>
+              </div>
+              <div className="text-[10px] text-gray-500">
+                Min: {totals.minBerat.toFixed(1)} kg • Max: {totals.maxBerat.toFixed(1)} kg
+              </div>
+            </div>
+
+            {/* Card 4: Rata-rata Harga Beli */}
+            <div className="bg-white p-3.5 border border-gray-200 rounded-none shadow-xs space-y-1 hover:border-gray-300 transition">
+              <div className="flex items-center justify-between text-gray-500 text-[11px] font-medium">
+                <span>Rata-rata Harga Beli</span>
+                <DollarSign className="w-4 h-4 text-emerald-700" />
+              </div>
+              <div className="text-xl font-bold font-mono text-emerald-900">
+                Rp {Math.round(totals.avgHargaKg).toLocaleString('id-ID')}{' '}
+                <span className="text-xs font-normal text-gray-500 font-sans">/kg</span>
+              </div>
+              <div className="text-[10px] text-gray-500">
+                Min: Rp {totals.minHarga.toLocaleString('id-ID')} • Max: Rp {totals.maxHarga.toLocaleString('id-ID')}
+              </div>
+            </div>
+
+            {/* Card 5: Total Nilai Pembelian */}
+            <div className="bg-white p-3.5 border border-gray-200 rounded-none shadow-xs space-y-1 bg-red-50/20 col-span-2 sm:col-span-1 hover:border-red-300 transition">
+              <div className="flex items-center justify-between text-[#b81d24] text-[11px] font-bold">
+                <span>Total Nilai Pembelian (Lunas)</span>
+                <DollarSign className="w-4 h-4 text-[#b81d24]" />
+              </div>
+              <div className="text-lg sm:text-xl font-black font-mono text-[#b81d24]">
+                Rp {Math.round(totals.totalNilai).toLocaleString('id-ID')}
+              </div>
+              <div className="text-[10px] text-gray-600 font-medium">
+                Hanya bal lunas • Kredit: Rp {Math.round(totals.totalNilaiKredit).toLocaleString('id-ID')}
+              </div>
+            </div>
           </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+        </div>
+        </div>
+      )}
     </div>
       )}
 
       {/* 3. Collapsible Filter Control Section */}
-      <AnimatePresence initial={false}>
-        {isFilterPanelOpen && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="overflow-hidden"
+      {isFilterPanelOpen && (
+        <div className="overflow-hidden">
+          <div className="bg-white p-4 border border-gray-200 shadow-xs space-y-4">
+        <div className="flex items-center justify-between pb-2 border-b border-gray-200">
+          <div className="flex items-center space-x-2">
+            <SlidersHorizontal className="w-4 h-4 text-slate-700" />
+            <span className="text-xs font-bold text-gray-900 uppercase tracking-wide">
+              Filter Data & Parameter Analisis Bal
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={handleResetFilters}
+            className="text-[11px] text-red-700 hover:text-red-900 font-semibold flex items-center space-x-1 cursor-pointer"
           >
-            <div className="bg-white p-4 border border-gray-200 shadow-xs space-y-4">
-          <div className="flex items-center justify-between pb-2 border-b border-gray-200">
-            <div className="flex items-center space-x-2">
-              <SlidersHorizontal className="w-4 h-4 text-slate-700" />
-              <span className="text-xs font-bold text-gray-900 uppercase tracking-wide">
-                Filter Data & Parameter Analisis Bal
-              </span>
+            <RotateCcw className="w-3 h-3" />
+            <span>Reset Semua Filter</span>
+          </button>
+        </div>
+
+        <form onSubmit={handleApplyFilters} className="space-y-3">
+          <PresetTanggal startDate={filterStartDate} endDate={filterEndDate} onPilih={handlePilihRentang} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 text-xs">
+            
+            {/* Filter 1: Tanggal Dari */}
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                Tanggal Masuk Dari
+              </label>
+              <div className="relative">
+                <Calendar className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="date"
+                  value={filterStartDate}
+                  onChange={(e) => setFilterStartDate(e.target.value)}
+                  className="w-full pl-8 pr-2 py-1.5 bg-white border border-[#ced4da] rounded-none text-xs focus:outline-none focus:border-slate-800"
+                />
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={handleResetFilters}
-              className="text-[11px] text-red-700 hover:text-red-900 font-semibold flex items-center space-x-1 cursor-pointer"
-            >
-              <RotateCcw className="w-3 h-3" />
-              <span>Reset Semua Filter</span>
-            </button>
+
+            {/* Filter 2: Tanggal Sampai */}
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                Tanggal Sampai
+              </label>
+              <div className="relative">
+                <Calendar className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="date"
+                  value={filterEndDate}
+                  onChange={(e) => setFilterEndDate(e.target.value)}
+                  className="w-full pl-8 pr-2 py-1.5 bg-white border border-[#ced4da] rounded-none text-xs focus:outline-none focus:border-slate-800"
+                />
+              </div>
+            </div>
+
+            {/* Filter 3: Kode Grade / Beli */}
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                Kode Grade / Beli
+              </label>
+              <select
+                value={filterGrade}
+                onChange={(e) => setFilterGrade(e.target.value)}
+                className="w-full px-2 py-1.5 bg-white border border-[#ced4da] rounded-none text-xs focus:outline-none focus:border-slate-800"
+              >
+                <option value="ALL">Semua Grade</option>
+                {uniqueGrades.map((g) => (
+                  <option key={g} value={g}>
+                    Grade {g}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Filter Petani: jumlah bal per kode untuk satu petani (hari itu atau sepanjang masa) */}
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                Petani
+              </label>
+              <SearchableSelect
+                value={filterPetani}
+                onChange={(val) => setFilterPetani(val || 'ALL')}
+                options={petaniOptions}
+                placeholder="Semua Petani"
+              />
+            </div>
+
+            {/* Filter 3b: Kode Bal */}
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                Kode Bal
+              </label>
+              <select
+                value={filterKodeBal}
+                onChange={(e) => setFilterKodeBal(e.target.value)}
+                className="w-full px-2 py-1.5 bg-white border border-[#ced4da] rounded-none text-xs focus:outline-none focus:border-slate-800"
+              >
+                <option value="ALL">Semua Kode Bal</option>
+                {uniqueKodeBal.map((k) => (
+                  <option key={k} value={k}>
+                    {k}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Filter 4: Status Stok */}
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                Status Stok Bal
+              </label>
+              <select
+                value={filterStatusStok}
+                onChange={(e) => setFilterStatusStok(e.target.value)}
+                className="w-full px-2 py-1.5 bg-white border border-[#ced4da] rounded-none text-xs focus:outline-none focus:border-slate-800"
+              >
+                <option value="ALL">Semua Status</option>
+                <option value="proses_sortir">Proses Sortir</option>
+                <option value="di_gudang">Di Gudang</option>
+                <option value="keluar">Dikirim</option>
+              </select>
+            </div>
+
+            {/* Filter 4b: Status Bayar */}
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                Status Bayar
+              </label>
+              <select
+                value={filterStatusBayar}
+                onChange={(e) => setFilterStatusBayar(e.target.value)}
+                className="w-full px-2 py-1.5 bg-white border border-[#ced4da] rounded-none text-xs focus:outline-none focus:border-slate-800"
+              >
+                <option value="ALL">Semua Status Bayar</option>
+                <option value="lunas">Lunas</option>
+                <option value="belum_lunas">Belum Lunas</option>
+              </select>
+            </div>
+
+            {/* Filter 4c: Ganti Tikar */}
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                Ganti Tikar
+              </label>
+              <select
+                id="filter-ganti-tikar"
+                value={filterGantiTikar}
+                onChange={(e) => setFilterGantiTikar(e.target.value as 'ALL' | 'ya' | 'tidak')}
+                className="w-full px-2 py-1.5 bg-white border border-[#ced4da] rounded-none text-xs focus:outline-none focus:border-slate-800"
+              >
+                <option value="ALL">Semua Tikar</option>
+                <option value="ya">Ganti Tikar (Ya)</option>
+                <option value="tidak">Tidak Ganti (Standar)</option>
+              </select>
+            </div>
+
+            {/* Filter 5: Search Keyword */}
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                Cari No Bal / Petani / Kupon
+              </label>
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="No bal, petani, barcode..."
+                  className="w-full pl-8 pr-2 py-1.5 bg-white border border-[#ced4da] rounded-none text-xs focus:outline-none focus:border-slate-800"
+                />
+              </div>
+            </div>
           </div>
 
-          <form onSubmit={handleApplyFilters} className="space-y-3">
-            <PresetTanggal startDate={filterStartDate} endDate={filterEndDate} onPilih={handlePilihRentang} />
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 text-xs">
-              
-              {/* Filter 1: Tanggal Dari */}
-              <div>
-                <label className="block text-[11px] font-semibold text-gray-700 mb-1">
-                  Tanggal Masuk Dari
-                </label>
-                <div className="relative">
-                  <Calendar className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="date"
-                    value={filterStartDate}
-                    onChange={(e) => setFilterStartDate(e.target.value)}
-                    className="w-full pl-8 pr-2 py-1.5 bg-white border border-[#ced4da] rounded-none text-xs focus:outline-none focus:border-slate-800"
-                  />
-                </div>
-              </div>
-
-              {/* Filter 2: Tanggal Sampai */}
-              <div>
-                <label className="block text-[11px] font-semibold text-gray-700 mb-1">
-                  Tanggal Sampai
-                </label>
-                <div className="relative">
-                  <Calendar className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="date"
-                    value={filterEndDate}
-                    onChange={(e) => setFilterEndDate(e.target.value)}
-                    className="w-full pl-8 pr-2 py-1.5 bg-white border border-[#ced4da] rounded-none text-xs focus:outline-none focus:border-slate-800"
-                  />
-                </div>
-              </div>
-
-              {/* Filter 3: Kode Grade / Beli */}
-              <div>
-                <label className="block text-[11px] font-semibold text-gray-700 mb-1">
-                  Kode Grade / Beli
-                </label>
-                <select
-                  value={filterGrade}
-                  onChange={(e) => setFilterGrade(e.target.value)}
-                  className="w-full px-2 py-1.5 bg-white border border-[#ced4da] rounded-none text-xs focus:outline-none focus:border-slate-800"
-                >
-                  <option value="ALL">Semua Grade</option>
-                  {uniqueGrades.map((g) => (
-                    <option key={g} value={g}>
-                      Grade {g}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Filter Petani: jumlah bal per kode untuk satu petani (hari itu atau sepanjang masa) */}
-              <div>
-                <label className="block text-[11px] font-semibold text-gray-700 mb-1">
-                  Petani
-                </label>
-                <SearchableSelect
-                  value={filterPetani}
-                  onChange={(val) => setFilterPetani(val || 'ALL')}
-                  options={petaniOptions}
-                  placeholder="Semua Petani"
-                />
-              </div>
-
-              {/* Filter 3b: Kode Bal */}
-              <div>
-                <label className="block text-[11px] font-semibold text-gray-700 mb-1">
-                  Kode Bal
-                </label>
-                <select
-                  value={filterKodeBal}
-                  onChange={(e) => setFilterKodeBal(e.target.value)}
-                  className="w-full px-2 py-1.5 bg-white border border-[#ced4da] rounded-none text-xs focus:outline-none focus:border-slate-800"
-                >
-                  <option value="ALL">Semua Kode Bal</option>
-                  {uniqueKodeBal.map((k) => (
-                    <option key={k} value={k}>
-                      {k}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Filter 4: Status Stok */}
-              <div>
-                <label className="block text-[11px] font-semibold text-gray-700 mb-1">
-                  Status Stok Bal
-                </label>
-                <select
-                  value={filterStatusStok}
-                  onChange={(e) => setFilterStatusStok(e.target.value)}
-                  className="w-full px-2 py-1.5 bg-white border border-[#ced4da] rounded-none text-xs focus:outline-none focus:border-slate-800"
-                >
-                  <option value="ALL">Semua Status</option>
-                  <option value="proses_sortir">Proses Sortir</option>
-                  <option value="di_gudang">Di Gudang</option>
-                  <option value="terkirim_sample">Sample</option>
-                  <option value="keluar">Dikirim</option>
-                </select>
-              </div>
-
-              {/* Filter 4b: Status Bayar */}
-              <div>
-                <label className="block text-[11px] font-semibold text-gray-700 mb-1">
-                  Status Bayar
-                </label>
-                <select
-                  value={filterStatusBayar}
-                  onChange={(e) => setFilterStatusBayar(e.target.value)}
-                  className="w-full px-2 py-1.5 bg-white border border-[#ced4da] rounded-none text-xs focus:outline-none focus:border-slate-800"
-                >
-                  <option value="ALL">Semua Status Bayar</option>
-                  <option value="lunas">Lunas</option>
-                  <option value="belum_lunas">Belum Lunas</option>
-                </select>
-              </div>
-
-              {/* Filter 4c: Ganti Tikar */}
-              <div>
-                <label className="block text-[11px] font-semibold text-gray-700 mb-1">
-                  Ganti Tikar
-                </label>
-                <select
-                  id="filter-ganti-tikar"
-                  value={filterGantiTikar}
-                  onChange={(e) => setFilterGantiTikar(e.target.value as 'ALL' | 'ya' | 'tidak')}
-                  className="w-full px-2 py-1.5 bg-white border border-[#ced4da] rounded-none text-xs focus:outline-none focus:border-slate-800"
-                >
-                  <option value="ALL">Semua Tikar</option>
-                  <option value="ya">Ganti Tikar (Ya)</option>
-                  <option value="tidak">Tidak Ganti (Standar)</option>
-                </select>
-              </div>
-
-              {/* Filter 5: Search Keyword */}
-              <div>
-                <label className="block text-[11px] font-semibold text-gray-700 mb-1">
-                  Cari No Bal / Petani / Kupon
-                </label>
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="No bal, petani, barcode..."
-                    className="w-full pl-8 pr-2 py-1.5 bg-white border border-[#ced4da] rounded-none text-xs focus:outline-none focus:border-slate-800"
-                  />
-                </div>
-              </div>
+          {/* Sub-Row: Min/Max Berat & Harga Range */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-2 border-t border-gray-100 text-xs">
+            <div className="flex items-center space-x-2">
+              <span className="text-[11px] text-gray-500 whitespace-nowrap">Rentang Berat (kg):</span>
+              <input
+                type="number"
+                placeholder="Min"
+                value={filterMinBerat}
+                onChange={(e) => setFilterMinBerat(e.target.value)}
+                className="w-20 px-2 py-1 bg-white border border-gray-300 rounded-none text-xs"
+              />
+              <span className="text-gray-400">-</span>
+              <input
+                type="number"
+                placeholder="Max"
+                value={filterMaxBerat}
+                onChange={(e) => setFilterMaxBerat(e.target.value)}
+                className="w-20 px-2 py-1 bg-white border border-gray-300 rounded-none text-xs"
+              />
             </div>
 
-            {/* Sub-Row: Min/Max Berat & Harga Range */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-2 border-t border-gray-100 text-xs">
-              <div className="flex items-center space-x-2">
-                <span className="text-[11px] text-gray-500 whitespace-nowrap">Rentang Berat (kg):</span>
-                <input
-                  type="number"
-                  placeholder="Min"
-                  value={filterMinBerat}
-                  onChange={(e) => setFilterMinBerat(e.target.value)}
-                  className="w-20 px-2 py-1 bg-white border border-gray-300 rounded-none text-xs"
-                />
-                <span className="text-gray-400">-</span>
-                <input
-                  type="number"
-                  placeholder="Max"
-                  value={filterMaxBerat}
-                  onChange={(e) => setFilterMaxBerat(e.target.value)}
-                  className="w-20 px-2 py-1 bg-white border border-gray-300 rounded-none text-xs"
-                />
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <span className="text-[11px] text-gray-500 whitespace-nowrap">Rentang Harga (Rp):</span>
-                <input
-                  type="number"
-                  placeholder="Min Rp"
-                  value={filterMinHarga}
-                  onChange={(e) => setFilterMinHarga(e.target.value)}
-                  className="w-24 px-2 py-1 bg-white border border-gray-300 rounded-none text-xs"
-                />
-                <span className="text-gray-400">-</span>
-                <input
-                  type="number"
-                  placeholder="Max Rp"
-                  value={filterMaxHarga}
-                  onChange={(e) => setFilterMaxHarga(e.target.value)}
-                  className="w-24 px-2 py-1 bg-white border border-gray-300 rounded-none text-xs"
-                />
-              </div>
-
-              <div className="md:col-span-2 flex items-center justify-end space-x-2">
-                <button
-                  type="submit"
-                  className="px-5 py-1.5 bg-[#b81d24] hover:bg-[#a0181e] text-white font-bold text-xs rounded-sm shadow-xs transition cursor-pointer flex items-center space-x-1.5"
-                >
-                  <Search className="w-3.5 h-3.5" />
-                  <span>Terapkan Filter</span>
-                </button>
-              </div>
+            <div className="flex items-center space-x-2">
+              <span className="text-[11px] text-gray-500 whitespace-nowrap">Rentang Harga (Rp):</span>
+              <input
+                type="number"
+                placeholder="Min Rp"
+                value={filterMinHarga}
+                onChange={(e) => setFilterMinHarga(e.target.value)}
+                className="w-24 px-2 py-1 bg-white border border-gray-300 rounded-none text-xs"
+              />
+              <span className="text-gray-400">-</span>
+              <input
+                type="number"
+                placeholder="Max Rp"
+                value={filterMaxHarga}
+                onChange={(e) => setFilterMaxHarga(e.target.value)}
+                className="w-24 px-2 py-1 bg-white border border-gray-300 rounded-none text-xs"
+              />
             </div>
-          </form>
-        </div>
-        </motion.div>
-        )}
-      </AnimatePresence>
+
+            <div className="md:col-span-2 flex items-center justify-end space-x-2">
+              <button
+                type="submit"
+                className="px-5 py-1.5 bg-[#b81d24] hover:bg-[#a0181e] text-white font-bold text-xs rounded-sm shadow-xs transition cursor-pointer flex items-center space-x-1.5"
+              >
+                <Search className="w-3.5 h-3.5" />
+                <span>Terapkan Filter</span>
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+      </div>
+      )}
 
       {/* Rekap jumlah bal per kode / per petani; ikut disembunyikan oleh tombol Ringkasan */}
       {tampilan.tampilRingkasan && (
@@ -1953,178 +1742,6 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
             )}
           </div>
         )}
-      </div>
-
-      {/* 7. Hidden Container for PDF / Document Printing */}
-      <div className="hidden">
-        <div
-          ref={printDocumentRef}
-          id="printable-laporan-bal"
-          className="w-full max-w-5xl bg-white p-6 text-gray-900 font-sans text-xs space-y-4"
-        >
-          <KopSurat judul="Laporan Detail Bal Tembakau" />
-
-          {/* Metadata */}
-          <div className="mb-4">
-            <div className="grid grid-cols-2 gap-2 text-[11px] bg-gray-50 p-2 border border-gray-200">
-              <div>
-                <span className="font-semibold text-gray-600">Periode Masuk:</span>{' '}
-                <span>
-                  {appliedFilters.startDate || 'Semua'} s/d {appliedFilters.endDate || 'Sekarang'}
-                </span>
-              </div>
-              <div>
-                <span className="font-semibold text-gray-600">Filter Grade:</span>{' '}
-                <span>{appliedFilters.grade === 'ALL' ? 'Semua Grade' : `Grade ${appliedFilters.grade}`}</span>
-              </div>
-              <div>
-                <span className="font-semibold text-gray-600">Filter Kode Bal:</span>{' '}
-                <span>{appliedFilters.kodeBal === 'ALL' ? 'Semua' : appliedFilters.kodeBal}</span>
-              </div>
-              <div>
-                <span className="font-semibold text-gray-600">Ganti Tikar:</span>{' '}
-                <span>
-                  {appliedFilters.gantiTikar === 'YA'
-                    ? 'Ya (Ganti Tikar)'
-                    : appliedFilters.gantiTikar === 'TIDAK'
-                    ? 'Tidak Ganti Tikar'
-                    : 'Semua'}
-                </span>
-              </div>
-              <div>
-                <span className="font-semibold text-gray-600">Status Bayar:</span>{' '}
-                <span>
-                  {appliedFilters.statusBayar === 'lunas'
-                    ? 'Lunas'
-                    : appliedFilters.statusBayar === 'belum_lunas'
-                    ? 'Belum Lunas'
-                    : 'Semua'}
-                </span>
-              </div>
-              <div>
-                <span className="font-semibold text-gray-600">Ganti Tikar:</span>{' '}
-                <span>
-                  {appliedFilters.gantiTikar === 'ya'
-                    ? 'Ya'
-                    : appliedFilters.gantiTikar === 'tidak'
-                    ? 'Tidak'
-                    : 'Semua'}
-                </span>
-              </div>
-              <div>
-                <span className="font-semibold text-gray-600">Waktu Cetak Dokumen:</span>{' '}
-                <span>{new Date().toLocaleString('id-ID')}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Print Table */}
-          <table className="w-full text-left border-collapse border border-gray-300 text-[10px] mb-4">
-            <thead>
-              <tr className="bg-gray-100 text-gray-900 font-bold border-b border-gray-300 uppercase">
-                <th className="p-1 border border-gray-300 text-center">NO</th>
-                <th className="p-1 border border-gray-300">TANGGAL</th>
-                <th className="p-1 border border-gray-300">NO BAL</th>
-                <th className="p-1 border border-gray-300">PETANI</th>
-                <th className="p-1 border border-gray-300 text-center">TIKAR</th>
-                <th className="p-1 border border-gray-300 text-right">BERAT</th>
-                <th className="p-1 border border-gray-300 text-right">HARGA</th>
-                <th className="p-1 border border-gray-300 text-center">STATUS BAYAR</th>
-                <th className="p-1 border border-gray-300 text-right">POTONGAN</th>
-                <th className="p-1 border border-gray-300 text-center">STATUS BAL</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedData.slice(0, 300).map((b, idx) => (
-                <tr key={idx} className="border-b border-gray-200">
-                  <td className="p-1 border border-gray-300 text-center">{idx + 1}</td>
-                  <td className="p-1 border border-gray-300 font-mono">{b.tanggal_masuk?.split('T')[0] || '-'}</td>
-                  <td className="p-1 border border-gray-300 font-mono font-bold">{b.no_bal}</td>
-                  <td className="p-1 border border-gray-300">{b.nama_petani}</td>
-                  <td className="p-1 border border-gray-300 text-center uppercase text-[9px] font-semibold">
-                    {b.ganti_tikar ? 'GANTI' : '-'}
-                  </td>
-                  <td className="p-1 border border-gray-300 text-right font-mono font-bold">{(b.berat_kg || 0) > 0 ? (b.berat_kg || 0).toFixed(1) : '-'}</td>
-                  <td className="p-1 border border-gray-300 text-right font-mono font-bold">{(b.berat_kg || 0) > 0 ? `Rp ${Math.round(b.total_harga || 0).toLocaleString('id-ID')}` : '-'}</td>
-                  <td className="p-1 border border-gray-300 text-center uppercase text-[9px]">{b.status_bayar === 'lunas' ? 'LUNAS' : b.status_bayar === 'belum_lunas' ? 'BELUM LUNAS' : '-'}</td>
-                  <td className="p-1 border border-gray-300 text-right font-mono">Rp {Math.round(b.potongan || 0).toLocaleString('id-ID')}</td>
-                  <td className="p-1 border border-gray-300 text-center uppercase text-[9px]">{labelStatusStok(b.status_stok)}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot className="bg-gray-100 font-bold">
-              <tr>
-                <td colSpan={5} className="p-1.5 border border-gray-300 text-right">TOTAL ({totals.totalBal} BAL):</td>
-                <td className="p-1.5 border border-gray-300 text-right font-mono">{totals.totalNetto.toFixed(1)} kg</td>
-                <td className="p-1.5 border border-gray-300 text-right font-mono">Rp {Math.round(totals.avgHargaKg).toLocaleString('id-ID')}</td>
-                <td className="p-1.5 border border-gray-300 text-center font-mono">-</td>
-                <td className="p-1.5 border border-gray-300 text-right font-mono text-black font-black">Rp {Math.round(totals.totalNilai).toLocaleString('id-ID')}</td>
-                <td className="p-1.5 border border-gray-300"></td>
-              </tr>
-            </tfoot>
-          </table>
-
-          {/* Sub-Ringkasan Grade di Dokumen Cetak */}
-          {gradeBreakdown.length > 0 && (
-            <div className="mt-4 pt-2">
-              <h4 className="text-[11px] font-bold uppercase text-gray-900 mb-1.5 pb-1 border-b border-gray-400">
-                SUB-RINGKASAN TOTAL BERAT & NILAI BERDASARKAN GRADE
-              </h4>
-              <table className="w-full text-left border-collapse border border-gray-300 text-[9px] mb-3">
-                <thead>
-                  <tr className="bg-gray-100 font-bold border-b border-gray-300">
-                    <th className="p-1 border border-gray-300 text-center w-8">No</th>
-                    <th className="p-1 border border-gray-300">Kode Grade</th>
-                    <th className="p-1 border border-gray-300 text-center">Jumlah Bal</th>
-                    <th className="p-1 border border-gray-300 text-right">Total Netto (kg)</th>
-                    <th className="p-1 border border-gray-300 text-right">Rata-rata (kg/bal)</th>
-                    <th className="p-1 border border-gray-300 text-center">% Kontribusi</th>
-                    <th className="p-1 border border-gray-300 text-right font-bold">Total Nilai Pembelian (Rp)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {gradeBreakdown.map((gb, idx) => {
-                    const pct = totals.totalNetto > 0 ? ((gb.totalNetto / totals.totalNetto) * 100).toFixed(1) : '0';
-                    const avg = gb.balDitimbang > 0 ? (gb.totalNetto / gb.balDitimbang).toFixed(1) : '0';
-                    return (
-                      <tr key={gb.grade} className="border-b border-gray-200">
-                        <td className="p-1 border border-gray-300 text-center">{idx + 1}</td>
-                        <td className="p-1 border border-gray-300 font-bold">Grade {gb.grade}</td>
-                        <td className="p-1 border border-gray-300 text-center font-mono">{gb.balCount} Bal</td>
-                        <td className="p-1 border border-gray-300 text-right font-mono font-bold">{gb.totalNetto.toFixed(1)}</td>
-                        <td className="p-1 border border-gray-300 text-right font-mono">{avg}</td>
-                        <td className="p-1 border border-gray-300 text-center font-mono">{pct}%</td>
-                        <td className="p-1 border border-gray-300 text-right font-mono font-bold">Rp {Math.round(gb.totalNilai).toLocaleString('id-ID')}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Tanda Tangan: pembuat = akun yang mengunduh, lainnya ditandatangani & ditulis manual */}
-          <div className="grid grid-cols-3 gap-4 pt-6 text-center text-[11px] avoid-page-break">
-            <div>
-              <p className="text-gray-500">Dibuat Oleh,</p>
-              <p className="font-semibold text-gray-700">Petugas Administrasi Bal</p>
-              <div className="h-14"></div>
-              <p className="font-bold text-gray-900 border-t border-gray-400 pt-1 mx-6 min-h-[22px]">{loadCurrentUser()?.nama_lengkap || <>&nbsp;</>}</p>
-            </div>
-            <div>
-              <p className="text-gray-500">Diperiksa Oleh,</p>
-              <p className="font-semibold text-gray-700">Supervisor QC & Mutu</p>
-              <div className="h-14"></div>
-              <p className="font-bold text-gray-900 border-t border-gray-400 pt-1 mx-6 min-h-[22px]"><>&nbsp;</></p>
-            </div>
-            <div>
-              <p className="text-gray-500">Mengetahui,</p>
-              <p className="font-semibold text-gray-700">Kepala Gudang</p>
-              <div className="h-14"></div>
-              <p className="font-bold text-gray-900 border-t border-gray-400 pt-1 mx-6 min-h-[22px]"><>&nbsp;</></p>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Floating Scroll Controls (Otomatis Geser ke Paling Atas & Paling Bawah) */}

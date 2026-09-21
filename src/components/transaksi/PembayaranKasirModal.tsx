@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { TransaksiPembelian } from '../../types';
 import { formatRupiah } from '../../utils/formatters';
+import { tampilkanInfo } from '../../utils/dialog';
 import { sortTransaksiItemsByInputOrder } from '../../utils/kuponSortir';
 
 interface PembayaranKasirModalProps {
@@ -64,19 +65,19 @@ export const PembayaranKasirModal: React.FC<PembayaranKasirModalProps> = ({
     e.preventDefault();
 
     if (hasUnweighedBal) {
-      alert(
+      tampilkanInfo(
         `⚠️ Pembayaran Ditolak!\n\nKupon ${transaksi.no_kupon} masih memiliki ${unweighedItems.length} bal yang belum ditimbang di modul Timbangan.\n\nSesuai SOP, seluruh bal dalam 1 kupon harus ditimbang semua terlebih dahulu baru bisa lanjut ke proses pembayaran kasir.`
       );
       return;
     }
 
     if (!isCashMatched) {
-      alert(`Nominal Cash belum pas! Silakan ketik tepat senilai ${formatRupiah(totalBersih)}.`);
+      tampilkanInfo(`Nominal Cash belum pas! Silakan ketik tepat senilai ${formatRupiah(totalBersih)}.`);
       return;
     }
 
     if (!isTiketFisikDiserahkan) {
-      alert('Harap pastikan tiket timbang fisik asli telah diserahkan sebelum mencairkan kas.');
+      tampilkanInfo('Harap pastikan tiket timbang fisik asli telah diserahkan sebelum mencairkan kas.');
       return;
     }
 

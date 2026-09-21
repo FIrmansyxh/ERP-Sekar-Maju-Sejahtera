@@ -1,28 +1,29 @@
 import React, { useState, useMemo } from 'react';
-import { 
-  Search, 
-  Scale, 
-  CheckCircle2, 
-  Clock, 
-  Trash2, 
-  Receipt, 
+import {
+  Search,
+  Scale,
+  CheckCircle2,
+  Clock,
+  Trash2,
+  Receipt,
   RefreshCw,
   Filter,
   Eye,
   Edit3,
-  ArrowUp,
-  ArrowDown,
   X,
   AlertTriangle,
-  Lock
+  Lock,
+  Banknote
 } from 'lucide-react';
 import { TransaksiPembelian, Petani, TabelHarga, Barang, UserRole, User as UserType, SaveTransaksiMeta } from '../../types';
+import { isTransaksiLunas } from '../../utils/statusBayar';
 import { formatRupiah, formatAccounting, formatDateIndo, formatNoKupon, normalizeKg } from '../../utils/formatters';
 import { TransaksiDetailModal } from './TransaksiDetailModal';
 import { PembayaranKasirModal } from './PembayaranKasirModal';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { Pagination } from '../common/Pagination';
 import { SortIcon } from '../common/SortIcon';
+import { tampilkanInfo } from '../../utils/dialog';
 import { openPrintDocument } from '../../utils/openDedicatedPrint';
 import { alasanBalSusulanDitolak, isKuponProsesSortir } from '../../utils/kuponSortir';
 import { balTerkirimDariTransaksi, pesanTransaksiTerkunci } from '../../utils/kunciHapus';
@@ -69,7 +70,6 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
   const [filterKupon, setFilterKupon] = useState(initialKuponNo || '');
   const [filterPetaniId, setFilterPetaniId] = useState('');
   const [filterStatusBayar, setFilterStatusBayar] = useState<'all' | 'cash' | 'kredit' | 'siap_bayar' | 'belum_lengkap'>('all');
-  const [sortOrderKupon, setSortOrderKupon] = useState<'desc' | 'asc'>('desc');
 
   // Quick Table Search & Sort (DataTables style)
   const [tableSearch, setTableSearch] = useState('');
@@ -86,8 +86,6 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  // In-memory printed status tracking
-  const [localPrintedTxIds, setLocalPrintedTxIds] = useState<Set<string>>(new Set());
 
   // Confirm Modal state to avoid blocking browser locker errors
   const [confirmConfig, setConfirmConfig] = useState<{
@@ -105,10 +103,6 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     cancelText: 'Batal',
     onConfirm: () => {},
   });
-
-  const handleUpdateNotaStatus = (txId: string) => {
-    setLocalPrintedTxIds((prev) => new Set([...prev, txId]));
-  };
 
   // Helper to strictly evaluate weighing completion across all bales in a kupon
   const getKuponWeighStatus = (tx: TransaksiPembelian) => {
@@ -157,7 +151,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     // Strict validation: Kupon MUST have all bales weighed before payment can be confirmed!
     const weighStatus = getKuponWeighStatus(tx);
     if (!weighStatus.isAllWeighed) {
-      alert(
+      tampilkanInfo(
         `⚠️ Pembayaran Gagal!\n\n${alasanBelumSiapBayar(tx, weighStatus)}\n\nSesuai SOP, sortir kupon harus selesai dan seluruh bal harus ditimbang terlebih dahulu baru bisa lanjut ke pembayaran kasir.`
       );
       return;
@@ -174,7 +168,6 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
 
     const relatedBarang = barangList.filter((b) => tx.barang_ids?.includes(b.barang_id));
     onSaveTransaksi(updatedTx, relatedBarang);
-    handleUpdateNotaStatus(txId);
 
     if (selectedTxForDetail && selectedTxForDetail.transaksi_id === txId) {
       setSelectedTxForDetail(updatedTx);
@@ -257,7 +250,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
         return false;
       }
       // Status Kas (Cash vs Kredit) & Kesiapan Timbang
-      const isLunas = tx.status_pembayaran === 'lunas' || tx.metode_pembayaran === 'cash';
+      const isLunas = isTransaksiLunas(tx);
       const weighStatus = getKuponWeighStatus(tx);
 
       if (filterStatusBayar === 'cash' && !isLunas) return false;
@@ -269,31 +262,103 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     });
   }, [transaksiList, startDate, endDate, filterKupon, filterPetaniId, filterStatusBayar]);
 
-  // Status summary counts for the filter dropdown
+  // Jumlah dan nilai kupon per status untuk kartu filter status
   const statusCounts = useMemo(() => {
-    let siapBayar = 0;
-    let belumLengkap = 0;
-    let lunas = 0;
-    let belumLunas = 0;
+    const kosong = () => ({ jumlah: 0, nilai: 0 });
+    const semua = kosong();
+    const siapBayar = kosong();
+    const belumLengkap = kosong();
+    const lunas = kosong();
+    const belumLunas = kosong();
+    const tambah = (grup: { jumlah: number; nilai: number }, nilai: number) => {
+      grup.jumlah += 1;
+      grup.nilai += nilai;
+    };
 
     transaksiList.forEach((t) => {
-      const isLunas = t.status_pembayaran === 'lunas' || t.metode_pembayaran === 'cash';
+      const nilai = t.harga_final || 0;
+      const isLunas = isTransaksiLunas(t);
       const isAllWeighed = getKuponWeighStatus(t).isAllWeighed;
+      tambah(semua, nilai);
       if (isLunas) {
-        lunas++;
+        tambah(lunas, nilai);
       } else {
-        belumLunas++;
+        tambah(belumLunas, nilai);
         if (isAllWeighed) {
-          siapBayar++;
+          tambah(siapBayar, nilai);
         }
       }
       if (!isAllWeighed) {
-        belumLengkap++;
+        tambah(belumLengkap, nilai);
       }
     });
 
-    return { siapBayar, belumLengkap, lunas, belumLunas };
+    return { semua, siapBayar, belumLengkap, lunas, belumLunas };
   }, [transaksiList]);
+
+  // Kartu filter status pembayaran: satu klik langsung menyaring tabel
+  const kartuStatus = [
+    {
+      nilai: 'all' as const,
+      judul: 'Semua Status',
+      satuan: 'Kupon',
+      data: statusCounts.semua,
+      Ikon: Receipt,
+      teks: 'text-slate-800',
+      ikon: 'text-slate-600',
+      aktif: 'bg-slate-50 border-slate-500 ring-1 ring-slate-500',
+      biasa: 'bg-white border-slate-300 hover:bg-slate-50',
+      garis: 'border-slate-200',
+    },
+    {
+      nilai: 'siap_bayar' as const,
+      judul: 'Siap Bayar',
+      satuan: 'Kupon',
+      data: statusCounts.siapBayar,
+      Ikon: Banknote,
+      teks: 'text-sky-800',
+      ikon: 'text-sky-600',
+      aktif: 'bg-sky-50 border-sky-400 ring-1 ring-sky-400',
+      biasa: 'bg-white border-sky-200 hover:bg-sky-50/50',
+      garis: 'border-sky-100',
+    },
+    {
+      nilai: 'belum_lengkap' as const,
+      judul: 'Belum Lengkap Timbang',
+      satuan: 'Kupon',
+      data: statusCounts.belumLengkap,
+      Ikon: Scale,
+      teks: 'text-rose-800',
+      ikon: 'text-rose-600',
+      aktif: 'bg-rose-50 border-rose-400 ring-1 ring-rose-400',
+      biasa: 'bg-white border-rose-200 hover:bg-rose-50/50',
+      garis: 'border-rose-100',
+    },
+    {
+      nilai: 'cash' as const,
+      judul: 'Lunas',
+      satuan: 'Nota Cair',
+      data: statusCounts.lunas,
+      Ikon: CheckCircle2,
+      teks: 'text-emerald-800',
+      ikon: 'text-emerald-600',
+      aktif: 'bg-emerald-50 border-emerald-400 ring-1 ring-emerald-400',
+      biasa: 'bg-white border-emerald-200 hover:bg-emerald-50/50',
+      garis: 'border-emerald-100',
+    },
+    {
+      nilai: 'kredit' as const,
+      judul: 'Belum Lunas',
+      satuan: 'Nota Pending',
+      data: statusCounts.belumLunas,
+      Ikon: Clock,
+      teks: 'text-amber-800',
+      ikon: 'text-amber-600',
+      aktif: 'bg-amber-50 border-amber-400 ring-1 ring-amber-400',
+      biasa: 'bg-white border-amber-200 hover:bg-amber-50/50',
+      garis: 'border-amber-100',
+    },
+  ];
 
   // Overall stats for the filtered list
   const stats = useMemo(() => {
@@ -307,10 +372,10 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     const avgHarga = totalNetto > 0 ? Math.round(totalKotor / totalNetto) : 0;
 
     const lunasList = filteredList.filter(
-      (t) => t.status_pembayaran === 'lunas' || t.metode_pembayaran === 'cash'
+      (t) => isTransaksiLunas(t)
     );
     const belumLunasList = filteredList.filter(
-      (t) => t.status_pembayaran !== 'lunas' && t.metode_pembayaran !== 'cash'
+      (t) => !isTransaksiLunas(t)
     );
 
     const lunasNominal = lunasList.reduce((acc, t) => acc + (t.harga_final || 0), 0);
@@ -318,7 +383,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
 
     const unweighedPendingList = filteredList.filter((t) => !getKuponWeighStatus(t).isAllWeighed);
     const siapBayarList = filteredList.filter((t) => {
-      const isLunas = t.status_pembayaran === 'lunas' || t.metode_pembayaran === 'cash';
+      const isLunas = isTransaksiLunas(t);
       return !isLunas && getKuponWeighStatus(t).isAllWeighed;
     });
 
@@ -404,15 +469,15 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
           valB = b.harga_final || 0;
           break;
         case 'cash': {
-          const isLunasA = a.status_pembayaran === 'lunas' || a.metode_pembayaran === 'cash';
-          const isLunasB = b.status_pembayaran === 'lunas' || b.metode_pembayaran === 'cash';
+          const isLunasA = isTransaksiLunas(a);
+          const isLunasB = isTransaksiLunas(b);
           valA = isLunasA ? a.harga_final : 0;
           valB = isLunasB ? b.harga_final : 0;
           break;
         }
         case 'kredit': {
-          const isLunasA = a.status_pembayaran === 'lunas' || a.metode_pembayaran === 'cash';
-          const isLunasB = b.status_pembayaran === 'lunas' || b.metode_pembayaran === 'cash';
+          const isLunasA = isTransaksiLunas(a);
+          const isLunasB = isTransaksiLunas(b);
           valA = !isLunasA ? a.harga_final : 0;
           valB = !isLunasB ? b.harga_final : 0;
           break;
@@ -458,7 +523,6 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     setFilterPetaniId('');
     setFilterStatusBayar('all');
     setTableSearch('');
-    setSortOrderKupon('desc');
     setSortField('kupon');
     setSortDirection('desc');
     setCurrentPage(1);
@@ -587,27 +651,6 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
             </select>
           </div>
 
-          {/* Status Bayar */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Status Pembayaran
-            </label>
-            <select
-              value={filterStatusBayar}
-              onChange={(e) => {
-                setFilterStatusBayar(e.target.value as any);
-                setCurrentPage(1);
-              }}
-              className="w-full bg-white border border-slate-300 rounded-sm px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800 font-medium"
-            >
-              <option value="all">Semua Status</option>
-              <option value="siap_bayar">Siap Bayar ({statusCounts.siapBayar})</option>
-              <option value="belum_lengkap">Belum Lengkap Timbang ({statusCounts.belumLengkap})</option>
-              <option value="cash">Lunas ({statusCounts.lunas})</option>
-              <option value="kredit">Belum Lunas ({statusCounts.belumLunas})</option>
-            </select>
-          </div>
-
           {/* Urutan Kupon */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -647,6 +690,38 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
           </div>
 
         </div>
+      </div>
+
+      {/* Kartu Status Pembayaran: klik untuk menyaring tabel */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        {kartuStatus.map((k) => {
+          const terpilih = filterStatusBayar === k.nilai;
+          return (
+            <button
+              key={k.nilai}
+              type="button"
+              aria-pressed={terpilih}
+              onClick={() => {
+                setFilterStatusBayar(k.nilai);
+                setCurrentPage(1);
+              }}
+              className={`p-3.5 border rounded-sm shadow-2xs text-left cursor-pointer transition ${terpilih ? k.aktif : k.biasa}`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className={`text-[11px] font-semibold ${k.teks}`}>{k.judul}</span>
+                <k.Ikon className={`w-4 h-4 shrink-0 ${k.ikon}`} />
+              </div>
+              <div className="mt-2 flex items-baseline justify-between">
+                <span className={`text-xl font-bold ${k.teks}`}>{k.data.jumlah}</span>
+                <span className={`text-[11px] font-medium ${k.ikon}`}>{k.satuan}</span>
+              </div>
+              <div className={`mt-2 pt-2 border-t ${k.garis} flex items-center justify-between text-[11px]`}>
+                <span className={`font-medium ${k.teks}`}>Nilai Pembelian:</span>
+                <span className="font-mono font-bold text-slate-900">{formatRupiah(k.data.nilai)}</span>
+              </div>
+            </button>
+          );
+        })}
       </div>
 
       {/* Summary KPI Widgets */}
@@ -932,7 +1007,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 paginatedList.map((tx, index) => {
                   const seq = (currentPage - 1) * itemsPerPage + index + 1;
                   const { isAllWeighed, isSortirOpen, unweighedCount, totalBal: balCount, weighedCount, unweighedBalList } = getKuponWeighStatus(tx);
-                  const isLunas = tx.status_pembayaran === 'lunas' || tx.metode_pembayaran === 'cash';
+                  const isLunas = isTransaksiLunas(tx);
                   const totalKotorVal = tx.total_kotor || tx.total_harga_beli || 0;
                   const pajakVal = tx.pajak || 0;
                   const potonganVal = tx.total_potongan || 0;
@@ -1212,7 +1287,6 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
         isOpen={Boolean(selectedTxForDetail)}
         onClose={() => setSelectedTxForDetail(null)}
         transaksi={selectedTxForDetail}
-        onUpdateNotaStatus={handleUpdateNotaStatus}
         onMarkAsLunas={handleMarkAsLunas}
         onOpenBayarModal={(tx) => setSelectedTxForBayar(tx)}
         onEditKupon={canEditKupon ? handleEditKupon : undefined}

@@ -1,12 +1,5 @@
 import React, { useState } from 'react';
-import { 
-  AlertTriangle, 
-  CheckCircle2, 
-  X, 
-  HelpCircle,
-  FileText,
-  ArrowLeft
-} from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ArrowLeft } from 'lucide-react';
 import { Petani } from '../../types';
 
 interface PetaniDeactivateModalProps {

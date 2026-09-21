@@ -1,15 +1,12 @@
 import React, { useState } from 'react';
-import {  
-  X, 
-  Download, 
-  Upload, 
-  FileSpreadsheet, 
-  Check, 
-  AlertCircle, 
-  HelpCircle,
-  Copy,
-  ArrowLeft
-, AlertTriangle } from 'lucide-react';
+import {
+  Download,
+  Upload,
+  FileSpreadsheet,
+  Check,
+  ArrowLeft,
+  AlertTriangle
+} from 'lucide-react';
 import { Petani } from '../../types';
 import { downloadExcelReport, todayStamp } from '../../utils/excelExport';
 

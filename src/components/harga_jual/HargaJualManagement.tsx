@@ -1,22 +1,20 @@
 import React, { useState, useMemo } from 'react';
-import { ChevronDown, ChevronUp,  
-  DollarSign, 
-  Plus, 
-  Search, 
-  Edit3, 
-  Calendar, 
-  Tag, 
-  CheckCircle2, 
-  XCircle, 
+import {
+  ChevronDown,
+  ChevronUp,
+  DollarSign,
+  Plus,
+  Search,
+  Edit3,
+  Calendar,
+  CheckCircle2,
+  XCircle,
   AlertCircle,
-  TrendingUp,
-  FileText,
   X,
-  Save,
-  Check
- } from 'lucide-react';
+  Save
+} from 'lucide-react';
 import { MasterHargaJual } from '../../types';
-import { formatRupiah, formatNumber } from '../../utils/formatters';
+import { formatRupiah } from '../../utils/formatters';
 import { Pagination } from '../common/Pagination';
 
 interface HargaJualManagementProps {
@@ -66,18 +64,9 @@ export const HargaJualManagement: React.FC<HargaJualManagementProps> = ({
   }, [filteredList, currentPage, itemsPerPage]);
 
   // Summary Metrics
-  const totalEntries = hargaJualList.length;
   const activeEntries = hargaJualList.filter((h) => h.status_aktif !== false).length;
   const inactiveEntries = hargaJualList.filter((h) => h.status_aktif === false).length;
-  const maxPrice = useMemo(() => {
-    if (hargaJualList.length === 0) return 0;
-    return Math.max(...hargaJualList.map((h) => h.harga_jual));
-  }, [hargaJualList]);
-  const minPrice = useMemo(() => {
-    if (hargaJualList.length === 0) return 0;
-    return Math.min(...hargaJualList.map((h) => h.harga_jual));
-  }, [hargaJualList]);
-
+    
   // Open Modal for Add
   const handleOpenAddModal = () => {
     setEditingItem(null);

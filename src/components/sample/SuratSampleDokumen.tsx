@@ -1,39 +1,32 @@
 import React from 'react';
 import { BatchPengirimanSample } from '../../types';
-import { formatNumber, formatRupiah } from '../../utils/formatters';
+import { formatNumber } from '../../utils/formatters';
 import { COMPANY_NAME } from '../../config/appInfo';
 import { DokumenBerlembar } from '../common/DokumenBerlembar';
 import { UKURAN_SURAT_SAMPLE, UkuranDokumen } from '../../utils/paginasiDokumen';
 import { beratBrutoItemSample } from '../../utils/beratKirim';
+import { kodeBalPembeliBerbeda, kodeHargaJualSample } from '../../utils/suratSample';
 
 export interface SuratSampleDokumenProps {
   batch: BatchPengirimanSample;
 }
 
 /**
- * Isi Surat Pengantar Sample & Penawaran Batch untuk pratinjau, cetak, dan PDF. Aturan halaman sama
+ * Isi Surat Pengantar Sample & Penawaran Batch untuk pratinjau dan cetak. Aturan halaman sama
  * dengan Nota Pembelian dan Surat Jalan: satu lembar per halaman, baris tidak terpotong, judul kolom
- * berulang. Data pemasok (petani) sengaja tidak ditampilkan.
+ * berulang. Data pemasok (petani) sengaja tidak ditampilkan, dan harga jual hanya tampil sebagai
+ * KODE harga jual, bukan nilai rupiahnya.
  */
 export const SuratSampleDokumen: React.FC<SuratSampleDokumenProps> = ({ batch }) => {
   const items = batch.items || [];
   const totalBal = items.length;
   // Dokumen untuk buyer memakai berat bruto; netto hanya untuk pembelian internal
   const totalBruto = items.reduce((sum, it) => sum + beratBrutoItemSample(it), 0);
-  const totalNilaiTawaran = items.reduce((sum, it) => sum + beratBrutoItemSample(it) * it.harga_tawaran_kg, 0);
-  const itemDeal = items.filter((it) => it.status_item === 'disetujui');
-  const totalNilaiDeal = itemDeal.reduce(
-    (sum, it) => sum + beratBrutoItemSample(it) * (it.harga_deal_kg || it.harga_tawaran_kg),
-    0
-  );
 
   // Kolom hanya muncul bila ada isinya, supaya tiap sel tetap satu baris dan tinggi baris pasti
-  const adaKodeBuyer = items.some(
-    (it) => it.kode_bal_pembeli && it.kode_bal_pembeli.trim().toUpperCase() !== (it.no_bal || '').trim().toUpperCase()
-  );
-  const adaDeal = itemDeal.some((it) => it.harga_deal_kg && it.harga_deal_kg > 0);
+  const adaKodeBuyer = items.some((it) => kodeBalPembeliBerbeda(it) !== '');
 
-  const U: UkuranDokumen = { ...UKURAN_SURAT_SAMPLE, totalBaris: totalNilaiDeal > 0 ? 88 : 44 };
+  const U: UkuranDokumen = { ...UKURAN_SURAT_SAMPLE, totalBaris: 44 };
 
   const printDateStr = (() => {
     const d = new Date();
@@ -42,12 +35,10 @@ export const SuratSampleDokumen: React.FC<SuratSampleDokumenProps> = ({ batch })
   })();
 
   // Lebar kolom dalam persen; jumlahnya selalu 100
-  const lebar: number[] = [6, adaKodeBuyer ? 20 : 26, ...(adaKodeBuyer ? [16] : [])];
+  const lebar: number[] = [6, adaKodeBuyer ? 24 : 34, ...(adaKodeBuyer ? [22] : [])];
   const sisa = 100 - lebar.reduce((a, b) => a + b, 0);
-  const jumlahAngka = 3 + (adaDeal ? 1 : 0);
-  const bagi = Math.floor(sisa / jumlahAngka);
-  for (let i = 0; i < jumlahAngka - 1; i++) lebar.push(bagi);
-  lebar.push(sisa - bagi * (jumlahAngka - 1));
+  const lebarBruto = Math.floor(sisa / 2);
+  lebar.push(lebarBruto, sisa - lebarBruto);
 
   const kolom = (
     <colgroup>
@@ -66,17 +57,13 @@ export const SuratSampleDokumen: React.FC<SuratSampleDokumenProps> = ({ batch })
       <th className="px-3 text-left border-r border-slate-300">No Bal</th>
       {adaKodeBuyer && <th className="px-3 text-left border-r border-slate-300">Kode Buyer</th>}
       <th className="px-3 text-right border-r border-slate-300">Bruto (kg)</th>
-      <th className="px-3 text-right border-r border-slate-300">Tawar / Kg</th>
-      {adaDeal && <th className="px-3 text-right border-r border-slate-300 bg-slate-200/50">Deal / Kg</th>}
-      <th className="px-3 text-right">Subtotal</th>
+      <th className="px-3 text-center">Kode Harga Jual</th>
     </tr>
   );
 
   const baris = items.map((it, idx) => {
     const bruto = beratBrutoItemSample(it);
-    const kodeBuyerBerbeda =
-      it.kode_bal_pembeli && it.kode_bal_pembeli.trim().toUpperCase() !== (it.no_bal || '').trim().toUpperCase();
-    const punyaDeal = it.status_item === 'disetujui' && it.harga_deal_kg && it.harga_deal_kg > 0;
+    const kodeBuyer = kodeBalPembeliBerbeda(it);
     return (
       <tr key={it.sample_item_id || `${it.barang_id}-${idx}`} className={idx % 2 === 1 ? 'bg-slate-50/70' : 'bg-white'} style={{ height: U.baris }}>
         <td className="px-3 text-center font-mono font-medium text-slate-500 border-r border-slate-200 text-xs">{idx + 1}</td>
@@ -85,22 +72,14 @@ export const SuratSampleDokumen: React.FC<SuratSampleDokumenProps> = ({ batch })
         </td>
         {adaKodeBuyer && (
           <td className="px-3 text-left font-mono text-slate-700 border-r border-slate-200 text-xs truncate">
-            {kodeBuyerBerbeda ? it.kode_bal_pembeli : ''}
+            {kodeBuyer}
           </td>
         )}
         <td className="px-3 text-right font-mono font-medium text-slate-700 border-r border-slate-200 text-xs sm:text-sm whitespace-nowrap">
           {formatNumber(bruto, 1)} kg
         </td>
-        <td className="px-3 text-right font-mono font-medium text-slate-700 border-r border-slate-200 text-xs sm:text-sm whitespace-nowrap">
-          {formatRupiah(it.harga_tawaran_kg)}
-        </td>
-        {adaDeal && (
-          <td className="px-3 text-right font-mono font-bold text-emerald-800 border-r border-slate-200 text-xs sm:text-sm bg-slate-50/70 whitespace-nowrap">
-            {punyaDeal ? formatRupiah(it.harga_deal_kg) : '-'}
-          </td>
-        )}
-        <td className="px-3 text-right font-mono font-bold text-slate-950 text-xs sm:text-sm whitespace-nowrap">
-          {formatRupiah(bruto * it.harga_tawaran_kg)}
+        <td className="px-3 text-center font-mono font-bold text-slate-950 text-xs sm:text-sm whitespace-nowrap">
+          {kodeHargaJualSample(it)}
         </td>
       </tr>
     );
@@ -120,23 +99,8 @@ export const SuratSampleDokumen: React.FC<SuratSampleDokumenProps> = ({ batch })
         <td className="px-3 text-right font-mono font-medium text-slate-700 border-r border-slate-300 whitespace-nowrap">
           {formatNumber(totalBruto, 1)} kg
         </td>
-        <td colSpan={adaDeal ? 2 : 1} className="px-3 text-right text-[11px] text-slate-600 border-r border-slate-300">
-          Total Nilai:
-        </td>
-        <td className="px-3 text-right font-mono font-black text-slate-950 text-sm whitespace-nowrap">
-          {formatRupiah(totalNilaiTawaran)}
-        </td>
+        <td className="px-3" />
       </tr>
-      {totalNilaiDeal > 0 && (
-        <tr className="bg-emerald-50 font-bold text-emerald-900 border-t border-emerald-200" style={{ height: 44 }}>
-          <td colSpan={kolomLabel + 1 + (adaDeal ? 1 : 0)} className="px-3 text-right uppercase tracking-wider text-xs border-r border-emerald-200">
-            Total Nilai Disetujui (Deal Final):
-          </td>
-          <td colSpan={2} className="px-3 text-right font-mono font-black text-emerald-800 text-sm whitespace-nowrap">
-            {formatRupiah(totalNilaiDeal)}
-          </td>
-        </tr>
-      )}
     </>
   );
 

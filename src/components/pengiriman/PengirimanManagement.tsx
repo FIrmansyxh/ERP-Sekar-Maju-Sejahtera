@@ -1,24 +1,14 @@
 import { SearchableSelect } from '../common/SearchableSelect';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { 
-  Truck, 
-  Plus, 
-  Search, 
-  Printer, 
-  FileText, 
-  RefreshCw,
-  X, 
-  Info, 
-  ArrowLeft, 
-  ArrowRight,
-  CheckCircle2, 
-  Filter, 
-  CheckSquare, 
-  Square, 
-  Scale, 
-  Building2, 
-  Calendar, 
-  User, 
+import {
+  Truck,
+  Plus,
+  Search,
+  FileText,
+  X,
+  Info,
+  CheckCircle2,
+  Scale,
   AlertCircle,
   AlertOctagon,
   FlaskConical,
@@ -26,29 +16,26 @@ import {
   Check,
   Zap,
   AlertTriangle,
-  DollarSign,
   Trash2,
   Package,
   Edit3,
   Layers,
   Scissors
 } from 'lucide-react';
-import { 
-  PengirimanBarang, 
-  Barang, 
-  PengirimanSample, 
-  BatchPengirimanSample, 
-  SampleItemDetail,
-  Petani, 
-  UserRole, 
-  TabelHarga, 
+import {
+  PengirimanBarang,
+  Barang,
+  PengirimanSample,
+  BatchPengirimanSample,
+  Petani,
+  UserRole,
+  TabelHarga,
   TransaksiPembelian,
-  MasterHargaJual 
+  MasterHargaJual
 } from '../../types';
 import { loadHargaJualData, loadBatchSampleData, loadCurrentUser } from '../../utils/storage';
 import { SuratJalanPrintModal } from './SuratJalanPrintModal';
 import { ConfirmModal } from '../common/ConfirmModal';
-import { openPrintDocument } from '../../utils/openDedicatedPrint';
 import { formatNumber, formatRupiah, normalizeKg } from '../../utils/formatters';
 import { cekNomorDokumen, normalisasiNomor, pesanNomorKembar } from '../../utils/nomorDokumen';
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
@@ -57,6 +44,7 @@ import { useSessionDraft } from '../../hooks/useSessionDraft';
 import { beratBrutoBal, beratBrutoItemSample } from '../../utils/beratKirim';
 import { AturanNettoBaris, NettoJualHasil, barisAturanBaru, bacaAturanNetto, hitungNettoJual, labelRentang } from '../../utils/aturanNetto';
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
+import { isSuratJalanTerkunci } from '../../utils/kunciHapus';
 
 /** Penanda bal yang belum punya harga jual (pengganti "Rp 0" / angka karangan). */
 const BelumAdaHarga: React.FC = () => (
@@ -77,9 +65,14 @@ interface PengirimanManagementProps {
   transaksiList?: TransaksiPembelian[];
   userRole: UserRole;
   onSaveNewPengiriman: (pengiriman: PengirimanBarang, updatedBarangIds: string[]) => void;
-  onUpdatePengiriman?: (pengiriman: PengirimanBarang) => void;
-  onDeletePengiriman?: (pengirimanId: string, revertedBarangs?: Barang[]) => void;
+  /** Menyimpan perubahan Surat Jalan yang belum Selesai; mengembalikan false bila ditolak (mis. bal dipakai Surat Jalan lain). */
+  onUpdatePengiriman?: (pengiriman: PengirimanBarang, balDitambah: string[], balDikeluarkan: string[]) => boolean;
+  onDeletePengiriman?: (pengirimanId: string) => void;
   onNavigateToStatusBatch?: () => void;
+  /** Surat Jalan yang sedang diedit (dipilih dari halaman Status Pengiriman). */
+  editPengirimanId?: string | null;
+  /** Dipanggil saat mode edit berakhir (disimpan atau dibatalkan). */
+  onSelesaiEdit?: () => void;
 }
 
 export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
@@ -97,11 +90,24 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   onUpdatePengiriman,
   onDeletePengiriman,
   onNavigateToStatusBatch,
+  editPengirimanId = null,
+  onSelesaiEdit,
 }) => {
   const activeHargaJualList = (hargaJualList && hargaJualList.length > 0) ? hargaJualList : loadHargaJualData();
 
   const [editingPengirimanId, setEditingPengirimanId] = useState<string | null>(null);
-  
+  // Surat Jalan yang menunggu konfirmasi karena draf Surat Jalan baru akan tergantikan
+  const [editMenunggu, setEditMenunggu] = useState<PengirimanBarang | null>(null);
+  const editDimuatRef = useRef<string | null>(null);
+  // Harga jual bawaan Surat Jalan yang diedit (snapshot saat diterbitkan), dipakai selama kode harga tidak dipilih ulang
+  const [hargaBawaanMap, setHargaBawaanMap] = useState<Record<string, number>>({});
+  const suratJalanDiedit = useMemo(
+    () => (editingPengirimanId ? pengirimanList.find((p) => p.pengiriman_id === editingPengirimanId) || null : null),
+    [editingPengirimanId, pengirimanList]
+  );
+  // Bal yang tercatat di Surat Jalan yang diedit: berstatus keluar tetapi masih milik Surat Jalan ini
+  const idBalSuratJalanDiedit = useMemo(() => new Set(suratJalanDiedit?.barang_ids || []), [suratJalanDiedit]);
+
   const [isBatchDropdownOpen, setIsBatchDropdownOpen] = useState(false);
   const [highlightedBatchIndex, setHighlightedBatchIndex] = useState(0);
   const [scanBatchId, setScanBatchId] = useState('');
@@ -126,6 +132,8 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     totalBal: number;
     totalBerat: number;
     tujuan: string;
+    /** True bila Surat Jalan yang sudah ada diubah, bukan diterbitkan baru. */
+    diperbarui?: boolean;
   } | null>(null);
 
   // In-Page Create Delivery Order State
@@ -138,10 +146,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   const [driverNama, setDriverNama] = useState('');
   const [platNomor, setPlatNomor] = useState('');
 
-  // Create View Filters (Grade, Petani) for regular mode
-  const [filterGrade, setFilterGrade] = useState<string>('all');
-  const [filterPetani, setFilterPetani] = useState<string>('all');
-  const [filterSearchBal, setFilterSearchBal] = useState<string>('');
 
   // Selected Bal IDs for shipment (centang pada kolom kirim / bal yang dikeluarkan & di-scan)
   // By default: statusnya TIDAK DICENTANG DULU sesuai permintaan user
@@ -171,11 +175,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  // Modal Pilih dari Stok Gudang untuk Pengiriman Reguler
-  const [isStokModalOpen, setIsStokModalOpen] = useState(false);
-  const [stokModalSearch, setStokModalSearch] = useState('');
-  const [stokModalSelectedIds, setStokModalSelectedIds] = useState<string[]>([]);
-
   useUnsavedChangesWarning(selectedBalIds.length > 0 || regulerManifestBalIds.length > 0);
 
   const scannerInputRef = useRef<HTMLInputElement>(null);
@@ -189,7 +188,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   const getBatchShipmentStatus = (batch: BatchPengirimanSample) => {
     const linkedShipments = pengirimanList.filter(
       (p) =>
-        p.status !== 'batal' &&
         (p.batch_sample_id_ref === batch.batch_id ||
          p.batch_sample_id_ref === batch.kode_batch ||
          p.batch_sample_id_ref?.toLowerCase() === batch.batch_id.toLowerCase() ||
@@ -208,15 +206,12 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       batch.status === 'dikirim' || 
       linkedShipments.some((p) => p.status === 'dalam_perjalanan' || p.status === 'dikirim');
 
-    const isPendingSampleEvaluation =
-      (batch.status === 'diproses' || batch.status === 'sample') &&
-      !(batch.items || []).some((it) => (it.status_item === 'disetujui' || it.status_item === 'nego') && !it.sudah_dikirim_do);
-
+    // Hasil Reclass (harga ulang) langsung boleh dipakai membuat Surat Jalan, tanpa menunggu hasil sortir pembeli
+    // dan tanpa harus difinalkan dulu: bal dan harganya sudah ada di batch.
     return {
       isAlreadyShipped,
       isCurrentlyShipping,
-      isPendingSampleEvaluation,
-      isEligibleForRegularDO: !isAlreadyShipped && !isCurrentlyShipping && !isPendingSampleEvaluation && (batch.items || []).length > 0,
+      isEligibleForRegularDO: !isAlreadyShipped && !isCurrentlyShipping && (batch.items || []).length > 0,
       linkedShipments,
     };
   };
@@ -319,13 +314,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
         });
         return;
       }
-      if (statusInfo.isPendingSampleEvaluation) {
-        setScanAlert({
-          type: 'warning',
-          message: `Batch "${anyMatch.kode_batch}" masih dalam proses pengujian sample / lab QC buyer. Tunggu hasil sortir/approval sebelum membuat DO reguler.`,
-        });
-        return;
-      }
     }
 
     setScanAlert({
@@ -366,7 +354,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       if (it.status_item !== 'ditolak' && !it.sudah_dikirim_do) {
         initialIncluded.push(it.barang_id);
       }
-      const balObj = barangList.find((b) => b.barang_id === it.barang_id);
       const agreedPrice = it.harga_deal_kg || it.harga_tawaran_kg || 0;
       initialHarga[it.barang_id] = agreedPrice;
       if (it.kode_harga_jual) {
@@ -395,7 +382,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     // Cek apakah Batch ini sudah dalam status pengiriman (Peringatan Pengiriman Ganda / Double Shipment)
     const batchShipments = pengirimanList.filter(
       (p) =>
-        p.status !== 'batal' &&
         (p.batch_sample_id_ref === targetBatch.batch_id ||
          p.batch_sample_id_ref === targetBatch.kode_batch ||
          p.batch_sample_id_ref?.toLowerCase() === targetBatch.batch_id.toLowerCase() ||
@@ -653,15 +639,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
         setScanInputText('');
         return;
       }
-      if (statusInfo.isPendingSampleEvaluation) {
-        setScanAlert({
-          type: 'warning',
-          message: `Batch ${matchedBatch.kode_batch} masih dalam tahap pengujian sample / QC buyer. Belum siap untuk pembuatan DO reguler.`,
-        });
-        setScanInputText('');
-        return;
-      }
-
       handleSelectSuggestedBatch(matchedBatch.batch_id);
       setScanAlert({
         type: 'success',
@@ -734,7 +711,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       setScanInputText('');
     } else {
       // In regular mode
-      if (targetBal.status_stok === 'keluar') {
+      if (targetBal.status_stok === 'keluar' && !idBalSuratJalanDiedit.has(targetBal.barang_id)) {
         setScanAlert({
           type: 'error',
           message: `PERINGATAN: Bal #${targetBal.no_bal || targetBal.barang_id} sudah berstatus KELUAR / telah dikirim sebelumnya!`,
@@ -742,15 +719,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
         setScanInputText('');
         return;
       }
-      if (targetBal.status_stok === 'terkirim_sample') {
-        setScanAlert({
-          type: 'error',
-          message: `PERINGATAN: Bal #${targetBal.no_bal || targetBal.barang_id} sedang berstatus TERKIRIM SAMPLE QC (belum kembali ke gudang)!`,
-        });
-        setScanInputText('');
-        return;
-      }
-      if (targetBal.status_stok !== 'di_gudang') {
+      if (targetBal.status_stok !== 'di_gudang' && !idBalSuratJalanDiedit.has(targetBal.barang_id)) {
         setScanAlert({
           type: 'error',
           message: `PERINGATAN: Bal #${targetBal.no_bal || targetBal.barang_id} masih berstatus PROSES SORTIR (belum ditimbang) sehingga belum bisa dikirim.`,
@@ -800,65 +769,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     handleProcessScan(scanned);
   });
 
-  // Available bal in warehouse (strictly status_stok === 'di_gudang' only)
-  const availableBalList = useMemo(() => {
-    return barangList.filter((b) => b.status_stok === 'di_gudang');
-  }, [barangList]);
-
-  // Filtered bal for the warehouse selection modal
-  const modalFilteredBalList = useMemo(() => {
-    return availableBalList.filter((b) => {
-      if (stokModalSearch.trim()) {
-        const q = stokModalSearch.toLowerCase().trim();
-        const noBal = (b.no_bal || '').toLowerCase();
-        const bId = (b.barang_id || '').toLowerCase();
-        const pet = (b.nama_petani || '').toLowerCase();
-        return noBal.includes(q) || bId.includes(q) || pet.includes(q);
-      }
-      return true;
-    });
-  }, [availableBalList, stokModalSearch]);
-
-  const handleConfirmStokModal = () => {
-    if (stokModalSelectedIds.length === 0) return;
-    setRegulerManifestBalIds((prev) => {
-      const next = [...prev];
-      stokModalSelectedIds.forEach((id) => {
-        if (!next.includes(id)) next.push(id);
-      });
-      return next;
-    });
-
-    setScanAlert({
-      type: 'success',
-      message: `${stokModalSelectedIds.length} bal berhasil dimasukkan ke daftar muatan.`,
-    });
-
-    setIsStokModalOpen(false);
-    setStokModalSelectedIds([]);
-  };
-
-  // Filtered bal for selection in regular mode
-  const filteredBalForShipment = useMemo(() => {
-    return availableBalList.filter((b) => {
-      if (filterGrade !== 'all' && b.kode_grade !== filterGrade) return false;
-      if (filterPetani !== 'all') {
-        const matchPetani =
-          (b.petani_id && b.petani_id === filterPetani) ||
-          (b.nama_petani && b.nama_petani.toLowerCase() === filterPetani.toLowerCase());
-        if (!matchPetani) return false;
-      }
-      if (filterSearchBal.trim()) {
-        const q = filterSearchBal.toLowerCase().trim();
-        const matchNoBal = (b.no_bal || '').toLowerCase().includes(q);
-        const matchId = (b.barang_id || '').toLowerCase().includes(q);
-        const matchPetaniName = (b.nama_petani || '').toLowerCase().includes(q);
-        return matchNoBal || matchId || matchPetaniName;
-      }
-      return true;
-    });
-  }, [availableBalList, filterGrade, filterPetani, filterSearchBal]);
-
   // Active batch object
   const activeBatchObj = useMemo(() => {
     return activeBatchSampleList.find(
@@ -868,6 +778,16 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
              b.kode_batch.toLowerCase() === (selectedBatchSampleId || '').toLowerCase()
     );
   }, [activeBatchSampleList, selectedBatchSampleId]);
+
+  // Bal yang sudah dikirim lewat Surat Jalan lain (bal milik Surat Jalan yang sedang diedit tidak termasuk)
+  const isBalSudahDikirim = (bal: Barang): boolean => {
+    if (idBalSuratJalanDiedit.has(bal.barang_id)) return false;
+    if (bal.status_stok === 'keluar') return true;
+    if (sourceMode === 'sample_batch') {
+      return Boolean(activeBatchObj?.items?.find((it) => it.barang_id === bal.barang_id)?.sudah_dikirim_do);
+    }
+    return false;
+  };
 
   // Compute bal suggestions for shipment scan input (e.g. typing "A00", "BAL", etc.)
   const scanBalSuggestions = useMemo(() => {
@@ -882,7 +802,9 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       const batchItemBarangIds = activeBatchObj.items.map((it) => it.barang_id);
       pool = barangList.filter((b) => batchItemBarangIds.includes(b.barang_id));
     } else {
-      pool = availableBalList.length > 0 ? availableBalList : barangList;
+      // Bal di gudang, ditambah bal yang sudah dikirim agar tampil di urutan paling bawah
+      pool = barangList.filter((b) => b.status_stok === 'di_gudang' || b.status_stok === 'keluar');
+      if (pool.length === 0) pool = barangList;
     }
 
     const matches = pool.filter((b) => {
@@ -899,9 +821,19 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       );
     });
 
+    // Urutan: bal yang belum dipilih dan belum dikirim paling atas, lalu yang sudah dicentang,
+    // dan yang sudah dikirim paling bawah. Di tiap kelompok, yang paling mirip dengan ketikan didahulukan
+    // (persis sama, lalu diawali ketikan), sisanya menurut urutan nomor bal.
+    const kelompok = (b: Barang) => (isBalSudahDikirim(b) ? 2 : selectedBalIds.includes(b.barang_id) ? 1 : 0);
     matches.sort((a, b) => {
+      const selisihKelompok = kelompok(a) - kelompok(b);
+      if (selisihKelompok !== 0) return selisihKelompok;
       const aNo = (a.no_bal || '').toLowerCase();
       const bNo = (b.no_bal || '').toLowerCase();
+      const aExact = aNo === q;
+      const bExact = bNo === q;
+      if (aExact && !bExact) return -1;
+      if (!aExact && bExact) return 1;
       const aStarts = aNo.startsWith(q);
       const bStarts = bNo.startsWith(q);
       if (aStarts && !bStarts) return -1;
@@ -910,7 +842,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     });
 
     return matches.slice(0, 20);
-  }, [scanInputText, sourceMode, activeBatchObj, availableBalList, barangList]);
+  }, [scanInputText, sourceMode, activeBatchObj, barangList, selectedBalIds, idBalSuratJalanDiedit]);
 
   // Select bal from suggestions
   const handleSelectSuggestedShipmentBal = (bal: Barang) => {
@@ -959,7 +891,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       setScanInputText('');
       setIsScanDropdownOpen(false);
     } else {
-      if (bal.status_stok === 'keluar') {
+      if (bal.status_stok === 'keluar' && !idBalSuratJalanDiedit.has(bal.barang_id)) {
         setScanAlert({
           type: 'error',
           message: `PERINGATAN: Bal #${bal.no_bal || bal.barang_id} sudah berstatus KELUAR / telah dikirim!`,
@@ -968,12 +900,10 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
         setIsScanDropdownOpen(false);
         return;
       }
-      if (bal.status_stok !== 'di_gudang') {
+      if (bal.status_stok !== 'di_gudang' && !idBalSuratJalanDiedit.has(bal.barang_id)) {
         setScanAlert({
           type: 'error',
-          message: bal.status_stok === 'terkirim_sample'
-            ? `PERINGATAN: Bal #${bal.no_bal || bal.barang_id} sedang berstatus TERKIRIM SAMPLE QC (belum kembali ke gudang)!`
-            : `PERINGATAN: Bal #${bal.no_bal || bal.barang_id} masih berstatus PROSES SORTIR (belum ditimbang) sehingga belum bisa dikirim.`,
+          message: `PERINGATAN: Bal #${bal.no_bal || bal.barang_id} masih berstatus PROSES SORTIR (belum ditimbang) sehingga belum bisa dikirim.`,
         });
         setScanInputText('');
         setIsScanDropdownOpen(false);
@@ -1060,7 +990,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       const master = activeHargaJualList.find((h) => h.kode === kode);
       if (master) return master.harga_jual;
     }
-    return sourceMode === 'sample_batch' ? hargaDealMap[barangId] ?? 0 : 0;
+    return sourceMode === 'sample_batch' ? hargaDealMap[barangId] ?? 0 : hargaBawaanMap[barangId] ?? 0;
   };
 
   // Nilai Surat Jalan = netto jual (bruto timbang ulang - potongan aturan netto) x harga jual
@@ -1086,7 +1016,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     const bId = (activeBatchObj.batch_id || '').toLowerCase();
     return pengirimanList.filter(
       (p) =>
-        p.status !== 'batal' &&
         (p.batch_sample_id_ref?.toLowerCase() === targetId ||
          (kode && p.batch_sample_id_ref?.toLowerCase() === kode) ||
          (bId && p.batch_sample_id_ref?.toLowerCase() === bId))
@@ -1154,11 +1083,9 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     setRegulerManifestBalIds([]);
     setCustomKodeHargaMap({});
     setBeratKirimInputMap({});
+    setHargaBawaanMap({});
     setAturanNettoBaris([]);
     setScanAlert(null);
-    setFilterGrade('all');
-    setFilterPetani('all');
-    setFilterSearchBal('');
     setErrorMessage('');
     setSelectedBatchSampleId('');
     setScanBatchId('');
@@ -1166,7 +1093,108 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     setEditingPengirimanId(null);
   };
 
-  
+  // Mengisi formulir dengan isi Surat Jalan yang belum Selesai agar bisa diubah (bal, berat, harga, potongan, tujuan, dll.)
+  const muatUntukEdit = (p: PengirimanBarang) => {
+    const idBal = p.barang_ids || [];
+    const hilang = idBal.filter((id) => !barangList.some((b) => b.barang_id === id));
+    if (hilang.length > 0) {
+      setErrorMessage(`Surat Jalan ${p.no_surat_jalan} belum bisa diedit: data bal ${hilang.join(', ')} tidak ditemukan. Muat ulang data lalu coba lagi.`);
+      onSelesaiEdit?.();
+      return;
+    }
+
+    // Harga: pakai kode dari Master Harga Jual bila harganya masih sama; bila master sudah berubah,
+    // harga saat Surat Jalan diterbitkan dipertahankan sampai petugas memilih kode harga baru.
+    const kodeMap: Record<string, string> = {};
+    const hargaBawaan: Record<string, number> = {};
+    idBal.forEach((id) => {
+      const snapshot = p.harga_deal_map?.[id];
+      const kode = p.kode_harga_jual_map?.[id];
+      const master = kode ? activeHargaJualList.find((h) => h.kode === kode) : undefined;
+      if (master && (snapshot === undefined || master.harga_jual === snapshot)) kodeMap[id] = master.kode;
+      else if (snapshot && snapshot > 0) hargaBawaan[id] = snapshot;
+    });
+
+    // Bruto timbang ulang: hanya yang berbeda dari bruto bal yang dianggap dikoreksi
+    const beratMap: Record<string, string> = {};
+    idBal.forEach((id) => {
+      const bal = barangList.find((b) => b.barang_id === id);
+      const snapshot = p.berat_kirim_map?.[id];
+      if (bal && snapshot && normalizeKg(snapshot) !== normalizeKg(beratBrutoBal(bal))) {
+        beratMap[id] = String(snapshot).replace('.', ',');
+      }
+    });
+
+    const teks = (n: number) => String(n).replace('.', ',');
+    editDimuatRef.current = p.pengiriman_id;
+    setEditingPengirimanId(p.pengiriman_id);
+    setSourceMode('gudang_reguler');
+    setSelectedBatchSampleId('');
+    setScanBatchId('');
+    setNoSuratJalan(p.no_surat_jalan || '');
+    setTanggalKirim(p.tanggal_kirim || new Date().toISOString().split('T')[0]);
+    setTujuanBuyer(p.tujuan || '');
+    setDriverNama(p.driver_nama || '');
+    setPlatNomor(p.plat_nomor || '');
+    setRegulerManifestBalIds(idBal);
+    setSelectedBalIds(idBal);
+    setCustomKodeHargaMap(kodeMap);
+    setHargaBawaanMap(hargaBawaan);
+    setBeratKirimInputMap(beratMap);
+    setAturanNettoBaris(
+      (p.aturan_netto || []).map((a) => ({
+        ...barisAturanBaru(),
+        min: teks(a.min),
+        max: a.max === null ? '' : teks(a.max),
+        potongan: teks(a.potongan),
+      }))
+    );
+    setScanAlert(null);
+    setErrorMessage('');
+    setSuccessNotification(null);
+    setEditMenunggu(null);
+  };
+
+  // Surat Jalan yang dipilih dari halaman Status Pengiriman dimuat ke formulir untuk diedit
+  useEffect(() => {
+    if (!editPengirimanId) {
+      editDimuatRef.current = null;
+      return;
+    }
+    if (editDimuatRef.current === editPengirimanId) return;
+    const target = pengirimanList.find((p) => p.pengiriman_id === editPengirimanId);
+    if (!target) return;
+
+    editDimuatRef.current = editPengirimanId;
+    if (isSuratJalanTerkunci(target)) {
+      setErrorMessage(`Surat Jalan ${target.no_surat_jalan} sudah Selesai dan tidak dapat diedit lagi.`);
+      onSelesaiEdit?.();
+      return;
+    }
+    // Draf Surat Jalan baru yang belum disimpan akan tergantikan, jadi minta konfirmasi dulu
+    if (selectedBalIds.length > 0 || regulerManifestBalIds.length > 0) {
+      setEditMenunggu(target);
+      return;
+    }
+    muatUntukEdit(target);
+  }, [editPengirimanId, pengirimanList]);
+
+  // Sisa draf dari edit yang terputus (mis. halaman dimuat ulang): bal yang sudah keluar bukan muatan baru
+  useEffect(() => {
+    if (editingPengirimanId || editPengirimanId || editMenunggu) return;
+    const basi = new Set(
+      regulerManifestBalIds.filter((id) => barangList.find((b) => b.barang_id === id)?.status_stok === 'keluar')
+    );
+    if (basi.size === 0) return;
+    setRegulerManifestBalIds((prev) => prev.filter((id) => !basi.has(id)));
+    setSelectedBalIds((prev) => prev.filter((id) => !basi.has(id)));
+  }, [barangList, regulerManifestBalIds, editingPengirimanId, editPengirimanId, editMenunggu]);
+
+  const handleBatalEdit = () => {
+    handleResetForm();
+    onSelesaiEdit?.();
+  };
+
   const handleSubmitShipment = () => {
     if (sourceMode === 'sample_batch') {
       if (!selectedBatchSampleId || !activeBatchObj) {
@@ -1199,6 +1227,16 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     }
     if (cekNoSuratJalan.kembar) {
       setErrorMessage(pesanNomorKembar('Surat Jalan', noSuratJalan, cekNoSuratJalan));
+      return;
+    }
+
+    // Cegah bal ganda: bal yang sudah keluar hanya boleh tercatat di Surat Jalan yang sedang diedit
+    const balBentrok = selectedBalObjects.filter(
+      (b) => b.status_stok === 'keluar' && !idBalSuratJalanDiedit.has(b.barang_id)
+    );
+    if (balBentrok.length > 0) {
+      const daftarBal = balBentrok.map((b) => `#${b.no_bal || b.barang_id}`).join(', ');
+      setErrorMessage(`Bal ${daftarBal} sudah keluar lewat Surat Jalan lain. Keluarkan bal itu dari muatan terlebih dahulu.`);
       return;
     }
 
@@ -1287,6 +1325,8 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     const existingPengiriman = editingPengirimanId ? pengirimanList.find(p => p.pengiriman_id === editingPengirimanId) : null;
 
     const newPengiriman: PengirimanBarang = {
+      // Saat edit, data lain milik Surat Jalan (status, petugas penerbit, rujukan batch, dll.) dipertahankan
+      ...(existingPengiriman || {}),
       pengiriman_id: editingPengirimanId || String(nextShipmentSeq),
       no_surat_jalan: normalisasiNomor(noSuratJalan),
       tanggal_kirim: tanggalKirim,
@@ -1296,11 +1336,13 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       total_berat_kg: totalSelectedBerat,
       driver_nama: driverNama,
       plat_nomor: platNomor.toUpperCase(),
-      catatan: '',
-      petugas: loadCurrentUser()?.nama_lengkap || '',
+      catatan: existingPengiriman?.catatan || '',
+      petugas: existingPengiriman?.petugas || loadCurrentUser()?.nama_lengkap || '',
       barang_ids: selectedBalIds,
       rincian_grade: gradesBreakdown,
-      batch_sample_id_ref: sourceMode === 'sample_batch' ? selectedBatchSampleId : undefined,
+      batch_sample_id_ref: existingPengiriman
+        ? existingPengiriman.batch_sample_id_ref
+        : sourceMode === 'sample_batch' ? selectedBatchSampleId : undefined,
       harga_deal_map: Object.keys(finalHargaDealMap).length > 0 ? finalHargaDealMap : undefined,
       kode_harga_jual_map: Object.keys(finalKodeHargaMap).length > 0 ? finalKodeHargaMap : undefined,
       berat_kirim_map: finalBeratKirimMap,
@@ -1310,12 +1352,21 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       total_nilai_deal: totalNilaiSuratJalan,
     };
 
-    if (editingPengirimanId && onUpdatePengiriman) {
-      onUpdatePengiriman(newPengiriman);
+    const sedangEdit = Boolean(existingPengiriman);
+    if (existingPengiriman) {
+      if (!onUpdatePengiriman) return;
+      const idLama = existingPengiriman.barang_ids || [];
+      const balDitambah = selectedBalIds.filter((id) => !idLama.includes(id));
+      const balDikeluarkan = idLama.filter((id) => !selectedBalIds.includes(id));
+      const berhasil = onUpdatePengiriman(newPengiriman, balDitambah, balDikeluarkan);
+      if (!berhasil) {
+        setIsConfirmOpen(false);
+        return;
+      }
     } else {
       onSaveNewPengiriman(newPengiriman, selectedBalIds);
     }
-    
+
     setEditingPengirimanId(null);
     setIsConfirmOpen(false);
     setPrintingSuratJalan(newPengiriman);
@@ -1324,8 +1375,10 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       totalBal: totalSelectedBal,
       totalBerat: totalSelectedBerat,
       tujuan: finalTujuan,
+      diperbarui: sedangEdit,
     });
     handleResetForm();
+    if (sedangEdit) onSelesaiEdit?.();
   };
 
   return (
@@ -1351,6 +1404,33 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
         </div>
       </div>
 
+      {/* Banner Mode Edit Surat Jalan */}
+      {editingPengirimanId && (
+        <div className="p-4 bg-amber-50 border border-amber-300 rounded-sm shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-start space-x-3">
+            <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+              <Edit3 className="w-4 h-4" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-amber-900">
+                Mengedit Surat Jalan {suratJalanDiedit?.no_surat_jalan || ''}
+              </h4>
+              <p className="text-xs text-amber-800">
+                Anda dapat menambah atau mengeluarkan bal, mengubah bruto timbang ulang, harga jual, Atur Netto, tujuan, sopir, dan data lain.
+                Perubahan baru berlaku setelah disimpan. Surat Jalan yang sudah Selesai tidak dapat diedit.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleBatalEdit}
+            className="px-3 py-1.5 text-xs font-bold text-amber-900 bg-white hover:bg-amber-100 border border-amber-400 rounded-xs transition cursor-pointer shrink-0"
+          >
+            Batal Edit
+          </button>
+        </div>
+      )}
+
       {/* Success Notification Banner */}
       {successNotification && (
         <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-sm shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -1360,7 +1440,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
             </div>
             <div>
               <h4 className="text-sm font-bold text-emerald-900">
-                Surat Jalan {successNotification.noSuratJalan} Berhasil Diterbitkan!
+                Surat Jalan {successNotification.noSuratJalan} Berhasil {successNotification.diperbarui ? 'Diperbarui' : 'Diterbitkan'}!
               </h4>
               <p className="text-xs text-emerald-800">
                 Total <strong>{successNotification.totalBal} Bal</strong> ({formatNumber(successNotification.totalBerat, 1)} Kg) siap dikirim ke <strong>{successNotification.tujuan}</strong>.
@@ -1398,6 +1478,11 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                 <span>Pilih Sumber Pengiriman Bal:</span>
               </div>
 
+              {editingPengirimanId ? (
+                <span className="text-[11px] font-semibold text-gray-600">
+                  Sumber bal terkunci selama edit. Tambah bal lewat kolom scan barcode / input ID bal.
+                </span>
+              ) : (
               <div className="flex items-center space-x-2">
                 <button
                   type="button"
@@ -1432,6 +1517,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                   <span>Pilih Bebas dari Stok Gudang (Reguler)</span>
                 </button>
               </div>
+              )}
             </div>
 
             {/* Batch Sample Selector Dropdown */}
@@ -1573,15 +1659,15 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                                       </div>
                                       <div className="flex items-center space-x-1">
                                         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-xs ${
-                                          b.status === 'selesai_deal'
+                                          accCount > 0 && accCount === items.length
                                             ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                            : b.status === 'deal_sebagian'
+                                            : accCount > 0
                                             ? 'bg-slate-100 text-slate-800 border border-slate-300'
                                             : 'bg-rose-100 text-rose-800 border border-rose-300'
                                         }`}>
-                                          {b.status === 'selesai_deal'
+                                          {accCount > 0 && accCount === items.length
                                             ? 'ACC Semua'
-                                            : b.status === 'deal_sebagian'
+                                            : accCount > 0
                                             ? 'ACC Sebagian'
                                             : 'Siap Kirim'}
                                         </span>
@@ -1839,12 +1925,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
               </div>
             </div>
 
-            <p className="text-[11px] text-gray-500 leading-relaxed">
-              Isi rentang berat bruto (hasil timbang ulang) beserta potongannya sesuai aturan pembeli. Netto Jual di tabel muatan terisi otomatis.
-              Rentang ditulis dalam kg utuh: 1-49 mencakup sampai 49,9 kg. Kosongkan kolom Sampai untuk &quot;ke atas&quot;.
-              Contoh GG: 1-49 potongan 4, lalu 50 (Sampai kosong) potongan 5.
-            </p>
-
             {aturanNettoBaris.length === 0 ? (
               <div className="p-3 bg-gray-50 border border-dashed border-gray-300 text-xs text-gray-600 rounded-xs">
                 Belum ada aturan, jadi Netto Jual sama dengan Bruto Timbang Ulang (tanpa potongan).
@@ -2058,7 +2138,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                             onMouseEnter={() => setHighlightedScanIndex(idx)}
                             className={`w-full px-3 py-2 text-left flex items-center justify-between transition cursor-pointer ${
                               isHighlighted ? 'bg-red-50 text-red-950 border-l-4 border-[#b81d24]' : 'hover:bg-gray-50 text-gray-800'
-                            }`}
+                            } ${isBalSudahDikirim(bal) ? 'opacity-60' : ''}`}
                           >
                             <div className="space-y-0.5">
                               <div className="flex items-center space-x-2">
@@ -2072,7 +2152,11 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                             </div>
 
                             <div className="text-right shrink-0">
-                              {isSelectedInShipment ? (
+                              {isBalSudahDikirim(bal) ? (
+                                <span className="text-[10px] font-bold text-red-800 bg-red-50 px-2 py-0.5 rounded-xs border border-red-300">
+                                  Sudah Dikirim
+                                </span>
+                              ) : isSelectedInShipment ? (
                                 <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-xs border border-emerald-300">
                                   ✓ Sudah Dicentang
                                 </span>
@@ -2157,18 +2241,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                     </>
                   ) : (
                     <>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setStokModalSearch('');
-                          setStokModalSelectedIds([]);
-                          setIsStokModalOpen(true);
-                        }}
-                        className="px-2.5 py-1 text-[11px] font-bold text-white bg-[#b81d24] hover:bg-[#b81d24] rounded-xs cursor-pointer transition flex items-center space-x-1 shadow-2xs"
-                      >
-                        <Plus className="w-3 h-3" />
-                        <span>Pilih dari Stok Gudang ({availableBalList.length} Bal)</span>
-                      </button>
                       {selectedBalIds.length > 0 && (
                         <button
                           type="button"
@@ -2383,18 +2455,6 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                               <p className="text-xs text-gray-500">
                                 Scan barcode bal tembakau atau ketik nomor bal/ID di atas untuk memasukkan bal ke dalam daftar muatan surat jalan.
                               </p>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setStokModalSearch('');
-                                  setStokModalSelectedIds([]);
-                                  setIsStokModalOpen(true);
-                                }}
-                                className="mt-2 inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#b81d24] rounded-xs cursor-pointer shadow-xs"
-                              >
-                                <Plus className="w-3.5 h-3.5" />
-                                <span>Pilih dari Stok Gudang ({availableBalList.length} Bal Tersedia)</span>
-                              </button>
                             </div>
                           </td>
                         </tr>
@@ -2547,10 +2607,10 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                 disabled={!canSubmitShipment}
                 onClick={handleSubmitShipment}
                 className="px-5 py-2 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#a0181e] disabled:opacity-40 disabled:cursor-not-allowed rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-md"
-                title={!tujuanBuyer.trim() ? 'Tujuan gudang / pabrik buyer wajib diisi' : !canSubmitShipment ? 'Wajib scan atau centang seluruh bal muatan terlebih dahulu' : 'Terbitkan Surat Jalan'}
+                title={!tujuanBuyer.trim() ? 'Tujuan gudang / pabrik buyer wajib diisi' : !canSubmitShipment ? 'Wajib scan atau centang seluruh bal muatan terlebih dahulu' : editingPengirimanId ? 'Simpan perubahan Surat Jalan' : 'Terbitkan Surat Jalan'}
               >
                 <Truck className="w-4 h-4" />
-                <span>Terbitkan Surat Jalan & Kirim ({totalSelectedBal} Bal)</span>
+                <span>{editingPengirimanId ? `Simpan Perubahan Surat Jalan (${totalSelectedBal} Bal)` : `Terbitkan Surat Jalan & Kirim (${totalSelectedBal} Bal)`}</span>
               </button>
             </div>
           </div>
@@ -2569,188 +2629,39 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       {/* Confirm Save Modal */}
       <ConfirmModal
         isOpen={isConfirmOpen}
-        title="Konfirmasi Penerbitan Surat Jalan DO"
-        message={`Apakah Anda yakin ingin menerbitkan Surat Jalan ${noSuratJalan} untuk pengiriman ${totalSelectedBal} bal tembakau (${formatNumber(totalSelectedBerat, 1)} Kg bruto${totalPotongan > 0 ? `, netto jual ${formatNumber(totalNettoJual, 1)} Kg` : ''}${
+        title={editingPengirimanId ? 'Konfirmasi Perubahan Surat Jalan DO' : 'Konfirmasi Penerbitan Surat Jalan DO'}
+        message={`Apakah Anda yakin ingin ${editingPengirimanId ? 'menyimpan perubahan' : 'menerbitkan'} Surat Jalan ${noSuratJalan} untuk pengiriman ${totalSelectedBal} bal tembakau (${formatNumber(totalSelectedBerat, 1)} Kg bruto${totalPotongan > 0 ? `, netto jual ${formatNumber(totalNettoJual, 1)} Kg` : ''}${
           totalSelisihBerat !== 0
             ? `, ${totalSelisihBerat < 0 ? 'susut' : 'naik'} ${formatNumber(Math.abs(totalSelisihBerat))} Kg dari berat gudang ${formatNumber(totalSelectedBeratGudang, 1)} Kg`
             : ''
         }) ke ${tujuanBuyer} dengan total nilai ${formatRupiah(totalNilaiSuratJalan)}?`}
-        confirmText="Ya, Terbitkan Surat Jalan"
+        confirmText={editingPengirimanId ? 'Ya, Simpan Perubahan' : 'Ya, Terbitkan Surat Jalan'}
         cancelText="Periksa Lagi"
         onConfirm={handleConfirmSave}
         onClose={() => setIsConfirmOpen(false)}
         onCancel={() => setIsConfirmOpen(false)}
       />
 
-      {/* Modal: Pilih Bal dari Stok Gudang untuk Pengiriman Reguler */}
-      {isStokModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/50 backdrop-blur-2xs animate-in fade-in duration-150">
-          <div className="bg-white rounded-sm border border-gray-300 shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
-            {/* Modal Header */}
-            <div className="px-5 py-4 border-b border-gray-200 bg-white flex items-center justify-between gap-3">
-              <div className="flex items-center space-x-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-sm bg-red-50 border border-red-100 flex items-center justify-center shrink-0">
-                  <Package className="w-4 h-4 text-[#b81d24]" />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="text-sm font-bold text-gray-900 tracking-tight">Pilih Bal Tembakau dari Stok Gudang</h3>
-                  <p className="text-[11px] text-gray-500 font-medium">
-                    Tersedia {availableBalList.length} bal tembakau yang siap dimuat ke dalam surat jalan reguler.
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsStokModalOpen(false)}
-                className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-sm transition cursor-pointer shrink-0"
-                title="Tutup"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Modal Filters & Toolbar */}
-            <div className="p-3.5 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2.5 text-xs">
-              <div className="flex items-center space-x-2 flex-1 min-w-[240px]">
-                <div className="relative flex-1">
-                  <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-2.5" />
-                  <input
-                    type="text"
-                    placeholder="Cari No. Bal / ID..."
-                    value={stokModalSearch}
-                    onChange={(e) => setStokModalSearch(e.target.value)}
-                    className="w-full pl-8 pr-3 py-1.5 bg-white border border-gray-300 rounded-xs focus:ring-1 focus:ring-gray-700 text-xs"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                {stokModalSelectedIds.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setStokModalSelectedIds([])}
-                    className="px-2.5 py-1.5 text-[11px] font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xs transition cursor-pointer"
-                  >
-                    Batal Pilih ({stokModalSelectedIds.length})
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Modal Items Table */}
-            <div className="flex-1 overflow-y-auto max-h-[460px] p-0">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead className="bg-gray-100 border-b border-gray-300 text-gray-700 font-bold z-10">
-                  <tr>
-                    <th className="p-2.5 w-10 text-center">Pilih</th>
-                    <th className="p-2.5 w-28 text-center">No. Bal</th>
-                    <th className="p-2.5 w-24 text-center">Bruto (Kg)</th>
-                                        <th className="p-2.5 w-28 text-center">Status Muatan</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 bg-white">
-                  {modalFilteredBalList.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="p-8 text-center text-gray-500">
-                        Tidak ada bal tembakau di gudang yang sesuai dengan filter pencarian.
-                      </td>
-                    </tr>
-                  ) : (
-                    modalFilteredBalList.map((b) => {
-                      const isChecked = stokModalSelectedIds.includes(b.barang_id);
-                      const isAlreadyInManifest = regulerManifestBalIds.includes(b.barang_id);
-
-                      return (
-                        <tr
-                          key={b.barang_id}
-                          onClick={() => {
-                            setStokModalSelectedIds((prev) =>
-                              prev.includes(b.barang_id)
-                                ? prev.filter((id) => id !== b.barang_id)
-                                : [...prev, b.barang_id]
-                            );
-                          }}
-                          className={`transition cursor-pointer ${
-                            isChecked
-                              ? 'bg-slate-100 font-medium'
-                              : isAlreadyInManifest
-                              ? 'bg-emerald-50/40 text-gray-600 hover:bg-emerald-50/60'
-                              : 'hover:bg-gray-50'
-                          }`}
-                        >
-                          <td className="p-2.5 text-center" onClick={(e) => e.stopPropagation()}>
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => {
-                                setStokModalSelectedIds((prev) =>
-                                  prev.includes(b.barang_id)
-                                    ? prev.filter((id) => id !== b.barang_id)
-                                    : [...prev, b.barang_id]
-                                );
-                              }}
-                              className="w-4 h-4 text-[#b81d24] rounded-xs border-gray-300 focus:ring-[#b81d24] cursor-pointer"
-                            />
-                          </td>
-                          <td className="p-2.5 font-mono font-bold text-gray-900">
-                            #{b.no_bal || b.barang_id}
-                          </td>
-                          <td className="p-2.5 text-right font-mono font-semibold text-gray-800">
-                            {formatNumber(beratBrutoBal(b), 1)} Kg
-                          </td>
-                          <td className="p-2.5 text-center">
-                            {isAlreadyInManifest ? (
-                              <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 rounded-xs">
-                                Sudah di Muatan
-                              </span>
-                            ) : (
-                              <span className="px-2 py-0.5 text-[10px] font-semibold bg-gray-100 text-gray-600 rounded-xs">
-                                Siap Muat
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-3.5 bg-gray-100 border-t border-gray-300 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-              <div className="text-gray-700 font-medium">
-                Terpilih: <strong className="text-gray-900">{stokModalSelectedIds.length} Bal</strong> (
-                {formatNumber(
-                  availableBalList
-                    .filter((b) => stokModalSelectedIds.includes(b.barang_id))
-                    .reduce((sum, b) => sum + beratBrutoBal(b), 0),
-                  1
-                )}{' '}
-                Kg)
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <button
-                  type="button"
-                  onClick={() => setIsStokModalOpen(false)}
-                  className="px-3.5 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-200 border border-gray-300 rounded-xs transition cursor-pointer"
-                >
-                  Batal
-                </button>
-                <button
-                  type="button"
-                  disabled={stokModalSelectedIds.length === 0}
-                  onClick={handleConfirmStokModal}
-                  className="px-4 py-1.5 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#b81d24] disabled:opacity-50 disabled:cursor-not-allowed rounded-xs transition cursor-pointer shadow-xs"
-                >
-                  Masukkan ke Daftar Muatan ({stokModalSelectedIds.length} Bal)
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Konfirmasi: draf Surat Jalan baru akan tergantikan oleh Surat Jalan yang diedit */}
+      <ConfirmModal
+        isOpen={!!editMenunggu}
+        title="Ganti Draf dengan Surat Jalan yang Diedit"
+        message={`Ada draf Surat Jalan baru yang belum disimpan. Membuka Surat Jalan ${editMenunggu?.no_surat_jalan || ''} untuk diedit akan mengganti draf itu. Lanjutkan?`}
+        confirmText="Ya, Edit Surat Jalan"
+        cancelText="Batal"
+        variant="warning"
+        onConfirm={() => {
+          if (editMenunggu) muatUntukEdit(editMenunggu);
+        }}
+        onClose={() => {
+          setEditMenunggu(null);
+          onSelesaiEdit?.();
+        }}
+        onCancel={() => {
+          setEditMenunggu(null);
+          onSelesaiEdit?.();
+        }}
+      />
 
     </div>
   );

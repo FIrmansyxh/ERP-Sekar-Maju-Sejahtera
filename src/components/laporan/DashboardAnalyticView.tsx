@@ -1,23 +1,16 @@
 import React, { useMemo, useState } from 'react';
 import {
   BarChart3,
-  DollarSign, 
-  Scale, 
-  Package, 
-  CheckCircle2, 
-  Download, 
-  TrendingUp, 
-  Award, 
-  Building2, 
-  FileText, 
+  Scale,
+  Package,
+  CheckCircle2,
+  Download,
+  Award,
+  Building2,
+  FileText,
   ArrowUpRight,
-  ShieldCheck,
-  Layers,
-  Users,
-  Tag,
   Activity,
-  Calendar,
-  Filter
+  Calendar
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { 
@@ -43,7 +36,6 @@ import {
   hitungProfitPengiriman,
   hitungModalTransaksi,
 } from '../../utils/finance';
-import { GRADE_PALETTE, getGradePalette } from './LaporanGradeView';
 import { DistribusiStokHargaBeliChart } from './DistribusiStokHargaBeliChart';
 
 interface DashboardAnalyticViewProps {
@@ -107,8 +99,6 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
   onNavigateToModule,
   onRefreshSources,
 }) => {
-  const isQCOnly = userRole === 'qc_mutu';
-
   const serverPembelian = Number(serverStats?.transaksi?.total_pembelian || 0);
   const serverBalPembelian = Number(serverStats?.transaksi?.total_bal || 0);
   const serverPenjualanAllDo = Number(serverStats?.pengiriman?.total_nilai_deal || 0);
@@ -164,11 +154,7 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
   }, [barangLunasList, hargaList]);
 
   // Helper to get fallback price
-  const getPriceByGrade = (kodeGrade: string) => {
-    const h = (hargaList || []).find(x => (x.kode_grade || '').toUpperCase() === (kodeGrade || '').toUpperCase());
-    return h ? (h.harga_per_kg || 50000) : 50000;
-  };
-
+  
   // 4. Valuasi (Stok Gudang) menggunakan helper hitungValuasiGudang
   const totalValuasiRupiah = useMemo(() => {
     return hitungValuasiGudang(stokAktifGudang.items, hargaList);
@@ -305,17 +291,7 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
 
 
   // Profitabilitas (Disinkronkan dengan rumus shippedBalMetrics)
-  const profitStats = useMemo(() => {
-    return {
-      netProfit: shippedBalMetrics.keuntunganBersih,
-      totalProfitPct: shippedBalMetrics.roiPct,
-      avgProfitPctPerBal: shippedBalMetrics.totalBalTerkirim > 0 ? (shippedBalMetrics.roiPct / shippedBalMetrics.totalBalTerkirim) : 0,
-      soldBalCount: shippedBalMetrics.totalBalTerkirim,
-      totalHargaBeliSold: shippedBalMetrics.totalHargaBeliTerkirim,
-      totalHargaJualSold: shippedBalMetrics.totalPenjualan,
-    };
-  }, [shippedBalMetrics]);
-
+  
   // Daftar tahun unik dari data transaksi untuk filter tahun
   const availableYears = useMemo(() => {
     const years = new Set<string>();
@@ -449,7 +425,6 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
 
     const avgBeratPerBal = data.totalBal > 0 ? (data.totalKg / data.totalBal).toFixed(1) : '0';
     const avgHargaPerKg = data.totalKg > 0 ? Math.round(data.totalNilai / data.totalKg) : 0;
-    const avgNilaiPerTrx = data.countTrx > 0 ? Math.round(data.totalNilai / data.countTrx) : 0;
 
     return (
       <div className="bg-slate-900 text-white p-3.5 rounded-md shadow-2xl border border-slate-700 text-xs min-w-[260px] max-w-[320px] pointer-events-none opacity-100">
@@ -832,28 +807,26 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
               <span>{isRefreshing ? 'Refresh…' : 'Refresh Server'}</span>
             </button>
           )}
-          {!isQCOnly && (
-            <>
-            <button
-              onClick={exportBukuKasPembelian}
-              className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
-            >
-              <Download className="w-3.5 h-3.5 text-gray-500" />
-              <span>Export Transaksi Pembelian</span>
-            </button>
-            <button
-              onClick={exportInventarisBalGudang}
-              className="px-3 py-1.5 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#a0181e] rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export Inventaris Bal</span>
-            </button>
-            </>
-          )}
+          <>
+          <button
+            onClick={exportBukuKasPembelian}
+            className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
+          >
+            <Download className="w-3.5 h-3.5 text-gray-500" />
+            <span>Export Transaksi Pembelian</span>
+          </button>
+          <button
+            onClick={exportInventarisBalGudang}
+            className="px-3 py-1.5 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#a0181e] rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Export Inventaris Bal</span>
+          </button>
+          </>
         </div>
       </div>
 
-      {hasServerStats && !isQCOnly && (
+      {hasServerStats && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="bg-slate-50 border border-slate-200 p-3 rounded-sm">
             <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Server · Pembelian Lunas (modal murni)</div>
@@ -868,7 +841,7 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
               Rp {serverPenjualanTerkirim.toLocaleString('id-ID')}
             </div>
             <div className="text-[10px] text-slate-500 mt-1">
-              {serverBalTerkirim.toLocaleString('id-ID')} bal · {serverDoTerkirim} DO · harus ≈ kartu Penjualan
+              {serverBalTerkirim.toLocaleString('id-ID')} bal · {serverDoTerkirim} DO · dihitung server, bisa lebih besar dari kartu Penjualan (hanya DO Selesai)
             </div>
           </div>
           <div className="bg-slate-50 border border-slate-200 p-3 rounded-sm">
@@ -887,136 +860,130 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
       )}
 
       {/* 9.1 Summary Cards (FINANCIAL OVERVIEW) */}
-      {!isQCOnly && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-          
-          {/* 1. Total Pembelian Petani */}
-          <div className="bg-white p-4 border border-gray-200 shadow-xs relative overflow-hidden">
-            <div className="flex items-center justify-between" title="Total modal murni pembelian tembakau (Berat Netto × Harga Beli/kg, abaikan potongan tali/kuli/tikar)">
-              <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">
-                Total Pembelian (Modal)
-              </span>
-              <span className="p-1.5 bg-red-50 text-[#b81d24] rounded-sm">
-                <span className="inline-flex items-center justify-center font-bold leading-none w-4 h-4">Rp</span>
-              </span>
-            </div>
-            <div className="text-[17px] font-bold text-[#b81d24] mt-2 font-mono">
-              Rp {totalPembelianRupiah.toLocaleString('id-ID')}
-            </div>
-            <div className="flex items-center justify-between text-[10px] text-gray-500 mt-2 pt-2 border-t border-gray-100">
-              <span title="Murni Berat Netto × Harga Beli/kg">Modal Murni Semua Bal</span>
-              <span className="font-semibold text-gray-700">{totalBalDibeli} Bal ({transaksiList.filter((t) => isTransaksiLunas(t)).length} Nota Lunas)</span>
-            </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        
+        {/* 1. Total Pembelian Petani */}
+        <div className="bg-white p-4 border border-gray-200 shadow-xs relative overflow-hidden">
+          <div className="flex items-center justify-between" title="Total modal murni pembelian tembakau (Berat Netto × Harga Beli/kg, abaikan potongan tali/kuli/tikar)">
+            <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">
+              Total Pembelian (Modal)
+            </span>
+            <span className="p-1.5 bg-red-50 text-[#b81d24] rounded-sm">
+              <span className="inline-flex items-center justify-center font-bold leading-none w-4 h-4">Rp</span>
+            </span>
           </div>
-
-          {/* 2. Total Penjualan */}
-          <div className="bg-white p-4 border border-gray-200 shadow-xs relative overflow-hidden">
-            <div className="flex items-center justify-between" title="Total penjualan bal tembakau yang sudah dikirimkan surat jalan dan barangnya sampai (Netto × Harga Jual Deal)">
-              <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">
-                Total Penjualan
-              </span>
-              <span className="p-1.5 bg-blue-50 text-blue-800 rounded-sm">
-                <span className="inline-flex items-center justify-center font-bold leading-none w-4 h-4">Rp</span>
-              </span>
-            </div>
-            <div className="text-[17px] font-bold text-blue-800 mt-2 font-mono">
-              Rp {totalPenjualanRupiah.toLocaleString('id-ID')}
-            </div>
-            <div className="flex items-center justify-between text-[10px] text-gray-500 mt-2 pt-2 border-t border-gray-100">
-              <span>Bal Terkirim ke Pabrik</span>
-              <span className="font-semibold text-gray-700">{shippedBalMetrics.totalBalTerkirim} Bal ({shippedBalMetrics.validShippedDO.length} DO)</span>
-            </div>
+          <div className="text-[17px] font-bold text-[#b81d24] mt-2 font-mono">
+            Rp {totalPembelianRupiah.toLocaleString('id-ID')}
           </div>
-
-          {/* 3. Valuasi Aset di Gudang */}
-          <div className="bg-white p-4 border border-gray-200 shadow-xs relative overflow-hidden">
-            <div className="flex items-center justify-between" title="Estimasi modal bal yang statusnya masih tersimpan di gudang (Berat Netto × Harga Beli/kg)">
-              <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">
-                Valuasi (Stok Gudang)
-              </span>
-              <span className="p-1.5 bg-amber-50 text-amber-800 rounded-sm">
-                <span className="inline-flex items-center justify-center font-bold leading-none w-4 h-4">Rp</span>
-              </span>
-            </div>
-            <div className="text-[17px] font-bold text-amber-800 mt-2 font-mono">
-              Rp {totalValuasiRupiah.toLocaleString('id-ID')}
-            </div>
-            <div className="flex items-center justify-between text-[10px] text-gray-500 mt-2 pt-2 border-t border-gray-100">
-              <span>Sisa Bal di Gudang</span>
-              <span className="font-semibold text-gray-700">{stokAktifGudang.count} Bal ({stokAktifGudang.totalKg.toLocaleString('id-ID')} kg)</span>
-            </div>
+          <div className="flex items-center justify-between text-[10px] text-gray-500 mt-2 pt-2 border-t border-gray-100">
+            <span title="Murni Berat Netto × Harga Beli/kg">Modal Murni Semua Bal</span>
+            <span className="font-semibold text-gray-700">{totalBalDibeli} Bal ({transaksiList.filter((t) => isTransaksiLunas(t)).length} Nota Lunas)</span>
           </div>
-
-          {/* 4. Total Keuntungan Bersih */}
-          <div className={`bg-white p-4 border shadow-xs relative overflow-hidden ${totalKeuntunganBersih >= 0 ? 'border-emerald-200 bg-emerald-50/10' : 'border-rose-200 bg-rose-50/10'}`}>
-            <div className="flex items-center justify-between" title="Total dari selisih (Harga Jual - Harga Beli) setiap bal yang sudah dikirimkan">
-              <span className={`text-xs font-bold uppercase tracking-wide ${totalKeuntunganBersih >= 0 ? 'text-emerald-800' : 'text-rose-800'}`}>
-                Keuntungan Bersih
-              </span>
-              <span className={`p-1.5 rounded-sm ${totalKeuntunganBersih >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
-                <span className="inline-flex items-center justify-center font-bold leading-none w-4 h-4">Rp</span>
-              </span>
-            </div>
-            <div className={`text-[17px] font-bold mt-2 font-mono ${totalKeuntunganBersih >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
-              {totalKeuntunganBersih < 0 ? '-' : ''}Rp {Math.abs(totalKeuntunganBersih).toLocaleString('id-ID')}
-            </div>
-            <div className="flex items-center justify-between text-[10px] text-gray-500 mt-2 pt-2 border-t border-gray-100">
-              <span className="italic text-gray-600 truncate mr-1">Selisih Jual - Beli Bal Terkirim</span>
-              <span className={`font-bold font-mono ${totalKeuntunganBersih >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
-                {shippedBalMetrics.totalPenjualan > 0 ? `${shippedBalMetrics.profitMarginPct >= 0 ? '+' : ''}${shippedBalMetrics.profitMarginPct.toFixed(1)}%` : '0%'}
-              </span>
-            </div>
-          </div>
-
         </div>
-      )}
+
+        {/* 2. Total Penjualan */}
+        <div className="bg-white p-4 border border-gray-200 shadow-xs relative overflow-hidden">
+          <div className="flex items-center justify-between" title="Total penjualan dari Surat Jalan yang sudah berstatus Selesai (Netto Jual × Harga Jual Deal). Surat Jalan yang belum Selesai belum dihitung.">
+            <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">
+              Total Penjualan
+            </span>
+            <span className="p-1.5 bg-blue-50 text-blue-800 rounded-sm">
+              <span className="inline-flex items-center justify-center font-bold leading-none w-4 h-4">Rp</span>
+            </span>
+          </div>
+          <div className="text-[17px] font-bold text-blue-800 mt-2 font-mono">
+            Rp {totalPenjualanRupiah.toLocaleString('id-ID')}
+          </div>
+          <div className="flex items-center justify-between text-[10px] text-gray-500 mt-2 pt-2 border-t border-gray-100">
+            <span>Bal Terjual (DO Selesai)</span>
+            <span className="font-semibold text-gray-700">{shippedBalMetrics.totalBalTerkirim} Bal ({shippedBalMetrics.validShippedDO.length} DO)</span>
+          </div>
+        </div>
+
+        {/* 3. Valuasi Aset di Gudang */}
+        <div className="bg-white p-4 border border-gray-200 shadow-xs relative overflow-hidden">
+          <div className="flex items-center justify-between" title="Estimasi modal bal yang statusnya masih tersimpan di gudang (Berat Netto × Harga Beli/kg)">
+            <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">
+              Valuasi (Stok Gudang)
+            </span>
+            <span className="p-1.5 bg-amber-50 text-amber-800 rounded-sm">
+              <span className="inline-flex items-center justify-center font-bold leading-none w-4 h-4">Rp</span>
+            </span>
+          </div>
+          <div className="text-[17px] font-bold text-amber-800 mt-2 font-mono">
+            Rp {totalValuasiRupiah.toLocaleString('id-ID')}
+          </div>
+          <div className="flex items-center justify-between text-[10px] text-gray-500 mt-2 pt-2 border-t border-gray-100">
+            <span>Sisa Bal di Gudang</span>
+            <span className="font-semibold text-gray-700">{stokAktifGudang.count} Bal ({stokAktifGudang.totalKg.toLocaleString('id-ID')} kg)</span>
+          </div>
+        </div>
+
+        {/* 4. Total Keuntungan Bersih */}
+        <div className={`bg-white p-4 border shadow-xs relative overflow-hidden ${totalKeuntunganBersih >= 0 ? 'border-emerald-200 bg-emerald-50/10' : 'border-rose-200 bg-rose-50/10'}`}>
+          <div className="flex items-center justify-between" title="Total dari selisih (Harga Jual - Harga Beli) setiap bal pada Surat Jalan yang sudah Selesai">
+            <span className={`text-xs font-bold uppercase tracking-wide ${totalKeuntunganBersih >= 0 ? 'text-emerald-800' : 'text-rose-800'}`}>
+              Keuntungan Bersih
+            </span>
+            <span className={`p-1.5 rounded-sm ${totalKeuntunganBersih >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+              <span className="inline-flex items-center justify-center font-bold leading-none w-4 h-4">Rp</span>
+            </span>
+          </div>
+          <div className={`text-[17px] font-bold mt-2 font-mono ${totalKeuntunganBersih >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+            {totalKeuntunganBersih < 0 ? '-' : ''}Rp {Math.abs(totalKeuntunganBersih).toLocaleString('id-ID')}
+          </div>
+          <div className="flex items-center justify-between text-[10px] text-gray-500 mt-2 pt-2 border-t border-gray-100">
+            <span className="italic text-gray-600 truncate mr-1">Selisih Jual - Beli Bal Terjual</span>
+            <span className={`font-bold font-mono ${totalKeuntunganBersih >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+              {shippedBalMetrics.totalPenjualan > 0 ? `${shippedBalMetrics.profitMarginPct >= 0 ? '+' : ''}${shippedBalMetrics.profitMarginPct.toFixed(1)}%` : '0%'}
+            </span>
+          </div>
+        </div>
+
+      </div>
 
       {/* 9.1b Operational Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {/* 2. Tonase Masuk (Intake) */}
-        {!isQCOnly ? (
-          <div className="bg-white p-4 border border-gray-200 shadow-xs relative overflow-hidden">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                Tonase Masuk (Intake)
-              </span>
-              <span className="p-1.5 bg-slate-100 text-slate-800 rounded-sm">
-                <Scale className="w-4 h-4" />
-              </span>
-            </div>
-            <div className="text-xl font-bold text-gray-900 mt-2">
-              {totalTonaseMasukKg.toLocaleString('id-ID')} <span className="text-xs font-normal text-gray-500">kg ({(totalTonaseMasukKg / 1000).toFixed(2)} Ton)</span>
-            </div>
-            <div className="flex items-center justify-between text-[11px] text-gray-500 mt-1 pt-2 border-t border-gray-100">
-              <span>Total Dikeluarkan/Terkirim:</span>
-              <span className="font-semibold text-slate-800">{totalTerkirimKg.toLocaleString('id-ID')} kg</span>
-            </div>
+        <div className="bg-white p-4 border border-gray-200 shadow-xs relative overflow-hidden">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              Tonase Masuk (Intake)
+            </span>
+            <span className="p-1.5 bg-slate-100 text-slate-800 rounded-sm">
+              <Scale className="w-4 h-4" />
+            </span>
           </div>
-        ) : null}
+          <div className="text-xl font-bold text-gray-900 mt-2">
+            {totalTonaseMasukKg.toLocaleString('id-ID')} <span className="text-xs font-normal text-gray-500">kg ({(totalTonaseMasukKg / 1000).toFixed(2)} Ton)</span>
+          </div>
+          <div className="flex items-center justify-between text-[11px] text-gray-500 mt-1 pt-2 border-t border-gray-100">
+            <span>Total Dikeluarkan/Terkirim:</span>
+            <span className="font-semibold text-slate-800">{totalTerkirimKg.toLocaleString('id-ID')} kg</span>
+          </div>
+        </div>
 
         {/* 3. Stok Aktif di Gudang */}
-        {!isQCOnly ? (
-          <div className="bg-white p-4 border border-gray-200 shadow-xs relative overflow-hidden">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                Stok Aktif di Gudang
-              </span>
-              <span className="p-1.5 bg-emerald-50 text-emerald-800 rounded-sm">
-                <Package className="w-4 h-4" />
-              </span>
-            </div>
-            <div className="text-xl font-bold text-emerald-950 mt-2">
-              {stokAktifGudang.totalKg.toLocaleString('id-ID')} <span className="text-xs font-normal text-gray-500">kg ({(stokAktifGudang.totalKg / 1000).toFixed(2)} Ton)</span>
-            </div>
-            <div className="flex items-center justify-between text-[11px] text-gray-500 mt-1 pt-2 border-t border-gray-100">
-              <span>Fisik Bal Tersimpan:</span>
-              <span className="font-semibold text-emerald-900">{stokAktifGudang.count} Bal</span>
-            </div>
+        <div className="bg-white p-4 border border-gray-200 shadow-xs relative overflow-hidden">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              Stok Aktif di Gudang
+            </span>
+            <span className="p-1.5 bg-emerald-50 text-emerald-800 rounded-sm">
+              <Package className="w-4 h-4" />
+            </span>
           </div>
-        ) : null}
+          <div className="text-xl font-bold text-emerald-950 mt-2">
+            {stokAktifGudang.totalKg.toLocaleString('id-ID')} <span className="text-xs font-normal text-gray-500">kg ({(stokAktifGudang.totalKg / 1000).toFixed(2)} Ton)</span>
+          </div>
+          <div className="flex items-center justify-between text-[11px] text-gray-500 mt-1 pt-2 border-t border-gray-100">
+            <span>Fisik Bal Tersimpan:</span>
+            <span className="font-semibold text-emerald-900">{stokAktifGudang.count} Bal</span>
+          </div>
+        </div>
 
         {/* 4. Approval Rate Lab QC */}
-        <div className={`bg-white p-4 border border-gray-200 shadow-xs relative overflow-hidden ${isQCOnly ? 'col-span-full' : ''}`}>
+        <div className={`bg-white p-4 border border-gray-200 shadow-xs relative overflow-hidden`}>
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
               Approval Rate Lab QC
@@ -1041,361 +1008,353 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
       
 
       {/* Visualisasi Recharts: Tren Pembelian dengan Filter Rentang Waktu */}
-      {!isQCOnly && (
-        <div className="bg-white p-4 border border-gray-200 shadow-xs">
-          {/* Header & Controls Toolbar */}
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 pb-3 mb-4 border-b border-gray-100">
-            <div>
-              <div className="flex items-center space-x-2">
-                <Activity className="w-5 h-5 text-[#b81d24]" />
-                <h3 className="text-sm font-bold text-gray-900 tracking-tight">
-                  Tren Pembelian Tembakau
-                </h3>
-                {trendPembelianData.length > 8 && (
-                  <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-xs font-medium">
-                    ↔ Geser horizontal ({trendPembelianData.length} data)
-                  </span>
-                )}
-              </div>
-              <p className="text-[11px] text-gray-500 mt-0.5">
-                Analisis tren {trendMetric === 'bal' ? 'volume bal' : trendMetric === 'tonase' ? 'tonase (kg)' : 'nilai modal (Rp)'} berdasarkan periode {periodeWaktu}
-              </p>
-            </div>
-
-            {/* Filter Tools: Periode, Metrik, dan Tahun */}
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Filter Pilihan Periode Waktu */}
-              <div className="inline-flex bg-gray-100 p-0.5 rounded-xs border border-gray-200">
-                <button
-                  type="button"
-                  onClick={() => setPeriodeWaktu('mingguan')}
-                  className={`px-2.5 py-1 text-xs font-semibold rounded-xs transition-colors ${
-                    periodeWaktu === 'mingguan'
-                      ? 'bg-white text-gray-900 shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                  title="Tampilkan per Minggu"
-                >
-                  Mingguan
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPeriodeWaktu('bulanan')}
-                  className={`px-2.5 py-1 text-xs font-semibold rounded-xs transition-colors ${
-                    periodeWaktu === 'bulanan'
-                      ? 'bg-white text-gray-900 shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                  title="Tampilkan per Bulan"
-                >
-                  Bulanan
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPeriodeWaktu('kuartalan')}
-                  className={`px-2.5 py-1 text-xs font-semibold rounded-xs transition-colors ${
-                    periodeWaktu === 'kuartalan'
-                      ? 'bg-white text-gray-900 shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                  title="Tampilkan per Kuartal (Q1-Q4)"
-                >
-                  Kuartalan
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPeriodeWaktu('tahunan')}
-                  className={`px-2.5 py-1 text-xs font-semibold rounded-xs transition-colors ${
-                    periodeWaktu === 'tahunan'
-                      ? 'bg-white text-gray-900 shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                  title="Tampilkan per Tahun"
-                >
-                  Tahunan
-                </button>
-              </div>
-
-              {/* Filter Tahun */}
-              {availableYears.length > 0 && (
-                <div className="flex items-center">
-                  <select
-                    value={selectedTahun}
-                    onChange={(e) => setSelectedTahun(e.target.value)}
-                    className="text-xs bg-gray-50 border border-gray-200 text-gray-700 font-medium px-2 py-1 rounded-xs focus:ring-1 focus:ring-red-600 focus:outline-none"
-                    aria-label="Pilih Filter Tahun"
-                  >
-                    <option value="semua">Semua Tahun</option>
-                    {availableYears.map((yr) => (
-                      <option key={yr} value={yr}>
-                        Tahun {yr}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+      <div className="bg-white p-4 border border-gray-200 shadow-xs">
+        {/* Header & Controls Toolbar */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 pb-3 mb-4 border-b border-gray-100">
+          <div>
+            <div className="flex items-center space-x-2">
+              <Activity className="w-5 h-5 text-[#b81d24]" />
+              <h3 className="text-sm font-bold text-gray-900 tracking-tight">
+                Tren Pembelian Tembakau
+              </h3>
+              {trendPembelianData.length > 8 && (
+                <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-xs font-medium">
+                  ↔ Geser horizontal ({trendPembelianData.length} data)
+                </span>
               )}
-
-              {/* Metrik Pilihan Toggle */}
-              <div className="inline-flex bg-gray-100 p-0.5 rounded-xs border border-gray-200">
-                <button
-                  type="button"
-                  onClick={() => setTrendMetric('bal')}
-                  className={`px-2 py-1 text-[11px] font-semibold rounded-xs transition-colors ${
-                    trendMetric === 'bal'
-                      ? 'bg-red-700 text-white shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Bal
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTrendMetric('tonase')}
-                  className={`px-2 py-1 text-[11px] font-semibold rounded-xs transition-colors ${
-                    trendMetric === 'tonase'
-                      ? 'bg-emerald-800 text-white shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Kg
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTrendMetric('nilai')}
-                  className={`px-2 py-1 text-[11px] font-semibold rounded-xs transition-colors ${
-                    trendMetric === 'nilai'
-                      ? 'bg-blue-800 text-white shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Rp
-                </button>
-              </div>
             </div>
+            <p className="text-[11px] text-gray-500 mt-0.5">
+              Analisis tren {trendMetric === 'bal' ? 'volume bal' : trendMetric === 'tonase' ? 'tonase (kg)' : 'nilai modal (Rp)'} berdasarkan periode {periodeWaktu}
+            </p>
           </div>
 
-          {/* Sub-bar Total Ringkasan Periode Terpilih */}
-          <div className="flex flex-wrap items-center justify-between bg-gray-50/80 px-3 py-1.5 rounded-xs mb-3 text-xs border border-gray-100">
-            <span className="text-gray-600">
-              Periode Aktif: <strong className="text-gray-900 capitalize">{periodeWaktu}</strong> {selectedTahun !== 'semua' ? `(${selectedTahun})` : '(Semua Tahun)'} &bull; {trendPembelianData.length} rentang data
-            </span>
-            <div className="flex items-center space-x-3 font-mono text-[11px]">
-              <span className="text-gray-700">
-                Total Bal: <strong className="text-gray-900">{grandTotalTrend.bal.toLocaleString('id-ID')}</strong>
-              </span>
-              <span className="text-gray-300">|</span>
-              <span className="text-gray-700">
-                Tonase: <strong className="text-emerald-800">{grandTotalTrend.kg.toLocaleString('id-ID')} kg</strong>
-              </span>
-              <span className="text-gray-300">|</span>
-              <span className="text-gray-700">
-                Modal: <strong className="text-blue-800">{formatRupiah(grandTotalTrend.nilai)}</strong>
-              </span>
-            </div>
-          </div>
-
-          {trendPembelianData.length > 0 ? (
-            <div className="w-full overflow-x-auto overflow-y-hidden">
-              <div
-                className="h-64"
-                style={{
-                  minWidth: trendPembelianData.length > 8 ? `${Math.max(500, trendPembelianData.length * 52)}px` : '100%',
-                }}
+          {/* Filter Tools: Periode, Metrik, dan Tahun */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Filter Pilihan Periode Waktu */}
+            <div className="inline-flex bg-gray-100 p-0.5 rounded-xs border border-gray-200">
+              <button
+                type="button"
+                onClick={() => setPeriodeWaktu('mingguan')}
+                className={`px-2.5 py-1 text-xs font-semibold rounded-xs transition-colors ${
+                  periodeWaktu === 'mingguan'
+                    ? 'bg-white text-gray-900 shadow-xs'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+                title="Tampilkan per Minggu"
               >
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={trendPembelianData} margin={{ top: 10, right: 15, left: 10, bottom: trendPembelianData.length > 6 ? 28 : 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                    <XAxis 
-                      dataKey="label" 
-                      axisLine={false} 
-                      tickLine={false} 
-                      tick={{ fontSize: 11, fill: '#6B7280' }} 
-                      interval={0}
-                      angle={trendPembelianData.length > 6 ? -25 : 0}
-                      textAnchor={trendPembelianData.length > 6 ? 'end' : 'middle'}
-                      height={trendPembelianData.length > 6 ? 40 : 25}
-                      tickFormatter={(val) => {
-                        const maxLen = trendPembelianData.length > 12 ? 7 : trendPembelianData.length > 8 ? 9 : 14;
-                        return truncateLabel(val, maxLen);
-                      }}
-                      dy={trendPembelianData.length > 6 ? 5 : 8}
-                    />
-                    <YAxis 
-                      axisLine={false} 
-                      tickLine={false} 
-                      tick={{ fontSize: 11, fill: '#6B7280' }}
-                      tickFormatter={(value) => {
-                        if (trendMetric === 'nilai') {
-                          if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}M`;
-                          return `${(value / 1_000_000).toFixed(0)}Jt`;
-                        }
-                        if (trendMetric === 'tonase') {
-                          if (value >= 1000) return `${(value / 1000).toFixed(1)}t`;
-                          return `${value}kg`;
-                        }
-                        return `${value.toLocaleString('id-ID')}`;
-                      }}
-                      width={80}
-                    />
-                    <Tooltip
-                      content={<CustomTrendTooltip />}
-                      cursor={{ fill: 'rgba(243, 244, 246, 0.7)' }}
-                      wrapperStyle={{ zIndex: 100, outline: 'none' }}
-                    />
-                    <Bar 
-                      dataKey={trendMetric === 'nilai' ? 'totalNilai' : trendMetric === 'tonase' ? 'totalKg' : 'totalBal'} 
-                      fill={trendMetric === 'nilai' ? '#1d4ed8' : trendMetric === 'tonase' ? '#047857' : '#b81d24'} 
-                      radius={[4, 4, 0, 0]} 
-                      maxBarSize={56}
-                      animationDuration={1500}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
+                Mingguan
+              </button>
+              <button
+                type="button"
+                onClick={() => setPeriodeWaktu('bulanan')}
+                className={`px-2.5 py-1 text-xs font-semibold rounded-xs transition-colors ${
+                  periodeWaktu === 'bulanan'
+                    ? 'bg-white text-gray-900 shadow-xs'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+                title="Tampilkan per Bulan"
+              >
+                Bulanan
+              </button>
+              <button
+                type="button"
+                onClick={() => setPeriodeWaktu('kuartalan')}
+                className={`px-2.5 py-1 text-xs font-semibold rounded-xs transition-colors ${
+                  periodeWaktu === 'kuartalan'
+                    ? 'bg-white text-gray-900 shadow-xs'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+                title="Tampilkan per Kuartal (Q1-Q4)"
+              >
+                Kuartalan
+              </button>
+              <button
+                type="button"
+                onClick={() => setPeriodeWaktu('tahunan')}
+                className={`px-2.5 py-1 text-xs font-semibold rounded-xs transition-colors ${
+                  periodeWaktu === 'tahunan'
+                    ? 'bg-white text-gray-900 shadow-xs'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+                title="Tampilkan per Tahun"
+              >
+                Tahunan
+              </button>
+            </div>
+
+            {/* Filter Tahun */}
+            {availableYears.length > 0 && (
+              <div className="flex items-center">
+                <select
+                  value={selectedTahun}
+                  onChange={(e) => setSelectedTahun(e.target.value)}
+                  className="text-xs bg-gray-50 border border-gray-200 text-gray-700 font-medium px-2 py-1 rounded-xs focus:ring-1 focus:ring-red-600 focus:outline-none"
+                  aria-label="Pilih Filter Tahun"
+                >
+                  <option value="semua">Semua Tahun</option>
+                  {availableYears.map((yr) => (
+                    <option key={yr} value={yr}>
+                      Tahun {yr}
+                    </option>
+                  ))}
+                </select>
               </div>
+            )}
+
+            {/* Metrik Pilihan Toggle */}
+            <div className="inline-flex bg-gray-100 p-0.5 rounded-xs border border-gray-200">
+              <button
+                type="button"
+                onClick={() => setTrendMetric('bal')}
+                className={`px-2 py-1 text-[11px] font-semibold rounded-xs transition-colors ${
+                  trendMetric === 'bal'
+                    ? 'bg-red-700 text-white shadow-xs'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Bal
+              </button>
+              <button
+                type="button"
+                onClick={() => setTrendMetric('tonase')}
+                className={`px-2 py-1 text-[11px] font-semibold rounded-xs transition-colors ${
+                  trendMetric === 'tonase'
+                    ? 'bg-emerald-800 text-white shadow-xs'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Kg
+              </button>
+              <button
+                type="button"
+                onClick={() => setTrendMetric('nilai')}
+                className={`px-2 py-1 text-[11px] font-semibold rounded-xs transition-colors ${
+                  trendMetric === 'nilai'
+                    ? 'bg-blue-800 text-white shadow-xs'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Rp
+              </button>
             </div>
-          ) : (
-            <div className="h-64 w-full flex items-center justify-center bg-gray-50 border border-dashed border-gray-200">
-              <span className="text-sm text-gray-500 font-medium">Belum ada data transaksi pada periode ini</span>
-            </div>
-          )}
+          </div>
         </div>
-      )}
+
+        {/* Sub-bar Total Ringkasan Periode Terpilih */}
+        <div className="flex flex-wrap items-center justify-between bg-gray-50/80 px-3 py-1.5 rounded-xs mb-3 text-xs border border-gray-100">
+          <span className="text-gray-600">
+            Periode Aktif: <strong className="text-gray-900 capitalize">{periodeWaktu}</strong> {selectedTahun !== 'semua' ? `(${selectedTahun})` : '(Semua Tahun)'} &bull; {trendPembelianData.length} rentang data
+          </span>
+          <div className="flex items-center space-x-3 font-mono text-[11px]">
+            <span className="text-gray-700">
+              Total Bal: <strong className="text-gray-900">{grandTotalTrend.bal.toLocaleString('id-ID')}</strong>
+            </span>
+            <span className="text-gray-300">|</span>
+            <span className="text-gray-700">
+              Tonase: <strong className="text-emerald-800">{grandTotalTrend.kg.toLocaleString('id-ID')} kg</strong>
+            </span>
+            <span className="text-gray-300">|</span>
+            <span className="text-gray-700">
+              Modal: <strong className="text-blue-800">{formatRupiah(grandTotalTrend.nilai)}</strong>
+            </span>
+          </div>
+        </div>
+
+        {trendPembelianData.length > 0 ? (
+          <div className="w-full overflow-x-auto overflow-y-hidden">
+            <div
+              className="h-64"
+              style={{
+                minWidth: trendPembelianData.length > 8 ? `${Math.max(500, trendPembelianData.length * 52)}px` : '100%',
+              }}
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={trendPembelianData} margin={{ top: 10, right: 15, left: 10, bottom: trendPembelianData.length > 6 ? 28 : 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                  <XAxis 
+                    dataKey="label" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fontSize: 11, fill: '#6B7280' }} 
+                    interval={0}
+                    angle={trendPembelianData.length > 6 ? -25 : 0}
+                    textAnchor={trendPembelianData.length > 6 ? 'end' : 'middle'}
+                    height={trendPembelianData.length > 6 ? 40 : 25}
+                    tickFormatter={(val) => {
+                      const maxLen = trendPembelianData.length > 12 ? 7 : trendPembelianData.length > 8 ? 9 : 14;
+                      return truncateLabel(val, maxLen);
+                    }}
+                    dy={trendPembelianData.length > 6 ? 5 : 8}
+                  />
+                  <YAxis 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fontSize: 11, fill: '#6B7280' }}
+                    tickFormatter={(value) => {
+                      if (trendMetric === 'nilai') {
+                        if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}M`;
+                        return `${(value / 1_000_000).toFixed(0)}Jt`;
+                      }
+                      if (trendMetric === 'tonase') {
+                        if (value >= 1000) return `${(value / 1000).toFixed(1)}t`;
+                        return `${value}kg`;
+                      }
+                      return `${value.toLocaleString('id-ID')}`;
+                    }}
+                    width={80}
+                  />
+                  <Tooltip
+                    content={<CustomTrendTooltip />}
+                    cursor={{ fill: 'rgba(243, 244, 246, 0.7)' }}
+                    wrapperStyle={{ zIndex: 100, outline: 'none' }}
+                  />
+                  <Bar 
+                    dataKey={trendMetric === 'nilai' ? 'totalNilai' : trendMetric === 'tonase' ? 'totalKg' : 'totalBal'} 
+                    fill={trendMetric === 'nilai' ? '#1d4ed8' : trendMetric === 'tonase' ? '#047857' : '#b81d24'} 
+                    radius={[4, 4, 0, 0]} 
+                    maxBarSize={56}
+                    animationDuration={1500}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        ) : (
+          <div className="h-64 w-full flex items-center justify-center bg-gray-50 border border-dashed border-gray-200">
+            <span className="text-sm text-gray-500 font-medium">Belum ada data transaksi pada periode ini</span>
+          </div>
+        )}
+      </div>
 
       {/* Visualisasi Recharts: Distribusi Stok Bal Berdasarkan Kode Harga Beli Tembakau */}
-      {!isQCOnly && (
-        <DistribusiStokHargaBeliChart
-          barangList={barangLunasList}
-          hargaList={hargaList}
-          onNavigateToHarga={onNavigateToModule ? () => onNavigateToModule('modul-6-laporan-grade') : undefined}
-        />
-      )}
+      <DistribusiStokHargaBeliChart
+        barangList={barangLunasList}
+        hargaList={hargaList}
+        onNavigateToHarga={onNavigateToModule ? () => onNavigateToModule('modul-6-laporan-grade') : undefined}
+      />
 
       {/* Main Analytic Content Row */}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         
         {/* 9.2 Top 5 Harga Beli Paling Banyak Muncul */}
-        {!isQCOnly && (
-          <div className="bg-white p-4 border border-gray-200 shadow-xs">
-            <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-100">
-              <div>
-                <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
-                  Top 5 Harga Beli Paling Banyak Muncul
-                </h3>
-                <p className="text-[11px] text-gray-500 mt-0.5">
-                  Top 5 harga beli per kg yang paling sering tercatat dalam transaksi pembelian
-                </p>
-              </div>
-              <div className="flex items-center space-x-2">
-                {onNavigateToModule && (
-                  <button
-                    onClick={() => onNavigateToModule('modul-6-laporan-grade')}
-                    className="px-2 py-1 bg-red-50 text-[#b81d24] hover:bg-red-100 text-[11px] font-bold rounded-xs transition cursor-pointer flex items-center space-x-1"
-                  >
-                    <span>Laporan Harga</span>
-                    <ArrowUpRight className="w-3 h-3" />
-                  </button>
-                )}
-                <span className="px-2 py-1 bg-gray-100 text-gray-800 text-[11px] font-bold">
-                  {topHargaBeli.length} Kategori Harga
-                </span>
-              </div>
+        <div className="bg-white p-4 border border-gray-200 shadow-xs">
+          <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-100">
+            <div>
+              <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+                Top 5 Harga Beli Paling Banyak Muncul
+              </h3>
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                Top 5 harga beli per kg yang paling sering tercatat dalam transaksi pembelian
+              </p>
             </div>
+            <div className="flex items-center space-x-2">
+              {onNavigateToModule && (
+                <button
+                  onClick={() => onNavigateToModule('modul-6-laporan-grade')}
+                  className="px-2 py-1 bg-red-50 text-[#b81d24] hover:bg-red-100 text-[11px] font-bold rounded-xs transition cursor-pointer flex items-center space-x-1"
+                >
+                  <span>Laporan Harga</span>
+                  <ArrowUpRight className="w-3 h-3" />
+                </button>
+              )}
+              <span className="px-2 py-1 bg-gray-100 text-gray-800 text-[11px] font-bold">
+                {topHargaBeli.length} Kategori Harga
+              </span>
+            </div>
+          </div>
 
-            <div className="space-y-3 pt-1">
-              {topHargaBeli.length === 0 ? (
-                <div className="py-6 text-center text-xs text-gray-400">Belum ada data transaksi pembelian</div>
-              ) : (
-                topHargaBeli.map((item, idx) => {
-                  return (
-                    <div key={idx} className="text-xs">
-                      <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center space-x-2">
-                          <span className="w-5 h-5 flex items-center justify-center font-bold text-white text-[10px] bg-zinc-900">
-                            #{idx + 1}
-                          </span>
-                          <span className="font-mono font-bold text-emerald-700">{formatRupiah(item.harga)}/kg</span>
-                        </div>
-                        <div className="text-right">
-                          <span className="font-mono font-bold text-gray-900">{item.count} Transaksi</span>
-                          <span className="text-gray-400 mx-1">|</span>
-                          <span className="font-mono text-gray-600">{item.totalKg.toLocaleString('id-ID')} kg</span>
-                          <span className="text-gray-400 mx-1">|</span>
-                          <span className="font-bold text-[#b81d24]">{item.percentage.toFixed(1)}%</span>
-                        </div>
+          <div className="space-y-3 pt-1">
+            {topHargaBeli.length === 0 ? (
+              <div className="py-6 text-center text-xs text-gray-400">Belum ada data transaksi pembelian</div>
+            ) : (
+              topHargaBeli.map((item, idx) => {
+                return (
+                  <div key={idx} className="text-xs">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center space-x-2">
+                        <span className="w-5 h-5 flex items-center justify-center font-bold text-white text-[10px] bg-zinc-900">
+                          #{idx + 1}
+                        </span>
+                        <span className="font-mono font-bold text-emerald-700">{formatRupiah(item.harga)}/kg</span>
                       </div>
-                      <div className="w-full bg-gray-100 h-2.5 rounded-none overflow-hidden">
-                        <div 
-                          className="h-full bg-zinc-900 transition-all duration-300"
-                          style={{ width: `${Math.max(item.count > 0 ? 4 : 0, item.relativePercentage)}%` }}
-                        ></div>
+                      <div className="text-right">
+                        <span className="font-mono font-bold text-gray-900">{item.count} Transaksi</span>
+                        <span className="text-gray-400 mx-1">|</span>
+                        <span className="font-mono text-gray-600">{item.totalKg.toLocaleString('id-ID')} kg</span>
+                        <span className="text-gray-400 mx-1">|</span>
+                        <span className="font-bold text-[#b81d24]">{item.percentage.toFixed(1)}%</span>
                       </div>
                     </div>
-                  );
-                })
-              )}
-            </div>
+                    <div className="w-full bg-gray-100 h-2.5 rounded-none overflow-hidden">
+                      <div 
+                        className="h-full bg-zinc-900 transition-all duration-300"
+                        style={{ width: `${Math.max(item.count > 0 ? 4 : 0, item.relativePercentage)}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
-        )}
+        </div>
 
         {/* 9.3 Top 5 Petani Penyetor Terbanyak */}
-        {!isQCOnly && (
-          <div className="bg-white p-4 border border-gray-200 shadow-xs">
-            <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-100">
-              <div>
-                <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
-                  Top 5 Petani Penyetor Terbanyak
-                </h3>
-                <p className="text-[11px] text-gray-500 mt-0.5">
-                  Penyetor dengan volume tonase tembakau terbesar
-                </p>
-              </div>
-              <Award className="w-4 h-4 text-amber-600" />
+        <div className="bg-white p-4 border border-gray-200 shadow-xs">
+          <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-100">
+            <div>
+              <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+                Top 5 Petani Penyetor Terbanyak
+              </h3>
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                Penyetor dengan volume tonase tembakau terbesar
+              </p>
             </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-gray-50 text-gray-700 font-bold border-b border-gray-200 text-[10px] uppercase">
-                    <th className="py-2 px-2 text-center w-8">Rank</th>
-                    <th className="py-2 px-3">Nama Petani</th>
-                    <th className="py-2 px-2 text-center">Jumlah Bal</th>
-                    <th className="py-2 px-2 text-right">Total Tonase</th>
-                    <th className="py-2 px-3 text-right">Total Nilai</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {topPetani.map((petani, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50/80">
-                      <td className="py-2 px-2 text-center">
-                        <span className={`inline-flex items-center justify-center w-5 h-5 text-[11px] font-bold ${
-                          idx === 0 ? 'bg-amber-500 text-white' :
-                          idx === 1 ? 'bg-gray-400 text-white' :
-                          idx === 2 ? 'bg-amber-700 text-white' :
-                          'bg-gray-100 text-gray-700'
-                        }`}>
-                          {idx + 1}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3 font-semibold text-gray-900">
-                        {petani.nama}
-                      </td>
-                      <td className="py-2 px-2 text-center font-mono font-semibold text-gray-700">
-                        {petani.balCount} Bal
-                      </td>
-                      <td className="py-2 px-2 text-right font-mono font-bold text-blue-900">
-                        {petani.totalKg.toLocaleString('id-ID')} kg
-                      </td>
-                      <td className="py-2 px-3 text-right font-mono font-bold text-[#b81d24]">
-                        Rp {petani.totalNilai.toLocaleString('id-ID')}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Award className="w-4 h-4 text-amber-600" />
           </div>
-        )}
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-gray-50 text-gray-700 font-bold border-b border-gray-200 text-[10px] uppercase">
+                  <th className="py-2 px-2 text-center w-8">Rank</th>
+                  <th className="py-2 px-3">Nama Petani</th>
+                  <th className="py-2 px-2 text-center">Jumlah Bal</th>
+                  <th className="py-2 px-2 text-right">Total Tonase</th>
+                  <th className="py-2 px-3 text-right">Total Nilai</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {topPetani.map((petani, idx) => (
+                  <tr key={idx} className="hover:bg-gray-50/80">
+                    <td className="py-2 px-2 text-center">
+                      <span className={`inline-flex items-center justify-center w-5 h-5 text-[11px] font-bold ${
+                        idx === 0 ? 'bg-amber-500 text-white' :
+                        idx === 1 ? 'bg-gray-400 text-white' :
+                        idx === 2 ? 'bg-amber-700 text-white' :
+                        'bg-gray-100 text-gray-700'
+                      }`}>
+                        {idx + 1}
+                      </span>
+                    </td>
+                    <td className="py-2 px-3 font-semibold text-gray-900">
+                      {petani.nama}
+                    </td>
+                    <td className="py-2 px-2 text-center font-mono font-semibold text-gray-700">
+                      {petani.balCount} Bal
+                    </td>
+                    <td className="py-2 px-2 text-right font-mono font-bold text-blue-900">
+                      {petani.totalKg.toLocaleString('id-ID')} kg
+                    </td>
+                    <td className="py-2 px-3 text-right font-mono font-bold text-[#b81d24]">
+                      Rp {petani.totalNilai.toLocaleString('id-ID')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
 
       </div>
 
@@ -1411,73 +1370,67 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           
           {/* Card 1: Buku Kas Pembelian */}
-          {!isQCOnly && (
-            <div className="p-3 bg-gray-50 border border-gray-200 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-xs text-gray-900">Buku Kas Pembelian</span>
-                  <span className="inline-flex items-center justify-center font-bold leading-none w-4 h-4 text-gray-400">Rp</span>
-                </div>
-                <p className="text-[11px] text-gray-500 mt-1">
-                  Rekapitulasi seluruh setoran timbang, potongan kuli, dan jumlah bayar petani.
-                </p>
+          <div className="p-3 bg-gray-50 border border-gray-200 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-xs text-gray-900">Buku Kas Pembelian</span>
+                <span className="inline-flex items-center justify-center font-bold leading-none w-4 h-4 text-gray-400">Rp</span>
               </div>
-              <button
-                onClick={exportBukuKasPembelian}
-                className="mt-3 w-full py-1.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 text-xs font-semibold flex items-center justify-center space-x-1.5 transition cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5 text-gray-600" />
-                <span>Unduh Excel</span>
-              </button>
+              <p className="text-[11px] text-gray-500 mt-1">
+                Rekapitulasi seluruh setoran timbang, potongan kuli, dan jumlah bayar petani.
+              </p>
             </div>
-          )}
+            <button
+              onClick={exportBukuKasPembelian}
+              className="mt-3 w-full py-1.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 text-xs font-semibold flex items-center justify-center space-x-1.5 transition cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5 text-gray-600" />
+              <span>Unduh Excel</span>
+            </button>
+          </div>
 
           {/* Card 2: Inventaris Bal Gudang */}
-          {!isQCOnly && (
-            <div className="p-3 bg-gray-50 border border-gray-200 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-xs text-gray-900">Inventaris Bal Gudang</span>
-                  <Package className="w-4 h-4 text-gray-400" />
-                </div>
-                <p className="text-[11px] text-gray-500 mt-1">
-                  Daftar seluruh bal tembakau fisik, status stok, dan status bayar.
-                </p>
+          <div className="p-3 bg-gray-50 border border-gray-200 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-xs text-gray-900">Inventaris Bal Gudang</span>
+                <Package className="w-4 h-4 text-gray-400" />
               </div>
-              <button
-                onClick={exportInventarisBalGudang}
-                className="mt-3 w-full py-1.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 text-xs font-semibold flex items-center justify-center space-x-1.5 transition cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5 text-gray-600" />
-                <span>Unduh Excel</span>
-              </button>
+              <p className="text-[11px] text-gray-500 mt-1">
+                Daftar seluruh bal tembakau fisik, status stok, dan status bayar.
+              </p>
             </div>
-          )}
+            <button
+              onClick={exportInventarisBalGudang}
+              className="mt-3 w-full py-1.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 text-xs font-semibold flex items-center justify-center space-x-1.5 transition cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5 text-gray-600" />
+              <span>Unduh Excel</span>
+            </button>
+          </div>
 
           {/* Card 3: Distribusi Surat Jalan */}
-          {!isQCOnly && (
-            <div className="p-3 bg-gray-50 border border-gray-200 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-xs text-gray-900">Distribusi Surat Jalan</span>
-                  <Building2 className="w-4 h-4 text-gray-400" />
-                </div>
-                <p className="text-[11px] text-gray-500 mt-1">
-                  Log surat jalan delivery order pengiriman tembakau ke pabrik rokok rekanan.
-                </p>
+          <div className="p-3 bg-gray-50 border border-gray-200 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-xs text-gray-900">Distribusi Surat Jalan</span>
+                <Building2 className="w-4 h-4 text-gray-400" />
               </div>
-              <button
-                onClick={exportDistribusiSuratJalan}
-                className="mt-3 w-full py-1.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 text-xs font-semibold flex items-center justify-center space-x-1.5 transition cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5 text-gray-600" />
-                <span>Unduh Excel</span>
-              </button>
+              <p className="text-[11px] text-gray-500 mt-1">
+                Log surat jalan delivery order pengiriman tembakau ke pabrik rokok rekanan.
+              </p>
             </div>
-          )}
+            <button
+              onClick={exportDistribusiSuratJalan}
+              className="mt-3 w-full py-1.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 text-xs font-semibold flex items-center justify-center space-x-1.5 transition cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5 text-gray-600" />
+              <span>Unduh Excel</span>
+            </button>
+          </div>
 
           {/* Card 4: Laporan QC Sample */}
-          <div className={`p-3 bg-gray-50 border border-gray-200 flex flex-col justify-between ${isQCOnly ? 'col-span-full' : ''}`}>
+          <div className={`p-3 bg-gray-50 border border-gray-200 flex flex-col justify-between`}>
             <div>
               <div className="flex items-center justify-between">
                 <span className="font-bold text-xs text-gray-900">Laporan QC Sample</span>

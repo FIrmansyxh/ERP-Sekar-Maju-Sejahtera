@@ -182,10 +182,10 @@ Prasyarat: Node.js versi 20 atau lebih baru. Backend Laravel dijalankan terpisah
 `http://localhost:8000` (`php artisan serve`). Tanpa backend, aplikasi tetap berjalan memakai
 data peramban.
 
-Pasang dependensi.
+Pasang dependensi sesuai `package-lock.json`.
 
 ```bash
-npm install
+npm ci
 ```
 
 Jalankan server pengembangan pada port 3000.
@@ -194,11 +194,34 @@ Jalankan server pengembangan pada port 3000.
 npm run dev
 ```
 
-Periksa tipe tanpa menghasilkan berkas keluaran.
+Periksa tipe tanpa menghasilkan berkas keluaran. TypeScript berjalan dalam mode `strict` dengan
+`noUnusedLocals`, jadi kode mati dan tipe yang longgar langsung terdeteksi.
 
 ```bash
 npm run lint
 ```
+
+Jalankan tes otomatis (Vitest dan Testing Library). Gunakan `npm run test:watch` saat mengembangkan.
+
+```bash
+npm test
+```
+
+Tes berkas `*.test.ts(x)` berada di samping kode yang diuji. Isinya: aturan hitung (netto jual, potongan tara,
+penjualan hanya dari Surat Jalan Selesai, status bayar, nomor dokumen, kunci hapus), perubahan stok bal dan status batch
+saat Surat Jalan diedit atau dibatalkan, alur login (server sebagai penentu), serta uji tampilan untuk menu Status
+Pengiriman, Kasir, Timbangan, Pengiriman Reguler, dan Pengiriman Sample.
+
+### Kualitas dan kinerja
+
+- **Muat awal ringan:** setiap menu diunduh saat pertama dibuka (`React.lazy`); pustaka PDF, grafik, dan Excel hanya
+  diunduh saat dipakai. Muat awal sekitar 230 kB gzip (sebelumnya sekitar 680 kB).
+- **Galat tidak mengosongkan layar:** `ErrorBoundary` di akar aplikasi dan per menu. Setelah aplikasi diperbarui di server,
+  sesi lama yang gagal mengunduh potongan kode diarahkan untuk memuat ulang halaman.
+- **Dialog seragam:** pemberitahuan dan konfirmasi memakai `utils/dialog.ts` (`tampilkanInfo`, `mintaKonfirmasi`), bukan
+  `alert()`/`confirm()` bawaan peramban.
+- **Peringatan simpanan:** perubahan yang gagal dikirim ke server dan penyimpanan peramban yang penuh ditampilkan di Header
+  (`utils/peringatanSimpanan.ts`), tidak lagi hanya di konsol.
 
 ## Deployment produksi
 
@@ -218,9 +241,12 @@ npm run preview
 ### VPS (produksi)
 
 Setiap push ke branch `main` menjalankan GitHub Actions `.github/workflows/deploy.yml`.
-Workflow masuk ke VPS lewat SSH, menarik kode terbaru di `/var/www/erp-fe/ERP-Sekar-Maju-Sejahtera`,
-menjalankan `npm install` dan `npm run build` dengan `NODE_OPTIONS=--max-old-space-size=2048`,
-lalu memuat ulang Nginx.
+Workflow membangun di GitHub Actions (`npm ci`, `npm test`, `npm run build`); deploy dibatalkan bila tes atau
+build gagal. Hasil `dist/` dikirim ke VPS di `/var/www/erp-fe/ERP-Sekar-Maju-Sejahtera`, lalu Nginx dimuat ulang, sehingga VPS
+tidak menanggung beban build.
+
+Workflow `.github/workflows/ci.yml` menjalankan pemeriksaan yang sama (tipe, tes, build) untuk setiap pull request dan
+push ke branch selain `main`, tanpa deploy.
 
 Secret repositori yang dibutuhkan: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, dan `VPS_PORT`
 (opsional, bawaan 22).
@@ -331,9 +357,10 @@ src/
 │   ├── laporan/             Dashboard analitik dan seluruh laporan
 │   ├── user/                Manajemen pengguna, matriks peran, dan jejak audit
 │   ├── print/               Tampilan cetak mandiri
-│   └── common/              Kop surat, ikon urutan, modal, paginasi, pilihan tercari, dan lencana status simpanan
+│   └── common/              Kop surat, ikon urutan, modal, dialog (DialogHost), ErrorBoundary, paginasi, pilihan tercari, dan lencana status simpanan
 ├── data/                    Data bawaan instalasi, seluruhnya kosong kecuali akun Super Admin
 ├── hooks/                   Hook khusus, antara lain pemindai barcode
+├── test/                    Pengaturan tes dan pembangun data uji (fixtures)
 ├── types/                   Definisi tipe domain
 └── utils/
     ├── storage.ts           Baca dan tulis localStorage, otentikasi lokal, serta jejak audit
@@ -341,7 +368,11 @@ src/
     ├── crypto.ts            Hash kata sandi SHA-256
     ├── statusBayar.ts       Penentuan status lunas dan kredit
     ├── nomorDokumen.ts      Validasi nomor surat manual dan saran nomor berikutnya
-    ├── kunciHapus.ts        Aturan data yang tidak boleh dihapus setelah dikirim
+    ├── kunciHapus.ts        Aturan kunci: Surat Jalan Selesai final dan satu-satunya yang dihitung sebagai penjualan
+    ├── alurPengiriman.ts    Perubahan stok bal dan status batch sample saat Surat Jalan diedit atau dibatalkan
+    ├── dialog.ts            Pemberitahuan dan konfirmasi (pengganti alert/confirm)
+    ├── peringatanSimpanan.ts  Peringatan gagal kirim ke server dan penyimpanan peramban penuh
+    ├── lazyHalaman.ts       React.lazy untuk komponen berekspor bernama
     ├── beratKirim.ts        Berat bruto untuk pengiriman dan penjualan
     ├── formatters.ts        Format angka, tanggal, dan penanganan presisi berat
     ├── financialCalculations.ts  Perhitungan nilai transaksi
@@ -358,6 +389,8 @@ src/
 
 Batasan berikut perlu ditutup dengan prosedur operasional.
 
+- **Login: server adalah penentu.** Bila server menjawab dan menolak (sandi salah, akun nonaktif, 4xx), login gagal dan tidak
+  dilanjutkan ke akun lokal. Akun lokal hanya dipakai saat server tidak dapat dijangkau (offline, timeout, atau galat 5xx).
 - **Otorisasi peran masih berjalan di sisi klien.** Pemeriksaan peran di backend belum
   diterapkan (lihat `RENCANA_PERBAIKAN_ALUR_FE_BE.md`). Pengguna dengan akses ke peralatan
   pengembang peramban dapat membaca dan mengubah data lokal. Batasi akses fisik ke komputer

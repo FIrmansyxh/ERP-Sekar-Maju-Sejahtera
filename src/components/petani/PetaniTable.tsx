@@ -1,29 +1,19 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { 
-  Search, 
-  Plus, 
-  Download, 
-  Upload, 
-  Printer, 
-  Edit3, 
-  Info, 
-  Ban, 
-  CheckCircle, 
-  ChevronDown, 
-  ChevronUp, 
+import {
+  Search,
+  Plus,
+  Upload,
+  Printer,
+  Edit3,
+  Info,
+  Ban,
+  CheckCircle,
+  ChevronDown,
+  ChevronUp,
   RefreshCw,
-  X,
-  Phone,
-  MapPin,
-  User,
-  Filter,
-  Zap,
-  FileText,
-  ArrowUp,
-  Sparkles
+  X
 } from 'lucide-react';
 import { Petani, UserRole, TransaksiPembelian } from '../../types';
-import { formatNumber } from '../../utils/formatters';
 import { canUserPerform } from '../../utils/rbac';
 import { Pagination } from '../common/Pagination';
 import { SortIcon } from '../common/SortIcon';
@@ -72,9 +62,7 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
     prevDataLengthRef.current = data.length;
   }, [data.length]);
 
-  const countActive = useMemo(() => data.filter((p) => p.status_aktif).length, [data]);
-  const countInactive = useMemo(() => data.filter((p) => !p.status_aktif).length, [data]);
-
+    
   // Filter & Sort Logic
   const filteredData = useMemo(() => {
     return data

@@ -15,10 +15,11 @@ const DAFTAR: Array<{ id: JenisPreset; label: string; judul: string }> = [
   { id: 'kemarin', label: 'Kemarin', judul: 'Hanya data tanggal kemarin' },
   { id: 'tujuh_hari', label: '7 Hari', judul: '7 hari terakhir termasuk hari ini' },
   { id: 'bulan_ini', label: 'Bulan Ini', judul: 'Dari tanggal 1 bulan ini sampai hari ini' },
+  { id: 'tahun_ini', label: 'Tahun Ini', judul: 'Dari 1 Januari tahun ini sampai hari ini' },
   { id: 'semua', label: 'Sepanjang Masa', judul: 'Tanpa batas tanggal' },
 ];
 
-/** Pilihan rentang tanggal cepat (Hari Ini, Kemarin, 7 Hari, Bulan Ini, Sepanjang Masa). */
+/** Pilihan rentang tanggal cepat (Hari Ini, Kemarin, 7 Hari, Bulan Ini, Tahun Ini, Sepanjang Masa). */
 export const PresetTanggal: React.FC<PresetTanggalProps> = ({ startDate, endDate, onPilih, className = '' }) => {
   const aktif = presetAktif(startDate, endDate);
 

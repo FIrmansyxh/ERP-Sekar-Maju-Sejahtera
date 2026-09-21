@@ -30,17 +30,28 @@ jobs:
       with:
         node-version: 20
 
+<<<<<<< Updated upstream
     - name: 3. Install Dependencies
       run: npm install
 
     - name: 4. Build Vite (Staging)
+=======
+    - name: 3. Install Dependencies di GitHub Runner (sesuai package-lock.json)
+      run: npm ci
+
+    - name: 4. Jalankan Tes Otomatis (deploy dibatalkan bila ada yang gagal)
+      run: npm test
+
+    - name: 5. Build Vite di GitHub Runner (Super Cepat & Bebas Beban VPS)
+>>>>>>> Stashed changes
       run: npm run build
       env:
         VITE_API_URL: ${{ secrets.STAGING_VITE_API_URL }}
 
-    - name: 5. Kompres Hasil Build dist
+    - name: 6. Kompres Hasil Build dist
       run: tar -czf dist.tar.gz dist/
 
+<<<<<<< Updated upstream
     - name: 6. Kirim dist.tar.gz ke Staging VPS
       uses: appleboy/scp-action@v0.1.7
       with:
@@ -108,6 +119,9 @@ jobs:
       run: tar -czf dist.tar.gz dist/
 
     - name: 6. Kirim dist.tar.gz ke Production VPS
+=======
+    - name: 7. Kirim dist.tar.gz ke VPS
+>>>>>>> Stashed changes
       uses: appleboy/scp-action@v0.1.7
       with:
         host: ${{ secrets.VPS_HOST }}
@@ -118,7 +132,11 @@ jobs:
         target: "/var/www/erp-fe/ERP-Sekar-Maju-Sejahtera"
         overwrite: true
 
+<<<<<<< Updated upstream
     - name: 7. Ekstrak di Production VPS & Reload Nginx
+=======
+    - name: 8. Ekstrak di VPS & Reload Nginx
+>>>>>>> Stashed changes
       uses: appleboy/ssh-action@v1.0.3
       with:
         host: ${{ secrets.VPS_HOST }}

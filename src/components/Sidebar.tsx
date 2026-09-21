@@ -1,21 +1,13 @@
 import React, { useState } from 'react';
-import { 
-  Home, 
-  Database, 
-  Tag, 
-  ShoppingCart, 
-  Package, 
-  ChevronRight, 
-  ChevronDown, 
-  Users, 
-  FlaskConical, 
-  Truck, 
-  BarChart3, 
-  Scale,
-  Warehouse,
-  UserCheck,
-  FileSpreadsheet,
-  ShieldCheck
+import {
+  Home,
+  Database,
+  ShoppingCart,
+  ChevronRight,
+  ChevronDown,
+  Truck,
+  BarChart3,
+  UserCheck
 } from 'lucide-react';
 import { UserRole } from '../types';
 import { hasModuleAccess } from '../utils/rbac';
@@ -56,13 +48,6 @@ export const MODULES_CONFIG = [
     subtitle: 'Detail Bal, Berat, Harga & Status',
     icon: 'Package',
     moduleKey: 'laporan-bal',
-  },
-  {
-    id: 'modul-6-laporan-kode-bal',
-    title: 'Laporan Kode Bal',
-    subtitle: 'Analisa Kode Bal',
-    icon: 'PackageSearch',
-    moduleKey: 'laporan-kode-bal',
   },
   {
     id: 'modul-6-laporan-grade',
@@ -307,19 +292,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     }`}
                   >
                     <span>Laporan Bal</span>
-                  </button>
-                )}
-
-                {checkAccess('modul-6-laporan-kode-bal') && (
-                  <button
-                    onClick={() => onSelectModule('modul-6-laporan-kode-bal')}
-                    className={`w-full text-left py-1.5 px-2 rounded-xs flex items-center justify-between cursor-pointer ${
-                      activeModuleId === 'modul-6-laporan-kode-bal'
-                        ? 'text-slate-900 font-semibold bg-slate-100'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                    }`}
-                  >
-                    <span>Laporan Kode Bal</span>
                   </button>
                 )}
 

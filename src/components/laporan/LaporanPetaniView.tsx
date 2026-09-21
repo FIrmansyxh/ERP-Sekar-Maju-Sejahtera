@@ -1,43 +1,19 @@
-import React, { useState, useMemo, useRef } from 'react';
-import { 
-  Users, 
-  Search, 
-  RotateCcw, 
-  Download, 
-  Calendar, 
-  MapPin, 
-  Phone, 
-  Tag, 
-  CreditCard,
-  Package, 
-  DollarSign, 
-  TrendingUp, 
-  Award, 
-  CheckCircle2, 
-  Clock, 
-  Filter, 
-  ChevronRight, 
-  X, 
-  FileText, 
-  FileSpreadsheet, 
-  ArrowUpRight,
-  ShieldCheck,
-  Scale,
-  Eye,
-  EyeOff,
-  ChevronUp,
-  ChevronDown
+import React, { useState, useMemo } from 'react';
+import {
+  Users,
+  Search,
+  RotateCcw,
+  Award,
+  Filter,
+  X,
+  FileSpreadsheet
 } from 'lucide-react';
 import { Petani, TransaksiPembelian, Barang, UserRole } from '../../types';
-import { downloadElementAsPdf } from '../../utils/printDownload';
 import { downloadExcelReport, periodeInfo, todayStamp } from '../../utils/excelExport';
 import { formatDateHariBulanTahun } from '../../utils/formatters';
 import { hitungModalTransaksi } from '../../utils/finance';
 import { isTransaksiLunas } from '../../utils/statusBayar';
 import { Pagination } from '../common/Pagination';
-import { COMPANY_NAME } from '../../config/appInfo';
-import { loadCurrentUser } from '../../utils/storage';
-import { KopSurat } from '../common/KopSurat';
 import { useLaporanTampilan } from '../../hooks/useLaporanTampilan';
 import { LaporanTampilanToggle } from './LaporanTampilanToggle';
 
@@ -48,6 +24,18 @@ interface LaporanPetaniViewProps {
   userRole?: UserRole;
   onNavigateToTransaksi?: () => void;
 }
+
+/** Petani beserta ringkasan setoran pada periode yang dipilih. */
+type PetaniRingkasan = Petani & {
+  totalTransaksi: number;
+  totalBal: number;
+  totalKg: number;
+  totalNilaiRp: number;
+  totalKreditRp: number;
+  gradeDominan: string;
+  lastTxDate: string;
+  txList: TransaksiPembelian[];
+};
 
 export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
   petaniList = [],
@@ -91,12 +79,10 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
     appliedFilters.startDate,
     appliedFilters.endDate,
   ].filter(Boolean).length;
-  const [selectedPetaniForDetail, setSelectedPetaniForDetail] = useState<Petani | null>(null);
+  const [selectedPetaniForDetail, setSelectedPetaniForDetail] = useState<PetaniRingkasan | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
-  const printDocumentRef = useRef<HTMLDivElement>(null);
 
   // List of unique areas / desa for filter dropdown
   const uniqueWilayahList = useMemo(() => {
@@ -413,21 +399,6 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
     ]);
   };
 
-  // Export PDF (Direct Download)
-  const handleDownloadPdf = async () => {
-    if (!printDocumentRef.current) return;
-    setIsGeneratingPdf(true);
-    try {
-      await downloadElementAsPdf(
-        printDocumentRef.current,
-        `Laporan_Kinerja_Petani_${new Date().toISOString().slice(0, 10)}.pdf`,
-        { orientation: 'landscape' }
-      );
-    } finally {
-      setIsGeneratingPdf(false);
-    }
-  };
-
   // Search within filtered results for Tab 1
   const searchedPetaniData = useMemo(() => {
     if (!tableSearch.trim()) return filteredPetaniData;
@@ -462,7 +433,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
           </h1>
         </div>
 
-        {/* Action Controls: Tampilan (Filter / Ringkasan / Fokus Tabel), Unduh Excel, Unduh PDF */}
+        {/* Action Controls: Tampilan (Filter / Ringkasan / Fokus Tabel), dan Unduh Excel */}
         <div className="flex flex-wrap items-center gap-2">
           <LaporanTampilanToggle tampilan={tampilan} jumlahFilterAktif={jumlahFilterAktif} />
 
@@ -473,16 +444,6 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
           >
             <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
             <span>Unduh Excel</span>
-          </button>
-
-          <button
-            onClick={handleDownloadPdf}
-            disabled={isGeneratingPdf}
-            className="px-3 py-1.5 bg-[#b81d24] hover:bg-[#991b1b] text-white text-xs font-bold rounded-xs transition flex items-center space-x-1.5 cursor-pointer shadow-2xs disabled:opacity-50"
-            title="Unduh Laporan Dokumen PDF Resmi"
-          >
-            <FileText className="w-3.5 h-3.5" />
-            <span>{isGeneratingPdf ? 'Memproses PDF...' : 'Unduh PDF Resmi'}</span>
           </button>
         </div>
       </div>
@@ -921,6 +882,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
               </div>
               <Pagination
                 currentPage={currentPage}
+                totalPages={Math.max(1, Math.ceil(searchedPetaniData.length / itemsPerPage))}
                 totalItems={searchedPetaniData.length}
                 itemsPerPage={itemsPerPage}
                 onPageChange={(page) => setCurrentPage(page)}
@@ -1240,101 +1202,6 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
           </div>
         </div>
       )}
-
-      {/* 9. Offscreen Printable Document for High-Fidelity PDF Generation */}
-      <div className="hidden">
-        <div ref={printDocumentRef} className="p-8 bg-white text-gray-900 font-sans" style={{ width: '1080px' }}>
-          
-          <KopSurat judul="Laporan Rekapitulasi Petani" className="mb-2" />
-          <div className="mb-4 flex items-center justify-between text-[10px] text-gray-500">
-            <span>
-              Filter: {appliedFilters.wilayah !== 'ALL' ? `Desa ${appliedFilters.wilayah}` : 'Semua Wilayah'} • {appliedFilters.status !== 'ALL' ? `Status ${appliedFilters.status}` : 'Semua Status'}
-            </span>
-            <span>Tanggal Ekspor: {formatDateHariBulanTahun(new Date().toISOString())}</span>
-          </div>
-
-          {/* KPI Summary Block */}
-          <div className="grid grid-cols-5 gap-2 mb-4 p-3 bg-gray-50 border border-gray-300">
-            <div>
-              <div className="text-[10px] text-gray-500 uppercase font-bold">Total Petani</div>
-              <div className="text-sm font-bold font-mono text-gray-900">{overallKPIs.totalPetani} Petani</div>
-            </div>
-            <div>
-              <div className="text-[10px] text-gray-500 uppercase font-bold">Petani Aktif</div>
-              <div className="text-sm font-bold font-mono text-gray-900">{overallKPIs.totalPetaniAktif} Petani</div>
-            </div>
-            <div>
-              <div className="text-[10px] text-gray-500 uppercase font-bold">Total Bal Masuk</div>
-              <div className="text-sm font-bold font-mono text-gray-900">{overallKPIs.totalBalSetor} Bal</div>
-            </div>
-            <div>
-              <div className="text-[10px] text-gray-500 uppercase font-bold">Total Tonase Netto</div>
-              <div className="text-sm font-bold font-mono text-gray-900">{overallKPIs.totalKgSetor.toLocaleString('id-ID')} kg</div>
-            </div>
-            <div>
-              <div className="text-[10px] text-gray-500 uppercase font-bold">Total Nilai Pembelian</div>
-              <div className="text-sm font-bold font-mono text-[#b81d24]">Rp {overallKPIs.totalNilaiRp.toLocaleString('id-ID')}</div>
-            </div>
-          </div>
-
-          {/* Main Data Table */}
-          <table className="w-full text-left text-[11px] border-collapse border border-gray-400 mb-6">
-            <thead>
-              <tr className="bg-gray-100 font-bold text-gray-900 border-b border-gray-400">
-                <th className="p-2 border border-gray-300 text-center w-8">No</th>
-                <th className="p-2 border border-gray-300">ID & Nama Petani</th>
-                <th className="p-2 border border-gray-300">Desa / Wilayah</th>
-                <th className="p-2 border border-gray-300 text-center">Status</th>
-                <th className="p-2 border border-gray-300 text-center">Frekuensi</th>
-                <th className="p-2 border border-gray-300 text-center">Setoran (Bal)</th>
-                <th className="p-2 border border-gray-300 text-right">Netto (Kg)</th>
-                <th className="p-2 border border-gray-300 text-right">Total Bayar (Rp)</th>
-                <th className="p-2 border border-gray-300 text-center">Grade Utama</th>
-                <th className="p-2 border border-gray-300 text-center">Setoran Terakhir</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredPetaniData.map((p, idx) => (
-                <tr key={p.petani_id} className={idx % 2 === 1 ? 'bg-gray-50' : 'bg-white'}>
-                  <td className="p-1.5 border border-gray-300 text-center font-mono">{idx + 1}</td>
-                  <td className="p-1.5 border border-gray-300 font-bold">{p.nama_petani} ({p.petani_id})</td>
-                  <td className="p-1.5 border border-gray-300">{p.desa_kecamatan || p.alamat || '-'}</td>
-                  <td className="p-1.5 border border-gray-300 text-center">{p.status_aktif ? 'Aktif' : 'Nonaktif'}</td>
-                  <td className="p-1.5 border border-gray-300 text-center font-mono">{p.totalTransaksi}x</td>
-                  <td className="p-1.5 border border-gray-300 text-center font-mono font-bold">{p.totalBal}</td>
-                  <td className="p-1.5 border border-gray-300 text-right font-mono font-bold">{p.totalKg.toLocaleString('id-ID')}</td>
-                  <td className="p-1.5 border border-gray-300 text-right font-mono font-bold">Rp {p.totalNilaiRp.toLocaleString('id-ID')}</td>
-                  <td className="p-1.5 border border-gray-300 text-center font-bold">Grade {p.gradeDominan}</td>
-                  <td className="p-1.5 border border-gray-300 text-center font-mono">{p.lastTxDate}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          {/* Formal Signatures */}
-          <div className="grid grid-cols-3 gap-8 pt-6 text-center text-xs avoid-page-break">
-            <div>
-              <div className="text-gray-500">Dibuat Oleh,</div>
-              <div className="font-bold text-gray-900 mt-0.5">Operator Loket / Kasir</div>
-              <div className="h-16"></div>
-              <div className="font-semibold text-gray-800 border-t border-gray-400 pt-1 min-h-[22px]">{loadCurrentUser()?.nama_lengkap || <>&nbsp;</>}</div>
-            </div>
-            <div>
-              <div className="text-gray-500">Diperiksa Oleh,</div>
-              <div className="font-bold text-gray-900 mt-0.5">Kepala Gudang Tembakau</div>
-              <div className="h-16"></div>
-              <div className="font-semibold text-gray-800 border-t border-gray-400 pt-1 min-h-[22px]">&nbsp;</div>
-            </div>
-            <div>
-              <div className="text-gray-500">Mengetahui & Menyetujui,</div>
-              <div className="font-bold text-gray-900 mt-0.5">Direksi {COMPANY_NAME}</div>
-              <div className="h-16"></div>
-              <div className="font-semibold text-gray-800 border-t border-gray-400 pt-1 min-h-[22px]">&nbsp;</div>
-            </div>
-          </div>
-
-        </div>
-      </div>
 
     </div>
   );

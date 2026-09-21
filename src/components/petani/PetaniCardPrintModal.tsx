@@ -1,13 +1,10 @@
 import React, { useRef, useState } from 'react';
-import { 
-  Printer, 
-  Download, 
-  User, 
+import {
+  Printer,
+  Download,
+  User,
   ArrowLeft,
-  Building2,
-  ShieldCheck,
-  MapPin,
-  Phone
+  ShieldCheck
 } from 'lucide-react';
 import { Petani } from '../../types';
 import { formatDateIndo, formatRupiah } from '../../utils/formatters';

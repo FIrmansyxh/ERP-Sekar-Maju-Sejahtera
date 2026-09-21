@@ -1,4 +1,4 @@
-export type PresetTanggal = 'hari_ini' | 'kemarin' | 'tujuh_hari' | 'bulan_ini' | 'semua';
+export type PresetTanggal = 'hari_ini' | 'kemarin' | 'tujuh_hari' | 'bulan_ini' | 'tahun_ini' | 'semua';
 
 const dua = (n: number) => String(n).padStart(2, '0');
 
@@ -23,6 +23,8 @@ export function rentangPreset(preset: PresetTanggal, sekarang: Date = new Date()
     }
     case 'bulan_ini':
       return { start: formatTanggalLokal(new Date(hariIni.getFullYear(), hariIni.getMonth(), 1)), end: formatTanggalLokal(hariIni) };
+    case 'tahun_ini':
+      return { start: formatTanggalLokal(new Date(hariIni.getFullYear(), 0, 1)), end: formatTanggalLokal(hariIni) };
     case 'semua':
     default:
       return { start: '', end: '' };
@@ -31,7 +33,7 @@ export function rentangPreset(preset: PresetTanggal, sekarang: Date = new Date()
 
 /** Pilihan cepat yang cocok dengan rentang yang sedang dipakai, atau null bila rentang bebas. */
 export function presetAktif(start: string, end: string, sekarang: Date = new Date()): PresetTanggal | null {
-  const daftar: PresetTanggal[] = ['semua', 'hari_ini', 'kemarin', 'tujuh_hari', 'bulan_ini'];
+  const daftar: PresetTanggal[] = ['semua', 'hari_ini', 'kemarin', 'tujuh_hari', 'bulan_ini', 'tahun_ini'];
   return daftar.find((p) => {
     const r = rentangPreset(p, sekarang);
     return r.start === start && r.end === end;

@@ -28,8 +28,7 @@ export const HomeDashboardView: React.FC<HomeDashboardViewProps> = ({
   const allMenus = [
     { no: 1, nama: 'Home', judul: 'Dasbor Menu Utama & Status Sistem', modId: 'modul-home' },
     { no: 2, nama: 'Dashboard Laporan & Analytic ERP', judul: 'Executive Summary, Distribusi Grade & Pusat Unduh Dokumen', modId: 'modul-6-dashboard-analytic' },
-    { no: 3, nama: 'Laporan Bal', judul: 'Detail Setiap Bal, Berat, Harga Beli, Total Harga, Status Bayar & Filter Multi-Parameter', modId: 'modul-6-laporan-bal' },
-    { no: 4, nama: 'Laporan Kode Bal', judul: 'Analisa Kode Awal Bal Tembakau', modId: 'modul-6-laporan-kode-bal' },
+    { no: 3, nama: 'Laporan Bal', judul: 'Detail Setiap Bal, Rekap per Kode Bal, Berat, Harga Beli, Status Bayar & Filter Rentang Waktu', modId: 'modul-6-laporan-bal' },
     { no: 5, nama: 'Laporan Stok & Mutu Grade', judul: 'Rekapitulasi Mutu Grade, Tonase Bal, Valuasi Inventaris & Perputaran Stok', modId: 'modul-6-laporan-grade' },
     { no: 6, nama: 'Laporan Pembelian Barang', judul: 'Rekapitulasi Pembelian Multi-Parameter, Potongan Kuli & Tikar', modId: 'modul-6-laporan-pembelian' },
     { no: 7, nama: 'Laporan Petani & Setoran', judul: 'Rekapitulasi Kinerja Penyetoran, Volume Bal & Nilai Pembelian Per Petani', modId: 'modul-6-laporan-petani' },
@@ -129,8 +128,8 @@ export const HomeDashboardView: React.FC<HomeDashboardViewProps> = ({
                   <td className="py-2.5 px-4 text-center font-mono text-slate-500">
                     {idx + 1}
                   </td>
-                  <td className="py-2.5 px-4 font-medium text-slate-900 flex items-center space-x-1.5">
-                    <span>{item.nama}</span>
+                  <td className="py-2.5 px-4 font-medium text-slate-900">
+                    {item.nama}
                   </td>
                   <td className="py-2.5 px-4 text-slate-600">
                     {item.judul}

@@ -13,10 +13,11 @@ import {
   Lock
 } from 'lucide-react';
 import { TransaksiPembelian } from '../../types';
-import { formatRupiah, formatNumber, angkaTerbilang, formatDateHariBulanTahun } from '../../utils/formatters';
-import { downloadElementAsPdf, printHtmlElementDirectly } from '../../utils/printDownload';
+import { isTransaksiLunas } from '../../utils/statusBayar';
+import { formatRupiah } from '../../utils/formatters';
+import { downloadElementAsPdf } from '../../utils/printDownload';
+import { tampilkanInfo } from '../../utils/dialog';
 import { openPrintDocument } from '../../utils/openDedicatedPrint';
-import { ConfirmModal } from '../common/ConfirmModal';
 import { NotaTimbangContent } from './NotaTimbangContent';
 import { sortTransaksiItemsByInputOrder } from '../../utils/kuponSortir';
 
@@ -52,7 +53,7 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
 
   if (!isOpen || !transaksi) return null;
 
-  const isLunas = transaksi.status_pembayaran === 'lunas' || transaksi.metode_pembayaran === 'cash';
+  const isLunas = isTransaksiLunas(transaksi);
 
   const items = transaksi.items && transaksi.items.length > 0 
     ? sortTransaksiItemsByInputOrder(transaksi.items)
@@ -75,7 +76,7 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
 
   const handleDownloadPdf = async () => {
     if (!isAllWeighed) {
-      alert('Perhatian: Nota pembelian belum dapat diunduh/dicetak karena masih ada bal tembakau yang belum ditimbang (Proses 2 Timbang belum selesai).');
+      tampilkanInfo('Perhatian: Nota pembelian belum dapat diunduh/dicetak karena masih ada bal tembakau yang belum ditimbang (Proses 2 Timbang belum selesai).');
       return;
     }
     if (!receiptRef.current) return;
@@ -93,8 +94,6 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
       setIsDownloadingPdf(false);
     }
   };
-
-  const cleanDate = formatDateHariBulanTahun(transaksi.tanggal_transaksi);
 
   return (
     <div 
@@ -282,7 +281,7 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
               type="button"
               onClick={() => {
                 if (!isAllWeighed) {
-                  alert(
+                  tampilkanInfo(
                     `⚠️ Tidak Bisa Bayar!\n\nKupon ${transaksi.no_kupon} tidak dapat dibayar karena masih ada bal yang belum ditimbang di modul Timbangan.\n\nSesuai SOP, seluruh bal dalam 1 kupon harus ditimbang lengkap terlebih dahulu baru bisa lanjut ke pembayaran kasir.`
                   );
                   return;

@@ -1,33 +1,22 @@
-import React, { useState, useMemo, useRef, useEffect, useDeferredValue } from 'react';
-import { 
-  FileText, 
-  Search, 
-  RotateCcw, 
-  Download, 
-  Calendar, 
-  Tag, 
-  User, 
-  Package, 
-  Ticket,
+import React, { useState, useMemo, useEffect, useDeferredValue } from 'react';
+import {
+  FileText,
+  Search,
+  RotateCcw,
   Filter,
-  CheckCircle2, Clock,
-  TrendingUp,
+  CheckCircle2,
+  Clock,
   FileSpreadsheet,
   ArrowUp,
   ArrowDown,
   Scale,
-  ChevronUp,
-  ChevronDown,
   X
 } from 'lucide-react';
 
 import { TransaksiPembelian, Petani } from '../../types';
-import { downloadElementAsPdf } from '../../utils/printDownload';
 import { downloadExcelReport, periodeInfo, todayStamp, ExcelCellValue, ExcelRowKind } from '../../utils/excelExport';
 import { isTransaksiLunas, labelStatusBayar } from '../../utils/statusBayar';
-import { KopSurat } from '../common/KopSurat';
 import { SortIcon } from '../common/SortIcon';
-import { loadCurrentUser } from '../../utils/storage';
 import { formatDateHariBulanTahun, extractKodeBalPrefix } from '../../utils/formatters';
 import { hitungNilaiBal, hitungModalTransaksi } from '../../utils/finance';
 import { POTONGAN_GANTI_TIKAR, POTONGAN_KULI_PER_BAL, POTONGAN_TALI_PER_BAL } from '../../config/aturanTimbang';
@@ -238,10 +227,6 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
   // Table Real-Time Quick Search
   const [tableSearch, setTableSearch] = useState('');
 
-  // PDF Generation State (Direct Download)
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
-  const printReportRef = useRef<HTMLDivElement>(null);
-
   // Scroll Position State for Scroll-To-Top and Scroll-To-Bottom buttons
   const [showScrollButtons, setShowScrollButtons] = useState(false);
 
@@ -280,27 +265,6 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
       top: document.documentElement.scrollHeight,
       behavior: 'smooth',
     });
-  };
-
-  const handleDownloadPdf = async () => {
-    // Tabel PDF baru dibangun saat diunduh (tidak ikut dirender setiap kali laporan dibuka)
-    setIsGeneratingPdf(true);
-    for (let i = 0; i < 20 && !printReportRef.current; i++) {
-      await new Promise((r) => setTimeout(r, 25));
-    }
-    if (!printReportRef.current) {
-      setIsGeneratingPdf(false);
-      return;
-    }
-    try {
-      await downloadElementAsPdf(
-        printReportRef.current,
-        `Laporan_Pembelian_Barang_${new Date().toISOString().slice(0, 10)}.pdf`,
-        { orientation: 'landscape', judulLanjutan: 'Laporan Rekapitulasi Pembelian Barang' }
-      );
-    } finally {
-      setIsGeneratingPdf(false);
-    }
   };
 
 // Unique list of Kupons & Suppliers for dropdowns
@@ -519,7 +483,7 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
     [transaksiList, appliedFilters]
   );
 
-  // Rincian bal & subtotal per kupon, dipakai tabel, urutan, total, Excel, dan PDF
+  // Rincian bal & subtotal per kupon, dipakai tabel, urutan, total, dan Excel
   const urutanNoBal = sortConfigs.find((c) => c.field === 'no_bal')?.direction;
   const ringkasanMap = useMemo(
     () =>
@@ -977,15 +941,6 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
             <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
             <span>Export Excel</span>
           </button>
-          
-          <button
-            onClick={handleDownloadPdf}
-            disabled={sortedData.length === 0 || isGeneratingPdf}
-            className="px-3.5 py-1.5 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#a0181e] disabled:opacity-50 rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>{isGeneratingPdf ? 'Membuat PDF...' : 'Download Laporan (PDF)'}</span>
-          </button>
         </div>
       </div>
 
@@ -1333,146 +1288,6 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
           <span className="sr-only">Geser ke Paling Bawah</span>
         </button>
       </div>
-
-      {/* Hidden Container for Direct PDF Export (hanya dibangun saat mengunduh PDF) */}
-      {isGeneratingPdf && (
-      <div className="hidden">
-        <div 
-          ref={printReportRef} 
-          id="printable-laporan-pembelian"
-          className="w-full max-w-5xl bg-white p-6 text-gray-900 font-sans text-xs space-y-4"
-        >
-          <KopSurat judul="Laporan Rekapitulasi Pembelian Barang" />
-
-          {/* Metadata Filter */}
-          <div className="mb-4">
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px] bg-gray-50 p-2 border border-gray-200">
-              <div>
-                <span className="font-semibold text-gray-600">Periode Tanggal:</span>{' '}
-                <span>
-                  {appliedFilters.startDate || 'Awal'} s/d {appliedFilters.endDate || 'Sekarang'}
-                </span>
-              </div>
-              <div>
-                <span className="font-semibold text-gray-600">Filter Kode Beli:</span>{' '}
-                <span>{appliedFilters.grade === 'ALL' || !appliedFilters.grade ? 'Semua Kode Beli' : `Kode Beli ${appliedFilters.grade}`}</span>
-              </div>
-              <div>
-                <span className="font-semibold text-gray-600">Filter Kode Bal:</span>{' '}
-                <span>{appliedFilters.kodeBal === 'ALL' || !appliedFilters.kodeBal ? 'Semua Kode Bal' : `Kode Bal ${appliedFilters.kodeBal}`}</span>
-              </div>
-              <div>
-                <span className="font-semibold text-gray-600">Kupon:</span>{' '}
-                <span>{appliedFilters.kupon === 'ALL' || !appliedFilters.kupon ? 'Semua Kupon' : appliedFilters.kupon}</span>
-              </div>
-              <div>
-                <span className="font-semibold text-gray-600">Petani:</span>{' '}
-                <span>{petaniList.find((p) => p.petani_id === appliedFilters.supplier)?.nama_petani || 'Semua Petani'}</span>
-              </div>
-              <div>
-                <span className="font-semibold text-gray-600">Waktu Cetak Dokumen:</span>{' '}
-                <span>{new Date().toLocaleString('id-ID')}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Print Table: satu kupon = baris kupon, rincian bal, dan total kupon (tidak terbelah halaman) */}
-          <table className="no-zebra w-full text-left border-collapse border border-gray-300 text-[10px] mb-4">
-            <thead>
-              <tr className="bg-gray-100 text-gray-900 font-bold border-b border-gray-300 uppercase">
-                <th className="p-1 border border-gray-300 text-center">No</th>
-                <th className="p-1 border border-gray-300">Tanggal</th>
-                <th className="p-1 border border-gray-300">Kupon</th>
-                <th className="p-1 border border-gray-300">Petani</th>
-                <th className="p-1 border border-gray-300 text-center">No Bal</th>
-                <th className="p-1 border border-gray-300 text-right">Harga Beli (Rp/Kg)</th>
-                <th className="p-1 border border-gray-300 text-right">Bruto (Kg)</th>
-                <th className="p-1 border border-gray-300 text-right">Netto (Kg)</th>
-                <th className="p-1 border border-gray-300 text-right">Tali (Rp)</th>
-                <th className="p-1 border border-gray-300 text-right">Kuli (Rp)</th>
-                <th className="p-1 border border-gray-300 text-right">Tikar (Rp)</th>
-                <th className="p-1 border border-gray-300 text-right">Nilai Beli (Rp)</th>
-                <th className="p-1 border border-gray-300 text-right">Jumlah Bayar (Rp)</th>
-              </tr>
-            </thead>
-            {sortedData.map((row, idx) => {
-              const r = ringkasan(row);
-              return (
-                <tbody key={row.transaksi_id || idx} data-pdf-keep="true">
-                  <tr className="bg-gray-100 font-bold">
-                    <td className="p-1 border border-gray-300"></td>
-                    <td className="p-1 border border-gray-300 font-mono whitespace-nowrap">{formatDateHariBulanTahun(row.tanggal_transaksi)}</td>
-                    <td className="p-1 border border-gray-300 font-mono">{row.no_kupon || '-'}</td>
-                    <td className="p-1 border border-gray-300">{row.nama_petani || '-'}</td>
-                    <td colSpan={9} className="p-1 border border-gray-300 font-normal text-gray-600">
-                      {r.jumlahBal} bal · {labelStatusBayar(row)}
-                    </td>
-                  </tr>
-                  {r.rincian.map((bal, balIdx) => (
-                    <tr key={bal.key}>
-                      <td className="p-1 border border-gray-300 text-center">{balIdx + 1}</td>
-                      <td colSpan={3} className="p-1 border border-gray-300"></td>
-                      <td className="p-1 border border-gray-300 text-center font-mono">{bal.noBal}</td>
-                      <td className="p-1 border border-gray-300 text-right font-mono">{formatRp(bal.hargaBeli)}</td>
-                      <td className="p-1 border border-gray-300 text-right font-mono">{formatKg(bal.bruto)}</td>
-                      <td className="p-1 border border-gray-300 text-right font-mono font-semibold">{formatKg(bal.netto)}</td>
-                      <td className="p-1 border border-gray-300 text-right font-mono">{formatRp(bal.tali)}</td>
-                      <td className="p-1 border border-gray-300 text-right font-mono">{formatRp(bal.kuli)}</td>
-                      <td className="p-1 border border-gray-300 text-right font-mono">{formatRp(bal.tikar)}</td>
-                      <td className="p-1 border border-gray-300 text-right font-mono">{formatRp(bal.nilaiBeli)}</td>
-                      <td className="p-1 border border-gray-300 text-right font-mono">{formatRp(bal.jumlahBayar)}</td>
-                    </tr>
-                  ))}
-                  <tr className="bg-amber-50 font-bold">
-                    <td colSpan={6} className="p-1 border border-gray-300 text-right">Total {row.no_kupon || 'Kupon'} ({r.jumlahBal} bal)</td>
-                    <td className="p-1 border border-gray-300 text-right font-mono">{formatKg(r.bruto)}</td>
-                    <td className="p-1 border border-gray-300 text-right font-mono">{formatKg(r.netto)}</td>
-                    <td className="p-1 border border-gray-300 text-right font-mono">{formatRp(r.tali)}</td>
-                    <td className="p-1 border border-gray-300 text-right font-mono">{formatRp(r.kuli)}</td>
-                    <td className="p-1 border border-gray-300 text-right font-mono">{formatRp(r.tikar)}</td>
-                    <td className="p-1 border border-gray-300 text-right font-mono">{formatRp(r.nilaiBeli)}</td>
-                    <td className="p-1 border border-gray-300 text-right font-mono font-black">{formatRp(r.jumlahBayar)}</td>
-                  </tr>
-                </tbody>
-              );
-            })}
-            <tfoot className="bg-gray-100 font-bold">
-              <tr>
-                <td colSpan={6} className="p-1.5 border border-gray-300 text-right">TOTAL KESELURUHAN ({totals.count} KUPON, {totals.totalBal} BAL):</td>
-                <td className="p-1.5 border border-gray-300 text-right font-mono">{formatKg(totals.totalBruto)}</td>
-                <td className="p-1.5 border border-gray-300 text-right font-mono">{formatKg(totals.totalNetto)}</td>
-                <td className="p-1.5 border border-gray-300 text-right font-mono">{formatRp(totals.totalPotonganTali)}</td>
-                <td className="p-1.5 border border-gray-300 text-right font-mono">{formatRp(totals.totalPotonganKuli)}</td>
-                <td className="p-1.5 border border-gray-300 text-right font-mono">{formatRp(totals.totalPotonganTikar)}</td>
-                <td className="p-1.5 border border-gray-300 text-right font-mono">{formatRp(totals.totalNilaiHargaBeli)}</td>
-                <td className="p-1.5 border border-gray-300 text-right font-mono text-black font-black">{formatRp(totals.totalJumlahBayar)}</td>
-              </tr>
-            </tfoot>
-          </table>
-          {/* Tanda Tangan: pembuat = akun yang mengunduh, lainnya ditandatangani & ditulis manual */}
-          <div data-pdf-keep="true" className="grid grid-cols-3 gap-4 pt-6 text-center text-[11px]">
-            <div>
-              <p className="text-gray-500">Dibuat Oleh,</p>
-              <p className="font-semibold text-gray-700">Operator Loket Timbang</p>
-              <div className="h-14"></div>
-              <p className="font-bold text-gray-900 border-t border-gray-400 pt-1 mx-6 min-h-[22px]">{loadCurrentUser()?.nama_lengkap || <>&nbsp;</>}</p>
-            </div>
-            <div>
-              <p className="text-gray-500">Diperiksa Oleh,</p>
-              <p className="font-semibold text-gray-700">Petugas QC & Mutu</p>
-              <div className="h-14"></div>
-              <p className="font-bold text-gray-900 border-t border-gray-400 pt-1 mx-6 min-h-[22px]"><>&nbsp;</></p>
-            </div>
-            <div>
-              <p className="text-gray-500">Mengetahui,</p>
-              <p className="font-semibold text-gray-700">Kepala Gudang</p>
-              <div className="h-14"></div>
-              <p className="font-bold text-gray-900 border-t border-gray-400 pt-1 mx-6 min-h-[22px]"><>&nbsp;</></p>
-            </div>
-          </div>
-        </div>
-      </div>
-      )}
 
   </div>
 );

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, UserPlus, UserCheck, Shield, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { X, UserPlus, UserCheck, Shield, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { SearchableSelect } from '../common/SearchableSelect';
 import { User, UserRole } from '../../types';
 import { ALL_ROLES, ROLE_DEFINITIONS } from '../../utils/rbac';

@@ -1,31 +1,25 @@
 import { SearchableSelect } from '../common/SearchableSelect';
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { 
-  Plus, 
-  Check, 
-  Trash2, 
+import {
+  Plus,
+  Check,
+  Trash2,
   Pencil,
   X,
-  ArrowRight, 
-  AlertCircle, 
-  Layers, 
-  Calendar, 
-  User, 
-  Warehouse, 
-  CheckCircle2, 
-  Sparkles,
+  Layers,
+  CheckCircle2,
   Info,
   Clock,
-  Printer,
-  ChevronRight,
   RotateCcw,
   AlertTriangle
 } from 'lucide-react';
 import { TransaksiPembelian, Petani, TabelHarga, Barang, TransaksiItemBal, UserRole, User as UserType, SaveTransaksiMeta } from '../../types';
 import { formatRupiah, formatNoKupon, formatDateHariBulanTahun, formatNumber, generateTransaksiId, hitungPotonganTaraKg, normalizeKg } from '../../utils/formatters';
 import { useSessionDraft } from '../../hooks/useSessionDraft';
+import { alasanKuponTerkunciBayar } from '../../utils/statusBayar';
 import { alasanBalSusulanDitolak, buildBarangDariItem, hitungUlangKupon, isBalDitimbang, isKuponProsesSortir, nextBarangId, sortTransaksiItemsByInputOrder } from '../../utils/kuponSortir';
 import { isBalTerkirim } from '../../utils/kunciHapus';
+import { mintaKonfirmasi, tampilkanInfo } from '../../utils/dialog';
 import { POTONGAN_GANTI_TIKAR, POTONGAN_KULI_PER_BAL, POTONGAN_TALI_PER_BAL } from '../../config/aturanTimbang';
 
 interface SortirPageViewProps {
@@ -75,7 +69,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
   });
   const [selectedPetaniId, setSelectedPetaniId, resetDraftPetani] = useSessionDraft<string>('sortir_petani', draftUserId, '');
   const [tanggal, setTanggal] = useSessionDraft<string>('sortir_tanggal', draftUserId, () => new Date().toISOString().split('T')[0]);
-  const [petugasSortirNama, setPetugasSortirNama] = useState(currentUser?.nama_lengkap || 'Sistem');
+  const [petugasSortirNama] = useState(currentUser?.nama_lengkap || 'Sistem');
 
   // Kupon terbuka: tersimpan sejak bal pertama discan sehingga Timbangan di komputer
   // lain bisa langsung menimbang, walaupun sortir kupon ini belum selesai.
@@ -86,6 +80,8 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
     if (!openTxId) return undefined;
     const tx = transaksiList.find((t) => t.transaksi_id === openTxId);
     if (!tx) return undefined;
+    // Kupon yang sudah dibayar di Kasir terkunci, apa pun tahap sortirnya
+    if (alasanKuponTerkunciBayar(tx)) return undefined;
     if (isKuponProsesSortir(tx)) return tx;
     return susulanMode && !alasanBalSusulanDitolak(tx) ? tx : undefined;
   }, [openTxId, susulanMode, transaksiList]);
@@ -104,8 +100,8 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
     const tx = transaksiList.find((t) => t.transaksi_id === openTxId);
     if (!tx) return;
     const alasan = alasanBalSusulanDitolak(tx);
-    if (alasan && susulanMode) {
-      // Kupon dibayar di Kasir saat sedang diedit di sini
+    if (alasan && (susulanMode || isKuponProsesSortir(tx))) {
+      // Kupon dibayar di Kasir saat sedang dibuka di sini
       resetFormKuponBaru(tx.no_kupon);
       setScanFeedback({ text: alasan, isError: true });
     } else if (!isKuponProsesSortir(tx)) {
@@ -130,7 +126,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
 
   // Kupon proses sortir lain yang bisa dilanjutkan (mis. setelah browser ditutup)
   const kuponBelumSelesai = useMemo(
-    () => transaksiList.filter((t) => isKuponProsesSortir(t) && t.transaksi_id !== openTxId),
+    () => transaksiList.filter((t) => isKuponProsesSortir(t) && !alasanKuponTerkunciBayar(t) && t.transaksi_id !== openTxId),
     [transaksiList, openTxId]
   );
 
@@ -171,59 +167,11 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
   const [editGrade, setEditGrade] = useState<string>('');
 
   const barcodeInputRef = useRef<HTMLInputElement>(null);
-  const gradeSelectRef = useRef<HTMLSelectElement>(null);
-
+  
   
 
   // Compute bal suggestions for Sortir
-  const sortirBalSuggestions = useMemo(() => {
-    const q = inputNoBal.trim().toLowerCase();
-    if (!q) return [];
-    const qClean = q.replace(/[^a-zA-Z0-9]/g, '');
-
-    // Existing bales in database
-    const existingMatches = (barangList || []).filter((b) => {
-      const noBal = (b.no_bal || '').toLowerCase();
-      const bId = (b.barang_id || '').toLowerCase();
-      const noBalClean = noBal.replace(/[^a-zA-Z0-9]/g, '');
-      return noBal.includes(q) || bId.includes(q) || (qClean && noBalClean.includes(qClean));
-    });
-
-    const suggestions: { no_bal: string; kode_grade?: string; label: string; isNew?: boolean }[] = [];
-
-    // Synthesize pattern recommendations if matching format like A00, A0001, A0010, A0020
-    const currentGrade = selectedGrade || 'A';
-    const sampleNumbers = [1, 2, 3, 4, 5, 10, 15, 20, 25, 30, 50, 100];
-    sampleNumbers.forEach((num) => {
-      const formatted = `${currentGrade}${String(num).padStart(4, '0')}`;
-      if (formatted.toLowerCase().includes(q) || formatted.toLowerCase().startsWith(q)) {
-        if (!suggestions.some((s) => s.no_bal === formatted)) {
-          suggestions.push({
-            no_bal: formatted,
-            kode_grade: currentGrade,
-            label: `Format Rekomendasi Grade ${currentGrade}`,
-            isNew: true,
-          });
-        }
-      }
-    });
-
-    // Add existing from database
-    existingMatches.slice(0, 10).forEach((b) => {
-      const balNo = b.no_bal || b.barang_id;
-      if (!suggestions.some((s) => s.no_bal === balNo)) {
-        suggestions.push({
-          no_bal: balNo,
-          kode_grade: b.kode_grade,
-          label: `Master: ${b.nama_petani || 'Gudang'} (${b.kode_grade})`,
-          isNew: false,
-        });
-      }
-    });
-
-    return suggestions.slice(0, 15);
-  }, [inputNoBal, selectedGrade, barangList]);
-
+  
   // Active farmers list
   const activeFarmers = useMemo(() => {
     return petaniList.filter((p) => p.status_aktif !== false);
@@ -476,13 +424,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
     }, 100);
   };
 
-  const handleKeyDownAdder = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleAddBalItem();
-    }
-  };
-  const handleStartEdit = (item: TransaksiItemBal) => {
+    const handleStartEdit = (item: TransaksiItemBal) => {
     setEditingItemId(item.item_id);
     setEditNoBal(item.no_bal);
     setEditGrade(item.kode_grade);
@@ -574,7 +516,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
     });
   };
 
-  const handleRemoveItem = (itemId: string) => {
+  const handleRemoveItem = async (itemId: string) => {
     if (!openTx) return;
     const item = balItems.find((it) => it.item_id === itemId);
     if (!item) return;
@@ -593,7 +535,11 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
         });
         return;
       }
-      if (!window.confirm(`Bal ${item.no_bal} sudah ditimbang (${formatNumber(item.berat_kg)} kg). Hapus dari Kupon ${openTx.no_kupon}? Hasil timbangnya ikut terhapus.`)) return;
+      const setuju = await mintaKonfirmasi(
+        `Bal ${item.no_bal} sudah ditimbang (${formatNumber(item.berat_kg)} kg). Hapus dari Kupon ${openTx.no_kupon}? Hasil timbangnya ikut terhapus.`,
+        { judul: 'Hapus Bal yang Sudah Ditimbang', teksOk: 'Ya, Hapus Bal', varian: 'danger' }
+      );
+      if (!setuju) return;
     }
     if (isSusulan && balItems.length <= 1) {
       setScanFeedback({
@@ -632,7 +578,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
   const handleSelesaiSortir = () => {
     if (!openTx) return;
     if (balItems.length === 0) {
-      alert('Tambahkan minimal 1 bal tembakau sebelum menyelesaikan sortir.');
+      tampilkanInfo('Tambahkan minimal 1 bal tembakau sebelum menyelesaikan sortir.');
       return;
     }
 
@@ -656,13 +602,18 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
   };
 
   // Membatalkan kupon yang belum ada bal tertimbang
-  const handleBatalkanKupon = () => {
+  const handleBatalkanKupon = async () => {
     if (!openTx || !onDeleteTransaksi) return;
     if (balItems.some(isBalDitimbang)) {
-      alert(`Kupon ${openTx.no_kupon} tidak bisa dibatalkan karena sebagian bal sudah ditimbang. Hapus bal yang belum ditimbang satu per satu, atau selesaikan sortir.`);
+      tampilkanInfo(`Kupon ${openTx.no_kupon} tidak bisa dibatalkan karena sebagian bal sudah ditimbang. Hapus bal yang belum ditimbang satu per satu, atau selesaikan sortir.`);
       return;
     }
-    if (!window.confirm(`Batalkan Kupon ${openTx.no_kupon}? ${balItems.length} bal pada kupon ini akan dihapus.`)) return;
+    const setuju = await mintaKonfirmasi(`Batalkan Kupon ${openTx.no_kupon}? ${balItems.length} bal pada kupon ini akan dihapus.`, {
+      judul: 'Batalkan Kupon',
+      teksOk: 'Ya, Batalkan Kupon',
+      varian: 'danger',
+    });
+    if (!setuju) return;
     onDeleteTransaksi(openTx.transaksi_id, 'Kupon dibatalkan dari Sortir sebelum selesai');
     resetOpenTxId();
     setScanFeedback({ text: `Kupon ${openTx.no_kupon} dibatalkan.`, isError: false });
@@ -671,6 +622,11 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
   // Melanjutkan kupon proses sortir yang belum ditutup
   // Kupon yang sortirnya sudah ditutup dibuka dalam mode bal susulan
   const handleLanjutkanKupon = (tx: TransaksiPembelian) => {
+    const alasanTerkunci = alasanKuponTerkunciBayar(tx);
+    if (alasanTerkunci) {
+      setScanFeedback({ text: alasanTerkunci, isError: true });
+      return;
+    }
     const susulan = !isKuponProsesSortir(tx);
     setOpenTxId(tx.transaksi_id);
     setSusulanMode(susulan);

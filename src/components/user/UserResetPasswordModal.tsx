@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, KeyRound, AlertTriangle, CheckCircle2, Lock, Eye, EyeOff } from 'lucide-react';
+import { X, KeyRound, AlertTriangle, Eye, EyeOff } from 'lucide-react';
 import { User } from '../../types';
 
 interface UserResetPasswordModalProps {

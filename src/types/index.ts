@@ -60,6 +60,7 @@ export interface RolePermissionInfo {
 }
 
 // proses_sortir = bal sudah discan di Sortir tetapi belum ditimbang
+/** 'terkirim_sample' sudah tidak dipakai (Reclass tidak mengubah bal); data lama dipulihkan lewat pulihkanStatusSampleLama. */
 export type StatusStokBarang = 'proses_sortir' | 'di_gudang' | 'siap_kirim' | 'keluar' | 'terkirim_sample';
 
 
@@ -83,6 +84,11 @@ export interface Barang {
   nama_petani?: string;
   desa_kecamatan?: string;
   catatan?: string;
+  catatan_qc?: string; // jejak pengiriman sample, mis. "Sample Batch X dikirim ke Y"
+  barcode?: string;
+  kode_harga_jual?: string; // kode Master Harga Jual bawaan bal
+  pengiriman_id?: string; // Surat Jalan tempat bal tercatat selama berstatus keluar
+  created_at?: string; // waktu bal tercatat (ISO), dipakai untuk mengurutkan bal terakhir ditimbang
 }
 
 export interface MasterHargaJual {
@@ -222,7 +228,8 @@ export interface SaveTransaksiMeta {
 
 export type StatusSample ='sample' | 'dikirim' | 'diterima' | 'disetujui' | 'ditolak' | 'nego';
 
-export type StatusBatchSample = 'sample' | 'diproses' | 'dikirim' | 'dibatalkan' | 'selesai';
+/** 'draft' = disiapkan tetapi belum final; surat sample baru bisa dicetak setelah 'sample' (siap pakai). */
+export type StatusBatchSample = 'draft' | 'sample' | 'diproses' | 'dikirim' | 'dibatalkan' | 'selesai';
 
 export interface SampleItemDetail {
   sample_item_id: string; // e.g. SMP-001

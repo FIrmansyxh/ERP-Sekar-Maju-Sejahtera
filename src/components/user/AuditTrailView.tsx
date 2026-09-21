@@ -1,21 +1,13 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { 
-  ShieldCheck, 
-  Search, 
-  RefreshCw, 
-  Download, 
-  Clock, 
-  User, 
-  Layers, 
-  FileText, 
-  AlertTriangle, 
-  CheckCircle2,
-  Trash2,
-  Filter
+import {
+  ShieldCheck,
+  Search,
+  RefreshCw,
+  Download,
+  FileText
 } from 'lucide-react';
 import { AuditLogEntry } from '../../types';
 import { loadAuditLogData } from '../../utils/storage';
-import { formatDateTimeIndo } from '../../utils/formatters';
 import { downloadExcelReport, todayStamp } from '../../utils/excelExport';
 import { Pagination } from '../common/Pagination';
 
@@ -25,7 +17,7 @@ export const AuditTrailView: React.FC = () => {
   const [filterModul, setFilterModul] = useState<string>('all');
   const [filterAksi, setFilterAksi] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [itemsPerPage, setItemsPerPage] = useState<number>(15);
+  const [itemsPerPage] = useState<number>(15);
 
   const refreshLogs = () => {
     const data = loadAuditLogData();

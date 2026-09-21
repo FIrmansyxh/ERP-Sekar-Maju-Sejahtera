@@ -12,7 +12,8 @@ Dokumen terkait DB redesign ditahan sampai perintah: `lanjut rencana mapping db`
 |------|--------|---------|
 | **A (P0)** | **Selesai (2026-09-18)** | `PUT /transaksi/{id}/sortir-items`, `PUT /sample-batch/{id}`, DO stok=`keluar`, sync FE API-first + refetch barang setelah bayar/sample/DO |
 | **D (keandalan simpan)** | **Selesai FE (2026-09-20)** | Antrean sinkron kupon, verifikasi hasil server, percobaan ulang, muat ulang server tidak menimpa perubahan tertunda, lencana status di Header. Perlu dukungan BE: lihat `DOKUMENTASI_DATABASE.md` bagian 6 |
-| B (P1) | Belum | Delete harga/transaksi, auth:sanctum, wire update barang UI |
+| **E (antrean mutasi non-kupon)** | **Selesai FE (2026-09-21)** | Hapus batch sample/Surat Jalan/kupon, edit petani/harga/batch/Surat Jalan, status bal dan akun kini lewat `antrianMutasi` (dicoba ulang, diverifikasi, ditimpakan ke daftar server dua kali). Perlu dukungan BE: `DOKUMENTASI_DATABASE.md` bagian 5.3 |
+| B (P1) | Sebagian | Delete harga tidak ada di UI. Delete transaksi/batch/DO dan wire update barang sudah di FE; endpoint BE menunggu (5.3). auth:sanctum belum |
 | **C3 laporan** | **Selesai sebagian (2026-09-18)** | Refresh list saat buka `modul-6-*`, `getDashboardStats` + fallback SQL, mapper DO isi `total_berat_kg`/`total_nilai_deal`, laporan valuasi pakai `barangLunasList` |
 | C (P2 sisanya) | Belum | RBAC BE, deprecate sample legacy |
 

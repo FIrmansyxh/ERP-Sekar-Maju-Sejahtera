@@ -1,12 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  X, 
-  RotateCcw, 
-  Sparkles, 
-  AlertCircle, 
-  Check, 
-  CreditCard,
-  History,
+import {
+  RotateCcw,
+  Sparkles,
   ArrowLeft,
   Save
 } from 'lucide-react';
