@@ -6,10 +6,7 @@ import {
   Calendar,
   ArrowUp,
   ArrowDown,
-  Scale,
-  DollarSign,
   FileSpreadsheet,
-  TrendingUp,
   SlidersHorizontal,
   X
 } from 'lucide-react';
@@ -95,9 +92,8 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
   const [sortConfigs, setSortConfigs] = useState<SortConfig[]>([]);
 
   // UI States
-  // Panel Ringkasan dan Filter bisa disembunyikan (pilihan diingat) agar tabel lebih luas
+  // Panel Filter bisa disembunyikan (pilihan diingat) agar tabel lebih luas
   const tampilan = useLaporanTampilan('bal');
-  const showSummaryCards = tampilan.tampilRingkasan;
   const isFilterPanelOpen = tampilan.tampilFilter;
   const jumlahFilterAktif = Object.values(appliedFilters).filter((v) => v !== '' && v !== 'ALL').length;
   const [itemsPerPage, setItemsPerPage] = useState<number>(20);
@@ -952,110 +948,6 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
           </button>
         </div>
       </div>
-
-      {/* 2. Ringkasan & Sub-Ringkasan Grade (Di atas Filter Data); bisa disembunyikan lewat toolbar Tampilan */}
-      {showSummaryCards && (
-      <div className="bg-white border border-gray-200 shadow-xs">
-        <div className="px-4 py-3 bg-[#f8f9fa] border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div className="flex items-center space-x-2">
-            <TrendingUp className="w-4 h-4 text-[#b81d24]" />
-            <h2 className="text-xs font-bold text-gray-900 uppercase tracking-wide">
-              Ringkasan
-            </h2>
-            <span className="px-2 py-0.5 text-[10px] font-bold bg-white text-gray-700 border border-gray-300 rounded-xs">
-              {totals.totalBal} Bal Terdata
-            </span>
-          </div>
-          <div className="flex items-center space-x-3">
-            <p className="text-[11px] text-gray-500 font-medium">
-              Total Tonase: <strong className="text-gray-900 font-mono">{totals.totalNetto.toFixed(1)} kg</strong> ({(totals.totalNetto / 1000).toFixed(2)} Ton)
-            </p>
-          </div>
-        </div>
-
-        {/* Collapsible Content */}
-        {showSummaryCards && (
-          <div className="overflow-hidden">
-            <div className="p-4 space-y-4">
-          {/* Key Metrics Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            {/* Card 1: Total Bal */}
-            <div className="bg-white p-3.5 border border-gray-200 rounded-none shadow-xs space-y-1 hover:border-gray-300 transition">
-              <div className="flex items-center justify-between text-gray-500 text-[11px] font-medium">
-                <span>Total Populasi Bal</span>
-                <Package className="w-4 h-4 text-slate-700" />
-              </div>
-              <div className="text-xl font-bold font-mono text-gray-950">
-                {totals.totalBal.toLocaleString('id-ID')}{' '}
-                <span className="text-xs font-normal text-gray-500 font-sans">Bal</span>
-              </div>
-              <div className="text-[10px] text-gray-500">dari {barangList.length} bal</div>
-            </div>
-
-            {/* Card 2: Total Tonase Netto */}
-            <div className="bg-white p-3.5 border border-gray-200 rounded-none shadow-xs space-y-1 hover:border-gray-300 transition">
-              <div className="flex items-center justify-between text-slate-900 text-[11px] font-semibold">
-                <span>Total Berat Netto (Lunas)</span>
-                <Scale className="w-4 h-4 text-slate-700" />
-              </div>
-              <div className="text-xl font-black font-mono text-gray-900">
-                {totals.totalNetto.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}{' '}
-                <span className="text-xs font-bold text-slate-700 font-sans">Kg</span>
-              </div>
-              <div className="text-[10px] text-slate-800 font-medium">
-                ≈ {(totals.totalNetto / 1000).toFixed(2)} Ton (Bruto: {totals.totalBruto.toFixed(1)} kg)
-              </div>
-            </div>
-
-            {/* Card 3: Rata-rata Berat / Bal */}
-            <div className="bg-white p-3.5 border border-gray-200 rounded-none shadow-xs space-y-1 hover:border-gray-300 transition">
-              <div className="flex items-center justify-between text-gray-500 text-[11px] font-medium">
-                <span>Rata-rata Berat / Bal</span>
-                <TrendingUp className="w-4 h-4 text-slate-700" />
-              </div>
-              <div className="text-xl font-bold font-mono text-gray-950">
-                {totals.avgNetto.toFixed(1)}{' '}
-                <span className="text-xs font-normal text-gray-500 font-sans">Kg/bal</span>
-              </div>
-              <div className="text-[10px] text-gray-500">
-                Min: {totals.minBerat.toFixed(1)} kg • Max: {totals.maxBerat.toFixed(1)} kg
-              </div>
-            </div>
-
-            {/* Card 4: Rata-rata Harga Beli */}
-            <div className="bg-white p-3.5 border border-gray-200 rounded-none shadow-xs space-y-1 hover:border-gray-300 transition">
-              <div className="flex items-center justify-between text-gray-500 text-[11px] font-medium">
-                <span>Rata-rata Harga Beli</span>
-                <DollarSign className="w-4 h-4 text-gray-500" />
-              </div>
-              <div className="text-xl font-bold font-mono text-gray-900">
-                Rp {Math.round(totals.avgHargaKg).toLocaleString('id-ID')}{' '}
-                <span className="text-xs font-normal text-gray-500 font-sans">/kg</span>
-              </div>
-              <div className="text-[10px] text-gray-500">
-                Min: Rp {totals.minHarga.toLocaleString('id-ID')} • Max: Rp {totals.maxHarga.toLocaleString('id-ID')}
-              </div>
-            </div>
-
-            {/* Card 5: Total Nilai Pembelian */}
-            <div className="bg-white p-3.5 border border-gray-200 rounded-none shadow-xs space-y-1 col-span-2 sm:col-span-1 hover:border-gray-300 transition">
-              <div className="flex items-center justify-between text-[#b81d24] text-[11px] font-bold">
-                <span>Total Nilai Pembelian (Lunas)</span>
-                <DollarSign className="w-4 h-4 text-[#b81d24]" />
-              </div>
-              <div className="text-lg sm:text-xl font-black font-mono text-[#b81d24]">
-                Rp {Math.round(totals.totalNilai).toLocaleString('id-ID')}
-              </div>
-              <div className="text-[10px] text-gray-600 font-medium">
-                Kredit: Rp {Math.round(totals.totalNilaiKredit).toLocaleString('id-ID')}
-              </div>
-            </div>
-          </div>
-        </div>
-        </div>
-      )}
-    </div>
-      )}
 
       {/* 3. Collapsible Filter Control Section */}
       {isFilterPanelOpen && (
