@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lock, User as UserIcon, Eye, EyeOff, ArrowRight, AlertCircle, Monitor } from 'lucide-react';
+import { Lock, User as UserIcon, Eye, EyeOff, ArrowRight, AlertCircle, Monitor, Check } from 'lucide-react';
 import { User } from '../../types';
 import { ErpApiService } from '../../services/erpApi';
 import { APP_BUILD, APP_EDITION, APP_VERSION } from '../../config/appInfo';
@@ -73,6 +73,15 @@ export const LoginView: React.FC<LoginViewProps> = ({
               </h1>
               <p className="text-sm text-red-100/90 font-medium">Sistem Data Gudang Tembakau</p>
             </div>
+
+            <ul className="space-y-2.5 text-xs text-red-50/90 font-medium">
+              {['Sortir, Timbang, Kasir, dan Pengiriman dalam satu alur', 'Data petani, harga, dan bal tembakau', 'Laporan dan analitik real-time'].map((poin) => (
+                <li key={poin} className="flex items-start space-x-2">
+                  <Check className="w-3.5 h-3.5 text-red-200 shrink-0 mt-0.5" />
+                  <span>{poin}</span>
+                </li>
+              ))}
+            </ul>
 
             <div className="pt-6 mt-8 border-t border-white/15 text-[11px] text-red-200/90 leading-relaxed font-sans">
               <div>Pamekasan, Madura - Jawa Timur</div>
