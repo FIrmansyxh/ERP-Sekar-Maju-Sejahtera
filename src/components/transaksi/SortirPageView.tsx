@@ -16,11 +16,12 @@ import {
 import { TransaksiPembelian, Petani, TabelHarga, Barang, TransaksiItemBal, UserRole, User as UserType, SaveTransaksiMeta } from '../../types';
 import { formatRupiah, formatNoKupon, formatDateHariBulanTahun, formatNumber, generateTransaksiId, hitungPotonganTaraKg, normalizeKg } from '../../utils/formatters';
 import { useSessionDraft } from '../../hooks/useSessionDraft';
-import { alasanKuponTerkunciBayar } from '../../utils/statusBayar';
+import { alasanKuponTerkunciBayar, isTransaksiLunas } from '../../utils/statusBayar';
 import { alasanBalSusulanDitolak, buildBarangDariItem, hitungUlangKupon, isBalDitimbang, isKuponProsesSortir, nextBarangId, sortTransaksiItemsByInputOrder } from '../../utils/kuponSortir';
 import { isBalTerkirim } from '../../utils/kunciHapus';
 import { mintaKonfirmasi, tampilkanInfo } from '../../utils/dialog';
 import { POTONGAN_GANTI_TIKAR, POTONGAN_KULI_PER_BAL, POTONGAN_TALI_PER_BAL } from '../../config/aturanTimbang';
+import { rekapPerKode, BalRekapInput } from '../../utils/rekapKodeBal';
 
 interface SortirPageViewProps {
   petaniList: Petani[];
@@ -177,17 +178,47 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
     return petaniList.filter((p) => p.status_aktif !== false);
   }, [petaniList]);
 
-  // Set default farmer atau auto-select petani baru yang baru didaftarkan
+  // Auto-select petani baru yang baru didaftarkan lewat "+ Petani Baru".
+  // Tidak auto-pilih petani pertama secara default agar operator wajib memilih sendiri.
   const prevPetaniLenRef = useRef(petaniList.length);
   useEffect(() => {
-    if (activeFarmers.length > 0 && !selectedPetaniId) {
-      setSelectedPetaniId(activeFarmers[0].petani_id);
-    } else if (petaniList.length > prevPetaniLenRef.current && !openTx && activeFarmers.length > 0) {
-      // Petani baru saja ditambahkan, auto-pilih petani yang baru masuk di paling atas
+    if (petaniList.length > prevPetaniLenRef.current && !openTx && activeFarmers.length > 0) {
       setSelectedPetaniId(activeFarmers[0].petani_id);
     }
     prevPetaniLenRef.current = petaniList.length;
-  }, [activeFarmers, selectedPetaniId, petaniList.length, openTx]);
+  }, [activeFarmers, petaniList.length, openTx]);
+
+  // Rekap jumlah bal yang sudah masuk sortir per kode bal (SB, HF, dst.), lintas semua kupon.
+  const rekapKodeMasuk = useMemo(() => {
+    const rows: BalRekapInput[] = [];
+    transaksiList.forEach((tx) => {
+      const status_bayar = isTransaksiLunas(tx) ? 'lunas' : 'belum_lunas';
+      if (tx.items && tx.items.length > 0) {
+        tx.items.forEach((it) => {
+          if (!it.no_bal) return;
+          rows.push({
+            no_bal: it.no_bal,
+            berat_kg: it.berat_kg,
+            berat_bruto_kg: it.berat_bruto_kg,
+            harga_per_kg: it.harga_per_kg,
+            status_bayar,
+            petani_id: tx.petani_id,
+            nama_petani: tx.nama_petani,
+          });
+        });
+      } else if (tx.no_bal) {
+        rows.push({
+          no_bal: tx.no_bal,
+          berat_kg: tx.berat_kg,
+          harga_per_kg: tx.harga_per_kg,
+          status_bayar,
+          petani_id: tx.petani_id,
+          nama_petani: tx.nama_petani,
+        });
+      }
+    });
+    return rekapPerKode(rows);
+  }, [transaksiList]);
 
   
 
@@ -976,6 +1007,19 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
 
           {/* Bal Items Table for Current Batch */}
           <div className="space-y-2">
+            {rekapKodeMasuk.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                <span className="text-slate-500 font-medium">Sudah Masuk Sortir:</span>
+                {rekapKodeMasuk.map((r) => (
+                  <span
+                    key={r.kode}
+                    className="px-2 py-0.5 bg-slate-100 text-slate-700 border border-slate-200 rounded-xs font-semibold"
+                  >
+                    {r.kode}: {r.total} Bal
+                  </span>
+                ))}
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-800 flex items-center space-x-2">
                 <span>Daftar Bal</span>

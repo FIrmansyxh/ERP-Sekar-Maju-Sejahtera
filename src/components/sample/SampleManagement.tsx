@@ -275,7 +275,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
       badgeText: 'TERSEDIA',
       badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-300',
       message: `Bal #${bal.no_bal || bal.barang_id} siap digunakan.`,
-      detail: beratBrutoBal(bal) > 0 ? `${formatNumber(beratBrutoBal(bal), 1)} kg bruto` : 'Baru disortir, belum ditimbang',
+      detail: beratBrutoBal(bal) > 0 ? '' : 'Baru disortir, belum ditimbang',
     };
   };
 
@@ -513,7 +513,8 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
       hargaTawaranKg: foundHJ.harga_jual,
     };
 
-    setSelectedBalItems((prev) => [...prev, newItem]);
+    // Bal yang baru discan tampil paling atas di tabel
+    setSelectedBalItems((prev) => [newItem, ...prev]);
     setScanSampleAlert({
       type: 'success',
       message: `BERHASIL DITAMBAHKAN: Bal #${newItem.noBal} masuk ke tabel dengan Harga Jual ${foundHJ.kode}.`,
@@ -1065,6 +1066,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                           balSuggestions.map((bal, idx) => {
                             const isHighlighted = idx === highlightedBalIndex;
                             const usage = checkBalUsage(bal);
+                            const hargaBeli = resolveHargaBeli(bal);
                             return (
                               <button
                                 type="button"
@@ -1083,9 +1085,16 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                                     <span className={`px-1.5 py-0.5 text-[9px] font-bold border rounded-2xs ${usage.badgeClass}`}>
                                       {usage.badgeText}
                                     </span>
+                                    {hargaBeli > 0 && (
+                                      <span className="text-[10px] font-bold text-[#b81d24]">
+                                        {formatRupiah(hargaBeli)}/kg
+                                      </span>
+                                    )}
                                   </div>
                                   <div className="text-[10px] text-gray-500 truncate mt-0.5">
-                                    {beratBrutoBal(bal) > 0 ? `${formatNumber(beratBrutoBal(bal), 1)} kg bruto • ` : ''}Petani: {bal.nama_petani || '-'} • {usage.detail}
+                                    Petani: {bal.nama_petani || '-'}
+                                    {beratBrutoBal(bal) > 0 ? ` • ${formatNumber(beratBrutoBal(bal), 1)} kg bruto` : ''}
+                                    {usage.detail ? ` • ${usage.detail}` : ''}
                                   </div>
                                 </div>
                                 {!usage.isAvailable && (
