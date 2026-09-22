@@ -96,7 +96,7 @@ describe('Pengiriman Reguler: mode edit Surat Jalan yang belum Selesai', () => {
     render(<PengirimanManagement {...props} />);
 
     await userEvent.type(screen.getByPlaceholderText(/Scan \/ ketik No Bal/), 'B9{Enter}');
-    expect(screen.getByText(/sudah berstatus KELUAR/)).toBeInTheDocument();
+    expect(screen.getByText(/sudah tercatat di Surat Jalan lain/)).toBeInTheDocument();
   });
 
   it('Surat Jalan yang sudah Selesai tidak dapat diedit', () => {

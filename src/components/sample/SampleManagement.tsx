@@ -451,11 +451,13 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
 
     
   // Compute harga jual suggestions
+  // Dicocokkan HANYA lewat kode (bukan nominal harga): dua kode berbeda bisa punya harga yang sama persis,
+  // jadi mencocokkan lewat angka harga akan memunculkan kode yang salah.
   const hargaJualSuggestions = useMemo(() => {
     const q = scanHargaJual.trim().toLowerCase();
-    let matches = activeHargaJualList.filter((h) => 
-      h.status_aktif !== false && 
-      (!q || h.kode.toLowerCase().includes(q) || h.harga_jual.toString().includes(q))
+    let matches = activeHargaJualList.filter((h) =>
+      h.status_aktif !== false &&
+      (!q || h.kode.toLowerCase().includes(q))
     );
 
     matches.sort((a, b) => {

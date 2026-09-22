@@ -919,6 +919,7 @@ export class ErpApiService {
       nomor_kontrak: p.nomor_kontrak,
       catatan: p.catatan,
       batch_sample_id_ref: p.batch_sample_id_ref,
+      aturan_netto: Array.isArray(p.aturan_netto) && p.aturan_netto.length > 0 ? p.aturan_netto : undefined,
       barang_ids: barangIds,
       total_bal: Number(p.total_bal) || items.length,
       total_berat_kg: Number(p.total_berat_kg) || totalBerat,

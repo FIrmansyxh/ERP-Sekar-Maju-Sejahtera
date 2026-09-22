@@ -55,6 +55,18 @@ export function pulihkanStatusSampleLama<T extends Pick<Barang, 'status_stok' | 
  * dibayar, jadi tanpa ini bal yang belum lunas hilang dari daftar setiap kali data dimuat ulang dari server.
  * Pencocokan lewat No Bal (unik) supaya bal yang sudah ada di server tidak dobel.
  */
+/**
+ * Nomor urut bal dalam kupon, diambil dari akhiran item_id (mis. "TRX-...-BAL-02" -> 2), BUKAN dari
+ * posisinya di larik (bisa berbeda kalau bal pernah ditambah/dihapus tidak berurutan) atau angka pada
+ * No Bal (dua No Bal seperti "12A" dan "12B" bisa mengandung angka yang sama). Harus sama dengan aturan
+ * di backend (TransaksiController::urutanDariItemId) supaya ID sementara ini nanti cocok dengan barang_id
+ * sungguhan begitu kupon dibayar.
+ */
+function urutanDariItemId(itemId: string | undefined, fallback: number): number {
+  const m = itemId ? itemId.match(/-BAL-(\d+)$/) : null;
+  return m ? parseInt(m[1], 10) : fallback;
+}
+
 export function lengkapiBalDariKupon(barangList: Barang[], transaksiList: TransaksiPembelian[]): Barang[] {
   const ada = new Set<string>();
   for (const b of barangList) {
@@ -66,7 +78,8 @@ export function lengkapiBalDariKupon(barangList: Barang[], transaksiList: Transa
     (tx.items || []).forEach((it, idx) => {
       const noBal = String(it.no_bal || '').trim().toUpperCase();
       if (!noBal) return;
-      const idBal = it.barang_id || `BAL-${String(tx.transaksi_id || '').replace('TRX-', '')}-${String(idx + 1).padStart(2, '0')}`;
+      const seq = urutanDariItemId(it.item_id, idx + 1);
+      const idBal = it.barang_id || `BAL-${String(tx.transaksi_id || '').replace('TRX-', '')}-${String(seq).padStart(2, '0')}`;
       if (ada.has(noBal) || ada.has(idBal.toUpperCase())) return;
       ada.add(noBal);
       ada.add(idBal.toUpperCase());

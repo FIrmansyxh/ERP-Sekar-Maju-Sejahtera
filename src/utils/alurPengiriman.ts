@@ -13,16 +13,30 @@ export const LABEL_STATUS_PENGIRIMAN: Record<string, string> = {
   selesai: 'Selesai',
 };
 
-/** Bal yang keluar dari Surat Jalan kembali ke gudang (hanya bal yang memang berstatus keluar). */
+/**
+ * Bal yang dikeluarkan dari muatan Surat Jalan (dibatalkan, atau dikeluarkan lewat edit) tidak lagi
+ * menunjuk Surat Jalan itu. Status stok hanya ikut dibalik ke "di_gudang" bila kebetulan sudah
+ * "keluar" (data lama, atau Surat Jalan yang dibatalkan setelah sempat Selesai); bal yang belum
+ * pernah "keluar" (Surat Jalan belum Selesai) memang sudah "di_gudang" sejak awal.
+ */
 export function kembalikanBalKeGudang(barangList: Barang[], idBal: ReadonlySet<string>): Barang[] {
-  return barangList.map((b) =>
-    idBal.has(b.barang_id) && b.status_stok === 'keluar'
-      ? { ...b, status_stok: 'di_gudang' as const, pengiriman_id: undefined }
-      : b
-  );
+  return barangList.map((b) => {
+    if (!idBal.has(b.barang_id)) return b;
+    return {
+      ...b,
+      status_stok: b.status_stok === 'keluar' ? ('di_gudang' as const) : b.status_stok,
+      pengiriman_id: undefined,
+    };
+  });
 }
 
-/** Bal yang masuk Surat Jalan menjadi keluar gudang dan mencatat Surat Jalan-nya. */
+/** Bal dicatat masuk muatan Surat Jalan. Status stok TIDAK berubah di sini: bal baru benar-benar
+ * "keluar" gudang saat Surat Jalan ini berstatus Selesai (lihat `keluarkanBal`). */
+export function masukkanBalKeMuatan(barangList: Barang[], idBal: ReadonlySet<string>, pengirimanId: string): Barang[] {
+  return barangList.map((b) => (idBal.has(b.barang_id) ? { ...b, pengiriman_id: pengirimanId } : b));
+}
+
+/** Bal benar-benar keluar gudang: dipanggil saat Surat Jalan yang memuatnya berstatus Selesai. */
 export function keluarkanBal(barangList: Barang[], idBal: ReadonlySet<string>, pengirimanId: string): Barang[] {
   return barangList.map((b) =>
     idBal.has(b.barang_id) ? { ...b, status_stok: 'keluar' as const, pengiriman_id: pengirimanId } : b

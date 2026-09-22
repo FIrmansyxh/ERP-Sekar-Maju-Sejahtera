@@ -43,7 +43,7 @@ import { useSessionDraft } from '../../hooks/useSessionDraft';
 import { beratBrutoBal, beratBrutoItemSample } from '../../utils/beratKirim';
 import { AturanNettoBaris, NettoJualHasil, barisAturanBaru, bacaAturanNetto, hitungNettoJual } from '../../utils/aturanNetto';
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
-import { isSuratJalanTerkunci } from '../../utils/kunciHapus';
+import { isBalTerkirim, isSuratJalanTerkunci } from '../../utils/kunciHapus';
 
 /** Penanda bal yang belum punya harga jual (pengganti "Rp 0" / angka karangan). */
 const BelumAdaHarga: React.FC = () => (
@@ -104,6 +104,17 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   );
   // Bal yang tercatat di Surat Jalan yang diedit: berstatus keluar tetapi masih milik Surat Jalan ini
   const idBalSuratJalanDiedit = useMemo(() => new Set(suratJalanDiedit?.barang_ids || []), [suratJalanDiedit]);
+  // Bal yang sudah tercatat di Surat Jalan LAIN (apa pun statusnya): sejak Surat Jalan dibuat bal sudah
+  // "dipesan" walau status stoknya baru berubah ke keluar saat Selesai, jadi tidak boleh dipesan dobel
+  // ke Surat Jalan lain memakai cek status_stok saja.
+  const idBalDiSuratJalanLain = useMemo(
+    () => new Set(
+      pengirimanList
+        .filter((p) => p.pengiriman_id !== editingPengirimanId)
+        .flatMap((p) => p.barang_ids || [])
+    ),
+    [pengirimanList, editingPengirimanId]
+  );
 
   const [isBatchDropdownOpen, setIsBatchDropdownOpen] = useState(false);
   const [highlightedBatchIndex, setHighlightedBatchIndex] = useState(0);
@@ -705,10 +716,10 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       setScanInputText('');
     } else {
       // In regular mode
-      if (targetBal.status_stok === 'keluar' && !idBalSuratJalanDiedit.has(targetBal.barang_id)) {
+      if (isBalTerkirim(targetBal, idBalDiSuratJalanLain) && !idBalSuratJalanDiedit.has(targetBal.barang_id)) {
         setScanAlert({
           type: 'error',
-          message: `PERINGATAN: Bal #${targetBal.no_bal || targetBal.barang_id} sudah berstatus KELUAR / telah dikirim sebelumnya!`,
+          message: `PERINGATAN: Bal #${targetBal.no_bal || targetBal.barang_id} sudah tercatat di Surat Jalan lain!`,
         });
         setScanInputText('');
         return;
@@ -773,10 +784,10 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     );
   }, [activeBatchSampleList, selectedBatchSampleId]);
 
-  // Bal yang sudah dikirim lewat Surat Jalan lain (bal milik Surat Jalan yang sedang diedit tidak termasuk)
+  // Bal yang sudah dikirim/tercatat lewat Surat Jalan lain (bal milik Surat Jalan yang sedang diedit tidak termasuk)
   const isBalSudahDikirim = (bal: Barang): boolean => {
     if (idBalSuratJalanDiedit.has(bal.barang_id)) return false;
-    if (bal.status_stok === 'keluar') return true;
+    if (isBalTerkirim(bal, idBalDiSuratJalanLain)) return true;
     if (sourceMode === 'sample_batch') {
       return Boolean(activeBatchObj?.items?.find((it) => it.barang_id === bal.barang_id)?.sudah_dikirim_do);
     }
@@ -836,7 +847,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     });
 
     return matches.slice(0, 20);
-  }, [scanInputText, sourceMode, activeBatchObj, barangList, selectedBalIds, idBalSuratJalanDiedit]);
+  }, [scanInputText, sourceMode, activeBatchObj, barangList, selectedBalIds, idBalSuratJalanDiedit, idBalDiSuratJalanLain]);
 
   // Select bal from suggestions
   const handleSelectSuggestedShipmentBal = (bal: Barang) => {
@@ -885,10 +896,10 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       setScanInputText('');
       setIsScanDropdownOpen(false);
     } else {
-      if (bal.status_stok === 'keluar' && !idBalSuratJalanDiedit.has(bal.barang_id)) {
+      if (isBalTerkirim(bal, idBalDiSuratJalanLain) && !idBalSuratJalanDiedit.has(bal.barang_id)) {
         setScanAlert({
           type: 'error',
-          message: `PERINGATAN: Bal #${bal.no_bal || bal.barang_id} sudah berstatus KELUAR / telah dikirim!`,
+          message: `PERINGATAN: Bal #${bal.no_bal || bal.barang_id} sudah tercatat di Surat Jalan lain!`,
         });
         setScanInputText('');
         setIsScanDropdownOpen(false);
@@ -1173,16 +1184,19 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     muatUntukEdit(target);
   }, [editPengirimanId, pengirimanList]);
 
-  // Sisa draf dari edit yang terputus (mis. halaman dimuat ulang): bal yang sudah keluar bukan muatan baru
+  // Sisa draf dari edit yang terputus (mis. halaman dimuat ulang): bal yang sudah tercatat di Surat Jalan lain bukan muatan baru
   useEffect(() => {
     if (editingPengirimanId || editPengirimanId || editMenunggu) return;
     const basi = new Set(
-      regulerManifestBalIds.filter((id) => barangList.find((b) => b.barang_id === id)?.status_stok === 'keluar')
+      regulerManifestBalIds.filter((id) => {
+        const b = barangList.find((x) => x.barang_id === id);
+        return b ? isBalTerkirim(b, idBalDiSuratJalanLain) : false;
+      })
     );
     if (basi.size === 0) return;
     setRegulerManifestBalIds((prev) => prev.filter((id) => !basi.has(id)));
     setSelectedBalIds((prev) => prev.filter((id) => !basi.has(id)));
-  }, [barangList, regulerManifestBalIds, editingPengirimanId, editPengirimanId, editMenunggu]);
+  }, [barangList, regulerManifestBalIds, editingPengirimanId, editPengirimanId, editMenunggu, idBalDiSuratJalanLain]);
 
   const handleBatalEdit = () => {
     handleResetForm();
@@ -1224,13 +1238,13 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       return;
     }
 
-    // Cegah bal ganda: bal yang sudah keluar hanya boleh tercatat di Surat Jalan yang sedang diedit
+    // Cegah bal ganda: bal yang sudah tercatat di Surat Jalan lain hanya boleh tercatat di Surat Jalan yang sedang diedit
     const balBentrok = selectedBalObjects.filter(
-      (b) => b.status_stok === 'keluar' && !idBalSuratJalanDiedit.has(b.barang_id)
+      (b) => isBalTerkirim(b, idBalDiSuratJalanLain) && !idBalSuratJalanDiedit.has(b.barang_id)
     );
     if (balBentrok.length > 0) {
       const daftarBal = balBentrok.map((b) => `#${b.no_bal || b.barang_id}`).join(', ');
-      setErrorMessage(`Bal ${daftarBal} sudah keluar lewat Surat Jalan lain. Keluarkan bal itu dari muatan terlebih dahulu.`);
+      setErrorMessage(`Bal ${daftarBal} sudah tercatat di Surat Jalan lain. Keluarkan bal itu dari muatan terlebih dahulu.`);
       return;
     }
 

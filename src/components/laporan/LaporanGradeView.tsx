@@ -164,10 +164,12 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
     });
   };
 
-  // Set of shipped barang IDs from pengiriman
+  // Bal dianggap "Dikirim" hanya dari Surat Jalan yang sudah Selesai (bal baru benar-benar keluar
+  // gudang saat itu; selama belum Selesai, bal tetap "Di Gudang" walau sudah tercatat di Surat Jalan)
   const shippedBarangIds = useMemo(() => {
     const ids = new Set<string>();
     pengirimanList.forEach((p) => {
+      if (p.status !== 'selesai') return;
       if (p.barang_ids && Array.isArray(p.barang_ids)) {
         p.barang_ids.forEach((id) => ids.add(id));
       }
@@ -207,10 +209,11 @@ export const LaporanGradeView: React.FC<LaporanGradeViewProps> = ({
 
     // 1. Add from barangList
     barangList.forEach((b) => {
-      const isShipped = 
-        b.status_stok === 'keluar' || 
-        Boolean(b.tanggal_keluar) || 
-        Boolean(b.pengiriman_id) || 
+      // Bal dianggap "Dikirim" hanya setelah benar-benar keluar gudang (Surat Jalan Selesai);
+      // pengiriman_id saja tidak dipakai karena bisa menunjuk Surat Jalan yang belum Selesai.
+      const isShipped =
+        b.status_stok === 'keluar' ||
+        Boolean(b.tanggal_keluar) ||
         shippedBarangIds.has(b.barang_id);
 
       const isGudang = !isShipped;

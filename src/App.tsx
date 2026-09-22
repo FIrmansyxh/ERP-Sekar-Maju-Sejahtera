@@ -43,6 +43,7 @@ import {
   cariSuratJalanBentrok,
   keluarkanBal,
   kembalikanBalKeGudang,
+  masukkanBalKeMuatan,
   LABEL_STATUS_PENGIRIMAN,
   sesuaikanBatchSetelahPerubahanDO,
 } from './utils/alurPengiriman';
@@ -1298,7 +1299,9 @@ export default function App() {
 
     const updatedSet = new Set(updatedBarangIds);
 
-    // 1) Langsung tampil: surat jalan baru, bal berstatus keluar, dan tanda DO pada batch sample
+    // 1) Langsung tampil: surat jalan baru dan tanda DO pada batch sample. Bal TIDAK langsung berstatus
+    // keluar di sini: bal baru benar-benar keluar gudang saat Surat Jalan ini berstatus Selesai
+    // (lihat handleUpdatePengirimanStatus). Selama belum Selesai, bal tetap tampil "Di Gudang".
     setPengirimanList((prev) => {
       const next = [newPengiriman, ...prev.filter((p) => p.pengiriman_id !== newPengiriman.pengiriman_id)];
       savePengirimanData(next);
@@ -1306,9 +1309,7 @@ export default function App() {
     });
     setBarangList((prev) => {
       const next = prev.map((b) =>
-        updatedSet.has(b.barang_id)
-          ? { ...b, status_stok: 'keluar' as const, pengiriman_id: newPengiriman.pengiriman_id }
-          : b
+        updatedSet.has(b.barang_id) ? { ...b, pengiriman_id: newPengiriman.pengiriman_id } : b
       );
       saveBarangData(next);
       return next;
@@ -1336,7 +1337,7 @@ export default function App() {
       batchTerkait = updatedBatches.find((b) => b.batch_id === targetBatchId || b.kode_batch === targetBatchId);
     }
 
-    showToast(`Surat Jalan ${newPengiriman.no_surat_jalan} diterbitkan (${newPengiriman.total_bal || updatedBarangIds.length} bal keluar)!`);
+    showToast(`Surat Jalan ${newPengiriman.no_surat_jalan} diterbitkan (${newPengiriman.total_bal || updatedBarangIds.length} bal dimuat)!`);
 
     // 2) Sinkron ke server lewat antrean (dicoba ulang sampai berhasil); ID dari server digabung saat selesai
     void catatMutasi({
@@ -1505,11 +1506,14 @@ export default function App() {
       savePengirimanData(next);
       return next;
     });
-    setBarangList((prev) => {
-      const next = keluarkanBal(kembalikanBalKeGudang(prev, keluar), tambah, baru.pengiriman_id);
-      saveBarangData(next);
-      return next;
-    });
+    // Bal baru masuk muatan TIDAK langsung berstatus keluar (baru keluar sungguhan saat Selesai);
+    // bal yang dikeluarkan dari muatan hanya dibalik ke gudang bila kebetulan sudah keluar (data lama).
+    const barangSetelahEdit = masukkanBalKeMuatan(kembalikanBalKeGudang(barangList, keluar), tambah, baru.pengiriman_id);
+    setBarangList(barangSetelahEdit);
+    saveBarangData(barangSetelahEdit);
+    // Bal yang statusnya benar-benar berubah (jarang di sini, hanya kasus data lama) disinkronkan ke server
+    const idBalBerubah = new Set<string>([...tambah, ...keluar]);
+    catatStatusBal(barangSetelahEdit.filter((b) => idBalBerubah.has(b.barang_id)), barangList);
 
     const sesuaiBatch = sesuaikanBatchSetelahPerubahanDO(batchSampleList, lama.batch_sample_id_ref, tambah, keluar);
     const batchTerkait = sesuaiBatch.batchTerkait;
@@ -1559,11 +1563,11 @@ export default function App() {
     });
 
     const idBal = new Set(target.barang_ids || []);
-    setBarangList((prev) => {
-      const next = kembalikanBalKeGudang(prev, idBal);
-      saveBarangData(next);
-      return next;
-    });
+    const barangSetelahBatal = kembalikanBalKeGudang(barangList, idBal);
+    setBarangList(barangSetelahBatal);
+    saveBarangData(barangSetelahBatal);
+    // Bal kembali ke stok gudang juga di server (kalau tidak, statusnya balik "keluar" lagi saat data dimuat ulang)
+    catatStatusBal(barangSetelahBatal.filter((b) => idBal.has(b.barang_id)), barangList);
 
     // Batch sample asal ditutup otomatis saat semua bal punya DO; dengan DO dibatalkan ia terbuka lagi
     const sesuaiBatch = sesuaikanBatchSetelahPerubahanDO(batchSampleList, target.batch_sample_id_ref, new Set(), idBal);
@@ -1600,9 +1604,19 @@ export default function App() {
     const updated = pengirimanList.map((p) => (p.pengiriman_id === pengirimanId ? { ...p, status: newStatus as PengirimanBarang['status'] } : p));
     setPengirimanList(updated);
     savePengirimanData(updated);
+
+    // Bal baru benar-benar "keluar" gudang tepat saat Surat Jalan ini Selesai; sebelum itu masih "Di Gudang"
+    if (newStatus === 'selesai') {
+      const idBal = new Set(target.barang_ids || []);
+      const barangSetelahSelesai = keluarkanBal(barangList, idBal, pengirimanId);
+      setBarangList(barangSetelahSelesai);
+      saveBarangData(barangSetelahSelesai);
+      catatStatusBal(barangSetelahSelesai.filter((b) => idBal.has(b.barang_id)), barangList);
+    }
+
     showToast(
       newStatus === 'selesai'
-        ? `Surat Jalan ${target.no_surat_jalan} Selesai; nilai penjualannya kini masuk laporan.`
+        ? `Surat Jalan ${target.no_surat_jalan} Selesai; ${target.barang_ids?.length || 0} bal keluar gudang dan nilai penjualannya kini masuk laporan.`
         : `Status Surat Jalan ${target.no_surat_jalan} menjadi ${LABEL_STATUS_PENGIRIMAN[newStatus] || newStatus}.`
     );
 

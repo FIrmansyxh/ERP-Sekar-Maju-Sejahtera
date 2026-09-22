@@ -4,28 +4,35 @@ import {
   cariSuratJalanBentrok,
   keluarkanBal,
   kembalikanBalKeGudang,
+  masukkanBalKeMuatan,
   sesuaikanBatchSetelahPerubahanDO,
 } from './alurPengiriman';
 
-describe('stok bal mengikuti Surat Jalan', () => {
+describe('stok bal mengikuti Surat Jalan (bal baru "keluar" sungguhan saat Surat Jalan Selesai)', () => {
   const daftar = [
     buatBal('B1', { status_stok: 'keluar', pengiriman_id: '1' }),
     buatBal('B2', { status_stok: 'di_gudang' }),
     buatBal('B3', { status_stok: 'terkirim_sample' }),
   ];
 
-  it('bal yang dikeluarkan dari Surat Jalan kembali ke gudang dan tidak lagi menunjuk Surat Jalan', () => {
+  it('bal yang sudah keluar (Surat Jalan Selesai lalu dibatalkan) kembali ke gudang dan tidak lagi menunjuk Surat Jalan', () => {
     const hasil = kembalikanBalKeGudang(daftar, new Set(['B1']));
     expect(hasil[0]).toMatchObject({ status_stok: 'di_gudang', pengiriman_id: undefined });
   });
 
-  it('hanya bal berstatus keluar yang dikembalikan; status lain tidak disentuh', () => {
+  it('bal yang belum pernah keluar tetap tidak berubah status, tapi tautan Surat Jalannya tetap dilepas', () => {
     const hasil = kembalikanBalKeGudang(daftar, new Set(['B2', 'B3']));
-    expect(hasil[1].status_stok).toBe('di_gudang');
-    expect(hasil[2].status_stok).toBe('terkirim_sample');
+    expect(hasil[1]).toMatchObject({ status_stok: 'di_gudang', pengiriman_id: undefined });
+    expect(hasil[2]).toMatchObject({ status_stok: 'terkirim_sample', pengiriman_id: undefined });
   });
 
-  it('bal yang masuk Surat Jalan menjadi keluar dan mencatat nomor Surat Jalannya', () => {
+  it('bal masuk muatan Surat Jalan: hanya menunjuk Surat Jalannya, status stok tidak berubah', () => {
+    const hasil = masukkanBalKeMuatan(daftar, new Set(['B2']), '7');
+    expect(hasil[1]).toMatchObject({ status_stok: 'di_gudang', pengiriman_id: '7' });
+    expect(hasil[0]).toBe(daftar[0]);
+  });
+
+  it('bal benar-benar keluar (dipanggil saat Surat Jalan Selesai) dan mencatat nomor Surat Jalannya', () => {
     const hasil = keluarkanBal(daftar, new Set(['B2']), '7');
     expect(hasil[1]).toMatchObject({ status_stok: 'keluar', pengiriman_id: '7' });
     expect(hasil[0]).toBe(daftar[0]);
