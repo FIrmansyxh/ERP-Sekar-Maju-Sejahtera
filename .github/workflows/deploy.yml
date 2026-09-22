@@ -7,11 +7,10 @@ on:
   push:
     branches:
       - main
-      - staging
 
 # Cegah build ganda bertumpuk jika ada beberapa push berurutan
 concurrency:
-  group: deploy-frontend-${{ github.ref_name }}
+  group: deploy-frontend-production
   cancel-in-progress: true
 
 jobs:
@@ -76,11 +75,15 @@ jobs:
 
   # ============================================================
   # JOB 2: Deploy ke PRODUCTION (branch: main)
+  # Catatan: Deploy ke STAGING dilakukan manual lewat script
+  #          deploy-staging.ps1 dari laptop lokal
+  # ============================================================
+  deploy-production:
+    name: Build & Deploy Frontend → Production
   # ============================================================
   deploy-production:
     name: Build & Deploy Frontend → Production
     runs-on: ubuntu-latest
-    if: github.ref_name == 'main'
     environment: production
 
     steps:
