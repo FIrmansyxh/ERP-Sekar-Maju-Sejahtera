@@ -7,6 +7,7 @@ import {
   terbilangRupiah,
   normalizeKg
 } from '../../utils/formatters';
+import { isTransaksiLunas } from '../../utils/statusBayar';
 import { loadCurrentUser } from '../../utils/storage';
 import { KopSurat } from '../common/KopSurat';
 import { COMPANY_NAME } from '../../config/appInfo';
@@ -87,7 +88,7 @@ export const NotaTimbangContent: React.FC<NotaTimbangContentProps> = ({ transaks
   const grandTotalRp = totalKotorRp - totalPotonganRp;
   const jumlahGantiTikar = items.filter((it) => it.isGantiTikar).length;
 
-  const isLunas = transaksi.status_pembayaran === 'lunas' || transaksi.metode_pembayaran === 'cash';
+  const isLunas = isTransaksiLunas(transaksi);
   const cleanDate = formatDateHariBulanTahun(transaksi.tanggal_transaksi);
 
   const kasirNama =

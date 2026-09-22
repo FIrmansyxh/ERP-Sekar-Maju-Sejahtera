@@ -13,21 +13,24 @@ export const RoleMatrixModal: React.FC<RoleMatrixModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
+  // Nama sama dengan menu samping
   const modulesList = [
-    { id: 'modul-home', name: 'Home Dasbor' },
-    { id: 'modul-0-sortir', name: 'Sortir (Intake & Grade)' },
-    { id: 'modul-0-timbangan', name: 'Timbangan (Input Berat)' },
-    { id: 'modul-0-kasir', name: 'Kasir & Nota Pembayaran' },
-    { id: 'modul-1-petani', name: 'Master Petani & Kartu' },
-    { id: 'modul-3-harga', name: 'Master Kualitas & Harga' },
+    { id: 'modul-6-dashboard-analytic', name: 'Dashboard Analytic' },
+    { id: 'modul-6-laporan-bal', name: 'Laporan Bal' },
+    { id: 'modul-6-laporan-grade', name: 'Laporan Harga' },
+    { id: 'modul-6-laporan-pembelian', name: 'Laporan Pembelian' },
+    { id: 'modul-6-laporan-petani', name: 'Laporan Petani' },
+    { id: 'modul-6-laporan-pengiriman', name: 'Laporan Pengiriman' },
+    { id: 'modul-1-petani', name: 'Master Petani' },
+    { id: 'modul-3-harga', name: 'Master Harga Beli' },
+    { id: 'modul-3-harga-jual', name: 'Master Harga Jual' },
+    { id: 'modul-0-sortir', name: 'Sortir' },
+    { id: 'modul-0-timbangan', name: 'Timbangan' },
+    { id: 'modul-0-kasir', name: 'Kasir' },
     { id: 'modul-4-sample', name: 'Pengiriman Sample' },
+    { id: 'modul-status-batch', name: 'Status & Detail Batch' },
     { id: 'modul-5-pengiriman', name: 'Pengiriman Reguler (DO)' },
-    { id: 'modul-6-dashboard-analytic', name: 'Dashboard Analytic ERP' },
-    { id: 'modul-6-laporan-grade', name: 'Laporan Mutu Grade' },
-    { id: 'modul-6-laporan-pembelian', name: 'Laporan Pembelian Barang' },
-    { id: 'modul-6-laporan-petani', name: 'Laporan Petani & Setoran' },
-    { id: 'modul-6-laporan-pengiriman', name: 'Laporan Pengiriman & DO' },
-    { id: 'modul-users', name: 'Manajemen Pengguna (RBAC)' },
+    { id: 'modul-users', name: 'Manajemen Pengguna' },
   ];
 
   const capabilitiesList = [
@@ -46,19 +49,12 @@ export const RoleMatrixModal: React.FC<RoleMatrixModalProps> = ({
       <div className="bg-white rounded-md shadow-2xl border border-gray-200 w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
         
         {/* Modal Header */}
-        <div className="px-5 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+        <div className="px-5 py-4 border-b border-gray-200 bg-white flex items-center justify-between">
           <div className="flex items-center space-x-2.5">
-            <div className="p-1.5 bg-red-100 text-[#b81d24] rounded-sm">
-              <ShieldCheck className="w-5 h-5" />
+            <div className="w-8 h-8 bg-red-50 border border-red-100 text-[#b81d24] rounded-sm flex items-center justify-center">
+              <ShieldCheck className="w-4 h-4" />
             </div>
-            <div>
-              <h2 className="text-base font-bold text-gray-900 leading-tight">
-                Matriks Hak Akses Pengguna (Role-Based Access Control)
-              </h2>
-              <p className="text-xs text-gray-600">
-                PT. SEKAR MAJU SEJAHTERA - Standar Pembagian Wewenang 6 Role Operasional
-              </p>
-            </div>
+            <h2 className="text-sm font-bold text-gray-900 leading-tight">Matriks Wewenang</h2>
           </div>
           <button
             onClick={onClose}
@@ -71,47 +67,17 @@ export const RoleMatrixModal: React.FC<RoleMatrixModalProps> = ({
         {/* Modal Body - Scrollable */}
         <div className="p-5 overflow-y-auto space-y-6 text-xs text-gray-800">
           
-          {/* Section 1: Role Overview Cards */}
-          <div>
-            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-2.5">
-              1. Definisi & Tanggung Jawab 6 Role
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {ALL_ROLES.map((role) => {
-                const info = ROLE_DEFINITIONS[role];
-                return (
-                  <div 
-                    key={role}
-                    className="p-3 bg-gray-50 border border-gray-200 rounded-sm space-y-1.5 hover:border-gray-300 transition"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className={`px-2 py-0.5 text-[11px] font-bold rounded-xs border ${info.badgeBg} ${info.badgeText} ${info.badgeBorder}`}>
-                        {info.label}
-                      </span>
-                      <span className="text-[10px] font-mono text-gray-600 uppercase">
-                        {role}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-gray-600 leading-relaxed">
-                      {info.deskripsi}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
           {/* Section 2: Module Access Matrix */}
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-700 mb-2.5">
-              2. Matriks Akses Modul Aplikasi
+              Akses Menu
             </h3>
             <div className="border border-slate-200 rounded-md overflow-x-auto shadow-sm">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-slate-50/90 border-b border-slate-200 text-slate-600 font-semibold">
                     <th className="py-2.5 px-3 w-48">
-                      Modul Sistem
+                      Menu
                     </th>
                     {ALL_ROLES.map((r) => (
                       <th key={r} className="py-2.5 px-2 text-center min-w-[110px]">
@@ -152,14 +118,14 @@ export const RoleMatrixModal: React.FC<RoleMatrixModalProps> = ({
           {/* Section 3: Wewenang Khusus */}
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-700 mb-2.5">
-              3. Matriks Wewenang & Kemampuan Tindakan (Capabilities)
+              Wewenang Tindakan
             </h3>
             <div className="border border-slate-200 rounded-md overflow-x-auto shadow-sm">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-slate-50/90 border-b border-slate-200 text-slate-600 font-semibold">
                     <th className="py-2.5 px-3 w-56">
-                      Kemampuan Wewenang
+                      Wewenang
                     </th>
                     {ALL_ROLES.map((r) => (
                       <th key={r} className="py-2.5 px-2 text-center min-w-[110px]">
@@ -204,7 +170,7 @@ export const RoleMatrixModal: React.FC<RoleMatrixModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-1.5 bg-[#545b62] hover:bg-[#464c52] text-white text-xs font-bold rounded-sm transition cursor-pointer"
+            className="px-4 py-1.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 text-xs font-semibold rounded-sm transition cursor-pointer"
           >
             Tutup
           </button>

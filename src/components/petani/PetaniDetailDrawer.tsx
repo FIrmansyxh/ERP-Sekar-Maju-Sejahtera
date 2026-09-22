@@ -1,25 +1,14 @@
 import React, { useState } from 'react';
-import { 
-  X, 
-  User, 
-  MapPin, 
-  Phone, 
-  Calendar, 
-  CreditCard, 
-  Printer, 
-  Edit3, 
-  History, 
-  Scale, 
-  Layers, 
-  CheckCircle2, 
-  AlertCircle,
-  FileText,
-  RotateCcw,
-  Sparkles,
-  ArrowLeft
+import {
+  X,
+  User,
+  MapPin,
+  Printer,
+  Edit3,
+  RotateCcw
 } from 'lucide-react';
 import { Petani, UserRole, TransaksiPembelian } from '../../types';
-import { formatDateIndo, formatNumber } from '../../utils/formatters';
+import { formatDateIndo } from '../../utils/formatters';
 
 interface PetaniDetailDrawerProps {
   isOpen: boolean;
@@ -47,8 +36,6 @@ export const PetaniDetailDrawer: React.FC<PetaniDetailDrawerProps> = ({
   const [activeTab, setActiveTab] = useState<'info' | 'transaksi' | 'kartu'>('info');
 
   if (!isOpen || !petani) return null;
-
-  const isAdmin = userRole === 'admin_gudang';
 
   const realTransactions = transaksiList
     .filter((tx) => tx.petani_id === petani.petani_id)

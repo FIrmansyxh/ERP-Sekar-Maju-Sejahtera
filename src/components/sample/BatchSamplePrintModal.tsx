@@ -1,7 +1,7 @@
-import React, { useRef, useState } from 'react';
-import { Printer, Download, X, FlaskConical } from 'lucide-react';
+import React, { useState } from 'react';
+import { Printer, FileSpreadsheet, X, FlaskConical } from 'lucide-react';
 import { BatchPengirimanSample } from '../../types';
-import { downloadElementAsPdf } from '../../utils/printDownload';
+import { unduhSuratSampleExcel } from '../../utils/excelSuratSample';
 import { openPrintDocument } from '../../utils/openDedicatedPrint';
 import { SuratSampleDokumen } from './SuratSampleDokumen';
 
@@ -16,8 +16,7 @@ export const BatchSamplePrintModal: React.FC<BatchSamplePrintModalProps> = ({
   onClose,
   batch,
 }) => {
-  const printRef = useRef<HTMLDivElement>(null);
-  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [isDownloadingExcel, setIsDownloadingExcel] = useState(false);
 
   React.useEffect(() => {
     if (!isOpen) return;
@@ -32,20 +31,19 @@ export const BatchSamplePrintModal: React.FC<BatchSamplePrintModalProps> = ({
 
   if (!isOpen || !batch) return null;
 
-  // Cetak lewat halaman cetak khusus agar pembagian halamannya sama dengan PDF
+  // Cetak lewat halaman cetak khusus agar pembagian halamannya rapi
   const handlePrint = () => {
     openPrintDocument('sample', batch.batch_id);
   };
 
-  const handleDownloadPdf = async () => {
-    if (!printRef.current) return;
-    setIsDownloadingPdf(true);
+  const handleDownloadExcel = async () => {
+    setIsDownloadingExcel(true);
     try {
-      await downloadElementAsPdf(printRef.current, `SURAT_SAMPLE_${batch.kode_batch}`, { orientation: 'portrait' });
+      await unduhSuratSampleExcel(batch);
     } catch (err) {
-      console.error('PDF export error:', err);
+      console.error('Excel export error:', err);
     } finally {
-      setIsDownloadingPdf(false);
+      setIsDownloadingExcel(false);
     }
   };
 
@@ -70,7 +68,7 @@ export const BatchSamplePrintModal: React.FC<BatchSamplePrintModalProps> = ({
               <FlaskConical className="w-4 h-4 text-[#b81d24]" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-sm font-bold text-gray-900 tracking-tight truncate">Dokumen Pengantar & Uji Sample Batch Tembakau</h2>
+              <h2 className="text-sm font-bold text-gray-900 tracking-tight truncate">Surat Pengiriman Sample</h2>
               <p className="text-[11px] text-gray-500 font-medium">
                 No. Surat Sample: <span className="font-mono font-bold text-gray-900">{batch.kode_batch}</span>
               </p>
@@ -89,12 +87,13 @@ export const BatchSamplePrintModal: React.FC<BatchSamplePrintModalProps> = ({
 
             <button
               type="button"
-              onClick={handleDownloadPdf}
-              disabled={isDownloadingPdf}
+              onClick={handleDownloadExcel}
+              disabled={isDownloadingExcel}
               className="px-4 py-1.5 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#a0181e] rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+              title="Unduh surat sample dalam format Excel"
             >
-              <Download className="w-3.5 h-3.5" />
-              <span>{isDownloadingPdf ? 'Mengunduh...' : 'Unduh PDF'}</span>
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              <span>{isDownloadingExcel ? 'Mengunduh...' : 'Unduh Excel'}</span>
             </button>
 
             <button
@@ -110,7 +109,7 @@ export const BatchSamplePrintModal: React.FC<BatchSamplePrintModalProps> = ({
 
         {/* Lembar dokumen: tiap halaman tampil sebagai kertas terpisah, sama seperti Nota Pembelian */}
         <div className="p-4 sm:p-8 overflow-y-auto flex-1 bg-gray-100">
-          <div ref={printRef} className="mx-auto w-full max-w-3xl text-gray-900 font-sans">
+          <div className="mx-auto w-full max-w-3xl text-gray-900 font-sans">
             <SuratSampleDokumen batch={batch} />
           </div>
         </div>

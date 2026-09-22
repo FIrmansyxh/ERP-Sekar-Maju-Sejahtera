@@ -13,10 +13,11 @@ import {
   Lock
 } from 'lucide-react';
 import { TransaksiPembelian } from '../../types';
-import { formatRupiah, formatNumber, angkaTerbilang, formatDateHariBulanTahun } from '../../utils/formatters';
-import { downloadElementAsPdf, printHtmlElementDirectly } from '../../utils/printDownload';
+import { isTransaksiLunas } from '../../utils/statusBayar';
+import { formatRupiah } from '../../utils/formatters';
+import { downloadElementAsPdf } from '../../utils/printDownload';
+import { tampilkanInfo } from '../../utils/dialog';
 import { openPrintDocument } from '../../utils/openDedicatedPrint';
-import { ConfirmModal } from '../common/ConfirmModal';
 import { NotaTimbangContent } from './NotaTimbangContent';
 import { sortTransaksiItemsByInputOrder } from '../../utils/kuponSortir';
 
@@ -52,7 +53,7 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
 
   if (!isOpen || !transaksi) return null;
 
-  const isLunas = transaksi.status_pembayaran === 'lunas' || transaksi.metode_pembayaran === 'cash';
+  const isLunas = isTransaksiLunas(transaksi);
 
   const items = transaksi.items && transaksi.items.length > 0 
     ? sortTransaksiItemsByInputOrder(transaksi.items)
@@ -75,7 +76,7 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
 
   const handleDownloadPdf = async () => {
     if (!isAllWeighed) {
-      alert('Perhatian: Nota pembelian belum dapat diunduh/dicetak karena masih ada bal tembakau yang belum ditimbang (Proses 2 Timbang belum selesai).');
+      tampilkanInfo('Perhatian: Nota pembelian belum dapat diunduh/dicetak karena masih ada bal tembakau yang belum ditimbang (Proses 2 Timbang belum selesai).');
       return;
     }
     if (!receiptRef.current) return;
@@ -93,8 +94,6 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
       setIsDownloadingPdf(false);
     }
   };
-
-  const cleanDate = formatDateHariBulanTahun(transaksi.tanggal_transaksi);
 
   return (
     <div 
@@ -212,8 +211,8 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
                 )}
               </div>
               {transaksi.alasan_perubahan_terakhir && (
-                <div className="text-[11px] text-gray-600 font-mono italic">
-                  Alasan Koreksi: "{transaksi.alasan_perubahan_terakhir}"
+                <div className="text-[11px] text-gray-600 font-mono">
+                  Alasan: "{transaksi.alasan_perubahan_terakhir}"
                 </div>
               )}
             </div>
@@ -282,8 +281,8 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
               type="button"
               onClick={() => {
                 if (!isAllWeighed) {
-                  alert(
-                    `⚠️ Tidak Bisa Bayar!\n\nKupon ${transaksi.no_kupon} tidak dapat dibayar karena masih ada bal yang belum ditimbang di modul Timbangan.\n\nSesuai SOP, seluruh bal dalam 1 kupon harus ditimbang lengkap terlebih dahulu baru bisa lanjut ke pembayaran kasir.`
+                  tampilkanInfo(
+                    `Kupon ${transaksi.no_kupon} masih memiliki bal yang belum ditimbang.`
                   );
                   return;
                 }
@@ -333,7 +332,7 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
                 <Trash2 className="w-4 h-4 text-[#b81d24]" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-gray-900">Konfirmasi Hapus Transaksi</h3>
+                <h3 className="text-sm font-bold text-gray-900">Hapus Kupon</h3>
                 <p className="text-xs text-gray-500 font-mono">
                   Kupon {transaksi.no_kupon}
                 </p>
@@ -342,25 +341,21 @@ export const TransaksiDetailModal: React.FC<TransaksiDetailModalProps> = ({
 
             <div className="p-3 bg-gray-50 border border-gray-200 rounded-sm text-xs text-gray-800 space-y-1">
               <p>
-                Apakah Anda yakin ingin menghapus transaksi milik Petani <strong>{transaksi.nama_petani}</strong>?
+                Hapus kupon milik <strong>{transaksi.nama_petani}</strong> beserta seluruh balnya?
               </p>
               <p className="text-[11px] text-gray-600">
-                • Berat Netto: {transaksi.berat_kg} Kg ({transaksi.total_bal || (transaksi.items ? transaksi.items.length : 1)} Bal)
-                <br />
-                • Total Nilai: {formatRupiah(transaksi.harga_final || transaksi.total_harga_beli)}
-                <br />
-                • Semua bal tembakau inventaris gudang terkait transaksi ini juga akan dihapus.
+                {transaksi.total_bal || (transaksi.items ? transaksi.items.length : 0)} Bal • {transaksi.berat_kg} Kg • {formatRupiah(transaksi.harga_final || transaksi.total_harga_beli)}
               </p>
             </div>
 
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-gray-700 flex items-center space-x-1">
                 <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-                <span>Alasan Penghapusan (Wajib untuk Audit Trail Admin):</span>
+                <span>Alasan Penghapusan *</span>
               </label>
               <input
                 type="text"
-                placeholder="Contoh: Salah input nomor kupon / Duplikasi / Dibatalkan petani"
+                placeholder="Alasan penghapusan"
                 value={alasanHapus}
                 onChange={(e) => setAlasanHapus(e.target.value)}
                 className="w-full text-xs px-2.5 py-1.5 border border-gray-300 rounded-sm focus:ring-1 focus:ring-gray-800 focus:outline-none"

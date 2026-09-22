@@ -1,63 +1,36 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { 
-  FlaskConical, 
-  Plus, 
-  Search, 
-  CheckCircle2, 
-  XCircle, 
-  Clock, 
-  Building2, 
-  Edit3, 
-  Filter, 
-  RefreshCw, 
-  ChevronDown, 
-  ChevronUp, 
-  X, 
-  Info,
-  ArrowLeft,
-  CheckSquare,
-  Scale,
-  Calendar,
+import {
+  FlaskConical,
+  CheckCircle2,
+  Edit3,
+  X,
   AlertCircle,
-  FileText,
-  DollarSign,
-  Truck,
-  Printer,
-  Eye,
   Trash2,
-  SlidersHorizontal,
   Barcode,
-  Zap,
   Package
 } from 'lucide-react';
-import { 
-  PengirimanSample, 
-  BatchPengirimanSample, 
-  SampleItemDetail, 
-  StatusSample, 
-  StatusBatchSample, 
-  Barang, 
-  Petani, 
+import {
+  BatchPengirimanSample,
+  SampleItemDetail,
+  Barang,
+  Petani,
   UserRole,
   MasterHargaJual,
   TabelHarga,
-  TransaksiPembelian
+  TransaksiPembelian,
+  StatusBatchSample
 } from '../../types';
-import { loadHargaJualData, loadBatchSampleData, loadHargaData, loadTransaksiData } from '../../utils/storage';
-import { SampleStatusUpdateModal } from './SampleStatusUpdateModal';
-import { BatchSamplePrintModal } from './BatchSamplePrintModal';
 import { ConfirmModal } from '../common/ConfirmModal';
 
-import { Pagination } from '../common/Pagination';
 import { generateBatchSampleId, generateSampleId, formatRupiah, formatNumber } from '../../utils/formatters';
 import { cekNomorDokumen, normalisasiNomor, pesanNomorKembar } from '../../utils/nomorDokumen';
 import { beratBrutoBal, beratBrutoItemSample } from '../../utils/beratKirim';
+import { isBatchDraft } from '../../utils/statusBatchSample';
 
 import { useSessionDraft } from '../../hooks/useSessionDraft';
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
 
 interface SampleManagementProps {
-  sampleList: PengirimanSample[];
   batchSampleList?: BatchPengirimanSample[];
   barangList: Barang[];
   petaniList?: Petani[];
@@ -65,17 +38,18 @@ interface SampleManagementProps {
   hargaList?: TabelHarga[];
   transaksiList?: TransaksiPembelian[];
   userRole: UserRole;
-  onSaveNewSample?: (sample: PengirimanSample) => void;
-  onSaveBatchSamples: (samples: PengirimanSample[], updatedBarangs: Barang[]) => void;
-  onSaveBatchSample?: (newBatch: BatchPengirimanSample, updatedBarangs: Barang[]) => void;
-  onUpdateBatchSample?: (updatedBatch: BatchPengirimanSample, updatedBarangs?: Barang[]) => void;
-  onDeleteBatchSample?: (batchId: string) => void;
-  onUpdateSample: (sample: PengirimanSample) => void;
+  onSaveBatchSample: (newBatch: BatchPengirimanSample, updatedBarangs: Barang[]) => void;
+  onUpdateBatchSample: (updatedBatch: BatchPengirimanSample, updatedBarangs?: Barang[]) => void;
   onNavigateToPengiriman?: (batchId?: string) => void;
+  /** Membuka halaman Status & Detail Batch (daftar batch, status, hasil sortir, cetak, batal). */
+  onNavigateToStatusBatch?: () => void;
+  /** Batch yang sedang diedit (dipilih dari halaman Status & Detail Batch). */
+  editBatchId?: string | null;
+  /** Dipanggil saat mode edit berakhir (disimpan atau dibatalkan). */
+  onSelesaiEdit?: () => void;
 }
 
 export const SampleManagement: React.FC<SampleManagementProps> = ({
-  sampleList = [],
   batchSampleList = [],
   barangList = [],
   petaniList = [],
@@ -83,23 +57,17 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
   hargaList = [],
   transaksiList = [],
   userRole,
-  onSaveNewSample,
-  onSaveBatchSamples,
   onSaveBatchSample,
   onUpdateBatchSample,
-  onDeleteBatchSample,
-  onUpdateSample,
   onNavigateToPengiriman,
+  onNavigateToStatusBatch,
+  editBatchId = null,
+  onSelesaiEdit,
 }) => {
-  // Master Harga Jual reference list
-  const activeHargaJualList = (hargaJualList && hargaJualList.length > 0) ? hargaJualList : loadHargaJualData();
-  const activeHargaList = (hargaList && hargaList.length > 0) ? hargaList : loadHargaData();
-  const activeTransaksiList = (transaksiList && transaksiList.length > 0) ? transaksiList : loadTransaksiData();
-
-  // Active batches fallback to localStorage if prop is empty
-  const activeBatchSampleList = useMemo(() => {
-    return (batchSampleList && batchSampleList.length > 0) ? batchSampleList : loadBatchSampleData();
-  }, [batchSampleList]);
+  const activeHargaJualList = hargaJualList;
+  const activeHargaList = hargaList;
+  const activeTransaksiList = transaksiList;
+  const activeBatchSampleList = batchSampleList;
 
   // Transaksi item map to resolve purchase price (harga_beli) and farmer info
   const txItemMap = useMemo(() => {
@@ -153,9 +121,26 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
   // Pengiriman sample memakai berat bruto hasil timbangan (tanpa tara tebakan)
   const resolveBeratBruto = (bal: Partial<Barang> | undefined): number => beratBrutoBal(bal);
 
-  // Main view mode: 'list' (Daftar & Monitoring Batch) or 'create' (Input & Dispatch Sample Workstation)
-  const [viewMode, setViewMode] = useState<'list' | 'create'>('list');
-  const [activeTab, setActiveTab] = useState<'batches' | 'items'>('batches');
+  // Batch yang sedang diedit (dipilih dari halaman Status & Detail Batch); null berarti membuat batch baru
+  const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
+  // Batch yang menunggu konfirmasi karena draf batch baru akan tergantikan
+  const [editMenunggu, setEditMenunggu] = useState<BatchPengirimanSample | null>(null);
+  const editDimuatRef = useRef<string | null>(null);
+  const [successNotification, setSuccessNotification] = useState<{
+    kodeBatch: string;
+    totalBal: number;
+    tujuan: string;
+    diperbarui: boolean;
+    /** Disimpan sebagai Draft: belum final, surat belum bisa dicetak */
+    draft: boolean;
+  } | null>(null);
+  const batchDiedit = useMemo(
+    () => (editingBatchId ? activeBatchSampleList.find((b) => b.batch_id === editingBatchId) || null : null),
+    [editingBatchId, activeBatchSampleList]
+  );
+
+  // Tombol utama memfinalkan batch baru atau Draft; batch final yang diedit hanya menyimpan perubahan
+  const akanDifinalkan = !editingBatchId || isBatchDraft(batchDiedit);
 
   // Barcode Scanner & Manual Bal Input for Sample Dispatch
   const [scanSampleAlert, setScanSampleAlert] = useState<{ type: 'success' | 'error' | 'warning'; message: string } | null>(null);
@@ -208,10 +193,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
 
   useUnsavedChangesWarning(selectedBalItems.length > 0);
 
-  const availableBalList = useMemo(() => {
-    return barangList.filter((b) => b.status_stok === 'di_gudang');
-  }, [barangList]);
-
+  
   // Helper untuk memeriksa status penggunaan nomor bal pada modul sample
   const checkBalUsage = (bal: Barang) => {
     // 1. Cek apakah sudah dipilih di tabel draft pembuatan batch saat ini
@@ -226,14 +208,16 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
         statusType: 'in_current_batch' as const,
         badgeText: 'SUDAH DIPILIH',
         badgeClass: 'bg-amber-100 text-amber-800 border-amber-300',
-        message: `⚠️ BAL SUDAH DIPILIH: Bal #${bal.no_bal || bal.barang_id} sudah ada dalam tabel draft sample batch ini!`,
+        message: `Bal ${bal.no_bal || bal.barang_id} sudah ada di batch ini.`,
         detail: 'Sudah tercantum di tabel draft di bawah.',
       };
     }
 
     // 2. Cek apakah sudah pernah digunakan pada Batch Pengiriman Sample lain yang tercatat
+    // Batch yang sedang diedit tidak dihitung: bal miliknya boleh dipilih lagi
     const matchedBatch = activeBatchSampleList.find(
       (b) =>
+        b.batch_id !== editingBatchId &&
         b.status !== 'dibatalkan' &&
         b.items?.some(
           (it) => {
@@ -248,7 +232,9 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
     );
     if (matchedBatch) {
       const statusText =
-        matchedBatch.status === 'sample' || matchedBatch.status === 'diproses'
+        matchedBatch.status === 'draft'
+          ? 'Draft'
+          : matchedBatch.status === 'sample' || matchedBatch.status === 'diproses'
           ? 'Sedang Pengujian Lab'
           : matchedBatch.status === 'dikirim'
           ? 'Sedang Dikirim Ekspedisi'
@@ -261,28 +247,23 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
         statusType: 'used_in_batch' as const,
         badgeText: `SUDAH DIPAKAI: ${matchedBatch.kode_batch}`,
         badgeClass: 'bg-red-100 text-red-800 border-red-300',
-        message: `⚠️ NO BAL SUDAH DIPAKAI: Bal #${bal.no_bal || bal.barang_id} SUDAH DIGUNAKAN pada Batch Sample "${matchedBatch.kode_batch}" (Tujuan: ${matchedBatch.tujuan_buyer} • Status: ${statusText} • Tgl Kirim: ${matchedBatch.tanggal_kirim || '-'})!`,
+        message: `Bal ${bal.no_bal || bal.barang_id} sudah dipakai di Batch Sample ${matchedBatch.kode_batch} (${matchedBatch.tujuan_buyer} • ${statusText}).`,
         detail: `Batch: ${matchedBatch.kode_batch} (${matchedBatch.tujuan_buyer})`,
         batch: matchedBatch,
       };
     }
 
-    // 3. Cek status fisik bal di gudang
-    if (bal.status_stok !== 'di_gudang') {
-      let alasan = `Status fisik bal: "${bal.status_stok}".`;
-      if (bal.status_stok === 'proses_sortir') {
-        alasan = 'Bal ini masih Proses Sortir dan belum ditimbang.';
-      } else if (bal.status_stok === 'terkirim_sample') {
-        alasan = `Bal ini sudah berstatus terkirim sampel (${bal.catatan || 'Dalam proses pengujian sample'}).`;
-      } else if (bal.status_stok === 'keluar') {
-        alasan = `Bal ini sudah keluar gudang melalui DO pengiriman reguler.`;
-      }
+    // 3. Cek status fisik bal. Reclass tidak mengubah bal, jadi hanya bal yang sudah keluar gudang lewat Surat Jalan yang ditolak.
+    // Bal yang baru disortir (sudah ada No Bal dan harga) sudah terkumpul, jadi boleh dipilih walau belum ditimbang atau dibayar.
+    const milikBatchDiedit = Boolean(batchDiedit?.items?.some((it) => it.barang_id === bal.barang_id));
+    if (bal.status_stok === 'keluar' && !milikBatchDiedit) {
+      const alasan = `Bal ini sudah keluar gudang melalui Surat Jalan / DO pengiriman.`;
       return {
         isAvailable: false,
         statusType: 'not_in_warehouse' as const,
         badgeText: `STATUS: ${bal.status_stok.toUpperCase()}`,
         badgeClass: 'bg-gray-100 text-gray-700 border-gray-300',
-        message: `⚠️ BAL TIDAK TERSEDIA DI GUDANG: Bal #${bal.no_bal || bal.barang_id} tidak dapat dijadikan sample (${alasan})`,
+        message: `Bal ${bal.no_bal || bal.barang_id} tidak tersedia: ${alasan}`,
         detail: alasan,
       };
     }
@@ -294,7 +275,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
       badgeText: 'TERSEDIA',
       badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-300',
       message: `Bal #${bal.no_bal || bal.barang_id} siap digunakan.`,
-      detail: `${formatNumber(beratBrutoBal(bal), 1)} kg bruto`,
+      detail: beratBrutoBal(bal) > 0 ? `${formatNumber(beratBrutoBal(bal), 1)} kg bruto` : 'Baru disortir, belum ditimbang',
     };
   };
 
@@ -328,7 +309,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
     });
 
     return matches.slice(0, 20);
-  }, [barangList, scanGudang, selectedBalItems, activeBatchSampleList]);
+  }, [barangList, scanGudang, selectedBalItems, activeBatchSampleList, editingBatchId]);
 
   const handleSelectSuggestedBal = (bal: Barang) => {
     const check = checkBalUsage(bal);
@@ -354,15 +335,8 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
   };
 
   // Filter & Search State
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedBatchStatus, setSelectedBatchStatus] = useState<string>('all');
-  const [selectedItemStatus, setSelectedItemStatus] = useState<string>('all');
-  const [selectedGrade, setSelectedGrade] = useState<string>('all');
-  const [itemsPerPage, setItemsPerPage] = useState<number>(10);
-  const [currentPage, setCurrentPage] = useState<number>(1);
 
   // Modals State
-  const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
   // No. Surat Pengiriman Sample diisi manual dan tidak boleh kembar
   const [noSuratSample, setNoSuratSample] = useState('');
   const cekNoSuratSample = cekNomorDokumen(
@@ -372,9 +346,6 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
       .sort((a, b) => (a.tanggal_kirim || '').localeCompare(b.tanggal_kirim || ''))
       .map((b) => b.kode_batch || '')
   );
-  const [printingBatch, setPrintingBatch] = useState<BatchPengirimanSample | null>(null);
-  const [updatingSingleSample, setUpdatingSingleSample] = useState<PengirimanSample | null>(null);
-  const [deletingBatchId, setDeletingBatchId] = useState<string | null>(null);
 
   // Create Batch Form State
   const [tujuanBuyer, setTujuanBuyer] = useSessionDraft<string>('sample_tujuan_buyer', undefined, '');
@@ -382,18 +353,12 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
   const [sumberGudang, setSumberGudang] = useState('Gudang Utama Pamekasan');
   const [tanggalKirim, setTanggalKirim] = useState(new Date().toISOString().split('T')[0]);
   const [dikirimOleh, setDikirimOleh] = useState('');
-  const [catatanBatchForm, setCatatanBatchForm] = useState('Sample batch resmi untuk evaluasi organoleptik dan uji kadar air sebelum DO.');
+  const [catatanBatchForm, setCatatanBatchForm] = useState('');
 
   // Bal selection filters inside Create Form
-  const [filterGradeBal, setFilterGradeBal] = useState<string>('all');
-  const [filterPetaniBal, setFilterPetaniBal] = useState<string>('all');
-  const [searchBalText, setSearchBalText] = useState<string>('');
-
-  // Bulk set kode harga jual for all selected bales
-  const [bulkKodeHarga, setBulkKodeHarga] = useState<string>('');
+      
 
   const [isConfirmCreateOpen, setIsConfirmCreateOpen] = useState(false);
-  const [batchToDelete, setBatchToDelete] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
 
   // Available bal in warehouse for sample
@@ -416,7 +381,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
     if (!targetBal) {
       setScanSampleAlert({
         type: 'error',
-        message: `❌ BAL TIDAK DITEMUKAN: Nomor Bal "${trimmed}" tidak terdaftar di database!`,
+        message: `No Bal "${trimmed}" tidak ditemukan.`,
       });
       setScanGudang('');
       setTimeout(() => inputGudangRef.current?.focus(), 100);
@@ -451,8 +416,9 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
     if (selectedBalItems.some(item => (item.kodeBalPembeli || '').toLowerCase() === target)) {
       return true;
     }
-    // Check in all existing batches
+    // Check in all existing batches (kecuali batch yang sedang diedit)
     for (const batch of activeBatchSampleList) {
+      if (batch.batch_id === editingBatchId) continue;
       if (batch.items && batch.items.some(item => (item.kode_bal_pembeli || '').toLowerCase() === target)) {
         return true;
       }
@@ -485,11 +451,13 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
 
     
   // Compute harga jual suggestions
+  // Dicocokkan HANYA lewat kode (bukan nominal harga): dua kode berbeda bisa punya harga yang sama persis,
+  // jadi mencocokkan lewat angka harga akan memunculkan kode yang salah.
   const hargaJualSuggestions = useMemo(() => {
     const q = scanHargaJual.trim().toLowerCase();
-    let matches = activeHargaJualList.filter((h) => 
-      h.status_aktif !== false && 
-      (!q || h.kode.toLowerCase().includes(q) || h.harga_jual.toString().includes(q))
+    let matches = activeHargaJualList.filter((h) =>
+      h.status_aktif !== false &&
+      (!q || h.kode.toLowerCase().includes(q))
     );
 
     matches.sort((a, b) => {
@@ -504,15 +472,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
     return matches.slice(0, 10);
   }, [activeHargaJualList, scanHargaJual]);
 
-  const handleSelectSuggestedHargaJual = (hj: MasterHargaJual) => {
-    setScanHargaJual(hj.kode);
-    setIsHargaJualDropdownOpen(false);
-    setTimeout(() => {
-      // simulate submit
-      handleScanHargaJualSubmitWithCode(hj);
-    }, 50);
-  };
-
+  
 
   const handleScanHargaJualSubmitWithCode = (foundHJ: MasterHargaJual) => {
     if (!pendingScanBal) {
@@ -603,76 +563,137 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
     });
   };
 
-    const handleApplyBulkKodeHargaToSelected = () => {
-    if (!bulkKodeHarga) return;
-    const master = activeHargaJualList.find((h) => h.kode === bulkKodeHarga);
-    if (!master) return;
-
-    setSelectedBalItems((prev) => 
-      prev.map((it) => ({
-        ...it,
-        kodeHargaJual: master.kode,
-        hargaTawaranKg: master.harga_jual
-      }))
-    );
-  };
-
-  const handleUpdateBalKodeHarga = (barangId: string, kode: string) => {
-    const trimmed = kode.trim();
-    const master = activeHargaJualList.find((h) => h.kode.toLowerCase() === trimmed.toLowerCase() || h.kode === trimmed);
-    setSelectedBalItems((prev) => 
-      prev.map((it) => {
-        if (it.barangId === barangId) {
-          return {
-            ...it,
-            kodeHargaJual: master ? master.kode : kode,
-            hargaTawaranKg: master ? master.harga_jual : it.hargaTawaranKg
-          };
-        }
-        return it;
-      })
-    );
-  };
-
-  const handleUpdateBalOfferPrice = (barangId: string, price: number) => {
-    setSelectedBalItems((prev) => 
-      prev.map((it) => {
-        if (it.barangId === barangId) {
-          return {
-            ...it,
-            hargaTawaranKg: price
-          };
-        }
-        return it;
-      })
-    );
-  };
-
+    
+  
+  
   // Deselect all
   const handleDeselectAll = () => {
     resetDraftSampleItems();
   };
 
+  // Formulir kembali kosong seperti batch baru setelah edit selesai atau dibatalkan
+  const resetFormSetelahEdit = () => {
+    resetDraftSampleItems();
+    setEditingBatchId(null);
+    setTujuanBuyer('');
+    setNoSuratSample('');
+    setPermintaanBuyer('');
+    setSumberGudang('Gudang Utama Pamekasan');
+    setTanggalKirim(new Date().toISOString().split('T')[0]);
+    setDikirimOleh('');
+    setCatatanBatchForm('');
+    setErrorMessage('');
+    setScanSampleAlert(null);
+    setPendingScanBal(null);
+    setScanGudang('');
+  };
+
+  // Mengisi formulir dengan isi batch yang belum punya Surat Jalan agar bisa diubah
+  const muatUntukEdit = (batch: BatchPengirimanSample) => {
+    const items = (batch.items || []).map((it) => {
+      const matchedBal = barangList.find((b) => b.barang_id === it.barang_id || b.no_bal === it.no_bal);
+      return {
+        barangId: it.barang_id,
+        noBal: it.no_bal,
+        kodeBalPembeli: it.kode_bal_pembeli || it.no_bal,
+        grade: it.kode_grade,
+        beratBalKg: it.berat_bal_kg || resolveBeratNetto(matchedBal),
+        beratBrutoKg: it.berat_bruto_kg || resolveBeratBruto(matchedBal),
+        potonganTaraKg: it.potongan_tara_kg !== undefined ? it.potongan_tara_kg : (matchedBal?.potongan_tara_kg || 0),
+        hargaBeliKg: it.harga_beli_kg || resolveHargaBeli(matchedBal),
+        kodeHargaJual: it.kode_harga_jual || '-',
+        hargaTawaranKg: it.harga_tawaran_kg,
+      };
+    });
+
+    editDimuatRef.current = batch.batch_id;
+    setEditingBatchId(batch.batch_id);
+    setNoSuratSample(batch.kode_batch || '');
+    setTujuanBuyer(batch.tujuan_buyer || '');
+    setPermintaanBuyer(batch.permintaan_buyer || '');
+    setSumberGudang(batch.sumber_gudang || '');
+    setTanggalKirim(batch.tanggal_kirim || '');
+    setDikirimOleh(batch.dikirim_oleh || '');
+    setCatatanBatchForm(batch.catatan || '');
+    setSelectedBalItems(items);
+    setErrorMessage('');
+    setScanSampleAlert(null);
+    setPendingScanBal(null);
+    setScanGudang('');
+    setSuccessNotification(null);
+    setEditMenunggu(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Batch yang dipilih dari halaman Status & Detail Batch dimuat ke formulir untuk diedit
+  useEffect(() => {
+    if (!editBatchId) {
+      editDimuatRef.current = null;
+      return;
+    }
+    if (editDimuatRef.current === editBatchId) return;
+    const target = activeBatchSampleList.find((b) => b.batch_id === editBatchId);
+    if (!target) return;
+
+    editDimuatRef.current = editBatchId;
+    if ((target.items || []).some((it) => it.sudah_dikirim_do)) {
+      setErrorMessage(`Batch ${target.kode_batch} sudah dibuatkan Surat Jalan sehingga tidak dapat diedit. Batalkan Surat Jalannya dulu bila belum Selesai.`);
+      onSelesaiEdit?.();
+      return;
+    }
+    // Draf batch baru yang belum disimpan akan tergantikan, jadi minta konfirmasi dulu
+    if (selectedBalItems.length > 0) {
+      setEditMenunggu(target);
+      return;
+    }
+    muatUntukEdit(target);
+  }, [editBatchId, activeBatchSampleList]);
+
+  const handleBatalEdit = () => {
+    resetFormSetelahEdit();
+    onSelesaiEdit?.();
+  };
+
   // Submit Create Batch Form
-  const handleSaveBatchForm = () => {
+  // sebagai 'draft': simpan sebagai Draft (belum final, surat belum bisa dicetak); 'final': siap pakai
+  const handleSaveBatchForm = (sebagai: 'draft' | 'final' = 'final') => {
+    const tolak = (pesan: string) => {
+      setErrorMessage(pesan);
+      setIsConfirmCreateOpen(false);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
     if (cekNoSuratSample.kosong) {
-      setErrorMessage('No. Surat Pengiriman Sample wajib diisi manual.');
+      tolak('No. Surat Pengiriman Sample wajib diisi manual.');
       return;
     }
     if (cekNoSuratSample.kembar) {
-      setErrorMessage(pesanNomorKembar('Surat Pengiriman Sample', noSuratSample, cekNoSuratSample));
+      tolak(pesanNomorKembar('Surat Pengiriman Sample', noSuratSample, cekNoSuratSample));
       return;
     }
     const finalTujuan = tujuanBuyer.trim();
     if (!finalTujuan) {
-      setErrorMessage('Tujuan gudang / pabrik penerima sample wajib diisi!');
+      tolak('Tujuan gudang / pabrik penerima sample wajib diisi!');
       return;
     }
     if (selectedBalItems.length === 0) {
-      setErrorMessage('Pilih minimal 1 bal tembakau untuk dimasukkan ke dalam Batch Sample!');
+      tolak('Pilih minimal 1 bal tembakau untuk dimasukkan ke dalam Batch Sample!');
       return;
     }
-    
+    // Cegah bal ganda: bal yang sudah ada di batch lain (mis. sisa draf dari edit yang terputus) tidak boleh masuk batch baru
+    const balBentrok = selectedBalItems.filter((s) =>
+      activeBatchSampleList.some(
+        (b) =>
+          b.batch_id !== editingBatchId &&
+          b.status !== 'dibatalkan' &&
+          (b.items || []).some((it) => it.barang_id === s.barangId && it.status_item !== 'ditolak')
+      )
+    );
+    if (balBentrok.length > 0) {
+      setErrorMessage(`Bal ${balBentrok.map((s) => `#${s.noBal}`).join(', ')} sudah tercatat di batch sample lain. Keluarkan dari tabel terlebih dahulu.`);
+      setIsConfirmCreateOpen(false);
+      return;
+    }
+
 
     let nextSeq = activeBatchSampleList.length + 1;
     while (!editingBatchId && activeBatchSampleList.some((b) => b.batch_id === generateBatchSampleId(nextSeq))) {
@@ -711,6 +732,10 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
 
     const totalEstimasiNilai = items.reduce((sum, it) => sum + beratBrutoItemSample(it) * it.harga_tawaran_kg, 0);
 
+    // Draft tetap Draft; batch final yang diedit mempertahankan tahapnya; Draft yang difinalkan menjadi 'sample'
+    const statusBatch: StatusBatchSample =
+      sebagai === 'draft' ? 'draft' : existingBatch && !isBatchDraft(existingBatch) ? existingBatch.status : 'sample';
+
     const newBatch: BatchPengirimanSample = {
       ...existingBatch,
       batch_id: nextBatchId,
@@ -719,7 +744,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
       permintaan_buyer: permintaanBuyer,
       sumber_gudang: sumberGudang,
       tanggal_kirim: tanggalKirim,
-      status: existingBatch?.status || 'sample',
+      status: statusBatch,
       dikirim_oleh: dikirimOleh.trim(),
       catatan: catatanBatchForm.trim(),
       items: items,
@@ -731,111 +756,33 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
       total_nilai_deal: existingBatch?.total_nilai_deal || 0,
     };
 
-    // Find removed items and restore to di_gudang
-    const selectedIds = new Set(selectedBalItems.map((s) => s.barangId));
-    let finalBarangList = [...barangList];
-    
-    if (existingBatch) {
-      const removedItemIds = existingBatch.items
-        .filter(it => !selectedIds.has(it.barang_id))
-        .map(it => it.barang_id);
-        
-      if (removedItemIds.length > 0) {
-        const removedSet = new Set(removedItemIds);
-        finalBarangList = finalBarangList.map(b => {
-          if (removedSet.has(b.barang_id)) {
-            return {
-              ...b,
-              status_stok: 'di_gudang' as const,
-              catatan_qc: b.catatan_qc?.replace(`Sample Batch ${editingBatchId} dikirim ke ${existingBatch.tujuan_buyer}`, '').trim()
-            };
-          }
-          return b;
-        });
-      }
-    }
+    // Reclass / Batch Sample tidak mempengaruhi bal: status dan data bal tidak diubah sama sekali.
+    // Bal baru keluar dari gudang saat masuk Surat Jalan / DO.
+    const updatedBarangs: Barang[] = [];
 
-    // Update new items to terkirim_sample
-    const updatedBarangs = finalBarangList.map((b) => {
-      if (selectedIds.has(b.barang_id)) {
-        return {
-          ...b,
-          status_stok: 'terkirim_sample' as const,
-          catatan_qc: `Sample Batch ${kodeBatch} dikirim ke ${finalTujuan}`,
-        };
-      }
-      return b;
-    });
-
-    if (editingBatchId && onUpdateBatchSample) {
+    const sedangEdit = Boolean(editingBatchId);
+    if (sedangEdit) {
       onUpdateBatchSample(newBatch, updatedBarangs);
-      setEditingBatchId(null);
-      setViewMode('list');
-    } else if (onSaveBatchSample) {
-      onSaveBatchSample(newBatch, updatedBarangs);
     } else {
-      // Fallback
-      const flatSamples: PengirimanSample[] = items.map((it) => ({
-        sample_id: it.sample_item_id,
-        batch_id: newBatch.batch_id,
-        barang_id: it.barang_id,
-        no_bal: it.no_bal,
-        kode_grade: it.kode_grade,
-        sumber: newBatch.sumber_gudang,
-        tujuan: newBatch.tujuan_buyer,
-        berat_sample_gram: it.berat_sample_gram || 0,
-        berat_bal_kg: it.berat_bal_kg,
-        berat_bruto_kg: it.berat_bruto_kg,
-        potongan_tara_kg: it.potongan_tara_kg,
-        harga_beli_kg: it.harga_beli_kg,
-        harga_tawaran_kg: it.harga_tawaran_kg,
-        tanggal_kirim: newBatch.tanggal_kirim,
-        status: 'sample',
-        catatan: newBatch.catatan,
-        dikirim_oleh: newBatch.dikirim_oleh,
-        nama_petani: it.nama_petani,
-      }));
-      onSaveBatchSamples(flatSamples, updatedBarangs);
+      onSaveBatchSample(newBatch, updatedBarangs);
     }
-
     setIsConfirmCreateOpen(false);
-    resetDraftSampleItems();
-    setTujuanBuyer('');
-    setNoSuratSample('');
-    setViewMode('list');
-  };
-
-  // Filtered Batches for table
-  const filteredBatches = useMemo(() => {
-    return activeBatchSampleList.filter((b) => {
-      if (selectedBatchStatus !== 'all') {
-        if (selectedBatchStatus === 'diproses' && b.status !== 'diproses' && b.status !== 'sample') return false;
-        if (selectedBatchStatus === 'dikirim' && b.status !== 'dikirim') return false;
-        if (selectedBatchStatus === 'selesai' && b.status !== 'selesai') return false;
-      }
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchKode = (b.kode_batch || '').toLowerCase().includes(q);
-        const matchTujuan = (b.tujuan_buyer || '').toLowerCase().includes(q);
-        const matchPermintaan = (b.permintaan_buyer || '').toLowerCase().includes(q);
-        const matchBal = b.items?.some((it) => (it.no_bal || '').toLowerCase().includes(q));
-        if (!matchKode && !matchTujuan && !matchPermintaan && !matchBal) return false;
-      }
-      return true;
+    setSuccessNotification({
+      kodeBatch: kodeBatch,
+      totalBal: items.length,
+      tujuan: finalTujuan,
+      diperbarui: sedangEdit,
+      draft: sebagai === 'draft',
     });
-  }, [activeBatchSampleList, selectedBatchStatus, searchQuery]);
-
-  // Counts for tabs
-  const countDiproses = useMemo(() => activeBatchSampleList.filter(b => b.status === 'diproses' || b.status === 'sample').length, [activeBatchSampleList]);
-  const countDikirim = useMemo(() => activeBatchSampleList.filter(b => b.status === 'dikirim').length, [activeBatchSampleList]);
-  const countSelesai = useMemo(() => activeBatchSampleList.filter(b => b.status === 'selesai').length, [activeBatchSampleList]);
-  const totalSampleBalCount = useMemo(() => activeBatchSampleList.reduce((acc, b) => acc + (b.items?.length || b.total_sample_bal || 0), 0), [activeBatchSampleList]);
-
-  // Paginated Batches
-  const paginatedBatches = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
-    return filteredBatches.slice(start, start + itemsPerPage);
-  }, [filteredBatches, currentPage, itemsPerPage]);
+    if (sedangEdit) {
+      resetFormSetelahEdit();
+      onSelesaiEdit?.();
+    } else {
+      resetDraftSampleItems();
+      setTujuanBuyer('');
+      setNoSuratSample('');
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -848,368 +795,86 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
               <FlaskConical className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-gray-900 tracking-tight">
-                Pengiriman Sample & Evaluasi Sortir QC Pabrik
-              </h1>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Monitoring batch sample tembakau, status pengiriman ekspedisi, dan hasil evaluasi sortir lab buyer
+              <h1 className="text-lg font-bold text-gray-900 tracking-tight">Pengiriman Sample</h1>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      {/* Banner Mode Edit Batch Sample */}
+      {editingBatchId && (
+        <div className="p-4 bg-amber-50 border border-amber-300 rounded-sm shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-start space-x-3">
+            <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+              <Edit3 className="w-4 h-4" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-amber-900">
+                Mengedit Batch Sample {batchDiedit?.kode_batch || ''}
+                {isBatchDraft(batchDiedit) && (
+                  <span className="ml-2 px-2 py-0.5 text-[10px] font-bold text-slate-700 bg-slate-100 border border-slate-300 rounded-xs align-middle">
+                    DRAFT
+                  </span>
+                )}
+              </h4>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleBatalEdit}
+            className="px-3 py-1.5 text-xs font-bold text-amber-900 bg-white hover:bg-amber-100 border border-amber-400 rounded-xs transition cursor-pointer shrink-0"
+          >
+            Batal Edit
+          </button>
+        </div>
+      )}
+
+      {/* Notifikasi Berhasil Disimpan */}
+      {successNotification && (
+        <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-sm shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-start space-x-3">
+            <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-emerald-900">
+                Batch Sample {successNotification.kodeBatch} Berhasil {successNotification.diperbarui ? 'Diperbarui' : 'Disimpan'}
+                {successNotification.draft ? ' sebagai Draft' : ''}!
+              </h4>
+              <p className="text-xs text-emerald-800">
+                <strong>{successNotification.totalBal} Bal</strong> • {successNotification.tujuan}
               </p>
             </div>
           </div>
-        </div>
-
-        {/* View Mode Toggle Buttons */}
-        <div className="flex items-center space-x-2">
-          <button
-            type="button"
-            onClick={() => setViewMode('list')}
-            className={`px-3.5 py-2 text-xs font-semibold rounded-sm transition flex items-center space-x-1.5 cursor-pointer border ${
-              viewMode === 'list'
-                ? 'bg-[#b81d24] text-white border-[#b81d24] shadow-xs'
-                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-            }`}
-          >
-            <FileText className="w-3.5 h-3.5" />
-            <span>Daftar Batch ({activeBatchSampleList.length})</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setTujuanBuyer('');
-              setNoSuratSample('');
-              setEditingBatchId(null);
-              resetDraftSampleItems();
-              setErrorMessage('');
-              setViewMode('create');
-            }}
-            className={`px-3.5 py-2 text-xs font-semibold rounded-sm transition flex items-center space-x-1.5 cursor-pointer border ${
-              viewMode === 'create'
-                ? 'bg-[#b81d24] text-white border-[#b81d24] shadow-xs'
-                : 'bg-white text-[#b81d24] border-red-200 hover:bg-red-50'
-            }`}
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Buat Batch Baru</span>
-          </button>
-        </div>
-      </div>
-
-      {/* VIEW MODE 1: LIST BATCHES & KPI */}
-      {viewMode === 'list' && (
-        <div className="space-y-4 animate-in fade-in duration-150">
-          
-          {/* KPI Stat Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="bg-white p-3.5 border border-gray-200 rounded-sm shadow-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-gray-500">Total Batch Sample</span>
-                <FlaskConical className="w-4 h-4 text-gray-600" />
-              </div>
-              <div className="mt-2 flex items-baseline justify-between">
-                <span className="text-xl font-bold text-gray-900">{activeBatchSampleList.length}</span>
-                <span className="text-xs text-gray-500 font-medium">{totalSampleBalCount} Bal Total</span>
-              </div>
-            </div>
-
-            <div className="bg-white p-3.5 border border-amber-200 bg-amber-50/20 rounded-sm shadow-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-amber-800">Sedang Pengiriman Sample</span>
-                <Clock className="w-4 h-4 text-amber-600" />
-              </div>
-              <div className="mt-2 flex items-baseline justify-between">
-                <span className="text-xl font-bold text-amber-700">{countDiproses}</span>
-                <span className="text-[11px] font-medium text-amber-600">Evaluasi QC Lab</span>
-              </div>
-            </div>
-
-            <div className="bg-white p-3.5 border border-rose-200 bg-rose-50/20 rounded-sm shadow-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-rose-800">Sedang Berangkat</span>
-                <Truck className="w-4 h-4 text-[#b81d24]" />
-              </div>
-              <div className="mt-2 flex items-baseline justify-between">
-                <span className="text-xl font-bold text-rose-700">{countDikirim}</span>
-                <span className="text-[11px] font-medium text-[#b81d24]">Dalam Perjalanan</span>
-              </div>
-            </div>
-
-            <div className="bg-white p-3.5 border border-emerald-200 bg-emerald-50/20 rounded-sm shadow-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-emerald-800">Selesai / DO Terbit</span>
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              </div>
-              <div className="mt-2 flex items-baseline justify-between">
-                <span className="text-xl font-bold text-emerald-700">{countSelesai}</span>
-                <span className="text-[11px] font-medium text-emerald-600">Disetujui Buyer</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Table Container */}
-          <div className="bg-white border border-gray-300 rounded-sm shadow-xs overflow-hidden">
-            
-            {/* Toolbar */}
-            <div className="p-3 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs border-b border-gray-200">
-              <div className="flex flex-wrap items-center gap-2.5">
-                <div className="flex items-center space-x-1.5">
-                  <span className="text-gray-600 font-medium">Tampil</span>
-                  <select
-                    value={itemsPerPage}
-                    onChange={(e) => {
-                      setItemsPerPage(Number(e.target.value));
-                      setCurrentPage(1);
-                    }}
-                    className="border border-gray-300 rounded-sm px-2 py-1 bg-white text-xs font-semibold text-gray-800 focus:outline-none focus:border-[#b81d24] cursor-pointer"
-                  >
-                    <option value={5}>5</option>
-                    <option value={10}>10</option>
-                    <option value={25}>25</option>
-                    <option value={50}>50</option>
-                  </select>
-                  <span className="text-gray-500">per hal.</span>
-                </div>
-                {(searchQuery.trim() || selectedBatchStatus !== 'all') && (
-                  <span className="text-[11px] text-gray-500 font-medium">
-                    Ditemukan: <strong className="text-gray-900">{filteredBatches.length}</strong> batch sample
-                  </span>
-                )}
-              </div>
-
-              {/* Kolom Pencarian Utama */}
-              <div className="w-full sm:w-80 md:w-96">
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-gray-400">
-                    <Search className="w-4 h-4" />
-                  </div>
-                  <input
-                    id="search-sample-batch-input"
-                    type="text"
-                    placeholder="Cari batch sample (Kode, Buyer, Pabrik, No Bal)..."
-                    value={searchQuery}
-                    onChange={(e) => {
-                      setSearchQuery(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    className="w-full bg-gray-50 hover:bg-white focus:bg-white border border-gray-300 rounded-sm pl-8 pr-8 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-[#b81d24] focus:ring-1 focus:ring-[#b81d24] transition shadow-2xs"
-                  />
-                  {searchQuery && (
-                    <button
-                      type="button"
-                      id="btn-clear-search-sample-batch"
-                      onClick={() => {
-                        setSearchQuery('');
-                        setCurrentPage(1);
-                      }}
-                      className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
-                      title="Hapus pencarian"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Batch Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-gray-700">
-                <thead className="bg-gray-100 text-gray-600 uppercase text-[10px] font-bold tracking-wider border-b border-gray-200">
-                  <tr>
-                    <th className="px-3.5 py-2.5">No</th>
-                    <th className="px-3.5 py-2.5">Kode Batch & Info</th>
-                    <th className="px-3.5 py-2.5">Tujuan Buyer / Pabrik</th>
-                    <th className="px-3.5 py-2.5 text-center">Jml Bal</th>
-                    <th className="px-3.5 py-2.5 text-right">Berat Bruto</th>
-                    <th className="px-3.5 py-2.5">Tanggal Kirim</th>
-                    <th className="px-3.5 py-2.5 text-right">Nilai Deal / Tawar</th>
-                    <th className="px-3.5 py-2.5 text-center">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {paginatedBatches.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="px-4 py-8 text-center text-gray-400">
-                        Tidak ada data batch sample yang sesuai dengan filter.
-                      </td>
-                    </tr>
-                  ) : (
-                    paginatedBatches.map((batch, index) => {
-                      const balCount = batch.items?.length || batch.total_sample_bal || 0;
-                      const approved = batch.total_bal_disetujui || batch.items?.filter(it => it.status_item === 'disetujui').length || 0;
-                      const rejected = batch.total_bal_ditolak || batch.items?.filter(it => it.status_item === 'ditolak').length || 0;
-                      const nego = batch.total_bal_nego || batch.items?.filter(it => it.status_item === 'nego').length || 0;
-
-                      const batchBruto = batch.items?.reduce((sum, it) => sum + beratBrutoItemSample(it), 0) || 0;
-
-                      return (
-                        <tr key={batch.batch_id} className="hover:bg-gray-50/80 transition">
-                          <td className="px-3.5 py-3 font-mono text-gray-400">
-                            {(currentPage - 1) * itemsPerPage + index + 1}
-                          </td>
-                          <td className="px-3.5 py-3">
-                            <div className="font-bold text-gray-900 font-mono">{batch.kode_batch}</div>
-                            {batch.permintaan_buyer && (
-                              <div className="text-[10px] text-gray-600 italic line-clamp-1 max-w-[200px] mt-0.5">
-                                {batch.permintaan_buyer}
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-3.5 py-3">
-                            <div className="font-semibold text-gray-800 flex items-center space-x-1.5">
-                              <Building2 className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                              <span>{batch.tujuan_buyer}</span>
-                            </div>
-                            <div className="text-[10px] text-gray-500 mt-0.5">
-                              QC: {batch.dikirim_oleh || '-'}
-                            </div>
-                          </td>
-                          <td className="px-3.5 py-3 text-center">
-                            <span className="font-bold text-gray-900 bg-gray-100 px-2 py-0.5 rounded-xs border border-gray-200">
-                              {balCount} Bal
-                            </span>
-                          </td>
-                          <td className="px-3.5 py-3 text-right font-mono">
-                            <div className="font-bold text-gray-900">{formatNumber(batchBruto, 1)} kg</div>
-                          </td>
-                          <td className="px-3.5 py-3">
-                            <div className="text-[11px] text-gray-800 font-medium flex items-center space-x-1">
-                              <Calendar className="w-3 h-3 text-gray-400" />
-                              <span>{batch.tanggal_kirim}</span>
-                            </div>
-                          </td>
-                          <td className="px-3.5 py-3 text-right">
-                            {batch.total_nilai_deal && batch.total_nilai_deal > 0 ? (
-                              <div>
-                                <div className="font-bold text-emerald-700">
-                                  {formatRupiah(batch.total_nilai_deal)}
-                                </div>
-                                <div className="text-[10px] text-gray-400 line-through">
-                                  {formatRupiah(batch.total_estimasi_nilai || 0)}
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="font-semibold text-gray-700">
-                                {formatRupiah(batch.total_estimasi_nilai || 0)}
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-3.5 py-3 text-center">
-                            <div className="flex items-center justify-center space-x-1.5">
-                              
-                              <button
-                                type="button"
-                                title="Edit Info Batch"
-                                onClick={() => {
-                                  setViewMode('create');
-                                  // Populate the form
-                                  setEditingBatchId(batch.batch_id);
-                                  setNoSuratSample(batch.kode_batch || '');
-                                  setTujuanBuyer(batch.tujuan_buyer || '');
-                                  setPermintaanBuyer(batch.permintaan_buyer || '');
-                                  setSumberGudang(batch.sumber_gudang || '');
-                                  setTanggalKirim(batch.tanggal_kirim || '');
-                                  setDikirimOleh(batch.dikirim_oleh || '');
-                                  setCatatanBatchForm(batch.catatan || '');
-                                  
-                                  const items = batch.items?.map(it => {
-                                    const matchedBal = barangList.find(b => b.barang_id === it.barang_id || b.no_bal === it.no_bal);
-                                    const netto = it.berat_bal_kg || resolveBeratNetto(matchedBal);
-                                    const bruto = it.berat_bruto_kg || resolveBeratBruto(matchedBal);
-                                    const tara = it.potongan_tara_kg !== undefined ? it.potongan_tara_kg : (matchedBal?.potongan_tara_kg || 0);
-                                    const hrgBeli = it.harga_beli_kg || resolveHargaBeli(matchedBal);
-
-                                    return {
-                                      barangId: it.barang_id,
-                                      noBal: it.no_bal,
-                                      kodeBalPembeli: it.kode_bal_pembeli || it.no_bal,
-                                      grade: it.kode_grade,
-                                      beratBalKg: netto,
-                                      beratBrutoKg: bruto,
-                                      potonganTaraKg: tara,
-                                      hargaBeliKg: hrgBeli,
-                                      kodeHargaJual: it.kode_harga_jual || '-',
-                                      hargaTawaranKg: it.harga_tawaran_kg
-                                    };
-                                  }) || [];
-                                  setSelectedBalItems(items);
-                                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                                }}
-                                className="px-2 py-1 text-[11px] font-semibold bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300 rounded-xs transition cursor-pointer flex items-center space-x-1"
-                              >
-                                <Edit3 className="w-3 h-3 text-gray-600" />
-                                <span>Edit</span>
-                              </button>
-                              <button
-                                type="button"
-                                title="Cetak Surat Dokumen Sample"
-                                onClick={() => setPrintingBatch(batch)}
-                                className="px-2 py-1 text-[11px] font-semibold bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300 rounded-xs transition cursor-pointer flex items-center space-x-1"
-                              >
-                                <Printer className="w-3 h-3 text-gray-600" />
-                                <span>Cetak</span>
-                              </button>
-                              {batch.status !== 'selesai' && (
-                                <button
-                                  type="button"
-                                  title="Batalkan Draft Batch (Kembalikan Bal ke Gudang)"
-                                  onClick={() => {
-                                    setBatchToDelete(batch.batch_id);
-                                  }}
-                                  className="px-2 py-1 text-[11px] font-semibold bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-xs transition cursor-pointer flex items-center space-x-1"
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                  <span>Batal</span>
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Pagination footer */}
-            {filteredBatches.length > itemsPerPage && (
-              <div className="p-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between text-xs text-gray-600">
-                <span>
-                  Menampilkan {(currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, filteredBatches.length)} dari {filteredBatches.length} batch
-                </span>
-                <div className="flex items-center space-x-1">
-                  <button
-                    type="button"
-                    disabled={currentPage === 1}
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    className="px-2.5 py-1 bg-white border border-gray-300 rounded-xs disabled:opacity-40 cursor-pointer text-xs"
-                  >
-                    Sebelumnya
-                  </button>
-                  <span className="px-2 font-bold text-gray-700">{currentPage}</span>
-                  <button
-                    type="button"
-                    disabled={currentPage * itemsPerPage >= filteredBatches.length}
-                    onClick={() => setCurrentPage(p => p + 1)}
-                    className="px-2.5 py-1 bg-white border border-gray-300 rounded-xs disabled:opacity-40 cursor-pointer text-xs"
-                  >
-                    Selanjutnya
-                  </button>
-                </div>
-              </div>
+          <div className="flex items-center space-x-2 shrink-0">
+            {onNavigateToStatusBatch && (
+              <button
+                type="button"
+                onClick={onNavigateToStatusBatch}
+                className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-xs transition cursor-pointer shadow-xs"
+              >
+                Status & Detail Batch
+              </button>
             )}
+            <button
+              type="button"
+              onClick={() => setSuccessNotification(null)}
+              className="p-1 text-emerald-700 hover:text-emerald-900 cursor-pointer"
+              title="Tutup pesan"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         </div>
       )}
 
-      {/* VIEW MODE 2: CREATE BATCH SAMPLE */}
-      {viewMode === 'create' && (
+      {/* Form Pengiriman Batch Sample */}
         <div className="bg-white border border-gray-300 rounded-sm shadow-xs p-5 space-y-5 animate-in fade-in duration-150">
           
           <div className="border-b border-gray-200 pb-3 flex items-center justify-between">
             <div>
-              <h2 className="text-sm font-bold text-gray-900">Form Pengiriman 1 Batch Sample Tembakau</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Pilih atau scan bal tembakau yang akan dikirimkan untuk uji lab mutu buyer</p>
+              <h2 className="text-sm font-bold text-gray-900">Batch Sample</h2>
             </div>
           </div>
 
@@ -1226,7 +891,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
             {/* No. Surat Pengiriman Sample (manual) */}
             <div className="space-y-1">
               <label className="block text-xs font-semibold text-gray-700">
-                No. Surat Pengiriman Sample: <span className="text-red-500">*</span>
+                No. Surat Pengiriman Sample <span className="text-[#b81d24]">*</span>
               </label>
               <input
                 type="text"
@@ -1244,36 +909,29 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                 <p className="text-[10px] text-gray-500">
                   Nomor terakhir: <span className="font-mono font-semibold text-gray-700">{cekNoSuratSample.terakhir}</span>
                 </p>
-              ) : (
-                <p className="text-[10px] text-gray-500">Wajib diisi manual, tidak boleh sama dengan surat sample lain.</p>
-              )}
+              ) : null}
             </div>
 
             {/* Buyer Destination */}
             <div className="space-y-1">
               <label className="block text-xs font-semibold text-gray-700">
-                Tujuan Gudang / Pabrik Penerima: <span className="text-red-500">*</span>
+                Tujuan Gudang / Pabrik <span className="text-[#b81d24]">*</span>
               </label>
               <input
                 type="text"
-                placeholder="Ketik tujuan gudang / pabrik penerima..."
+                placeholder="Tujuan"
                 value={tujuanBuyer}
                 onChange={(e) => setTujuanBuyer(e.target.value)}
                 required
                 className="w-full px-2.5 py-1.5 text-xs bg-white border border-gray-300 rounded-xs focus:ring-1 focus:ring-gray-700 text-gray-900"
               />
-              {!tujuanBuyer.trim() && (
-                <p className="text-[10px] text-red-600 font-medium">
-                  * Wajib diisi, ketik nama tujuan gudang secara manual.
-                </p>
-              )}
             </div>
 
             
 
             {/* Tanggal Kirim */}
             <div className="space-y-1">
-              <label className="block text-xs font-semibold text-gray-700">Tanggal Pengiriman:</label>
+              <label className="block text-xs font-semibold text-gray-700">Tanggal Pengiriman</label>
               <input
                 type="date"
                 value={tanggalKirim}
@@ -1284,7 +942,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
 
             {/* Dikirim Oleh */}
             <div className="space-y-1">
-              <label className="block text-xs font-semibold text-gray-700">Petugas QC / Pengirim:</label>
+              <label className="block text-xs font-semibold text-gray-700">Petugas Pengirim</label>
               <input
                 type="text"
                 value={dikirimOleh}
@@ -1402,7 +1060,6 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                       >
                         <div className="px-3 py-1.5 bg-gray-50 text-[11px] font-bold text-gray-600 uppercase tracking-wider flex items-center justify-between border-b border-gray-200">
                           <span>Rekomendasi Bal Gudang ({balSuggestions.length}):</span>
-                          <span className="text-[10px] text-gray-400 font-normal lowercase">Pilih dgn Enter atau Klik</span>
                         </div>
                         {balSuggestions.length > 0 ? (
                           balSuggestions.map((bal, idx) => {
@@ -1428,7 +1085,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                                     </span>
                                   </div>
                                   <div className="text-[10px] text-gray-500 truncate mt-0.5">
-                                    {formatNumber(beratBrutoBal(bal), 1)} kg bruto • Petani: {bal.nama_petani || '-'} • {usage.detail}
+                                    {beratBrutoBal(bal) > 0 ? `${formatNumber(beratBrutoBal(bal), 1)} kg bruto • ` : ''}Petani: {bal.nama_petani || '-'} • {usage.detail}
                                   </div>
                                 </div>
                                 {!usage.isAvailable && (
@@ -1632,7 +1289,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
               <div className="w-full sm:w-1/2">
                 <input
                   type="text"
-                  placeholder="Opsional: Catatan untuk pihak QC pengirim..."
+                  placeholder="Catatan (opsional)"
                   value={catatanBatchForm}
                   onChange={(e) => setCatatanBatchForm(e.target.value)}
                   className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-300 rounded-sm focus:bg-white transition"
@@ -1646,6 +1303,22 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                     className="px-3 py-2 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-sm transition cursor-pointer"
                   >
                     Kosongkan Tabel
+                  </button>
+                )}
+
+                {/* Draft: bal dan harga jual masih bisa disesuaikan; hanya untuk batch baru atau batch yang masih Draft */}
+                {(!editingBatchId || isBatchDraft(batchDiedit)) && (
+                  <button
+                    type="button"
+                    disabled={selectedBalItems.length === 0 || !tujuanBuyer.trim() || cekNoSuratSample.kosong}
+                    onClick={() => {
+                      setErrorMessage('');
+                      handleSaveBatchForm('draft');
+                    }}
+                    className="px-4 py-2 text-xs font-bold text-slate-800 bg-white hover:bg-slate-100 border border-slate-400 disabled:opacity-50 disabled:cursor-not-allowed rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                    <span>{`Simpan sebagai Draft (${selectedBalItems.length} Bal)`}</span>
                   </button>
                 )}
 
@@ -1674,80 +1347,50 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                     setIsConfirmCreateOpen(true);
                   }}
                   className="px-5 py-2 text-xs font-bold text-white bg-[#b81d24] hover:bg-[#a0181e] disabled:opacity-50 disabled:cursor-not-allowed rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-md"
-                  title={!tujuanBuyer.trim() ? 'Tujuan gudang / pabrik penerima wajib diisi' : selectedBalItems.length === 0 ? 'Pilih minimal 1 bal' : 'Kirim Batch Sample'}
+                  title={!tujuanBuyer.trim() ? 'Tujuan gudang / pabrik penerima wajib diisi' : selectedBalItems.length === 0 ? 'Pilih minimal 1 bal' : akanDifinalkan ? 'Finalkan batch: siap pakai dan surat bisa dicetak' : 'Simpan perubahan batch sample'}
                 >
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>Simpan & Kirim Batch Sample ({selectedBalItems.length} Bal)</span>
+                  <span>{editingBatchId && !akanDifinalkan ? `Simpan Perubahan Batch Sample (${selectedBalItems.length} Bal)` : `Simpan & Finalkan Batch Sample (${selectedBalItems.length} Bal)`}</span>
                 </button>
               </div>
             </div>
           </div>
         </div>
-      )}
 
       
       {/* Modal 1: QC Sortir & Evaluation Modal */}
       
       
 
-      {/* Modal 2: Printable Batch Sample PDF Document */}
-      <BatchSamplePrintModal
-        isOpen={!!printingBatch}
-        onClose={() => setPrintingBatch(null)}
-        batch={printingBatch}
-      />
-
-      {/* Modal 3: Single Item Update Modal */}
-      <SampleStatusUpdateModal
-        isOpen={!!updatingSingleSample}
-        onClose={() => setUpdatingSingleSample(null)}
-        sample={updatingSingleSample}
-        onSaveStatus={(updated) => {
-          onUpdateSample(updated);
-          setUpdatingSingleSample(null);
-        }}
-      />
-
-      {/* Confirm Delete/Cancel Batch Modal */}
-      <ConfirmModal
-        isOpen={!!batchToDelete}
-        title="Konfirmasi Pembatalan Draft Batch Sample"
-        message="Apakah Anda yakin ingin membatalkan draft batch sample ini? Seluruh bal yang dipinjam akan otomatis dikembalikan ke status stok gudang."
-        confirmText="Ya, Batalkan Draft"
-        cancelText="Kembali"
-        variant="warning"
-        onConfirm={() => {
-          if (batchToDelete && onDeleteBatchSample) {
-            const batchToDel = batchSampleList.find((b) => b.batch_id === batchToDelete);
-            if (batchToDel) {
-              const revertedBarangs = batchToDel.items
-                .map((item) => {
-                  const b = barangList.find((br) => br.barang_id === item.barang_id);
-                  if (b) {
-                    return { ...b, status_stok: 'di_gudang' as const };
-                  }
-                  return undefined;
-                })
-                .filter((b): b is Barang => !!b);
-              onDeleteBatchSample(batchToDelete, revertedBarangs);
-            } else {
-              onDeleteBatchSample(batchToDelete);
-            }
-          }
-          setBatchToDelete(null);
-        }}
-        onClose={() => setBatchToDelete(null)}
-      />
 
       <ConfirmModal
         isOpen={isConfirmCreateOpen}
-        title="Konfirmasi Pengiriman Batch Sample Tembakau"
-        message={`Apakah Anda yakin ingin mengirimkan Batch Sample ${normalisasiNomor(noSuratSample)} berisi ${selectedBalItems.length} bal tembakau ke ${tujuanBuyer}? Bal yang terpilih akan ditandai berstatus "Terkirim Sample".`}
-        confirmText="Ya, Kirim Batch Sample"
+        title={editingBatchId && !akanDifinalkan ? 'Konfirmasi Perubahan Batch Sample' : 'Konfirmasi Finalkan Batch Sample'}
+        message={editingBatchId && !akanDifinalkan
+          ? `Simpan perubahan Batch Sample ${normalisasiNomor(noSuratSample)} berisi ${selectedBalItems.length} bal tembakau untuk ${tujuanBuyer}? Bal yang dikeluarkan dari batch tidak berubah dan tetap di stok gudang.`
+          : `Finalkan Batch Sample ${normalisasiNomor(noSuratSample)} berisi ${selectedBalItems.length} bal tembakau untuk ${tujuanBuyer}? Setelah final, batch siap dipakai dan surat pengiriman sample bisa dicetak. Bal tidak berubah dan tetap di stok gudang sampai masuk Surat Jalan.`}
+        confirmText={editingBatchId && !akanDifinalkan ? 'Ya, Simpan Perubahan' : 'Ya, Finalkan Batch Sample'}
         cancelText="Periksa Lagi"
-        onConfirm={handleSaveBatchForm}
+        onConfirm={() => handleSaveBatchForm('final')}
         onClose={() => setIsConfirmCreateOpen(false)}
         onCancel={() => setIsConfirmCreateOpen(false)}
+      />
+
+      {/* Konfirmasi: draf batch baru akan tergantikan oleh batch yang diedit */}
+      <ConfirmModal
+        isOpen={!!editMenunggu}
+        title="Ganti Draf dengan Batch yang Diedit"
+        message={`Ada draf batch sample baru yang belum disimpan. Membuka Batch ${editMenunggu?.kode_batch || ''} untuk diedit akan mengganti draf itu. Lanjutkan?`}
+        confirmText="Ya, Edit Batch"
+        cancelText="Batal"
+        variant="warning"
+        onConfirm={() => {
+          if (editMenunggu) muatUntukEdit(editMenunggu);
+        }}
+        onClose={() => {
+          setEditMenunggu(null);
+          onSelesaiEdit?.();
+        }}
       />
 
     </div>

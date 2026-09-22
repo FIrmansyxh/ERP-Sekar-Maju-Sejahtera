@@ -1,28 +1,29 @@
 import React, { useState, useMemo } from 'react';
-import { 
-  Search, 
-  Scale, 
-  CheckCircle2, 
-  Clock, 
-  Trash2, 
-  Receipt, 
+import {
+  Search,
+  Scale,
+  CheckCircle2,
+  Clock,
+  Trash2,
+  Receipt,
   RefreshCw,
   Filter,
   Eye,
   Edit3,
-  ArrowUp,
-  ArrowDown,
   X,
   AlertTriangle,
-  Lock
+  Lock,
+  Banknote
 } from 'lucide-react';
 import { TransaksiPembelian, Petani, TabelHarga, Barang, UserRole, User as UserType, SaveTransaksiMeta } from '../../types';
+import { isTransaksiLunas, labelStatusBayar } from '../../utils/statusBayar';
 import { formatRupiah, formatAccounting, formatDateIndo, formatNoKupon, normalizeKg } from '../../utils/formatters';
 import { TransaksiDetailModal } from './TransaksiDetailModal';
 import { PembayaranKasirModal } from './PembayaranKasirModal';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { Pagination } from '../common/Pagination';
 import { SortIcon } from '../common/SortIcon';
+import { tampilkanInfo } from '../../utils/dialog';
 import { openPrintDocument } from '../../utils/openDedicatedPrint';
 import { alasanBalSusulanDitolak, isKuponProsesSortir } from '../../utils/kuponSortir';
 import { balTerkirimDariTransaksi, pesanTransaksiTerkunci } from '../../utils/kunciHapus';
@@ -69,7 +70,6 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
   const [filterKupon, setFilterKupon] = useState(initialKuponNo || '');
   const [filterPetaniId, setFilterPetaniId] = useState('');
   const [filterStatusBayar, setFilterStatusBayar] = useState<'all' | 'cash' | 'kredit' | 'siap_bayar' | 'belum_lengkap'>('all');
-  const [sortOrderKupon, setSortOrderKupon] = useState<'desc' | 'asc'>('desc');
 
   // Quick Table Search & Sort (DataTables style)
   const [tableSearch, setTableSearch] = useState('');
@@ -86,8 +86,6 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  // In-memory printed status tracking
-  const [localPrintedTxIds, setLocalPrintedTxIds] = useState<Set<string>>(new Set());
 
   // Confirm Modal state to avoid blocking browser locker errors
   const [confirmConfig, setConfirmConfig] = useState<{
@@ -105,10 +103,6 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     cancelText: 'Batal',
     onConfirm: () => {},
   });
-
-  const handleUpdateNotaStatus = (txId: string) => {
-    setLocalPrintedTxIds((prev) => new Set([...prev, txId]));
-  };
 
   // Helper to strictly evaluate weighing completion across all bales in a kupon
   const getKuponWeighStatus = (tx: TransaksiPembelian) => {
@@ -157,8 +151,8 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     // Strict validation: Kupon MUST have all bales weighed before payment can be confirmed!
     const weighStatus = getKuponWeighStatus(tx);
     if (!weighStatus.isAllWeighed) {
-      alert(
-        `⚠️ Pembayaran Gagal!\n\n${alasanBelumSiapBayar(tx, weighStatus)}\n\nSesuai SOP, sortir kupon harus selesai dan seluruh bal harus ditimbang terlebih dahulu baru bisa lanjut ke pembayaran kasir.`
+      tampilkanInfo(
+        alasanBelumSiapBayar(tx, weighStatus)
       );
       return;
     }
@@ -174,7 +168,6 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
 
     const relatedBarang = barangList.filter((b) => tx.barang_ids?.includes(b.barang_id));
     onSaveTransaksi(updatedTx, relatedBarang);
-    handleUpdateNotaStatus(txId);
 
     if (selectedTxForDetail && selectedTxForDetail.transaksi_id === txId) {
       setSelectedTxForDetail(updatedTx);
@@ -217,8 +210,8 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
       setConfirmConfig({
         isOpen: true,
         title: 'Tidak Dapat Melakukan Pembayaran',
-        message: `${alasanBelumSiapBayar(tx, weighStatus)}\n\nSesuai SOP, sortir kupon harus selesai dan seluruh bal harus ditimbang lengkap terlebih dahulu baru bisa lanjut ke pembayaran kasir.\n\nApakah Anda ingin membuka Kupon ${tx.no_kupon} di modul Timbangan sekarang?`,
-        confirmText: 'Buka Modul Timbangan',
+        message: `${alasanBelumSiapBayar(tx, weighStatus)}\n\nBuka kupon ${tx.no_kupon} di Timbangan?`,
+        confirmText: 'Buka Timbangan',
         cancelText: 'Tutup',
         onConfirm: () => {
           setConfirmConfig(prev => ({ ...prev, isOpen: false }));
@@ -257,7 +250,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
         return false;
       }
       // Status Kas (Cash vs Kredit) & Kesiapan Timbang
-      const isLunas = tx.status_pembayaran === 'lunas' || tx.metode_pembayaran === 'cash';
+      const isLunas = isTransaksiLunas(tx);
       const weighStatus = getKuponWeighStatus(tx);
 
       if (filterStatusBayar === 'cash' && !isLunas) return false;
@@ -269,31 +262,103 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     });
   }, [transaksiList, startDate, endDate, filterKupon, filterPetaniId, filterStatusBayar]);
 
-  // Status summary counts for the filter dropdown
+  // Jumlah dan nilai kupon per status untuk kartu filter status
   const statusCounts = useMemo(() => {
-    let siapBayar = 0;
-    let belumLengkap = 0;
-    let lunas = 0;
-    let belumLunas = 0;
+    const kosong = () => ({ jumlah: 0, nilai: 0 });
+    const semua = kosong();
+    const siapBayar = kosong();
+    const belumLengkap = kosong();
+    const lunas = kosong();
+    const belumLunas = kosong();
+    const tambah = (grup: { jumlah: number; nilai: number }, nilai: number) => {
+      grup.jumlah += 1;
+      grup.nilai += nilai;
+    };
 
     transaksiList.forEach((t) => {
-      const isLunas = t.status_pembayaran === 'lunas' || t.metode_pembayaran === 'cash';
+      const nilai = t.harga_final || 0;
+      const isLunas = isTransaksiLunas(t);
       const isAllWeighed = getKuponWeighStatus(t).isAllWeighed;
+      tambah(semua, nilai);
       if (isLunas) {
-        lunas++;
+        tambah(lunas, nilai);
       } else {
-        belumLunas++;
+        tambah(belumLunas, nilai);
         if (isAllWeighed) {
-          siapBayar++;
+          tambah(siapBayar, nilai);
         }
       }
       if (!isAllWeighed) {
-        belumLengkap++;
+        tambah(belumLengkap, nilai);
       }
     });
 
-    return { siapBayar, belumLengkap, lunas, belumLunas };
+    return { semua, siapBayar, belumLengkap, lunas, belumLunas };
   }, [transaksiList]);
+
+  // Kartu filter status pembayaran: satu klik langsung menyaring tabel
+  const kartuStatus = [
+    {
+      nilai: 'all' as const,
+      judul: 'Semua Status',
+      satuan: 'Kupon',
+      data: statusCounts.semua,
+      Ikon: Receipt,
+      teks: 'text-slate-800',
+      ikon: 'text-slate-600',
+      aktif: 'bg-slate-50 border-slate-500 ring-1 ring-slate-500',
+      biasa: 'bg-white border-slate-300 hover:bg-slate-50',
+      garis: 'border-slate-200',
+    },
+    {
+      nilai: 'siap_bayar' as const,
+      judul: 'Siap Bayar',
+      satuan: 'Kupon',
+      data: statusCounts.siapBayar,
+      Ikon: Banknote,
+      teks: 'text-red-800',
+      ikon: 'text-[#b81d24]',
+      aktif: 'bg-red-50 border-red-400 ring-1 ring-red-400',
+      biasa: 'bg-white border-red-200 hover:bg-red-50/50',
+      garis: 'border-red-100',
+    },
+    {
+      nilai: 'belum_lengkap' as const,
+      judul: 'Belum Lengkap Timbang',
+      satuan: 'Kupon',
+      data: statusCounts.belumLengkap,
+      Ikon: Scale,
+      teks: 'text-slate-800',
+      ikon: 'text-slate-500',
+      aktif: 'bg-slate-50 border-slate-500 ring-1 ring-slate-500',
+      biasa: 'bg-white border-slate-300 hover:bg-slate-50',
+      garis: 'border-slate-200',
+    },
+    {
+      nilai: 'cash' as const,
+      judul: 'Lunas',
+      satuan: 'Nota',
+      data: statusCounts.lunas,
+      Ikon: CheckCircle2,
+      teks: 'text-emerald-800',
+      ikon: 'text-emerald-600',
+      aktif: 'bg-emerald-50 border-emerald-400 ring-1 ring-emerald-400',
+      biasa: 'bg-white border-emerald-200 hover:bg-emerald-50/50',
+      garis: 'border-emerald-100',
+    },
+    {
+      nilai: 'kredit' as const,
+      judul: 'Belum Lunas',
+      satuan: 'Nota',
+      data: statusCounts.belumLunas,
+      Ikon: Clock,
+      teks: 'text-amber-800',
+      ikon: 'text-amber-600',
+      aktif: 'bg-amber-50 border-amber-400 ring-1 ring-amber-400',
+      biasa: 'bg-white border-amber-200 hover:bg-amber-50/50',
+      garis: 'border-amber-100',
+    },
+  ];
 
   // Overall stats for the filtered list
   const stats = useMemo(() => {
@@ -307,10 +372,10 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     const avgHarga = totalNetto > 0 ? Math.round(totalKotor / totalNetto) : 0;
 
     const lunasList = filteredList.filter(
-      (t) => t.status_pembayaran === 'lunas' || t.metode_pembayaran === 'cash'
+      (t) => isTransaksiLunas(t)
     );
     const belumLunasList = filteredList.filter(
-      (t) => t.status_pembayaran !== 'lunas' && t.metode_pembayaran !== 'cash'
+      (t) => !isTransaksiLunas(t)
     );
 
     const lunasNominal = lunasList.reduce((acc, t) => acc + (t.harga_final || 0), 0);
@@ -318,7 +383,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
 
     const unweighedPendingList = filteredList.filter((t) => !getKuponWeighStatus(t).isAllWeighed);
     const siapBayarList = filteredList.filter((t) => {
-      const isLunas = t.status_pembayaran === 'lunas' || t.metode_pembayaran === 'cash';
+      const isLunas = isTransaksiLunas(t);
       return !isLunas && getKuponWeighStatus(t).isAllWeighed;
     });
 
@@ -404,15 +469,15 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
           valB = b.harga_final || 0;
           break;
         case 'cash': {
-          const isLunasA = a.status_pembayaran === 'lunas' || a.metode_pembayaran === 'cash';
-          const isLunasB = b.status_pembayaran === 'lunas' || b.metode_pembayaran === 'cash';
+          const isLunasA = isTransaksiLunas(a);
+          const isLunasB = isTransaksiLunas(b);
           valA = isLunasA ? a.harga_final : 0;
           valB = isLunasB ? b.harga_final : 0;
           break;
         }
         case 'kredit': {
-          const isLunasA = a.status_pembayaran === 'lunas' || a.metode_pembayaran === 'cash';
-          const isLunasB = b.status_pembayaran === 'lunas' || b.metode_pembayaran === 'cash';
+          const isLunasA = isTransaksiLunas(a);
+          const isLunasB = isTransaksiLunas(b);
           valA = !isLunasA ? a.harga_final : 0;
           valB = !isLunasB ? b.harga_final : 0;
           break;
@@ -458,7 +523,6 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     setFilterPetaniId('');
     setFilterStatusBayar('all');
     setTableSearch('');
-    setSortOrderKupon('desc');
     setSortField('kupon');
     setSortDirection('desc');
     setCurrentPage(1);
@@ -469,19 +533,9 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
       
       {/* Header Banner */}
       <div className="bg-white border border-slate-200 p-4 shadow-2xs rounded-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center space-x-2">
-            <span className="w-2 h-2 rounded-full bg-[#b81d24]"></span>
-            <h2 className="text-sm font-semibold text-slate-900 tracking-tight">
-              Data Pembelian Barang (Kasir & Pencairan Nota)
-            </h2>
-            <span className="px-2 py-0.5 bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-medium rounded-xs">
-              Proses 3: Kasir & Pembayaran Cash
-            </span>
-          </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Rekapitulasi data pembelian tembakau, verifikasi tiket timbang fisik, realisasi kas tunai keluar, dan pencetakan nota resmi.
-          </p>
+        <div className="flex items-center space-x-2">
+          <span className="w-2 h-2 rounded-full bg-[#b81d24]"></span>
+          <h2 className="text-sm font-semibold text-slate-900 tracking-tight">Data Pembelian & Pembayaran</h2>
         </div>
 
         <div className="flex items-center space-x-2">
@@ -490,14 +544,14 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
             onClick={() => onNavigateToSortir()}
             className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-medium text-xs rounded-sm transition cursor-pointer shadow-2xs"
           >
-            Intake Sortir Baru
+            Sortir
           </button>
           <button
             type="button"
             onClick={() => onNavigateToTimbangan()}
-            className="px-3 py-1.5 bg-[#b81d24] hover:bg-[#b81d24] text-white font-medium text-xs rounded-sm transition cursor-pointer shadow-2xs"
+            className="px-3 py-1.5 bg-[#b81d24] hover:bg-[#a0181e] text-white font-medium text-xs rounded-sm transition cursor-pointer shadow-2xs"
           >
-            Meja Timbangan
+            Timbangan
           </button>
         </div>
       </div>
@@ -507,7 +561,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
         <div className="flex items-center justify-between border-b border-slate-100 pb-2">
           <div className="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-slate-800">
             <Filter className="w-3.5 h-3.5 text-slate-600" />
-            <span>Filter Pencarian Data Pembelian</span>
+            <span>Filter</span>
           </div>
           <span className="text-[11px] text-slate-500">
             Ditemukan <strong className="text-slate-800">{filteredList.length}</strong> dari {transaksiList.length} transaksi
@@ -587,27 +641,6 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
             </select>
           </div>
 
-          {/* Status Bayar */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Status Pembayaran
-            </label>
-            <select
-              value={filterStatusBayar}
-              onChange={(e) => {
-                setFilterStatusBayar(e.target.value as any);
-                setCurrentPage(1);
-              }}
-              className="w-full bg-white border border-slate-300 rounded-sm px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800 font-medium"
-            >
-              <option value="all">Semua Status</option>
-              <option value="siap_bayar">Siap Bayar ({statusCounts.siapBayar})</option>
-              <option value="belum_lengkap">Belum Lengkap Timbang ({statusCounts.belumLengkap})</option>
-              <option value="cash">Lunas ({statusCounts.lunas})</option>
-              <option value="kredit">Belum Lunas ({statusCounts.belumLunas})</option>
-            </select>
-          </div>
-
           {/* Urutan Kupon */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -631,7 +664,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
             <button
               type="button"
               onClick={() => setCurrentPage(1)}
-              className="flex-1 py-1.5 bg-[#b81d24] hover:bg-[#b81d24] text-white font-medium text-xs rounded-sm transition flex items-center justify-center space-x-1.5 cursor-pointer shadow-2xs"
+              className="flex-1 py-1.5 bg-[#b81d24] hover:bg-[#a0181e] text-white font-medium text-xs rounded-sm transition flex items-center justify-center space-x-1.5 cursor-pointer shadow-2xs"
             >
               <Search className="w-3.5 h-3.5" />
               <span>Cari</span>
@@ -649,18 +682,44 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
         </div>
       </div>
 
-      {/* Summary KPI Widgets */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <div className="bg-white border border-slate-200 p-3 rounded-sm shadow-2xs">
-          <span className="text-[10px] uppercase font-semibold text-slate-500 block tracking-wider">Total Transaksi</span>
-          <p className="text-base font-semibold text-slate-900 mt-0.5">{stats.totalTx} Nota</p>
-          <span className="text-[10px] text-slate-400 font-normal">Setoran pembelian</span>
-        </div>
+      {/* Kartu Status Pembayaran: klik untuk menyaring tabel */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        {kartuStatus.map((k) => {
+          const terpilih = filterStatusBayar === k.nilai;
+          return (
+            <button
+              key={k.nilai}
+              type="button"
+              aria-pressed={terpilih}
+              onClick={() => {
+                setFilterStatusBayar(k.nilai);
+                setCurrentPage(1);
+              }}
+              className={`p-3.5 border rounded-sm shadow-2xs text-left cursor-pointer transition ${terpilih ? k.aktif : k.biasa}`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className={`text-[11px] font-semibold ${k.teks}`}>{k.judul}</span>
+                <k.Ikon className={`w-4 h-4 shrink-0 ${k.ikon}`} />
+              </div>
+              <div className="mt-2 flex items-baseline justify-between">
+                <span className={`text-xl font-bold ${k.teks}`}>{k.data.jumlah}</span>
+                <span className={`text-[11px] font-medium ${k.ikon}`}>{k.satuan}</span>
+              </div>
+              <div className={`mt-2 pt-2 border-t ${k.garis} flex items-center justify-between text-[11px]`}>
+                <span className={`font-medium ${k.teks}`}>Nilai Pembelian:</span>
+                <span className="font-mono font-bold text-slate-900">{formatRupiah(k.data.nilai)}</span>
+              </div>
+            </button>
+          );
+        })}
+      </div>
 
+      {/* Total sesuai filter; jumlah nota lunas dan kredit ada di kartu status di atas */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="bg-white border border-slate-200 p-3 rounded-sm shadow-2xs">
           <span className="text-[10px] uppercase font-semibold text-slate-500 block tracking-wider">Total Bal</span>
           <p className="text-base font-semibold text-slate-900 mt-0.5">{stats.totalBal} Bal</p>
-          <span className="text-[10px] text-slate-400 font-normal">Karung masuk</span>
+          <span className="text-[10px] text-slate-500 font-normal">{stats.totalTx} Kupon</span>
         </div>
 
         <div className="bg-white border border-slate-200 p-3 rounded-sm shadow-2xs">
@@ -672,26 +731,9 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
         <div className="bg-white border border-slate-200 p-3 rounded-sm shadow-2xs">
           <span className="text-[10px] uppercase font-semibold text-slate-500 block tracking-wider">Total Pembelian</span>
           <p className="text-base font-semibold text-slate-900 mt-0.5 font-mono">{formatRupiah(stats.totalBayar)}</p>
-          <span className="text-[10px] text-slate-500 font-normal">Pot: {formatRupiah(stats.totalPotongan)}</span>
+          <span className="text-[10px] text-slate-500 font-normal">Potongan {formatRupiah(stats.totalPotongan)}</span>
         </div>
 
-        <div className="bg-slate-50 border border-slate-200 p-3 rounded-sm shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] uppercase font-semibold text-slate-700 block tracking-wider">Kas Keluar (Cash)</span>
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-          </div>
-          <p className="text-base font-semibold text-slate-900 mt-0.5 font-mono">{formatRupiah(stats.lunasNominal)}</p>
-          <span className="text-[10px] text-emerald-700 font-semibold">{stats.lunasCount} Nota Cair</span>
-        </div>
-
-        <div className="bg-slate-50 border border-slate-200 p-3 rounded-sm shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] uppercase font-semibold text-slate-700 block tracking-wider">Hutang (Kredit)</span>
-            <Clock className="w-3.5 h-3.5 text-amber-600" />
-          </div>
-          <p className="text-base font-semibold text-slate-900 mt-0.5 font-mono">{formatRupiah(stats.belumLunasNominal)}</p>
-          <span className="text-[10px] text-amber-700 font-semibold">{stats.belumLunasCount} Nota Pending</span>
-        </div>
       </div>
 
       {/* Informational Alert if any Kupon is blocked due to unweighed items */}
@@ -700,7 +742,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
           <div className="flex items-center space-x-2.5">
             <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
             <span className="leading-tight">
-              <strong>Aturan Kasir:</strong> Terdapat <strong>{stats.unweighedPendingCount} kupon</strong> yang masih memiliki bal belum ditimbang di modul Timbangan. Seluruh bal dalam 1 kupon harus ditimbang lengkap terlebih dahulu baru bisa lanjut ke pembayaran kasir.
+              <strong>{stats.unweighedPendingCount} kupon</strong> masih memiliki bal yang belum ditimbang.
             </span>
           </div>
           <button
@@ -711,7 +753,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
             }}
             className="text-[11px] font-bold text-amber-800 hover:text-amber-950 underline shrink-0 cursor-pointer"
           >
-            Tampilkan Kupon Belum Lengkap ({stats.unweighedPendingCount})
+            Tampilkan
           </button>
         </div>
       )}
@@ -723,9 +765,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
         <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <Receipt className="w-4 h-4 text-slate-700" />
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-800">
-              Tabel Data Pembelian Barang & Status Kasir
-            </h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-800">Data Pembelian</h3>
           </div>
         </div>
 
@@ -733,7 +773,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 bg-white border-b border-slate-200 text-xs">
           <div className="flex flex-wrap items-center gap-2 text-slate-700">
             <div className="flex items-center space-x-1.5">
-              <span>Show</span>
+              <span>Tampil</span>
               <select
                 value={itemsPerPage}
                 onChange={(e) => {
@@ -747,7 +787,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 <option value={50}>50</option>
                 <option value={100}>100</option>
               </select>
-              <span>entries</span>
+              <span>per hal.</span>
             </div>
             {tableSearch.trim() && (
               <span className="text-[11px] text-slate-500 font-medium">
@@ -770,7 +810,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                   setTableSearch(e.target.value);
                   setCurrentPage(1);
                 }}
-                placeholder="Cari transaksi (No Kupon, Nama Petani, ID, Tanggal)..."
+                placeholder="Cari kupon, petani, tanggal..."
                 className="w-full bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 rounded-sm pl-8 pr-8 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#b81d24] focus:ring-1 focus:ring-[#b81d24] transition shadow-2xs"
               />
               {tableSearch && (
@@ -922,17 +962,14 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 <tr>
                   <td colSpan={14} className="py-12 text-center text-slate-400 bg-white">
                     <Receipt className="w-10 h-10 mx-auto text-slate-300 mb-2" />
-                    <p className="font-semibold text-slate-700 text-xs">Tidak ada data pembelian yang sesuai</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      Silakan sesuaikan filter tanggal atau kata kunci pencarian.
-                    </p>
+                    <p className="font-semibold text-slate-700 text-xs">Tidak ada data pembelian</p>
                   </td>
                 </tr>
               ) : (
                 paginatedList.map((tx, index) => {
                   const seq = (currentPage - 1) * itemsPerPage + index + 1;
                   const { isAllWeighed, isSortirOpen, unweighedCount, totalBal: balCount, weighedCount, unweighedBalList } = getKuponWeighStatus(tx);
-                  const isLunas = tx.status_pembayaran === 'lunas' || tx.metode_pembayaran === 'cash';
+                  const isLunas = isTransaksiLunas(tx);
                   const totalKotorVal = tx.total_kotor || tx.total_harga_beli || 0;
                   const pajakVal = tx.pajak || 0;
                   const potonganVal = tx.total_potongan || 0;
@@ -1082,8 +1119,8 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                                   setConfirmConfig({
                                     isOpen: true,
                                     title: 'Tidak Bisa Bayar',
-                                    message: `Kupon ${tx.no_kupon} masih memiliki ${unweighedCount} dari ${balCount} bal yang belum ditimbang di modul Timbangan:\n[${unweighedBalList.join(', ')}]\n\nSesuai SOP, seluruh bal dalam 1 kupon harus ditimbang semua terlebih dahulu baru bisa lanjut ke pembayaran kasir.\n\nApakah Anda ingin membuka Kupon ${tx.no_kupon} di modul Timbangan sekarang?`,
-                                    confirmText: 'Buka Modul Timbangan',
+                                    message: `Kupon ${tx.no_kupon}: ${unweighedCount} dari ${balCount} bal belum ditimbang\n[${unweighedBalList.join(', ')}]\n\nBuka kupon ini di Timbangan?`,
+                                    confirmText: 'Buka Timbangan',
                                     cancelText: 'Tutup',
                                     onConfirm: () => {
                                       setConfirmConfig(prev => ({ ...prev, isOpen: false }));
@@ -1137,7 +1174,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                                 setAlasanHapus('');
                                 setTxToDelete(tx);
                               }}
-                              className="p-1 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                              className="p-1 text-slate-400 hover:text-red-600 transition-colors cursor-pointer"
                               title="Batalkan Transaksi (Void) - Memerlukan Alasan Audit"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -1212,7 +1249,6 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
         isOpen={Boolean(selectedTxForDetail)}
         onClose={() => setSelectedTxForDetail(null)}
         transaksi={selectedTxForDetail}
-        onUpdateNotaStatus={handleUpdateNotaStatus}
         onMarkAsLunas={handleMarkAsLunas}
         onOpenBayarModal={(tx) => setSelectedTxForBayar(tx)}
         onEditKupon={canEditKupon ? handleEditKupon : undefined}
@@ -1239,17 +1275,15 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
       {/* Delete Confirmation Modal */}
       {txToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white border border-rose-300 rounded-none shadow-2xl max-w-lg w-full p-5 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-rose-100">
-              <div className="flex items-center space-x-3 text-rose-600">
-                <div className="w-9 h-9 rounded-sm bg-rose-100 flex items-center justify-center shrink-0 border border-rose-200">
-                  <Trash2 className="w-5 h-5 text-rose-600" />
+          <div className="bg-white border border-gray-200 rounded-sm shadow-2xl max-w-lg w-full p-5 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-200">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 rounded-sm bg-red-50 flex items-center justify-center shrink-0 border border-red-100">
+                  <Trash2 className="w-4 h-4 text-[#b81d24]" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-gray-900">Konfirmasi Pembatalan Transaksi Pembelian (Void)</h3>
-                  <p className="text-xs text-rose-600 font-mono font-semibold">
-                    Kupon: {txToDelete.no_kupon}
-                  </p>
+                  <h3 className="text-sm font-bold text-gray-900">Hapus Kupon</h3>
+                  <p className="text-xs text-gray-600 font-mono font-semibold">{txToDelete.no_kupon}</p>
                 </div>
               </div>
               <button
@@ -1275,7 +1309,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                   <span className="text-gray-500">Tanggal:</span> <strong className="text-gray-800">{formatDateIndo(txToDelete.tanggal_transaksi)}</strong>
                 </div>
                 <div>
-                  <span className="text-gray-500">Status Bayar:</span> <span className="font-bold uppercase text-slate-800">{txToDelete.status_pembayaran || 'CASH'}</span>
+                  <span className="text-gray-500">Status Bayar:</span> <span className="font-bold text-slate-800">{labelStatusBayar(txToDelete)}</span>
                 </div>
                 <div>
                   <span className="text-gray-500">Jumlah Bal:</span> <strong className="text-gray-800">{txToDelete.total_bal || (txToDelete.items ? txToDelete.items.length : 1)} Bal</strong>
@@ -1290,39 +1324,22 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
               </div>
             </div>
 
-            {/* Warning Box Dampak Penghapusan */}
-            <div className="p-3 bg-rose-50/90 border border-rose-200 text-xs text-rose-950 space-y-2">
-              <div className="flex items-center space-x-2 font-bold text-rose-800">
-                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                <span className="text-xs font-semibold">Peringatan Dampak Penghapusan:</span>
-              </div>
-              <div className="space-y-1.5 text-xs text-rose-900 leading-relaxed">
-                <div className="flex items-start space-x-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 mt-1.5 shrink-0" />
-                  <span>Seluruh bal inventaris dari transaksi ini otomatis ikut dihapus/dibatalkan.</span>
-                </div>
-                <div className="flex items-start space-x-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 mt-1.5 shrink-0" />
-                  <span>Akumulasi setoran total bal dan berat petani terkait otomatis disinkronkan kembali.</span>
-                </div>
-                <div className="flex items-start space-x-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 mt-1.5 shrink-0" />
-                  <span>Tindakan ini akan dicatat ke dalam audit trail keamanan sistem.</span>
-                </div>
-              </div>
+            <div className="p-2.5 bg-red-50 border border-red-200 text-xs text-red-900 flex items-center space-x-2">
+              <AlertTriangle className="w-4 h-4 text-[#b81d24] shrink-0" />
+              <span className="font-semibold">Seluruh bal pada kupon ini ikut terhapus.</span>
             </div>
 
             {/* Form Input Alasan */}
             <div className="space-y-1.5">
               <label className="block text-xs font-bold text-gray-700">
-                Alasan Penghapusan (Wajib diisi untuk catatan audit): <span className="text-rose-500">*</span>
+                Alasan Penghapusan <span className="text-[#b81d24]">*</span>
               </label>
               <input
                 type="text"
                 required
                 value={alasanHapus}
                 onChange={(e) => setAlasanHapus(e.target.value)}
-                placeholder="Contoh: Kesalahan input nomor kupon / duplikasi timbangan..."
+                placeholder="Alasan penghapusan"
                 className="w-full bg-white border border-gray-300 rounded-none px-2.5 py-1.5 text-xs text-gray-900 focus:outline-none focus:border-[#b81d24] focus:ring-1 focus:ring-[#b81d24]"
               />
               <div className="flex flex-wrap gap-1 pt-1">
@@ -1365,10 +1382,10 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                   setTxToDelete(null);
                   setAlasanHapus('');
                 }}
-                className="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs rounded-none transition cursor-pointer shadow-xs flex items-center space-x-1.5"
+                className="px-4 py-1.5 bg-[#b81d24] hover:bg-[#a0181e] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs rounded-sm transition cursor-pointer shadow-xs flex items-center space-x-1.5"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                <span>Ya, Batalkan Transaksi (Void)</span>
+                <span>Hapus Kupon</span>
               </button>
             </div>
           </div>

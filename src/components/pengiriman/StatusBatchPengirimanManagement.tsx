@@ -1,30 +1,22 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { 
-  FlaskConical, 
-  Truck, 
-  CheckCircle2, 
-  XCircle, 
-  AlertTriangle, 
-  Clock, 
-  Barcode, 
-  Search, 
-  DollarSign, 
-  ArrowRight, 
-  Save, 
-  FileText, 
-  Printer, 
-  Calendar, 
-  Check, 
-  ChevronRight,
-  Filter,
+import {
+  FlaskConical,
+  Truck,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  Clock,
+  Barcode,
+  Search,
+  ArrowRight,
+  Save,
+  Printer,
+  Check,
   Layers,
-  Scale,
-  Building2,
-  User,
-  Zap,
-  Info,
   Lock,
-  Trash2
+  Trash2,
+  Edit3,
+  ArrowLeft
 } from 'lucide-react';
 import { 
   BatchPengirimanSample, 
@@ -39,9 +31,11 @@ import { formatNumber, formatRupiah } from '../../utils/formatters';
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
 import { SuratJalanPrintModal } from './SuratJalanPrintModal';
 import { ConfirmModal } from '../common/ConfirmModal';
+import { BatchSamplePrintModal } from '../sample/BatchSamplePrintModal';
 import { openPrintDocument } from '../../utils/openDedicatedPrint';
 import { isSuratJalanTerkunci, pesanSuratJalanTerkunci } from '../../utils/kunciHapus';
 import { beratBrutoBal, beratBrutoItemSample } from '../../utils/beratKirim';
+import { alasanBatchBelumFinal, isBatchDraft } from '../../utils/statusBatchSample';
 
 interface StatusBatchPengirimanManagementProps {
   batchSampleList: BatchPengirimanSample[];
@@ -51,8 +45,12 @@ interface StatusBatchPengirimanManagementProps {
   onUpdateBatchSample: (updatedBatch: BatchPengirimanSample, updatedBarangs?: Barang[]) => void;
   onUpdatePengirimanStatus: (pengirimanId: string, newStatus: StatusPengiriman) => void;
   onNavigateToPengirimanWithBatch: (batchId: string) => void;
+  /** Membuka batch sample di halaman Pengiriman Sample untuk diedit. */
+  onEditBatchSample?: (batchId: string) => void;
   onDeleteBatchSample?: (batchId: string, revertedBarangs?: Barang[]) => void;
-  onDeletePengiriman?: (pengirimanId: string, revertedBarangs?: Barang[]) => void;
+  onDeletePengiriman?: (pengirimanId: string) => void;
+  /** Membuka Surat Jalan yang belum Selesai di halaman Pengiriman untuk diedit. */
+  onEditPengiriman?: (pengirimanId: string) => void;
 }
 
 export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanManagementProps> = ({
@@ -63,15 +61,18 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
   onUpdateBatchSample,
   onUpdatePengirimanStatus,
   onNavigateToPengirimanWithBatch,
+  onEditBatchSample,
   onDeleteBatchSample,
   onDeletePengiriman,
+  onEditPengiriman,
 }) => {
   // Main Module Tab
-  const [activeMainTab, setActiveMainTab] = useState<'sample_batch' | 'pengiriman_batch'>('sample_batch');
+  const [activeMainTab, setActiveMainTab] = useState<'sample_batch' | 'pengiriman_batch'>('pengiriman_batch');
   const [isBatchDropdownOpen, setIsBatchDropdownOpen] = useState(false);
   const [highlightedBatchIndex, setHighlightedBatchIndex] = useState(0);
   const [itemToRemove, setItemToRemove] = useState<string | null>(null);
   const [pengirimanToDelete, setPengirimanToDelete] = useState<string | null>(null);
+  const [pengirimanToFinish, setPengirimanToFinish] = useState<string | null>(null);
   const [scanBatchId, setScanBatchId] = useState('');
   const batchDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -126,6 +127,82 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
     return batchSampleList.find((b) => b.batch_id === selectedBatchId) || null;
   }, [batchSampleList, selectedBatchId]);
 
+  // Edit dan pembatalan batch hanya selama belum dibuatkan Surat Jalan (sama seperti Surat Jalan yang dikunci setelah Selesai)
+  const [printingBatch, setPrintingBatch] = useState<BatchPengirimanSample | null>(null);
+  const [batchToDelete, setBatchToDelete] = useState<string | null>(null);
+  const [batchToFinalize, setBatchToFinalize] = useState<BatchPengirimanSample | null>(null);
+  const [infoBatch, setInfoBatch] = useState('');
+
+  // Cetak surat sample hanya untuk batch yang sudah final (bukan Draft)
+  const mintaCetakBatch = (batch: BatchPengirimanSample) => {
+    const alasan = alasanBatchBelumFinal(batch, 'cetak');
+    if (alasan) {
+      setInfoBatch(alasan);
+      return;
+    }
+    setPrintingBatch(batch);
+  };
+
+  // Finalkan Draft: batch siap pakai dan surat sudah bisa dicetak. Bal tidak diubah: Reclass hanya harga ulang.
+  const finalkanBatch = (batch: BatchPengirimanSample) => {
+    if (!isBatchDraft(batch)) return;
+    onUpdateBatchSample({ ...batch, status: 'sample' });
+    setBatchToFinalize(null);
+    setSuccessToast(`Batch ${batch.kode_batch} sudah final dan siap dipakai. Surat pengiriman sample sekarang bisa dicetak.`);
+    setTimeout(() => setSuccessToast(''), 4000);
+  };
+  const infoKunciBatch = (batch: BatchPengirimanSample): { terkunci: boolean; alasan: string } => {
+    const suratJalan = pengirimanList.filter(
+      (p) => p.batch_sample_id_ref === batch.batch_id || p.batch_sample_id_ref === batch.kode_batch
+    );
+    const terkunci =
+      suratJalan.length > 0 || (batch.items || []).some((it) => it.sudah_dikirim_do) || batch.status === 'selesai';
+    const alasan = suratJalan.length > 0
+      ? `Batch sudah dibuatkan Surat Jalan ${suratJalan.map((p) => p.no_surat_jalan).join(', ')}. Batalkan Surat Jalannya dulu (bila belum Selesai).`
+      : 'Batch sudah dibuatkan Surat Jalan atau berstatus Selesai sehingga tidak dapat diubah.';
+    return { terkunci, alasan };
+  };
+  const kunciBatchAktif = activeBatch ? infoKunciBatch(activeBatch) : { terkunci: false, alasan: '' };
+  const batchTerkunci = kunciBatchAktif.terkunci;
+  const alasanBatchTerkunci = kunciBatchAktif.alasan;
+  const batchDraft = isBatchDraft(activeBatch);
+
+  // Daftar batch sample (tab Detail Batch): kartu status dan pencarian, sama seperti tab Status Pengiriman
+  const [filterBatchStatus, setFilterBatchStatus] = useState<'all' | 'draft' | 'uji' | 'berangkat' | 'selesai'>('all');
+  const [searchBatchText, setSearchBatchText] = useState('');
+  const kelompokStatusBatch = (batch: BatchPengirimanSample): 'draft' | 'uji' | 'berangkat' | 'selesai' =>
+    batch.status === 'draft' ? 'draft' : batch.status === 'selesai' ? 'selesai' : batch.status === 'dikirim' ? 'berangkat' : 'uji';
+  const nilaiBatch = (batch: BatchPengirimanSample): number =>
+    batch.total_nilai_deal && batch.total_nilai_deal > 0 ? batch.total_nilai_deal : batch.total_estimasi_nilai || 0;
+  const ringkasanBatch = useMemo(() => {
+    const kosong = () => ({ jumlah: 0, nilai: 0 });
+    const hasil = { semua: kosong(), draft: kosong(), uji: kosong(), berangkat: kosong(), selesai: kosong() };
+    batchSampleList.forEach((b) => {
+      const nilai = nilaiBatch(b);
+      hasil.semua.jumlah += 1;
+      hasil.semua.nilai += nilai;
+      const kelompok = kelompokStatusBatch(b);
+      hasil[kelompok].jumlah += 1;
+      hasil[kelompok].nilai += nilai;
+    });
+    return hasil;
+  }, [batchSampleList]);
+  const batchTerfilter = useMemo(() => {
+    const q = searchBatchText.toLowerCase().trim();
+    return batchSampleList.filter((b) => {
+      if (filterBatchStatus !== 'all' && kelompokStatusBatch(b) !== filterBatchStatus) return false;
+      if (!q) return true;
+      return (
+        (b.kode_batch || '').toLowerCase().includes(q) ||
+        (b.tujuan_buyer || '').toLowerCase().includes(q) ||
+        (b.permintaan_buyer || '').toLowerCase().includes(q) ||
+        (b.dikirim_oleh || '').toLowerCase().includes(q) ||
+        (b.items || []).some((it) => (it.no_bal || '').toLowerCase().includes(q))
+      );
+    });
+  }, [batchSampleList, filterBatchStatus, searchBatchText]);
+  const totalNilaiBatchTerfilter = batchTerfilter.reduce((sum, b) => sum + nilaiBatch(b), 0);
+
   React.useEffect(() => {
     if (activeBatch) {
       setBatchItems(JSON.parse(JSON.stringify(activeBatch.items || [])));
@@ -145,6 +222,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
   const handleProcessScanSortir = (code: string) => {
     const trimmed = code.trim().toLowerCase();
     if (!trimmed) return;
+    if (isBatchDraft(activeBatch)) return; // Draft disesuaikan lewat Edit, bukan lewat sortir
 
     const matchedIndex = batchItems.findIndex((it) => {
       const matchNoBal = (it.no_bal || '').toLowerCase() === trimmed;
@@ -210,6 +288,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
 
   // Change individual bal sortir status
   const handleChangeItemStatus = (sampleItemId: string, newStatus: StatusSample) => {
+    if (isBatchDraft(activeBatch)) return;
     if (newStatus === 'ditolak') {
       setItemToRemove(sampleItemId);
       return;
@@ -241,6 +320,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
 
   // Change individual bal Kode Harga Jual from dropdown
   const handleChangeItemKodeHarga = (sampleItemId: string, newKode: string) => {
+    if (isBatchDraft(activeBatch)) return;
     const matched = hargaJualList.find((h) => h.kode === newKode);
     setBatchItems((prev) => {
       return prev.map((item) => {
@@ -260,6 +340,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
 
   // Change individual bal custom deal price
   const handleChangeItemDealPrice = (sampleItemId: string, newPrice: number) => {
+    if (isBatchDraft(activeBatch)) return;
     setBatchItems((prev) => {
       return prev.map((item) => {
         if (item.sample_item_id === sampleItemId) {
@@ -276,6 +357,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
 
   // Remove individual bal from batch
   const handleRemoveItemFromBatch = (sampleItemId: string) => {
+    if (isBatchDraft(activeBatch)) return;
     setItemToRemove(sampleItemId);
   };
   
@@ -287,9 +369,8 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
       if (activeBatch) {
         // If the item was removed as a "Tolak" action from the scan/sortir table
         const itemToTolak = batchItems.find(i => i.sample_item_id === itemToRemove);
-        
+
         if (itemToTolak) {
-          const removedItems = activeBatch.items.filter(i => i.sample_item_id === itemToRemove);
           const countAcc = updatedBatchItems.filter((i) => i.status_item === 'disetujui').length;
           const countTolak = updatedBatchItems.filter((i) => i.status_item === 'ditolak').length;
           const countNego = updatedBatchItems.filter((i) => i.status_item === 'nego').length;
@@ -297,7 +378,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
             .filter((i) => i.status_item === 'disetujui')
             .reduce((sum, i) => sum + beratBrutoItemSample(i) * (i.harga_deal_kg || i.harga_tawaran_kg), 0);
             
-          let batchStatus: any = 'sample';
+          let batchStatus: BatchPengirimanSample['status'] = 'sample';
           if (countAcc > 0) batchStatus = 'diproses';
           else if (updatedBatchItems.length === 0) batchStatus = 'dibatalkan';
 
@@ -313,21 +394,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
             tanggal_respon: new Date().toISOString().split('T')[0],
           };
 
-          const itemBeingRemoved = batchItems.find(i => i.sample_item_id === itemToRemove);
-          const targetBarangId = itemBeingRemoved?.barang_id;
-          const updatedBarangs = targetBarangId
-            ? barangList
-                .filter(br => br.barang_id === targetBarangId)
-                .map(b => ({ ...b, status_stok: 'di_gudang' as const }))
-            : removedItems
-                .map(item => {
-                  const b = barangList.find(br => br.barang_id === item.barang_id);
-                  if (b) return { ...b, status_stok: 'di_gudang' as const };
-                  return undefined;
-                })
-                .filter((b): b is Barang => !!b);
-
-          onUpdateBatchSample(updatedBatch, updatedBarangs);
+          onUpdateBatchSample(updatedBatch);
         }
       }
 
@@ -338,23 +405,22 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
 
   // Save Batch Evaluation Changes
   
+  
   const handleAccAllItems = () => {
-    setBatchItems(prev => prev.map(item => ({
-      ...item,
-      status_item: 'disetujui',
-      alasan_tolak: '',
-      catatan_nego: ''
-    })));
+    if (isBatchDraft(activeBatch)) return;
+    setBatchItems((prev) =>
+      prev.map((item) => ({ ...item, status_item: 'disetujui' as const, alasan_tolak: '', catatan_nego: '' }))
+    );
     setScanSortirFeedback({
       type: 'success',
-      message: 'Semua bal dalam batch ini telah di-ACC. Silakan simpan hasil sortir.'
+      message: 'Semua bal dalam batch ini telah di-ACC. Silakan simpan hasil sortir.',
     });
     setHasUnsavedSortir(true);
     setIsAccAllConfirmOpen(false);
   };
 
   const handleSaveSortirChanges = () => {
-    if (!activeBatch) return;
+    if (!activeBatch || isBatchDraft(activeBatch)) return;
 
     const countAcc = batchItems.filter((i) => i.status_item === 'disetujui').length;
     const countTolak = batchItems.filter((i) => i.status_item === 'ditolak').length;
@@ -363,7 +429,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
       .filter((i) => i.status_item === 'disetujui')
       .reduce((sum, i) => sum + beratBrutoItemSample(i) * (i.harga_deal_kg || i.harga_tawaran_kg), 0);
 
-    let batchStatus: any = 'sample';
+    let batchStatus: BatchPengirimanSample['status'] = 'sample';
     if (countAcc > 0) batchStatus = 'diproses';
     else if (countTolak === batchItems.length) batchStatus = 'dibatalkan';
     
@@ -379,46 +445,18 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
       tanggal_respon: new Date().toISOString().split('T')[0],
     };
 
-    // Find items that were removed
-    const currentItemIds = new Set(batchItems.map(i => i.sample_item_id));
-    const removedItems = activeBatch.items.filter(i => !currentItemIds.has(i.sample_item_id));
-    
-    let updatedBarangs: Barang[] | undefined = undefined;
-    if (removedItems.length > 0) {
-      updatedBarangs = removedItems
-        .map(item => {
-          const b = barangList.find(br => br.barang_id === item.barang_id);
-          if (b) {
-            return { ...b, status_stok: 'di_gudang' as const };
-          }
-          return undefined;
-        })
-        .filter((b): b is Barang => !!b);
-    }
-
-    onUpdateBatchSample(updatedBatch, updatedBarangs);
+    onUpdateBatchSample(updatedBatch);
     setHasUnsavedSortir(false);
     setSuccessToast(`Hasil sortir buyer untuk batch ${activeBatch.kode_batch} berhasil disimpan!`);
     setTimeout(() => setSuccessToast(''), 3500);
   };
 
+  // Hasil Reclass langsung boleh dijadikan Surat Jalan (DO), termasuk dari Draft dan tanpa menunggu hasil sortir pembeli
   const handleBuatDOReguler = () => {
     if (!activeBatch) return;
 
     // Filter items to keep only those not rejected
     const remainingItems = batchItems.filter((i) => i.status_item !== 'ditolak');
-    const rejectedItems = batchItems.filter((i) => i.status_item === 'ditolak');
-    
-    // Update status_stok to 'di_gudang' for rejected items
-    const updatedBarangs = rejectedItems
-      .map(item => {
-        const barang = barangList.find(b => b.barang_id === item.barang_id);
-        if (barang) {
-          return { ...barang, status_stok: 'di_gudang' as const };
-        }
-        return undefined;
-      })
-      .filter((b): b is Barang => !!b);
 
     const countAcc = remainingItems.filter((i) => i.status_item === 'disetujui').length;
     const countNego = remainingItems.filter((i) => i.status_item === 'nego').length;
@@ -439,7 +477,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
       tanggal_respon: new Date().toISOString().split('T')[0],
     };
 
-    onUpdateBatchSample(updatedBatch, updatedBarangs);
+    onUpdateBatchSample(updatedBatch);
     setHasUnsavedSortir(false);
     onNavigateToPengirimanWithBatch(activeBatch.batch_id);
   };
@@ -459,7 +497,8 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
   const countAcc = batchItems.filter((i) => i.status_item === 'disetujui').length;
   const countNego = batchItems.filter((i) => i.status_item === 'nego').length;
   const countTolak = batchItems.filter((i) => i.status_item === 'ditolak').length;
-  const countPending = batchItems.filter((i) => i.status_item === 'dikirim' || i.status_item === 'diterima').length;
+  // Bal yang bisa langsung dibuatkan Surat Jalan: belum ditolak pembeli dan belum pernah dikirim
+  const jumlahSiapDO = batchItems.filter((i) => i.status_item !== 'ditolak' && !i.sudah_dikirim_do).length;
   const totalDealRp = batchItems
     .filter((i) => i.status_item === 'disetujui')
     .reduce((sum, i) => sum + beratBrutoItemSample(i) * (i.harga_deal_kg || i.harga_tawaran_kg), 0);
@@ -495,6 +534,15 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
   const countAkanDikirim = pengirimanList.filter((k) => k.status === 'dimuat' || k.status === 'dikirim').length;
   const countSedangDikirim = pengirimanList.filter((k) => k.status === 'dalam_perjalanan').length;
   const countSudahSelesai = pengirimanList.filter((k) => k.status === 'diterima' || k.status === 'selesai').length;
+
+  // Selesai bersifat final (nilai penjualan masuk laporan), jadi selalu lewat konfirmasi
+  const ubahStatusPengiriman = (pengirimanId: string, status: StatusPengiriman) => {
+    if (status === 'selesai') {
+      setPengirimanToFinish(pengirimanId);
+      return;
+    }
+    onUpdatePengirimanStatus(pengirimanId, status);
+  };
 
   const totalNilaiSemua = useMemo(() => {
     return pengirimanList.reduce((sum, k) => sum + (k.total_nilai_deal || 0), 0);
@@ -563,19 +611,6 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
         <div className="flex items-center p-1 bg-gray-100 border border-gray-300 rounded-xs shrink-0">
           <button
             type="button"
-            onClick={() => setActiveMainTab('sample_batch')}
-            className={`px-3.5 py-1.5 text-xs font-bold rounded-xs flex items-center space-x-1.5 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
-              activeMainTab === 'sample_batch'
-                ? 'bg-white text-gray-900 shadow-xs border border-gray-200'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            <FlaskConical className="w-3.5 h-3.5 text-[#b81d24]" />
-            <span>Detail Batch Sample & Sortir Pembeli</span>
-          </button>
-
-          <button
-            type="button"
             onClick={() => setActiveMainTab('pengiriman_batch')}
             className={`px-3.5 py-1.5 text-xs font-bold rounded-xs flex items-center space-x-1.5 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
               activeMainTab === 'pengiriman_batch'
@@ -584,7 +619,20 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
             }`}
           >
             <Truck className="w-3.5 h-3.5 text-[#b81d24]" />
-            <span>Status Pengiriman Barang (Akan / Sedang / Sudah)</span>
+            <span>Status Pengiriman Barang</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveMainTab('sample_batch')}
+            className={`px-3.5 py-1.5 text-xs font-bold rounded-xs flex items-center space-x-1.5 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+              activeMainTab === 'sample_batch'
+                ? 'bg-white text-gray-900 shadow-xs border border-gray-200'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <FlaskConical className="w-3.5 h-3.5 text-[#b81d24]" />
+            <span>Batch Sample & Reclass</span>
           </button>
         </div>
       </div>
@@ -592,9 +640,281 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
       {/* ========================================================================= */}
       {/* VIEW 1: DETAIL BATCH SAMPLE & HASIL SORTIR PEMBELI                       */}
       {/* ========================================================================= */}
-      {activeMainTab === 'sample_batch' && (
+      {/* Daftar semua batch sample: langsung tampil saat tab dibuka, dengan kartu status seperti tab Status Pengiriman */}
+      {activeMainTab === 'sample_batch' && !activeBatch && (
         <div className="space-y-4">
-          
+          <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
+            {([
+              {
+                nilai: 'all' as const,
+                judul: 'Semua Batch Sample',
+                satuan: 'Batch',
+                data: ringkasanBatch.semua,
+                Ikon: FlaskConical,
+                teks: 'text-gray-900',
+                ikon: 'text-gray-500',
+                aktif: 'bg-slate-50 border-gray-400 ring-1 ring-gray-400',
+                biasa: 'bg-white border-gray-200 hover:bg-gray-50',
+                garis: 'border-gray-100',
+              },
+              {
+                nilai: 'draft' as const,
+                judul: 'Draft',
+                satuan: 'Belum Final',
+                data: ringkasanBatch.draft,
+                Ikon: Edit3,
+                teks: 'text-slate-800',
+                ikon: 'text-slate-500',
+                aktif: 'bg-slate-100 border-slate-400 ring-1 ring-slate-400',
+                biasa: 'bg-white border-slate-300 hover:bg-slate-50',
+                garis: 'border-slate-100',
+              },
+              {
+                nilai: 'uji' as const,
+                judul: 'Sedang Pengujian Sample',
+                satuan: 'Evaluasi QC Lab',
+                data: ringkasanBatch.uji,
+                Ikon: Clock,
+                teks: 'text-amber-800',
+                ikon: 'text-amber-600',
+                aktif: 'bg-amber-50 border-amber-400 ring-1 ring-amber-400',
+                biasa: 'bg-white border-amber-200 hover:bg-amber-50/50',
+                garis: 'border-amber-100',
+              },
+              {
+                nilai: 'berangkat' as const,
+                judul: 'Sedang Berangkat',
+                satuan: 'Dalam Perjalanan',
+                data: ringkasanBatch.berangkat,
+                Ikon: Truck,
+                teks: 'text-red-800',
+                ikon: 'text-red-600',
+                aktif: 'bg-red-50 border-red-400 ring-1 ring-red-400',
+                biasa: 'bg-white border-red-200 hover:bg-red-50/50',
+                garis: 'border-red-100',
+              },
+              {
+                nilai: 'selesai' as const,
+                judul: 'Selesai / DO Terbit',
+                satuan: 'Disetujui Buyer',
+                data: ringkasanBatch.selesai,
+                Ikon: CheckCircle2,
+                teks: 'text-emerald-800',
+                ikon: 'text-emerald-600',
+                aktif: 'bg-emerald-50 border-emerald-400 ring-1 ring-emerald-400',
+                biasa: 'bg-white border-emerald-200 hover:bg-emerald-50/50',
+                garis: 'border-emerald-100',
+              },
+            ]).map((k) => (
+              <div
+                key={k.nilai}
+                onClick={() => setFilterBatchStatus(k.nilai)}
+                className={`p-3.5 border rounded-sm shadow-xs cursor-pointer transition ${filterBatchStatus === k.nilai ? k.aktif : k.biasa}`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className={`text-[11px] font-semibold ${k.teks}`}>{k.judul}</span>
+                  <k.Ikon className={`w-4 h-4 ${k.ikon}`} />
+                </div>
+                <div className="mt-2 flex items-baseline justify-between">
+                  <span className={`text-xl font-bold ${k.teks}`}>{k.data.jumlah}</span>
+                  <span className={`text-[11px] font-medium ${k.ikon}`}>{k.satuan}</span>
+                </div>
+                <div className={`mt-2 pt-2 border-t ${k.garis} flex items-center justify-between text-[11px]`}>
+                  <span className={`font-medium ${k.teks}`}>Nilai Sample:</span>
+                  <span className="font-mono font-bold text-gray-900">{formatRupiah(k.data.nilai)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-white border border-gray-300 rounded-sm shadow-xs overflow-hidden">
+            <div className="p-3.5 bg-gray-50 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="w-4 h-4 text-gray-400 absolute left-2.5 top-2.5" />
+                <input
+                  type="text"
+                  placeholder="Cari no. surat, pabrik, petugas, no bal"
+                  value={searchBatchText}
+                  onChange={(e) => setSearchBatchText(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-gray-300 rounded-xs focus:ring-1 focus:ring-gray-700"
+                />
+              </div>
+              <div className="flex items-center space-x-3 text-xs text-gray-500 font-medium">
+                <span>
+                  Menampilkan <strong className="text-gray-900">{batchTerfilter.length}</strong> batch
+                </span>
+                <span className="text-gray-300">|</span>
+                <span>
+                  Total Nilai: <strong className="text-emerald-800 font-mono font-bold">{formatRupiah(totalNilaiBatchTerfilter)}</strong>
+                </span>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1180px] text-left text-xs border-collapse">
+                <thead className="bg-gray-100 border-b border-gray-300 text-gray-700 font-bold">
+                  <tr>
+                    <th className="p-3 w-10 text-center">No</th>
+                    <th className="p-3 w-40">No. Surat Sample</th>
+                    <th className="p-3 w-28">Tgl Kirim</th>
+                    <th className="p-3">Tujuan Pabrik</th>
+                    <th className="p-3 w-36">Petugas QC</th>
+                    <th className="p-3 text-right w-20">Total Bal</th>
+                    <th className="p-3 text-right w-28">Bruto (Kg)</th>
+                    <th className="p-3 text-right w-36">Nilai Sample</th>
+                    <th className="p-3 text-center w-48 whitespace-nowrap">Status Sample</th>
+                    <th className="p-3 text-center w-72 whitespace-nowrap">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {batchTerfilter.length === 0 ? (
+                    <tr>
+                      <td colSpan={10} className="p-8 text-center text-gray-500 bg-gray-50/50">
+                        <FlaskConical className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                        <div className="text-sm font-bold text-gray-700">Tidak ada data batch sample</div>
+                      </td>
+                    </tr>
+                  ) : (
+                    batchTerfilter.map((batch, idx) => {
+                      const kelompok = kelompokStatusBatch(batch);
+                      const kunci = infoKunciBatch(batch);
+                      const totalBruto = (batch.items || []).reduce((sum, it) => sum + beratBrutoItemSample(it), 0);
+                      return (
+                        <tr key={batch.batch_id} className="hover:bg-gray-50 transition">
+                          <td className="p-3 text-center font-mono text-gray-500">{idx + 1}</td>
+                          <td className="p-3 font-mono font-bold text-gray-900">
+                            <div>{batch.kode_batch}</div>
+                            {batch.permintaan_buyer && (
+                              <div className="text-[10px] text-gray-500 font-normal italic line-clamp-1">{batch.permintaan_buyer}</div>
+                            )}
+                          </td>
+                          <td className="p-3 font-mono text-gray-700">{batch.tanggal_kirim}</td>
+                          <td className="p-3 font-semibold text-gray-900">{batch.tujuan_buyer}</td>
+                          <td className="p-3 text-gray-700">{batch.dikirim_oleh || '-'}</td>
+                          <td className="p-3 text-right font-mono font-bold">{(batch.items || []).length || batch.total_sample_bal || 0} Bal</td>
+                          <td className="p-3 text-right font-mono font-bold text-gray-900">{formatNumber(totalBruto, 1)} kg</td>
+                          <td className="p-3 text-right font-mono font-bold text-emerald-800">{formatRupiah(nilaiBatch(batch))}</td>
+                          <td className="p-3 text-center">
+                            {kelompok === 'draft' && (
+                              <span className="px-2.5 py-1 text-[10px] font-bold text-slate-700 bg-slate-100 border border-slate-300 rounded-xs inline-flex items-center space-x-1 whitespace-nowrap">
+                                <Edit3 className="w-3 h-3" />
+                                <span>Draft</span>
+                              </span>
+                            )}
+                            {kelompok === 'uji' && (
+                              <span className="px-2.5 py-1 text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-200 rounded-xs inline-flex items-center space-x-1 whitespace-nowrap">
+                                <Clock className="w-3 h-3" />
+                                <span>Pengujian Sample</span>
+                              </span>
+                            )}
+                            {kelompok === 'berangkat' && (
+                              <span className="px-2.5 py-1 text-[10px] font-bold text-red-800 bg-red-100 border border-red-300 rounded-xs inline-flex items-center space-x-1 whitespace-nowrap">
+                                <Truck className="w-3 h-3 text-red-700" />
+                                <span>Sedang Berangkat</span>
+                              </span>
+                            )}
+                            {kelompok === 'selesai' && (
+                              <span className="px-2.5 py-1 text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 rounded-xs inline-flex items-center space-x-1 whitespace-nowrap">
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span>Selesai (DO Terbit)</span>
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3 text-center">
+                            <div className="flex flex-nowrap items-center justify-center space-x-1.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedBatchId(batch.batch_id);
+                                  setScanBatchId(batch.kode_batch);
+                                }}
+                                title="Buka detail batch dan hasil sortir pembeli"
+                                className="px-2 py-1 bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-xs text-[10px] flex items-center space-x-1 cursor-pointer shadow-xs whitespace-nowrap"
+                              >
+                                <ArrowRight className="w-3 h-3" />
+                                <span>Detail</span>
+                              </button>
+                              {onEditBatchSample && (
+                                <button
+                                  type="button"
+                                  disabled={kunci.terkunci}
+                                  onClick={() => onEditBatchSample(batch.batch_id)}
+                                  title={kunci.terkunci ? kunci.alasan : 'Edit Batch Sample di halaman Pengiriman Sample'}
+                                  className="p-1 text-amber-700 hover:text-white hover:bg-amber-600 rounded-xs border border-amber-300 cursor-pointer transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-amber-700"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                              {kelompok === 'draft' && (
+                                <button
+                                  type="button"
+                                  onClick={() => setBatchToFinalize(batch)}
+                                  title="Finalkan: tandai siap pakai agar surat bisa dicetak"
+                                  className="px-2 py-1 bg-[#b81d24] hover:bg-[#a0181e] text-white font-bold rounded-xs text-[10px] flex items-center space-x-1 cursor-pointer shadow-xs whitespace-nowrap"
+                                >
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  <span>Finalkan</span>
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => mintaCetakBatch(batch)}
+                                aria-disabled={kelompok === 'draft'}
+                                title={kelompok === 'draft' ? 'Batch masih Draft. Finalkan dulu sebelum mencetak surat.' : 'Cetak Surat Pengiriman Sample'}
+                                className={`p-1 rounded-xs border transition ${
+                                  kelompok === 'draft'
+                                    ? 'text-gray-300 border-gray-200 cursor-not-allowed'
+                                    : 'text-[#b81d24] hover:text-white hover:bg-[#b81d24] border-red-300 cursor-pointer'
+                                }`}
+                              >
+                                <Printer className="w-3.5 h-3.5" />
+                              </button>
+                              {onDeleteBatchSample && (kunci.terkunci ? (
+                                <span
+                                  className="p-1 text-gray-300 rounded-xs border border-gray-200 inline-flex cursor-not-allowed"
+                                  title={kunci.alasan}
+                                >
+                                  <Lock className="w-3.5 h-3.5" />
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setBatchToDelete(batch.batch_id)}
+                                  title="Batalkan Batch Sample (bal tidak berubah)"
+                                  className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xs border border-gray-200 hover:border-red-200 cursor-pointer transition"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Detail satu batch sample & hasil sortir pembeli */}
+      {activeMainTab === 'sample_batch' && activeBatch && (
+        <div className="space-y-4">
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedBatchId('');
+              setScanBatchId('');
+              setBatchItems([]);
+            }}
+            className="px-3 py-1.5 text-xs font-bold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-xs transition cursor-pointer flex items-center space-x-1.5 shadow-xs"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Kembali ke Daftar Batch</span>
+          </button>
+
           {/* Top Selection & Meta Bar */}
           <div className="bg-white p-4 border border-gray-300 rounded-sm shadow-xs space-y-4">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -610,7 +930,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                   </div>
                   <input
                     type="text"
-                    placeholder="Ketik no. surat sample..."
+                    placeholder="No. surat sample"
                     value={scanBatchId}
                     onChange={(e) => {
                       setScanBatchId(e.target.value);
@@ -685,6 +1005,59 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                 </div>
               </div>
 
+              {/* Aksi Batch: edit kembali ke Pengiriman Sample, cetak surat sample, batalkan draft */}
+              {activeBatch && (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {onEditBatchSample && (
+                    <button
+                      type="button"
+                      disabled={batchTerkunci}
+                      onClick={() => onEditBatchSample(activeBatch.batch_id)}
+                      title={batchTerkunci ? alasanBatchTerkunci : 'Edit Batch Sample (tambah bal, ubah harga tawaran, tujuan, dll.) di halaman Pengiriman Sample'}
+                      className="px-2.5 py-1.5 text-[11px] font-semibold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-xs transition cursor-pointer flex items-center space-x-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                      <span>Edit</span>
+                    </button>
+                  )}
+                  {batchDraft && (
+                    <button
+                      type="button"
+                      onClick={() => setBatchToFinalize(activeBatch)}
+                      title="Finalkan: tandai siap pakai agar surat bisa dicetak"
+                      className="px-2.5 py-1.5 text-[11px] font-semibold bg-[#b81d24] hover:bg-[#a0181e] text-white border border-[#b81d24] rounded-xs transition cursor-pointer flex items-center space-x-1"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Finalkan</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => mintaCetakBatch(activeBatch)}
+                    aria-disabled={batchDraft}
+                    title={batchDraft ? 'Batch masih Draft. Finalkan dulu sebelum mencetak surat.' : 'Cetak Surat Pengiriman Sample'}
+                    className={`px-2.5 py-1.5 text-[11px] font-semibold border rounded-xs transition flex items-center space-x-1 ${
+                      batchDraft ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed' : 'bg-gray-100 hover:bg-gray-200 text-gray-800 border-gray-300 cursor-pointer'
+                    }`}
+                  >
+                    <Printer className="w-3.5 h-3.5 text-gray-600" />
+                    <span>Cetak</span>
+                  </button>
+                  {onDeleteBatchSample && (
+                    <button
+                      type="button"
+                      disabled={batchTerkunci}
+                      onClick={() => setBatchToDelete(activeBatch.batch_id)}
+                      title={batchTerkunci ? alasanBatchTerkunci : 'Batalkan Batch Sample (bal tidak berubah)'}
+                      className="px-2.5 py-1.5 text-[11px] font-semibold bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-xs transition cursor-pointer flex items-center space-x-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Batal</span>
+                    </button>
+                  )}
+                </div>
+              )}
+
               {/* Active Batch Overview Pill */}
               {activeBatch && (
                 <div className="flex items-center space-x-3 text-xs bg-gray-50 px-3.5 py-2.5 border border-gray-200 rounded-xs shrink-0">
@@ -712,42 +1085,35 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
               <div className="bg-white p-3 border border-gray-300 rounded-xs shadow-xs">
                 <div className="text-[11px] font-medium text-gray-500">Total Bal Sample</div>
                 <div className="text-xl font-bold text-gray-900 mt-0.5">{batchItems.length} Bal</div>
-                <div className="text-[10px] text-gray-400">Total yang dikirim</div>
               </div>
 
               <div className="bg-emerald-50 border border-emerald-300 p-3 rounded-xs shadow-xs">
                 <div className="text-[11px] font-bold text-emerald-800 flex items-center space-x-1">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Diterima untuk Dibeli</span>
+                  <span>ACC</span>
                 </div>
                 <div className="text-xl font-bold text-emerald-900 mt-0.5">{countAcc} Bal</div>
-                <div className="text-[10px] font-semibold text-emerald-700">ACC & Lolos Sortir</div>
               </div>
 
               <div className="bg-amber-50 border border-amber-300 p-3 rounded-xs shadow-xs">
                 <div className="text-[11px] font-bold text-amber-800 flex items-center space-x-1">
                   <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Perlu Edit Harga (Nego)</span>
+                  <span>Nego</span>
                 </div>
                 <div className="text-xl font-bold text-amber-900 mt-0.5">{countNego} Bal</div>
-                <div className="text-[10px] font-semibold text-amber-700">Penawaran Balik</div>
               </div>
 
               <div className="bg-red-50 border border-red-300 p-3 rounded-xs shadow-xs">
                 <div className="text-[11px] font-bold text-red-800 flex items-center space-x-1">
                   <XCircle className="w-3.5 h-3.5 text-red-600" />
-                  <span>Ditolak Penuh</span>
+                  <span>Ditolak</span>
                 </div>
                 <div className="text-xl font-bold text-red-900 mt-0.5">{countTolak} Bal</div>
-                <div className="text-[10px] font-semibold text-red-700">Tidak Lolos Mutu</div>
               </div>
 
-              <div className="bg-[#b81d24] text-white p-3 border border-[#b81d24] rounded-xs shadow-xs">
-                <div className="text-[11px] font-medium text-gray-300">Total Nilai Deal (ACC)</div>
-                <div className="text-base font-bold font-mono text-yellow-400 mt-0.5 truncate">
-                  {formatRupiah(totalDealRp)}
-                </div>
-                <div className="text-[10px] text-gray-400">Siap Jadi DO Reguler</div>
+              <div className="bg-white p-3 border border-gray-300 rounded-xs shadow-xs">
+                <div className="text-[11px] font-medium text-gray-500">Total Nilai Deal (ACC)</div>
+                <div className="text-base font-bold font-mono text-[#b81d24] mt-0.5 truncate">{formatRupiah(totalDealRp)}</div>
               </div>
             </div>
             )}
@@ -755,6 +1121,24 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
 
           {activeBatch ? (
           <>
+          {batchDraft && (
+            <div className="p-3.5 bg-slate-50 border border-slate-300 rounded-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-start space-x-2.5 text-xs text-slate-800">
+                <Edit3 className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-bold">Batch masih Draft</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBatchToFinalize(activeBatch)}
+                className="px-3 py-1.5 bg-[#b81d24] hover:bg-[#a0181e] text-white text-xs font-bold rounded-xs flex items-center space-x-1.5 shadow-xs cursor-pointer shrink-0"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Finalkan (Siap Pakai)</span>
+              </button>
+            </div>
+          )}
           {/* Barcode Quick Sortir Scanner & Bulk Tool */}
           <div className="bg-gray-50 border border-gray-300 rounded-sm p-4 space-y-3">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -765,7 +1149,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                   <Barcode className="w-4 h-4 text-gray-400 absolute left-2.5 top-2.5" />
                   <input
                     type="text"
-                    placeholder="Scan barcode alat atau ketik No Bal untuk sortir..."
+                    placeholder="Scan / ketik No Bal"
                     value={scanSortirInput}
                     onChange={(e) => setScanSortirInput(e.target.value)}
                     onKeyDown={(e) => {
@@ -886,7 +1270,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
               {/* Save or Create DO Action */}
               <div className="flex items-center space-x-2">
                 
-                {batchItems.length > 0 && batchItems.some(i => i.status_item !== 'disetujui') && (
+                {!batchDraft && batchItems.length > 0 && batchItems.some(i => i.status_item !== 'disetujui') && (
                   <button
                     type="button"
                     onClick={() => setIsAccAllConfirmOpen(true)}
@@ -896,7 +1280,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                     <span>ACC Semua</span>
                   </button>
                 )}
-                {hasUnsavedSortir && (
+                {!batchDraft && hasUnsavedSortir && (
                   <button
                     type="button"
                     onClick={handleSaveSortirChanges}
@@ -913,14 +1297,14 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                     <span>Batch Terkunci (Diproses DO)</span>
                   </div>
                 )}
-                {countAcc > 0 && !activeBatch?.is_locked && (
+                {jumlahSiapDO > 0 && !activeBatch?.is_locked && (
                   <button
                     type="button"
                     onClick={handleBuatDOReguler}
                     className="px-4 py-1.5 bg-[#b81d24] hover:bg-[#b81d24] text-white text-xs font-bold rounded-xs flex items-center space-x-1.5 shadow-xs transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Truck className="w-3.5 h-3.5 text-yellow-400" />
-                    <span>Buat DO Reguler ({countAcc} Bal ACC)</span>
+                    <span>Buat DO Reguler ({jumlahSiapDO} Bal)</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 )}
@@ -940,14 +1324,13 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                     <th className="p-3 text-right w-36">Harga Beli (Rp/Kg)</th>
                     <th className="p-3 text-right w-36">Harga Deal (Rp/Kg)</th>
                     <th className="p-3 text-right w-36">Subtotal Deal</th>
-                    <th className="p-3">Catatan Sortir</th>
                     <th className="p-3 text-center w-16">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {displayedBatchItems.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="p-8 text-center text-gray-500 bg-gray-50/50">
+                      <td colSpan={9} className="p-8 text-center text-gray-500 bg-gray-50/50">
                         Tidak ada bal dengan filter status ini pada batch terpilih.
                       </td>
                     </tr>
@@ -980,7 +1363,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                               <button
                                 type="button"
                                 onClick={() => handleChangeItemStatus(item.sample_item_id, 'disetujui')}
-                                disabled={activeBatch?.is_locked}
+                                disabled={activeBatch?.is_locked || batchDraft}
                                 title="Terima untuk dibeli"
                                 className={`px-2 py-1 text-[10px] font-bold rounded-xs transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                                   isAcc
@@ -993,7 +1376,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                               <button
                                 type="button"
                                 onClick={() => handleChangeItemStatus(item.sample_item_id, 'nego')}
-                                disabled={activeBatch?.is_locked}
+                                disabled={activeBatch?.is_locked || batchDraft}
                                 title="Perlu negosiasi harga"
                                 className={`px-2 py-1 text-[10px] font-bold rounded-xs transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                                   isNego
@@ -1006,7 +1389,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                               <button
                                 type="button"
                                 onClick={() => handleChangeItemStatus(item.sample_item_id, 'ditolak')}
-                                disabled={activeBatch?.is_locked}
+                                disabled={activeBatch?.is_locked || batchDraft}
                                 title="Tolak penuh"
                                 className={`px-2 py-1 text-[10px] font-bold rounded-xs transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                                   isTolak
@@ -1024,7 +1407,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                             <select
                               value={item.kode_harga_jual || ''}
                               onChange={(e) => handleChangeItemKodeHarga(item.sample_item_id, e.target.value)}
-                              disabled={isTolak || activeBatch?.is_locked}
+                              disabled={isTolak || activeBatch?.is_locked || batchDraft}
                               className="w-full px-2 py-1 text-xs font-mono font-bold bg-white border border-gray-300 rounded-xs disabled:bg-gray-100 disabled:text-gray-400 focus:ring-1 focus:ring-gray-700"
                             >
                               <option value="">-- Pilih Kode Harga --</option>
@@ -1048,7 +1431,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                                 type="number"
                                 value={item.harga_deal_kg || item.harga_tawaran_kg}
                                 onChange={(e) => handleChangeItemDealPrice(item.sample_item_id, Number(e.target.value))}
-                                disabled={isTolak || activeBatch?.is_locked}
+                                disabled={isTolak || activeBatch?.is_locked || batchDraft}
                                 className="w-24 px-1.5 py-1 text-xs font-mono font-bold text-right bg-white border border-gray-300 rounded-xs disabled:bg-gray-100 disabled:text-gray-400 focus:ring-1 focus:ring-gray-700"
                               />
                             </div>
@@ -1063,25 +1446,10 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                             )}
                           </td>
 
-                          {/* Catatan Sortir */}
-                          <td className="p-3 text-gray-600">
-                            {isTolak ? (
-                              <span className="text-red-700 font-medium">{item.alasan_tolak || 'Ditolak pabrik'}</span>
-                            ) : isNego ? (
-                              <span className="text-amber-800 font-medium">{item.catatan_nego || 'Penyesuaian harga'}</span>
-                            ) : isAcc ? (
-                              <span className="text-emerald-700 font-semibold flex items-center space-x-1">
-                                <Check className="w-3.5 h-3.5" />
-                                <span>Disetujui dibeli</span>
-                              </span>
-                            ) : (
-                              <span className="text-gray-400 italic">Menunggu evaluasi</span>
-                            )}
-                          </td>
                           <td className="p-3 text-center">
                             <button
                               type="button"
-                              disabled={activeBatch?.is_locked}
+                              disabled={activeBatch?.is_locked || batchDraft}
                                 onClick={() => handleRemoveItemFromBatch(item.sample_item_id)}
                               className="text-gray-400 hover:text-red-600 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                               title="Hapus dari batch"
@@ -1113,7 +1481,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                             .reduce((s, it) => s + (beratBrutoItemSample(it) * (it.harga_deal_kg || it.harga_tawaran_kg)), 0)
                         )}
                       </td>
-                      <td colSpan={2}></td>
+                      <td></td>
                     </tr>
                   </tfoot>
                 )}
@@ -1138,7 +1506,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
       <ConfirmModal
         isOpen={!!itemToRemove}
         title="Konfirmasi Tolak & Kembalikan Bal"
-        message="Apakah Anda yakin ingin menolak bal ini? Bal akan dihapus dari daftar batch dan statusnya otomatis direset kembali ke stok gudang sehingga dapat digunakan kembali."
+        message="Tolak bal ini? Bal dikeluarkan dari batch dan tetap di stok gudang."
         confirmText="Ya, Tolak & Kembalikan ke Gudang"
         cancelText="Batal"
         onConfirm={confirmRemoveItem}
@@ -1164,7 +1532,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
               </div>
               <div className="mt-2 flex items-baseline justify-between">
                 <span className="text-xl font-bold text-gray-900">{pengirimanList.length}</span>
-                <span className="text-xs text-gray-500 font-medium">Pengiriman</span>
+                <span className="text-xs text-gray-500 font-medium">Surat Jalan</span>
               </div>
               <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-[11px]">
                 <span className="text-gray-500 font-medium">Nilai Pengiriman:</span>
@@ -1176,21 +1544,21 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
               onClick={() => setFilterPengirimanStatus('akan')}
               className={`p-3.5 border rounded-sm shadow-xs cursor-pointer transition ${
                 filterPengirimanStatus === 'akan'
-                  ? 'bg-amber-50 border-amber-400 ring-1 ring-amber-400'
-                  : 'bg-white border-amber-200 hover:bg-amber-50/50'
+                  ? 'bg-slate-50 border-slate-500 ring-1 ring-slate-500'
+                  : 'bg-white border-slate-300 hover:bg-slate-50'
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-amber-800">Akan Dikirim</span>
-                <Clock className="w-4 h-4 text-amber-600" />
+                <span className="text-[11px] font-semibold text-slate-800">Akan Dikirim</span>
+                <Clock className="w-4 h-4 text-slate-500" />
               </div>
               <div className="mt-2 flex items-baseline justify-between">
-                <span className="text-xl font-bold text-amber-700">{countAkanDikirim}</span>
-                <span className="text-[11px] font-medium text-amber-600">Surat Jalan</span>
+                <span className="text-xl font-bold text-slate-800">{countAkanDikirim}</span>
+                <span className="text-[11px] font-medium text-slate-500">Surat Jalan</span>
               </div>
-              <div className="mt-2 pt-2 border-t border-amber-100 flex items-center justify-between text-[11px]">
-                <span className="text-amber-700 font-medium">Nilai Pengiriman:</span>
-                <span className="font-mono font-bold text-amber-900">{formatRupiah(totalNilaiAkan)}</span>
+              <div className="mt-2 pt-2 border-t border-slate-200 flex items-center justify-between text-[11px]">
+                <span className="text-slate-600 font-medium">Nilai Pengiriman:</span>
+                <span className="font-mono font-bold text-slate-900">{formatRupiah(totalNilaiAkan)}</span>
               </div>
             </div>
 
@@ -1198,21 +1566,21 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
               onClick={() => setFilterPengirimanStatus('sedang')}
               className={`p-3.5 border rounded-sm shadow-xs cursor-pointer transition ${
                 filterPengirimanStatus === 'sedang'
-                  ? 'bg-rose-50 border-rose-400 ring-1 ring-rose-400'
-                  : 'bg-white border-rose-200 hover:bg-rose-50/50'
+                  ? 'bg-amber-50 border-amber-400 ring-1 ring-amber-400'
+                  : 'bg-white border-amber-200 hover:bg-amber-50/50'
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-rose-800">Sedang Dikirim</span>
-                <Truck className="w-4 h-4 text-rose-600" />
+                <span className="text-[11px] font-semibold text-amber-800">Sedang Dikirim</span>
+                <Truck className="w-4 h-4 text-amber-600" />
               </div>
               <div className="mt-2 flex items-baseline justify-between">
-                <span className="text-xl font-bold text-rose-700">{countSedangDikirim}</span>
-                <span className="text-[11px] font-medium text-rose-600">Truk Jalan</span>
+                <span className="text-xl font-bold text-amber-700">{countSedangDikirim}</span>
+                <span className="text-[11px] font-medium text-amber-600">Surat Jalan</span>
               </div>
-              <div className="mt-2 pt-2 border-t border-rose-100 flex items-center justify-between text-[11px]">
-                <span className="text-rose-700 font-medium">Nilai Pengiriman:</span>
-                <span className="font-mono font-bold text-rose-900">{formatRupiah(totalNilaiSedang)}</span>
+              <div className="mt-2 pt-2 border-t border-amber-100 flex items-center justify-between text-[11px]">
+                <span className="text-amber-700 font-medium">Nilai Pengiriman:</span>
+                <span className="font-mono font-bold text-amber-900">{formatRupiah(totalNilaiSedang)}</span>
               </div>
             </div>
 
@@ -1230,7 +1598,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
               </div>
               <div className="mt-2 flex items-baseline justify-between">
                 <span className="text-xl font-bold text-emerald-700">{countSudahSelesai}</span>
-                <span className="text-[11px] font-medium text-emerald-600">Tiba di Pabrik</span>
+                <span className="text-[11px] font-medium text-emerald-600">Surat Jalan</span>
               </div>
               <div className="mt-2 pt-2 border-t border-emerald-100 flex items-center justify-between text-[11px]">
                 <span className="text-emerald-700 font-medium">Nilai Pengiriman:</span>
@@ -1247,7 +1615,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                 <Search className="w-4 h-4 text-gray-400 absolute left-2.5 top-2.5" />
                 <input
                   type="text"
-                  placeholder="Cari No. Surat Jalan, Pabrik, Supir, Plat Nomor..."
+                  placeholder="Cari no. surat jalan, pabrik, sopir, nopol"
                   value={searchPengirimanText}
                   onChange={(e) => setSearchPengirimanText(e.target.value)}
                   className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-gray-300 rounded-xs focus:ring-1 focus:ring-gray-700"
@@ -1267,7 +1635,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
 
             {/* Table Content */}
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
+              <table className="w-full min-w-[1180px] text-left text-xs border-collapse">
                 <thead className="bg-gray-100 border-b border-gray-300 text-gray-700 font-bold">
                   <tr>
                     <th className="p-3 w-10 text-center">No</th>
@@ -1278,8 +1646,8 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                     <th className="p-3 text-right w-20">Total Bal</th>
                     <th className="p-3 text-right w-24">Tonase (Kg)</th>
                     <th className="p-3 text-right w-36">Nilai Pengiriman</th>
-                    <th className="p-3 text-center w-36">Status Pengiriman</th>
-                    <th className="p-3 text-center w-52">Aksi Kelola Status</th>
+                    <th className="p-3 text-center w-48 whitespace-nowrap">Status Pengiriman</th>
+                    <th className="p-3 text-center w-72 whitespace-nowrap">Aksi Kelola Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -1288,9 +1656,6 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                       <td colSpan={10} className="p-8 text-center text-gray-500 bg-gray-50/50">
                         <Truck className="w-8 h-8 text-gray-300 mx-auto mb-2" />
                         <div className="text-sm font-bold text-gray-700">Tidak ada data pengiriman</div>
-                        <p className="text-xs text-gray-400 mt-0.5">
-                          Ubah filter status atau buat surat jalan pengiriman reguler terlebih dahulu.
-                        </p>
                       </td>
                     </tr>
                   ) : (
@@ -1299,7 +1664,6 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                       const isSedang = item.status === 'dalam_perjalanan';
                       const isDiterima = item.status === 'diterima';
                       const isSelesai = item.status === 'selesai';
-                      const isSudah = isDiterima || isSelesai;
                       const nilaiPengiriman = item.total_nilai_deal || 0;
 
                       return (
@@ -1339,25 +1703,25 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                           {/* Status Badge */}
                           <td className="p-3 text-center">
                             {isAkan && (
-                              <span className="px-2.5 py-1 text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-200 rounded-xs inline-flex items-center space-x-1">
+                              <span className="px-2.5 py-1 text-[10px] font-bold text-slate-700 bg-slate-100 border border-slate-300 rounded-xs inline-flex items-center space-x-1 whitespace-nowrap">
                                 <Clock className="w-3 h-3" />
                                 <span>Akan Dikirim</span>
                               </span>
                             )}
                             {isSedang && (
-                              <span className="px-2.5 py-1 text-[10px] font-bold text-rose-800 bg-rose-100 border border-rose-300 rounded-xs inline-flex items-center space-x-1 animate-pulse">
-                                <Truck className="w-3 h-3 text-rose-700" />
+                              <span className="px-2.5 py-1 text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-300 rounded-xs inline-flex items-center space-x-1 whitespace-nowrap">
+                                <Truck className="w-3 h-3 text-amber-700" />
                                 <span>Sedang Dikirim</span>
                               </span>
                             )}
                             {isDiterima && (
-                              <span className="px-2.5 py-1 text-[10px] font-bold text-indigo-800 bg-indigo-100 border border-indigo-300 rounded-xs inline-flex items-center space-x-1">
+                              <span className="px-2.5 py-1 text-[10px] font-bold text-emerald-800 bg-white border border-emerald-300 rounded-xs inline-flex items-center space-x-1 whitespace-nowrap">
                                 <CheckCircle2 className="w-3 h-3" />
                                 <span>Tiba di Pabrik</span>
                               </span>
                             )}
                             {isSelesai && (
-                              <span className="px-2.5 py-1 text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 rounded-xs inline-flex items-center space-x-1">
+                              <span className="px-2.5 py-1 text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 rounded-xs inline-flex items-center space-x-1 whitespace-nowrap">
                                 <CheckCircle2 className="w-3 h-3" />
                                 <span>Selesai (Tutup DO)</span>
                               </span>
@@ -1366,18 +1730,20 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
 
                           {/* Aksi Kelola Status Terpusat */}
                           <td className="p-3 text-center">
-                            <div className="flex items-center justify-center space-x-1.5">
+                            <div className="flex flex-nowrap items-center justify-center space-x-1.5">
                               {/* Direct Status Selector */}
                               <select
                                 value={item.status}
-                                onChange={(e) => onUpdatePengirimanStatus(item.pengiriman_id, e.target.value as StatusPengiriman)}
-                                className="text-[10px] font-semibold bg-white border border-gray-300 rounded px-1.5 py-1 text-gray-800 cursor-pointer focus:outline-none focus:ring-1 focus:ring-gray-700 shadow-2xs"
-                                title="Ubah langsung status pengiriman ini"
+                                disabled={isSelesai}
+                                onChange={(e) => ubahStatusPengiriman(item.pengiriman_id, e.target.value as StatusPengiriman)}
+                                className="text-[10px] font-semibold bg-white border border-gray-300 rounded px-1.5 py-1 text-gray-800 cursor-pointer focus:outline-none focus:ring-1 focus:ring-gray-700 shadow-2xs disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                                title={isSelesai ? 'Surat Jalan sudah Selesai; status tidak dapat diubah lagi' : 'Ubah langsung status pengiriman ini'}
                               >
-                                <option value="dimuat">Dimuat (Akan Kirim)</option>
+                                <option value="dimuat">Dimuat</option>
+                                <option value="dikirim">Akan Dikirim</option>
                                 <option value="dalam_perjalanan">Sedang Dikirim</option>
                                 <option value="diterima">Tiba di Pabrik</option>
-                                <option value="selesai">Selesai (DO Closed)</option>
+                                <option value="selesai">Selesai</option>
                               </select>
 
                               {/* Quick Action Button for Next Stage */}
@@ -1385,7 +1751,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                                 <button
                                   type="button"
                                   onClick={() => onUpdatePengirimanStatus(item.pengiriman_id, 'dalam_perjalanan')}
-                                  className="px-2 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xs text-[10px] flex items-center space-x-1 cursor-pointer shadow-xs whitespace-nowrap"
+                                  className="px-2 py-1 bg-[#b81d24] hover:bg-[#a0181e] text-white font-bold rounded-xs text-[10px] flex items-center space-x-1 cursor-pointer shadow-xs whitespace-nowrap"
                                   title="Konfirmasi truk berangkat (jalan)"
                                 >
                                   <Truck className="w-3 h-3" />
@@ -1397,7 +1763,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                                 <button
                                   type="button"
                                   onClick={() => onUpdatePengirimanStatus(item.pengiriman_id, 'diterima')}
-                                  className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xs text-[10px] flex items-center space-x-1 cursor-pointer shadow-xs whitespace-nowrap"
+                                  className="px-2 py-1 bg-[#b81d24] hover:bg-[#a0181e] text-white font-bold rounded-xs text-[10px] flex items-center space-x-1 cursor-pointer shadow-xs whitespace-nowrap"
                                   title="Konfirmasi truk telah tiba di pabrik tujuan"
                                 >
                                   <CheckCircle2 className="w-3 h-3" />
@@ -1408,9 +1774,9 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                               {isDiterima && (
                                 <button
                                   type="button"
-                                  onClick={() => onUpdatePengirimanStatus(item.pengiriman_id, 'selesai')}
-                                  className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xs text-[10px] flex items-center space-x-1 cursor-pointer shadow-xs whitespace-nowrap"
-                                  title="Tandai pengiriman telah tuntas selesai"
+                                  onClick={() => ubahStatusPengiriman(item.pengiriman_id, 'selesai')}
+                                  className="px-2 py-1 bg-[#b81d24] hover:bg-[#a0181e] text-white font-bold rounded-xs text-[10px] flex items-center space-x-1 cursor-pointer shadow-xs whitespace-nowrap"
+                                  title="Tandai pengiriman selesai; nilai penjualan masuk laporan dan Surat Jalan tidak dapat dihapus lagi"
                                 >
                                   <Check className="w-3 h-3" />
                                   <span>Selesai</span>
@@ -1427,7 +1793,19 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                                 <Printer className="w-3.5 h-3.5" />
                               </button>
 
-                              {/* Delete Button: terkunci bila bal sudah dikirim */}
+                              {/* Edit Button: hanya selama Surat Jalan belum Selesai */}
+                              {onEditPengiriman && !isSuratJalanTerkunci(item) && (
+                                <button
+                                  type="button"
+                                  onClick={() => onEditPengiriman(item.pengiriman_id)}
+                                  className="p-1 text-amber-700 hover:text-white hover:bg-amber-600 rounded-xs border border-amber-300 cursor-pointer transition"
+                                  title="Edit Surat Jalan (tambah bal, ubah berat, harga, potongan, tujuan, dll.)"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+
+                              {/* Delete Button: terkunci bila Surat Jalan sudah Selesai */}
                               {onDeletePengiriman && isSuratJalanTerkunci(item) && (
                                 <span
                                   className="p-1 text-gray-300 rounded-xs border border-gray-200 inline-flex cursor-not-allowed"
@@ -1441,7 +1819,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                                   type="button"
                                   onClick={() => setPengirimanToDelete(item.pengiriman_id)}
                                   className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xs border border-gray-200 hover:border-red-200 cursor-pointer transition"
-                                  title="Hapus Surat Jalan Pengiriman (Bal kembali ke stok gudang)"
+                                  title="Batalkan / hapus Surat Jalan (bal kembali ke stok gudang)"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
@@ -1468,9 +1846,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                       <td className="p-3 text-right font-mono text-xs text-emerald-800 font-bold">
                         {formatRupiah(totalNilaiFiltered)}
                       </td>
-                      <td colSpan={2} className="p-3 text-left text-[10px] font-normal text-gray-500 italic">
-                        Status terkelola terpusat & tersinkronisasi
-                      </td>
+                      <td colSpan={2}></td>
                     </tr>
                   </tfoot>
                 )}
@@ -1483,27 +1859,102 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
       {/* Confirm Delete Pengiriman DO Modal */}
       <ConfirmModal
         isOpen={!!pengirimanToDelete}
-        title="Konfirmasi Hapus Pengiriman DO"
-        message="Apakah Anda yakin ingin menghapus surat jalan pengiriman ini? Bal tembakau yang terikat akan dikembalikan ke status Gudang."
-        confirmText="Ya, Hapus"
-        cancelText="Batal"
+        title="Batalkan / Hapus Surat Jalan"
+        message="Batalkan Surat Jalan ini? Bal di dalamnya kembali ke stok gudang."
+        confirmText="Ya, Batalkan"
+        cancelText="Kembali"
         variant="danger"
         onConfirm={() => {
           if (pengirimanToDelete && onDeletePengiriman) {
-            const pToDel = pengirimanList.find((p) => p.pengiriman_id === pengirimanToDelete);
-            if (pToDel) {
-              const revertedBarangs = barangList
-                .filter((b) => pToDel.barang_ids.includes(b.barang_id))
-                .map((b) => ({ ...b, status_stok: 'di_gudang' as const }));
-              onDeletePengiriman(pengirimanToDelete, revertedBarangs);
-            } else {
-              onDeletePengiriman(pengirimanToDelete);
-            }
+            onDeletePengiriman(pengirimanToDelete);
           }
           setPengirimanToDelete(null);
         }}
         onClose={() => setPengirimanToDelete(null)}
         onCancel={() => setPengirimanToDelete(null)}
+      />
+
+      {/* Konfirmasi ACC semua bal batch sample */}
+      <ConfirmModal
+        isOpen={isAccAllConfirmOpen}
+        title="ACC Semua Bal"
+        message="Tandai seluruh bal pada batch ini ACC? Status Nego atau Tolak yang sudah diisi akan diganti."
+        confirmText="Ya, ACC Semua"
+        cancelText="Batal"
+        variant="warning"
+        onConfirm={handleAccAllItems}
+        onClose={() => setIsAccAllConfirmOpen(false)}
+      />
+
+      {/* Cetak Surat Pengiriman Sample */}
+      <BatchSamplePrintModal
+        isOpen={!!printingBatch}
+        onClose={() => setPrintingBatch(null)}
+        batch={printingBatch}
+      />
+
+      {/* Konfirmasi pembatalan Batch Sample: bal tidak berubah */}
+      {/* Finalkan Draft: setelah final batch siap dipakai dan surat bisa dicetak */}
+      <ConfirmModal
+        isOpen={!!batchToFinalize}
+        title="Finalkan Batch Sample"
+        message={`Finalkan Batch ${batchToFinalize?.kode_batch || ''} (${(batchToFinalize?.items || []).length} bal) untuk ${batchToFinalize?.tujuan_buyer || ''}? Setelah final, batch siap dipakai dan surat pengiriman sample bisa dicetak. Pastikan nomor bal dan harga jualnya sudah benar.`}
+        confirmText="Ya, Finalkan"
+        cancelText="Periksa Lagi"
+        variant="primary"
+        onConfirm={() => {
+          if (batchToFinalize) finalkanBatch(batchToFinalize);
+        }}
+        onClose={() => setBatchToFinalize(null)}
+      />
+
+      {/* Info: aksi ditolak karena batch masih Draft */}
+      <ConfirmModal
+        isOpen={Boolean(infoBatch)}
+        title="Batch Masih Draft"
+        message={infoBatch}
+        confirmText="Mengerti"
+        variant="warning"
+        hideCancel
+        onConfirm={() => setInfoBatch('')}
+        onClose={() => setInfoBatch('')}
+      />
+
+      <ConfirmModal
+        isOpen={!!batchToDelete}
+        title="Batalkan Batch Sample"
+        message="Hapus batch sample ini? Bal di dalamnya tetap di stok gudang."
+        confirmText="Ya, Batalkan Batch"
+        cancelText="Kembali"
+        variant="danger"
+        onConfirm={() => {
+          if (batchToDelete && onDeleteBatchSample) {
+            onDeleteBatchSample(batchToDelete);
+            if (selectedBatchId === batchToDelete) {
+              setSelectedBatchId('');
+              setScanBatchId('');
+              setBatchItems([]);
+            }
+          }
+          setBatchToDelete(null);
+        }}
+        onClose={() => setBatchToDelete(null)}
+      />
+
+      {/* Konfirmasi Selesai: final, nilai penjualan masuk laporan */}
+      <ConfirmModal
+        isOpen={!!pengirimanToFinish}
+        title="Tandai Surat Jalan Selesai"
+        message="Tandai Surat Jalan ini Selesai? Setelah Selesai, Surat Jalan tidak dapat diubah atau dibatalkan."
+        confirmText="Ya, Selesai"
+        cancelText="Belum"
+        variant="warning"
+        onConfirm={() => {
+          if (pengirimanToFinish) onUpdatePengirimanStatus(pengirimanToFinish, 'selesai');
+          setPengirimanToFinish(null);
+        }}
+        onClose={() => setPengirimanToFinish(null)}
+        onCancel={() => setPengirimanToFinish(null)}
       />
 
       {/* Print Surat Jalan Modal */}

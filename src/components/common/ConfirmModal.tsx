@@ -12,6 +12,8 @@ export interface ConfirmModalProps {
   cancelLabel?: string;
   variant?: 'danger' | 'warning' | 'primary' | 'success';
   isDanger?: boolean;
+  /** Untuk pemberitahuan satu tombol: sembunyikan tombol batal. */
+  hideCancel?: boolean;
   onConfirm: () => void;
   onClose?: () => void;
   onCancel?: () => void;
@@ -29,6 +31,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   cancelLabel,
   variant = 'warning',
   isDanger = false,
+  hideCancel = false,
   onConfirm,
   onClose,
   onCancel,
@@ -138,7 +141,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
 
         {/* Body */}
         <div className="p-5 bg-[#fcfcfc] space-y-3">
-          <p className="text-xs text-gray-700 leading-relaxed font-medium">
+          <p className="text-xs text-gray-700 leading-relaxed font-medium whitespace-pre-line">
             {message}
           </p>
 
@@ -152,14 +155,16 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
 
         {/* Footer Actions */}
         <div className="p-3 bg-gray-50 border-t border-gray-200 flex items-center justify-end space-x-2">
-          <button
-            type="button"
-            onClick={handleClose}
-            disabled={isLoading}
-            className="px-3.5 py-2 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-sm transition cursor-pointer shadow-xs disabled:opacity-50"
-          >
-            {resolvedCancelText}
-          </button>
+          {!hideCancel && (
+            <button
+              type="button"
+              onClick={handleClose}
+              disabled={isLoading}
+              className="px-3.5 py-2 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-sm transition cursor-pointer shadow-xs disabled:opacity-50"
+            >
+              {resolvedCancelText}
+            </button>
+          )}
           <button
             type="button"
             onClick={onConfirm}

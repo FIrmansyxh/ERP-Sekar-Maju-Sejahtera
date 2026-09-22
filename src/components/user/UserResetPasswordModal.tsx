@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, KeyRound, AlertTriangle, CheckCircle2, Lock, Eye, EyeOff } from 'lucide-react';
+import { X, KeyRound, AlertTriangle, Eye, EyeOff } from 'lucide-react';
 import { User } from '../../types';
 
 interface UserResetPasswordModalProps {
@@ -63,7 +63,7 @@ export const UserResetPasswordModal: React.FC<UserResetPasswordModalProps> = ({
             </div>
             <div className="min-w-0">
               <h2 className="text-sm font-bold text-gray-900 tracking-tight truncate">
-                Reset Kata Sandi Pengguna
+                Reset Kata Sandi
               </h2>
               <p className="text-[11px] text-gray-500 font-medium truncate">
                 Akun: <span className="font-semibold text-gray-800">{user.nama_lengkap}</span> ({user.username})
@@ -115,7 +115,7 @@ export const UserResetPasswordModal: React.FC<UserResetPasswordModalProps> = ({
                   setNewPassword(e.target.value);
                   setError(null);
                 }}
-                placeholder="Masukkan kata sandi baru..."
+                placeholder="Kata sandi baru"
                 className="w-full px-3 py-2 pr-9 border border-gray-300 rounded-sm focus:ring-1 focus:ring-[#b81d24] focus:border-[#b81d24] text-xs"
                 required
               />
@@ -140,7 +140,7 @@ export const UserResetPasswordModal: React.FC<UserResetPasswordModalProps> = ({
                 setConfirmPassword(e.target.value);
                 setError(null);
               }}
-              placeholder="Ketik ulang kata sandi baru..."
+              placeholder="Ulangi kata sandi baru"
               className="w-full px-3 py-2 border border-gray-300 rounded-sm focus:ring-1 focus:ring-[#b81d24] focus:border-[#b81d24] text-xs"
               required
             />

@@ -1,13 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Save, 
-  User, 
+import {
+  Save,
+  User,
   ArrowLeft,
-  CheckCircle2,
-  Phone,
-  MapPin,
-  FileText,
-  BadgeAlert
+  CheckCircle2
 } from 'lucide-react';
 import { Petani } from '../../types';
 import { generatePetaniId } from '../../utils/formatters';
@@ -138,11 +134,8 @@ export const PetaniFormModal: React.FC<PetaniFormModalProps> = ({
               </div>
               <div className="min-w-0">
                 <h2 className="text-sm font-bold text-gray-900 tracking-tight truncate">
-                  {isEdit ? `Edit Data Petani - ${formData.petani_id}` : 'Tambah Data Petani Baru'}
+                  {isEdit ? `Edit Petani ${formData.petani_id}` : 'Tambah Petani'}
                 </h2>
-                <p className="text-[11px] text-gray-500 font-medium">
-                  {isEdit ? 'Perbarui informasi master data petani tembakau' : 'Registrasi petani mitra tembakau (ID otomatis di-generate sistem)'}
-                </p>
               </div>
             </div>
 
@@ -170,28 +163,17 @@ export const PetaniFormModal: React.FC<PetaniFormModalProps> = ({
 
           {/* Form Content */}
           <form onSubmit={handleSubmit} className="p-5 space-y-4">
-            {/* Auto Generated ID Petani */}
-            <div>
-              <label className="block text-gray-700 font-semibold mb-1">
-                ID Petani <span className="text-gray-400 font-normal text-[11px]">(Otomatis Sistem)</span>
-              </label>
-              <div className="flex items-center space-x-2">
+            {isEdit && (
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">ID Petani</label>
                 <input
                   type="text"
                   readOnly
                   value={formData.petani_id || ''}
                   className="w-full bg-gray-100 border border-gray-300 rounded-sm px-3 py-2 text-xs font-mono font-bold text-gray-800 cursor-not-allowed select-all"
                 />
-                <span className="shrink-0 px-2.5 py-1.5 bg-green-50 text-green-700 border border-green-200 text-[11px] font-semibold rounded-sm">
-                  Format: PTN-YYYY-XXX
-                </span>
               </div>
-              <p className="text-[10px] text-gray-500 mt-1">
-                {isEdit
-                  ? 'ID Petani unik tidak dapat diubah.'
-                  : 'ID Petani resmi ditetapkan secara berurutan dan otomatis oleh database sistem (PostgreSQL) saat disimpan.'}
-              </p>
-            </div>
+            )}
 
             {/* Nama Petani */}
             <div>
@@ -201,7 +183,7 @@ export const PetaniFormModal: React.FC<PetaniFormModalProps> = ({
               <div className="relative">
                 <input
                   type="text"
-                  placeholder="Contoh: H. Achmad Zaini / Mat Rokim"
+                  placeholder="Nama petani"
                   value={formData.nama_petani || ''}
                   onChange={(e) => {
                     setFormData({ ...formData, nama_petani: e.target.value });
@@ -225,7 +207,7 @@ export const PetaniFormModal: React.FC<PetaniFormModalProps> = ({
               <div className="relative">
                 <input
                   type="tel"
-                  placeholder="Contoh: 081234567890 / 087855667788"
+                  placeholder="No. HP"
                   value={formData.no_hp || ''}
                   onChange={(e) => {
                     setFormData({ ...formData, no_hp: e.target.value });
@@ -248,7 +230,7 @@ export const PetaniFormModal: React.FC<PetaniFormModalProps> = ({
               </label>
               <textarea
                 rows={3}
-                placeholder="Contoh: Dusun Sumber Bening RT 01 / RW 02, Ds. Guluk-Guluk, Kec. Guluk-Guluk, Sumenep, Madura"
+                placeholder="Alamat"
                 value={formData.alamat || ''}
                 onChange={(e) => {
                   setFormData({ ...formData, alamat: e.target.value });
@@ -272,10 +254,7 @@ export const PetaniFormModal: React.FC<PetaniFormModalProps> = ({
             {/* Status Aktif */}
             <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
               <div>
-                <label className="text-xs font-semibold text-gray-700 block">Status Kemitraan Petani</label>
-                <p className="text-[11px] text-gray-500">
-                  Petani aktif dapat melakukan transaksi penjualan di loket timbang
-                </p>
+                <label className="text-xs font-semibold text-gray-700 block">Status Aktif</label>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
                 <input

@@ -35,13 +35,14 @@ export interface UkuranDokumen {
 export const UKURAN_SURAT_JALAN: UkuranDokumen = {
   halaman: 1090,
   footer: 98,
-  kopMeta: 258,
+  kopMeta: 256,
   lanjutan: 48,
   thead: 40,
   baris: 37,
   totalBaris: 44,
-  // Dasar (terbilang, syarat, tanda tangan); Surat Jalan menambah untuk catatan dan aturan netto
-  ekor: 280,
+  // Dasar (terbilang, syarat, tanda tangan); Surat Jalan menambah untuk catatan dan aturan netto.
+  // Sisa 16px disediakan bila terbilang turun ke baris kedua.
+  ekor: 292,
 };
 
 export const UKURAN_SURAT_SAMPLE: UkuranDokumen = {

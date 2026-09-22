@@ -1,5 +1,11 @@
-import jsPDF from 'jspdf';
-import { toPng } from 'html-to-image';
+/**
+ * Pustaka PDF (jsPDF dan html-to-image, sekitar 166 kB gzip) dimuat saat pertama kali dipakai,
+ * bukan saat aplikasi dibuka, supaya halaman login dan menu lain tetap ringan.
+ */
+const muatPustakaPdf = async () => {
+  const [{ default: jsPDF }, { toPng }] = await Promise.all([import('jspdf'), import('html-to-image')]);
+  return { jsPDF, toPng };
+};
 
 /**
  * Utility for downloading ready-to-print formatted documents (PDF)
@@ -28,6 +34,7 @@ export async function downloadElementAsPdf(
     return;
   }
 
+  const { jsPDF, toPng } = await muatPustakaPdf();
   const cleanFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
 
   // Detect orientation
@@ -330,6 +337,7 @@ async function simpanPdfPerLembar(
   orientation: 'portrait' | 'landscape',
   format?: string
 ): Promise<void> {
+  const { jsPDF, toPng } = await muatPustakaPdf();
   const pdf = new jsPDF({ orientation, unit: 'mm', format: format || 'a4', compress: true });
   const margin = 8;
   const maxWidthMm = pdf.internal.pageSize.getWidth() - margin * 2;

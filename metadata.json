@@ -1,6 +1,0 @@
-{
-  "name": "ERP PT. Sekar Maju Sejahtera",
-  "description": "Sistem ERP gudang tembakau PT. Sekar Maju Sejahtera: master petani, harga, sortir, timbang, kasir, stok bal, dan logistik pengiriman.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

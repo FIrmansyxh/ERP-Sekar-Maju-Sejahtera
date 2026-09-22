@@ -3,9 +3,20 @@
  * Mengimplementasikan pola "API-First with Offline LocalStorage Fallback".
  */
 
-import { api, checkBackendHealth, setAuthToken, getTerakhirGagalJaringan } from './apiClient';
+import { api, ApiError, checkBackendHealth, setAuthToken, getTerakhirGagalJaringan } from './apiClient';
 import { hashPassword } from '../utils/crypto';
 import { beratBrutoItemSample } from '../utils/beratKirim';
+import { statusSetelahSinkron } from '../utils/statusBatchSample';
+import {
+  overlayBarang,
+  overlayBatchSample,
+  overlayHargaBeli,
+  overlayHargaJual,
+  overlayPengiriman,
+  overlayPetani,
+  overlayTransaksi,
+  overlayUser,
+} from './overlayDaftar';
 import { 
   Petani, 
   Barang, 
@@ -37,9 +48,16 @@ import {
   saveCurrentUser,
   authenticateUser as authenticateLocalUser
 } from '../utils/storage';
-import { sortTransaksiItemsByInputOrder } from '../utils/kuponSortir';
-import { antrianSinkron } from './antrianSinkron';
+import { lengkapiBalDariKupon, mergeKuponParalel, pulihkanStatusSampleLama, sortTransaksiItemsByInputOrder } from '../utils/kuponSortir';
 import { generatePetaniId } from '../utils/formatters';
+import { POTONGAN_GANTI_TIKAR, POTONGAN_KULI_PER_BAL, POTONGAN_TALI_PER_BAL } from '../config/aturanTimbang';
+
+/** Angka dari server; kosong (null/undefined/'') memakai nilai cadangan, 0 tetap 0. */
+const angkaAtau = (nilai: unknown, cadangan: number): number =>
+  nilai === null || nilai === undefined || nilai === '' || Number.isNaN(Number(nilai)) ? cadangan : Number(nilai);
+
+/** Potongan tikar yang berlaku untuk satu bal: hanya bila ganti tikar, tarif dari isian atau tarif standar. */
+const tikarBal = (it: Partial<TransaksiItemBal>): number => (it.ganti_tikar ? Number(it.potongan_tikar) || POTONGAN_GANTI_TIKAR : 0);
 
 function mapTanggalPetani(value: unknown): string | undefined {
   if (typeof value === 'string' && value.trim()) {
@@ -52,7 +70,7 @@ function mapTanggalPetani(value: unknown): string | undefined {
   return undefined;
 }
 
-function mapPetaniFromApi(raw: any): Petani {
+export function mapPetaniFromApi(raw: any): Petani {
   return {
     petani_id: String(raw?.petani_id || ''),
     nama_petani: String(raw?.nama_petani || '').trim(),
@@ -107,6 +125,11 @@ export class ErpApiService {
   }
 
   // --- AUTENTIKASI ---
+  /**
+   * Login. Server adalah penentu: bila server menjawab dan menolak (mis. sandi salah, akun nonaktif, 4xx),
+   * login GAGAL dan tidak pernah dilanjutkan ke akun lokal. Autentikasi lokal hanya dipakai saat server
+   * tidak dapat dijangkau (offline, timeout, atau galat 5xx) agar operasional gudang tetap berjalan.
+   */
   public static async login(username: string, password: string): Promise<{ success: boolean; user?: User; message: string; mode: 'api' | 'local' }> {
     // 1. Coba login ke API backend
     try {
@@ -133,9 +156,13 @@ export class ErpApiService {
 
           return { success: true, user: localFormattedUser, message: res.message || 'Login berhasil via Backend API', mode: 'api' };
         }
+        return { success: false, message: res.message || 'Login gagal. Periksa kembali username dan password.', mode: 'api' };
       }
-    } catch (err: any) {
-      console.warn('Gagal login via API backend, mencoba fallback lokal:', err?.message || err);
+    } catch (err: unknown) {
+      if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
+        return { success: false, message: err.message || 'Login gagal. Periksa kembali username dan password.', mode: 'api' };
+      }
+      console.warn('Server tidak dapat dijangkau saat login, memakai autentikasi lokal:', err instanceof Error ? err.message : err);
     }
 
     // 2. Fallback autentikasi lokal
@@ -150,7 +177,9 @@ export class ErpApiService {
       if (isOnline) {
         const res = await api.get<Petani[]>('/petani');
         if (res.status === 'success' && Array.isArray(res.data)) {
-          const mapped = res.data.map(mapPetaniFromApi).filter((p) => p.petani_id && p.nama_petani);
+          const dariServer = res.data.map(mapPetaniFromApi).filter((p) => p.petani_id && p.nama_petani);
+          // Perubahan di perangkat ini yang belum sampai ke server tidak boleh tertimpa data server yang lebih lama
+          const mapped = overlayPetani(dariServer);
           savePetaniData(mapped);
           return { data: mapped, fromBackend: true };
         }
@@ -250,48 +279,46 @@ export class ErpApiService {
     return resultPetani;
   }
 
-  public static async deletePetani(petaniId: string, alasan?: string): Promise<boolean> {
-    try {
-      const isOnline = await this.isBackendOnline();
-      if (isOnline) {
-        await api.delete(`/petani/${petaniId}`);
-        return true;
-      }
-    } catch (err) {
-      console.warn('Gagal menonaktifkan petani di backend API:', err);
-      throw err;
-    }
-    return false;
-  }
-
   // --- TRANSAKSI ---
   public static mapBackendTransaksi(t: any): TransaksiPembelian {
     const items: TransaksiItemBal[] = Array.isArray(t.items)
       ? sortTransaksiItemsByInputOrder<TransaksiItemBal>(
-          t.items.map((it: any): TransaksiItemBal => ({
+          t.items.map((it: any): TransaksiItemBal => {
+      const berat = Number(it.berat_kg) || 0;
+      const harga = Number(it.harga_per_kg) || 0;
+      const gantiTikar = Boolean(it.ganti_tikar) || Number(it.potongan_tikar) > 0;
+      const kuli = angkaAtau(it.potongan_kuli, POTONGAN_KULI_PER_BAL);
+      const tali = angkaAtau(it.potongan_tali, POTONGAN_TALI_PER_BAL);
+      const tikar = gantiTikar ? Number(it.potongan_tikar) || POTONGAN_GANTI_TIKAR : 0;
+      const potongan = angkaAtau(it.potongan, kuli + tali + tikar);
+      const kotor = angkaAtau(it.total_kotor, Math.round(berat * harga));
+      return {
       item_id: it.item_id,
+      barang_id: it.barang_id ? String(it.barang_id) : it.barang?.barang_id ? String(it.barang.barang_id) : undefined,
       no_bal: String(it.no_bal || ''),
       kode_bal_pembeli: it.kode_bal_pembeli || undefined,
       barcode: it.barcode || undefined,
       kode_grade: it.kode_grade || it.grade?.kode_grade || '',
-      harga_per_kg: Number(it.harga_per_kg) || 0,
-      ganti_tikar: Boolean(it.ganti_tikar) || Number(it.potongan_tikar) > 0,
+      harga_per_kg: harga,
+      ganti_tikar: gantiTikar,
       berat_bruto_kg: it.berat_bruto_kg !== null && it.berat_bruto_kg !== undefined ? Number(it.berat_bruto_kg) : undefined,
       potongan_tara_kg: Number(it.potongan_tara_kg) || 0,
       is_netto_manual: Boolean(it.is_netto_manual),
-      berat_kg: Number(it.berat_kg) || 0,
-      potongan_kuli: Number(it.potongan_kuli) || 7000,
-      potongan_tali: Number(it.potongan_tali) || 3000,
-      potongan_tikar: Number(it.potongan_tikar) || (Boolean(it.ganti_tikar) ? 75000 : 0),
-      potongan: Number(it.potongan) || ((Number(it.potongan_kuli) || 7000) + (Number(it.potongan_tali) || 3000) + (Number(it.potongan_tikar) || 0)),
-      total_kotor: Number(it.total_kotor) || ((Number(it.berat_kg) || 0) * (Number(it.harga_per_kg) || 0)),
-      subtotal_bersih: Number(it.subtotal_bersih) || (((Number(it.berat_kg) || 0) * (Number(it.harga_per_kg) || 0)) - (Number(it.potongan) || 10000)),
+      berat_kg: berat,
+      potongan_kuli: kuli,
+      potongan_tali: tali,
+      potongan_tikar: tikar,
+      potongan,
+      total_kotor: kotor,
+      // Bal yang belum ditimbang belum bernilai; jumlah bayar tidak pernah negatif
+      subtotal_bersih: angkaAtau(it.subtotal_bersih, berat > 0 ? Math.max(0, kotor - potongan) : 0),
       status_timbang: it.status_timbang || (Number(it.berat_kg) > 0 ? 'selesai_timbang' : 'menunggu_timbang'),
       lokasi_simpan: it.lokasi_simpan || 'Blok A',
       sample_label_code: it.sample_label_code || undefined,
       sample_label_printed: Boolean(it.sample_label_printed),
       catatan: it.catatan || undefined,
-    }))
+    };
+          })
         )
       : [];
 
@@ -304,18 +331,18 @@ export class ErpApiService {
 
     const totalTara = items.reduce((sum: number, i: any) => sum + (Number(i.potongan_tara_kg) || 0), 0);
     const avgHarga = totalBerat > 0 ? Math.round(totalKotor / totalBerat) : (items[0]?.harga_per_kg || 0);
-    const totalKuli = items.reduce((sum: number, i: any) => sum + (Number(i.potongan_kuli) || 7000), 0);
+    const totalKuli = items.reduce((sum, i) => sum + (i.potongan_kuli ?? POTONGAN_KULI_PER_BAL), 0);
     const totalTikar = items.reduce((sum: number, i: any) => sum + (Number(i.potongan_tikar) || 0), 0);
-    const totalTali = items.reduce((sum: number, i: any) => sum + (Number(i.potongan_tali) || 3000), 0);
+    const totalTali = items.reduce((sum, i) => sum + (i.potongan_tali ?? POTONGAN_TALI_PER_BAL), 0);
 
-    const firstGrade = items[0]?.kode_grade || t.kode_grade || 'A';
-    const noBalSummary = items.map((i: any) => i.no_bal).filter(Boolean).join(', ') || t.no_bal || '1';
+    const firstGrade = items[0]?.kode_grade || t.kode_grade || '-';
+    const noBalSummary = items.map((i) => i.no_bal).filter(Boolean).join(', ') || t.no_bal || '';
 
     return {
       transaksi_id: t.transaksi_id,
       no_kupon: t.no_kupon || '',
       petani_id: t.petani_id || t.petani?.petani_id || '',
-      nama_petani: t.petani?.nama_petani || t.nama_petani || 'Petani',
+      nama_petani: t.petani?.nama_petani || t.nama_petani || '',
       no_hp: t.petani?.no_hp || t.no_hp || '',
       desa_kecamatan: t.petani?.desa_kecamatan || t.desa_kecamatan || '',
       no_bal: noBalSummary,
@@ -343,7 +370,7 @@ export class ErpApiService {
       metode_pembayaran: t.metode_pembayaran || undefined,
       status_nota: t.status_nota || 'belum_cetak',
       tanggal_transaksi: t.tanggal_transaksi ? String(t.tanggal_transaksi).split('T')[0] : new Date().toISOString().split('T')[0],
-      operator_nama: t.operator_nama || t.operator?.nama_lengkap || 'Staff Gudang',
+      operator_nama: t.operator_nama || t.operator?.nama_lengkap || '',
       catatan: t.catatan || undefined,
       catatan_kasir: t.catatan_kasir || undefined,
       catatan_qc: t.catatan_qc || undefined,
@@ -359,7 +386,7 @@ export class ErpApiService {
         if (res.status === 'success' && Array.isArray(res.data)) {
           const mapped = res.data.map(t => this.mapBackendTransaksi(t));
           // Perubahan di perangkat ini yang belum sampai ke server tidak boleh tertimpa data server yang lebih lama
-          const gabungan = antrianSinkron.terapkanKeDaftar(mapped);
+          const gabungan = overlayTransaksi(mapped);
           saveTransaksiData(gabungan);
           return { data: gabungan, fromBackend: true };
         }
@@ -371,37 +398,48 @@ export class ErpApiService {
   }
 
   /**
+   * Kupon tunggal terbaru dari server, dipakai untuk menyegarkan salinan lokal SESAAT SEBELUM mengirim
+   * simpanan (bukan lewat tampilan) supaya bal saudara yang sudah basi tidak ikut menimpa balik data
+   * yang sudah benar di server (mis. ganti tikar yang diubah dari perangkat lain). Tidak pernah melempar
+   * galat — kegagalan di sini tidak boleh menahan simpanan; pengirim tetap jalan pakai data lokal.
+   */
+  public static async getTransaksiSatu(transaksiId: string): Promise<TransaksiPembelian | undefined> {
+    try {
+      const res = await api.get<any>(`/transaksi/${transaksiId}`);
+      if (res.status === 'success' && res.data) return this.mapBackendTransaksi(res.data);
+    } catch (err) {
+      console.warn(`Gagal menyegarkan kupon ${transaksiId} sebelum kirim, memakai salinan lokal:`, err);
+    }
+    return undefined;
+  }
+
+  /**
    * Permintaan kirim kupon ke server. Semuanya MELEMPAR galat bila gagal, supaya antrean sinkron
    * (antrianSinkron.ts) tahu dan mencoba lagi; dulu galat ditelan dan data hanya tersimpan lokal.
    */
   public static async storeSortirTransaksi(tx: TransaksiPembelian): Promise<TransaksiPembelian> {
+    const itemKupon: Partial<TransaksiItemBal>[] = tx.items || [];
     const payload = {
       transaksi_id: tx.transaksi_id,
       no_kupon: tx.no_kupon,
       petani_id: tx.petani_id,
       tanggal_transaksi: tx.tanggal_transaksi || new Date().toISOString().split('T')[0],
       catatan: tx.catatan || '',
-      items: (tx.items && tx.items.length > 0 ? tx.items : [{
-        no_bal: tx.no_bal || '1',
-        kode_grade: tx.kode_grade || 'A',
-        harga_per_kg: (tx.total_harga_beli && tx.berat_kg) ? Math.round(tx.total_harga_beli / tx.berat_kg) : 100000,
-        ganti_tikar: false,
-        berat_bruto_kg: tx.berat_kg || 0,
-        potongan_tara_kg: 0,
-        berat_kg: tx.berat_kg || 0,
-        lokasi_simpan: 'Blok A',
-      }]).map(it => ({
+      items: itemKupon.map(it => ({
         no_bal: it.no_bal,
         kode_bal_pembeli: it.kode_bal_pembeli || null,
         barcode: it.barcode || null,
         kode_grade: it.kode_grade,
         harga_per_kg: it.harga_per_kg,
         ganti_tikar: Boolean(it.ganti_tikar),
+        potongan_tikar: tikarBal(it),
         berat_bruto_kg: it.berat_bruto_kg || 0,
         potongan_tara_kg: it.potongan_tara_kg || 0,
         berat_kg: it.berat_kg || 0,
         lokasi_simpan: it.lokasi_simpan || 'Blok A',
         sample_label_code: it.sample_label_code || null,
+        potongan_kuli: it.potongan_kuli,
+        potongan_tali: it.potongan_tali,
       })),
     };
 
@@ -420,9 +458,9 @@ export class ErpApiService {
         potongan_tara_kg: it.potongan_tara_kg || 0,
         berat_kg: it.berat_kg || 0,
         is_netto_manual: Boolean(it.is_netto_manual),
-        lokasi_simpan: (it as any).lokasi_simpan || 'Blok A',
+        lokasi_simpan: it.lokasi_simpan || 'Blok A',
         ganti_tikar: Boolean(it.ganti_tikar),
-        potongan_tikar: it.ganti_tikar ? (Number(it.potongan_tikar) || 75000) : 0,
+        potongan_tikar: tikarBal(it),
         potongan_kuli: it.potongan_kuli,
         potongan_tali: it.potongan_tali,
       })),
@@ -434,15 +472,11 @@ export class ErpApiService {
   }
 
   public static async updateSortirItemsTransaksi(tx: TransaksiPembelian): Promise<TransaksiPembelian> {
+    const itemKupon: Partial<TransaksiItemBal>[] = tx.items || [];
     const payload = {
       catatan: tx.catatan || '',
       status_tahap: tx.status_tahap,
-      items: (tx.items && tx.items.length > 0 ? tx.items : [{
-        no_bal: tx.no_bal || '1',
-        kode_grade: tx.kode_grade || 'A',
-        harga_per_kg: (tx.total_harga_beli && tx.berat_kg) ? Math.round(tx.total_harga_beli / tx.berat_kg) : 100000,
-        ganti_tikar: false,
-      }]).map(it => ({
+      items: itemKupon.map(it => ({
         item_id: it.item_id || null,
         no_bal: it.no_bal,
         kode_bal_pembeli: it.kode_bal_pembeli || null,
@@ -450,7 +484,7 @@ export class ErpApiService {
         kode_grade: it.kode_grade,
         harga_per_kg: it.harga_per_kg,
         ganti_tikar: Boolean(it.ganti_tikar),
-        potongan_tikar: it.ganti_tikar ? (Number(it.potongan_tikar) || 75000) : 0,
+        potongan_tikar: tikarBal(it),
         berat_bruto_kg: it.berat_bruto_kg || 0,
         potongan_tara_kg: it.potongan_tara_kg || 0,
         berat_kg: it.berat_kg || 0,
@@ -483,48 +517,6 @@ export class ErpApiService {
     throw new Error(res.message || 'Server menolak pelunasan');
   }
 
-  public static async koreksiTransaksi(tx: TransaksiPembelian): Promise<TransaksiPembelian | null> {
-    try {
-      const isOnline = await this.isBackendOnline();
-      if (isOnline && tx.transaksi_id) {
-        const payload = {
-          petani_id: tx.petani_id,
-          tanggal_transaksi: (tx.tanggal_transaksi || '').split(' ')[0],
-          status_pembayaran: tx.status_pembayaran === 'lunas' ? 'lunas' : 'belum_lunas',
-          metode_pembayaran: tx.metode_pembayaran === 'cash' || tx.metode_pembayaran === 'kredit'
-            ? tx.metode_pembayaran
-            : (tx.status_pembayaran === 'lunas' ? 'cash' : null),
-          catatan: tx.catatan || '',
-          catatan_kasir: tx.catatan_kasir || '',
-          alasan_perubahan: tx.alasan_perubahan_terakhir || 'Koreksi transaksi kasir',
-          terakhir_diubah_oleh: tx.terakhir_diubah_oleh || null,
-          items: (tx.items || []).map((it) => ({
-            no_bal: it.no_bal,
-            kode_grade: it.kode_grade,
-            harga_per_kg: it.harga_per_kg,
-            berat_bruto_kg: it.berat_bruto_kg || it.berat_kg || 0,
-            potongan_tara_kg: it.potongan_tara_kg || 0,
-            berat_kg: it.berat_kg || 0,
-            potongan_kuli: it.potongan_kuli,
-            potongan_tali: it.potongan_tali,
-            potongan_tikar: it.potongan_tikar,
-            barcode: it.barcode || it.no_bal,
-            catatan: it.catatan || null,
-            lokasi_simpan: it.lokasi_simpan || 'Blok A',
-          })),
-        };
-        const res = await api.put<any>(`/transaksi/${tx.transaksi_id}/koreksi`, payload);
-        if (res.status === 'success' && res.data) {
-          return this.mapBackendTransaksi(res.data);
-        }
-      }
-    } catch (err) {
-      console.warn('Gagal koreksi transaksi ke backend API:', err);
-      throw err;
-    }
-    return null;
-  }
-
   /** Galat "kupon belum ada di server" (mis. dulu tersimpan lokal saja): jalur ubah harus diganti jalur buat baru. */
   private static galatBelumAda(err: unknown): boolean {
     const status = (err as { status?: number } | null)?.status;
@@ -549,19 +541,12 @@ export class ErpApiService {
   public static async syncTransaksi(
     newTx: TransaksiPembelian,
     oldTx?: { status_pembayaran?: TransaksiPembelian['status_pembayaran'] },
-    options?: { koreksi?: boolean; tanpaCekKesehatan?: boolean }
+    options?: { tanpaCekKesehatan?: boolean }
   ): Promise<{ syncedTx: TransaksiPembelian; fromBackend: boolean }> {
     // Antrean mencoba permintaan sungguhan; cek kesehatan yang sekali gagal tidak boleh memblokir simpanan
     if (!options?.tanpaCekKesehatan) {
       const isOnline = await this.isBackendOnline();
       if (!isOnline) return { syncedTx: newTx, fromBackend: false };
-    }
-
-    // Koreksi kasir (petani / tanggal / status / bal) — endpoint khusus
-    if (options?.koreksi && oldTx) {
-      const corrected = await this.koreksiTransaksi(newTx);
-      if (corrected) return { syncedTx: corrected, fromBackend: true };
-      throw new Error('Koreksi transaksi gagal disimpan ke server');
     }
 
     const hasWeights = Boolean(newTx.items?.some((i) => (i.berat_kg || 0) > 0));
@@ -583,9 +568,18 @@ export class ErpApiService {
     };
 
     // Kupon sudah ada di server: ganti daftar bal, lalu hasil timbang. Bila ternyata belum ada, buat baru.
+    //
+    // Sebelum mengirim, kupon ini disegarkan dulu dari server dan digabung ke salinan layar
+    // (mergeKuponParalel) SESAAT sebelum dikirim — bukan lewat tampilan, jadi kolom yang sedang diisi
+    // operator tidak pernah tersentuh. Ini menutup celah "kupon dibiarkan terbuka lama, bal saudara
+    // berubah dari perangkat lain, lalu simpanan berikutnya dari sini menimpa balik ganti tikar/grade/
+    // harga bal itu ke nilai lama": tanpa ini, endpoint sortir-items mengganti SELURUH daftar bal apa
+    // adanya dari layar, termasuk bagian yang sudah basi.
     const perbarui = async (bolehBuat: boolean): Promise<TransaksiPembelian> => {
       try {
-        return await kirimBerat(await this.updateSortirItemsTransaksi(newTx));
+        const segar = await this.getTransaksiSatu(newTx.transaksi_id);
+        const untukDikirim = segar ? mergeKuponParalel(newTx, segar) : newTx;
+        return await kirimBerat(await this.updateSortirItemsTransaksi(untukDikirim));
       } catch (err) {
         if (bolehBuat && this.galatBelumAda(err)) return buatBaru(false);
         throw err;
@@ -648,7 +642,7 @@ export class ErpApiService {
       ? String(b.tanggal_keluar).split('T')[0]
       : undefined;
 
-    return {
+    return pulihkanStatusSampleLama({
       barang_id: String(b.barang_id || ''),
       kode_grade: String(b.kode_grade || item.kode_grade || ''),
       no_bal: String(b.no_bal || item.no_bal || ''),
@@ -667,7 +661,7 @@ export class ErpApiService {
       desa_kecamatan:
         b.petani?.alamat || b.petani?.desa_kecamatan || b.desa_kecamatan || undefined,
       catatan: b.catatan || undefined,
-    };
+    });
   }
 
   public static async getBarangList(): Promise<{ data: Barang[]; fromBackend: boolean }> {
@@ -676,7 +670,10 @@ export class ErpApiService {
       if (isOnline) {
         const res = await api.get<any[]>('/barang');
         if (res.status === 'success' && Array.isArray(res.data)) {
-          const mapped = res.data.map((b) => this.mapBackendBarang(b));
+          const dariServer = res.data.map((b) => this.mapBackendBarang(b));
+          // Status bal yang diubah di perangkat ini dan belum sampai ke server tetap dipakai; bal milik kupon yang sedang dihapus disembunyikan
+          // Bal yang baru disortir belum ada di server sampai kuponnya dibayar, tetapi sudah terkumpul dan harus tetap tampil
+          const mapped = lengkapiBalDariKupon(overlayBarang(dariServer), loadTransaksiData());
           saveBarangData(mapped);
           return { data: mapped, fromBackend: true };
         }
@@ -694,65 +691,15 @@ export class ErpApiService {
       if (isOnline) {
         const res = await api.get<TabelHarga[]>('/master/harga-beli');
         if (res.status === 'success' && Array.isArray(res.data)) {
-          saveHargaData(res.data);
-          return { data: res.data, fromBackend: true };
+          const mapped = overlayHargaBeli(res.data);
+          saveHargaData(mapped);
+          return { data: mapped, fromBackend: true };
         }
       }
     } catch (err) {
       console.warn('Gagal mengambil harga beli dari API:', err);
     }
     return { data: loadHargaData(), fromBackend: false };
-  }
-
-  public static async saveHargaBeli(harga: Partial<TabelHarga>): Promise<TabelHarga> {
-    try {
-      const isOnline = await this.isBackendOnline();
-      if (isOnline) {
-        const res = await api.post<TabelHarga>('/master/harga-beli', {
-          harga_id: harga.harga_id,
-          kode_grade: harga.kode_grade,
-          harga_per_kg: harga.harga_per_kg,
-          rate_potongan_per_bal: harga.rate_potongan_per_bal ?? 0,
-          berat_standar_kg: harga.berat_standar_kg,
-          tanggal_berlaku: harga.tanggal_berlaku,
-          status: harga.status ?? 'aktif',
-          deskripsi: harga.deskripsi,
-        });
-        if (res.data) {
-          const list = loadHargaData();
-          const exists = list.some(h => h.harga_id === res.data!.harga_id || (h.kode_grade === res.data!.kode_grade && res.data!.status === 'aktif'));
-          const updated = exists
-            ? list.map(h => (h.harga_id === res.data!.harga_id || (h.kode_grade === res.data!.kode_grade && res.data!.status === 'aktif')) ? res.data! : h)
-            : [res.data, ...list];
-          saveHargaData(updated);
-          return res.data;
-        }
-      }
-    } catch (err) {
-      console.warn('Gagal simpan harga beli ke backend API, beralih ke penyimpanan lokal:', err);
-      throw err;
-    }
-    return harga as TabelHarga;
-  }
-
-  public static async updateBarang(barang: Partial<Barang>): Promise<Barang> {
-    try {
-      const isOnline = await this.isBackendOnline();
-      if (isOnline && barang.barang_id) {
-        const res = await api.put<Barang>(`/barang/${barang.barang_id}/status`, {
-          status_stok: barang.status_stok,
-          catatan: barang.catatan,
-        });
-        if (res.data) {
-          const list = loadBarangData().map(b => b.barang_id === res.data!.barang_id ? { ...b, ...res.data! } : b);
-          saveBarangData(list);
-          return { ...barang, ...res.data } as Barang;
-        }
-      }
-    } catch (err) {
-      console.warn('Gagal update barang ke backend API, beralih ke penyimpanan lokal:', err);
-    }
-    return barang as Barang;
   }
 
   // --- USERS MANAGEMENT ---
@@ -762,8 +709,9 @@ export class ErpApiService {
       if (isOnline) {
         const res = await api.get<User[]>('/users');
         if (res.status === 'success' && Array.isArray(res.data)) {
-          saveUserData(res.data);
-          return { data: res.data, fromBackend: true };
+          const mapped = overlayUser(res.data);
+          saveUserData(mapped);
+          return { data: mapped, fromBackend: true };
         }
       }
     } catch (err) {
@@ -860,20 +808,6 @@ export class ErpApiService {
     return resultUser;
   }
 
-  public static async toggleUserStatus(userId: string, nextStatus?: boolean): Promise<boolean> {
-    try {
-      const isOnline = await this.isBackendOnline();
-      if (isOnline) {
-        await api.put(`/users/${userId}/status`, { status_aktif: nextStatus });
-        return true;
-      }
-    } catch (err) {
-      console.warn('Gagal toggle status user di backend API:', err);
-      throw err;
-    }
-    return false;
-  }
-
   public static async resetUserPassword(userId: string, newPass: string): Promise<boolean> {
     try {
       const isOnline = await this.isBackendOnline();
@@ -895,55 +829,15 @@ export class ErpApiService {
       if (isOnline) {
         const res = await api.get<MasterHargaJual[]>('/master/harga-jual');
         if (res.status === 'success' && Array.isArray(res.data)) {
-          saveHargaJualData(res.data);
-          return { data: res.data, fromBackend: true };
+          const mapped = overlayHargaJual(res.data);
+          saveHargaJualData(mapped);
+          return { data: mapped, fromBackend: true };
         }
       }
     } catch (err) {
       console.warn('Gagal mengambil harga jual dari API:', err);
     }
     return { data: loadHargaJualData(), fromBackend: false };
-  }
-
-  public static async saveHargaJual(item: Partial<MasterHargaJual>): Promise<MasterHargaJual> {
-    try {
-      const isOnline = await this.isBackendOnline();
-      if (isOnline) {
-        const res = await api.post<MasterHargaJual>('/master/harga-jual', {
-          harga_jual_id: item.harga_jual_id,
-          kode: item.kode,
-          harga_jual: item.harga_jual,
-          tanggal_berlaku: item.tanggal_berlaku,
-          status_aktif: item.status_aktif,
-        });
-        if (res.data) {
-          const list = loadHargaJualData();
-          const exists = list.some(h => h.harga_jual_id === res.data!.harga_jual_id);
-          const updated = exists
-            ? list.map(h => h.harga_jual_id === res.data!.harga_jual_id ? res.data! : h)
-            : [res.data, ...list];
-          saveHargaJualData(updated);
-          return res.data;
-        }
-      }
-    } catch (err) {
-      console.warn('Gagal simpan harga jual ke backend API, beralih ke penyimpanan lokal:', err);
-    }
-
-    const currentList = loadHargaJualData();
-    const exists = currentList.some(h => h.harga_jual_id === item.harga_jual_id);
-    const resultItem = {
-      harga_jual_id: item.harga_jual_id || `HJ-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
-      kode: item.kode || '',
-      harga_jual: item.harga_jual || 0,
-      tanggal_berlaku: item.tanggal_berlaku || new Date().toISOString().split('T')[0],
-      status_aktif: item.status_aktif ?? true,
-    } as MasterHargaJual;
-    const updated = exists
-      ? currentList.map(h => h.harga_jual_id === resultItem.harga_jual_id ? resultItem : h)
-      : [resultItem, ...currentList];
-    saveHargaJualData(updated);
-    return resultItem;
   }
 
   // --- BATCH SAMPLE PENGIRIMAN ---
@@ -986,7 +880,7 @@ export class ErpApiService {
       tanggal_kirim: b.tanggal_kirim ? String(b.tanggal_kirim).split('T')[0] : '',
       tanggal_respon: b.tanggal_respon ? String(b.tanggal_respon).split('T')[0] : undefined,
       status: b.status,
-      dikirim_oleh: b.dikirim_oleh || 'Staff Lab',
+      dikirim_oleh: b.dikirim_oleh || '',
       petugas_qc_pabrik: b.petugas_qc_pabrik || undefined,
       catatan: b.catatan || undefined,
       items: items,
@@ -1050,6 +944,7 @@ export class ErpApiService {
       nomor_kontrak: p.nomor_kontrak,
       catatan: p.catatan,
       batch_sample_id_ref: p.batch_sample_id_ref,
+      aturan_netto: Array.isArray(p.aturan_netto) && p.aturan_netto.length > 0 ? p.aturan_netto : undefined,
       barang_ids: barangIds,
       total_bal: Number(p.total_bal) || items.length,
       total_berat_kg: Number(p.total_berat_kg) || totalBerat,
@@ -1127,7 +1022,7 @@ export class ErpApiService {
     return {
       ...lokal,
       batch_id: server.batch_id || lokal.batch_id,
-      status: server.status || lokal.status,
+      status: statusSetelahSinkron(lokal.status, server.status),
       tanggal_respon: server.tanggal_respon || lokal.tanggal_respon,
       petugas_qc_pabrik: server.petugas_qc_pabrik || lokal.petugas_qc_pabrik,
       catatan: server.catatan || lokal.catatan,
@@ -1144,50 +1039,6 @@ export class ErpApiService {
     };
   }
 
-  public static async getDashboardStats(): Promise<{
-    data: {
-      transaksi: {
-        total_transaksi: number;
-        total_bal: number;
-        total_berat_kg: number;
-        total_pembelian: number;
-      } | null;
-      stok_valuasi: Array<{
-        gudang_id?: string;
-        kode_grade?: string;
-        bal_di_gudang?: number;
-        kg_di_gudang?: number;
-        valuasi_beli?: number;
-      }>;
-      pengiriman: {
-        total_pengiriman: number;
-        total_bal_terkirim: number;
-        total_berat_terkirim: number;
-        total_nilai_deal: number;
-      } | null;
-      pengiriman_terkirim?: {
-        total_pengiriman: number;
-        total_bal_terkirim: number;
-        total_berat_terkirim: number;
-        total_nilai_deal: number;
-      } | null;
-    } | null;
-    fromBackend: boolean;
-  }> {
-    try {
-      const isOnline = await this.isBackendOnline();
-      if (isOnline) {
-        const res = await api.get<any>('/dashboard/stats');
-        if (res.status === 'success' && res.data) {
-          return { data: res.data, fromBackend: true };
-        }
-      }
-    } catch (err) {
-      console.warn('Gagal mengambil dashboard stats dari API:', err);
-    }
-    return { data: null, fromBackend: false };
-  }
-
   public static async getBatchSampleList(): Promise<{ data: BatchPengirimanSample[]; fromBackend: boolean }> {
     try {
       const isOnline = await this.isBackendOnline();
@@ -1200,87 +1051,16 @@ export class ErpApiService {
             const cocok = lokal.find((l) => l.batch_id === server.batch_id || l.kode_batch === server.kode_batch);
             return this.gabungBatchServer(cocok, server);
           });
-          saveBatchSampleData(mapped);
-          return { data: mapped, fromBackend: true };
+          // Batch yang dihapus atau diubah di perangkat ini dan belum sampai ke server tidak boleh muncul lagi / kembali ke isi lama
+          const gabungan = overlayBatchSample(mapped);
+          saveBatchSampleData(gabungan);
+          return { data: gabungan, fromBackend: true };
         }
       }
     } catch (err) {
       console.warn('Gagal mengambil batch sample dari API, memakai fallback lokal:', err);
     }
     return { data: loadBatchSampleData(), fromBackend: false };
-  }
-
-  public static async saveBatchSample(batch: Partial<BatchPengirimanSample>): Promise<BatchPengirimanSample> {
-    try {
-      const isOnline = await this.isBackendOnline();
-      if (isOnline) {
-        const payload = {
-          kode_batch: batch.kode_batch,
-          dikirim_oleh: batch.dikirim_oleh,
-          tujuan_buyer: batch.tujuan_buyer,
-          permintaan_buyer: batch.permintaan_buyer,
-          tanggal_kirim: batch.tanggal_kirim || new Date().toISOString().split('T')[0],
-          items: (batch.items || []).map(it => ({
-            barang_id: it.barang_id,
-            kode_harga_jual: it.kode_harga_jual,
-            berat_sample_gram: it.berat_sample_gram || 200,
-            harga_tawaran_kg: it.harga_tawaran_kg,
-            harga_deal_kg: it.harga_deal_kg,
-          })),
-        };
-        const res = await api.post<any>('/sample-batch', payload);
-        if (res.data) {
-          const savedBatch = this.gabungBatchServer(batch as BatchPengirimanSample, this.mapBackendBatchSample(res.data));
-          const list = loadBatchSampleData();
-          saveBatchSampleData([savedBatch, ...list.filter(b => b.batch_id !== savedBatch.batch_id && b.batch_id !== batch.batch_id)]);
-          return savedBatch;
-        }
-      }
-      throw new Error('Backend offline atau respons sample tidak valid');
-    } catch (err) {
-      console.warn('Gagal simpan batch sample ke API, beralih ke lokal:', err);
-      throw err;
-    }
-  }
-
-  public static async updateBatchSample(batch: BatchPengirimanSample): Promise<BatchPengirimanSample> {
-    try {
-      const isOnline = await this.isBackendOnline();
-      if (isOnline && batch.batch_id) {
-        const payload = {
-          status: batch.status,
-          tujuan_buyer: batch.tujuan_buyer,
-          permintaan_buyer: batch.permintaan_buyer,
-          tanggal_kirim: batch.tanggal_kirim,
-          tanggal_respon: batch.tanggal_respon,
-          petugas_qc_pabrik: batch.petugas_qc_pabrik,
-          catatan: batch.catatan,
-          items: (batch.items || []).map((it) => ({
-            sample_item_id: it.sample_item_id,
-            status_item: it.status_item,
-            harga_tawaran_kg: it.harga_tawaran_kg,
-            harga_deal_kg: it.harga_deal_kg,
-            berat_sample_gram: it.berat_sample_gram,
-            kode_harga_jual: it.kode_harga_jual,
-            alasan_tolak: it.alasan_tolak,
-            catatan_nego: it.catatan_nego,
-            tanggal_evaluasi: it.tanggal_evaluasi,
-            sudah_dikirim_do: it.sudah_dikirim_do,
-          })),
-        };
-        const res = await api.put<any>(`/sample-batch/${batch.batch_id}`, payload);
-        if (res.data) {
-          const saved = this.gabungBatchServer(batch, this.mapBackendBatchSample(res.data));
-          const list = loadBatchSampleData().map((b) => (b.batch_id === saved.batch_id || b.batch_id === batch.batch_id ? saved : b));
-          saveBatchSampleData(list);
-          return saved;
-        }
-      }
-      throw new Error('Backend offline atau respons update sample tidak valid');
-    } catch (err) {
-      console.warn('Gagal update batch sample ke API, beralih ke lokal:', err);
-      throw err;
-    }
   }
 
   // --- PENGIRIMAN REGULER (DO) ---
@@ -1298,8 +1078,9 @@ export class ErpApiService {
             );
             return this.gabungPengirimanServer(cocok, server);
           });
-          savePengirimanData(mapped);
-          return { data: mapped, fromBackend: true };
+          const gabungan = overlayPengiriman(mapped);
+          savePengirimanData(gabungan);
+          return { data: gabungan, fromBackend: true };
         }
       }
     } catch (err) {
@@ -1308,49 +1089,4 @@ export class ErpApiService {
     return { data: loadPengirimanData(), fromBackend: false };
   }
 
-  public static async savePengiriman(pengiriman: Partial<PengirimanBarang>, items: any[]): Promise<PengirimanBarang> {
-    try {
-      const isOnline = await this.isBackendOnline();
-      if (isOnline) {
-        const payload = {
-          no_surat_jalan: pengiriman.no_surat_jalan,
-          tujuan: pengiriman.tujuan,
-          jenis_pengeluaran: pengiriman.jenis_pengeluaran || 'Pabrik Rokok',
-          driver_nama: pengiriman.driver_nama,
-          plat_nomor: pengiriman.plat_nomor,
-          tanggal_kirim: pengiriman.tanggal_kirim,
-          batch_sample_id_ref: pengiriman.batch_sample_id_ref,
-          nomor_kontrak: pengiriman.nomor_kontrak,
-          catatan: pengiriman.catatan,
-          aturan_netto: pengiriman.aturan_netto,
-          items: items.map(it => {
-            const bId = typeof it === 'string' ? it : it.barang_id;
-            return {
-              barang_id: bId,
-              kode_harga_jual: it.kode_harga_jual || pengiriman.kode_harga_jual_map?.[bId],
-              harga_deal_per_kg: it.harga_deal_per_kg || pengiriman.harga_deal_map?.[bId] || 0,
-              berat_kirim_kg: pengiriman.berat_kirim_map?.[bId],
-              netto_jual_kg: pengiriman.netto_jual_map?.[bId],
-            };
-          }),
-        };
-        const res = await api.post<any>('/pengiriman', payload);
-        if (res.data) {
-          const saved = this.gabungPengirimanServer(pengiriman as PengirimanBarang, this.mapBackendPengiriman(res.data));
-          const list = loadPengirimanData();
-          savePengirimanData([
-            saved,
-            ...list.filter(
-              (p) => p.pengiriman_id !== saved.pengiriman_id && p.pengiriman_id !== pengiriman.pengiriman_id
-            ),
-          ]);
-          return saved;
-        }
-      }
-      throw new Error('Backend offline atau respons pengiriman tidak valid');
-    } catch (err) {
-      console.warn('Gagal simpan pengiriman ke API, beralih ke lokal:', err);
-      throw err;
-    }
-  }
 }

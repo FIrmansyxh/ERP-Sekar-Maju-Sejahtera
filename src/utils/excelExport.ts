@@ -1,5 +1,6 @@
 import type { Borders, Cell, Workbook, Worksheet } from 'exceljs';
 import { COMPANY_ADDRESS, COMPANY_NAME } from '../config/appInfo';
+import { tampilkanInfo } from './dialog';
 
 /**
  * Pembuat laporan Excel (.xlsx) siap pakai untuk seluruh menu laporan.
@@ -384,7 +385,7 @@ export async function downloadExcelReport(filename: string, sheets: ExcelSheet[]
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   } catch (err) {
     console.error('Gagal membuat file Excel:', err);
-    window.alert('File Excel gagal dibuat. Silakan coba lagi.');
+    void tampilkanInfo('File Excel gagal dibuat. Silakan coba lagi.', { judul: 'Ekspor Gagal', varian: 'danger' });
   }
 }
 

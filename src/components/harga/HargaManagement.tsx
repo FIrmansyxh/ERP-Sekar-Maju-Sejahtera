@@ -274,7 +274,7 @@ return (
               <input
                 id="search-harga-beli-input"
                 type="text"
-                placeholder="Cari master harga beli (Kode Grade)..."
+                placeholder="Cari kode"
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
@@ -318,11 +318,6 @@ return (
                 <tr>
                   <td colSpan={canManage ? 6 : 5} className="py-8 text-center text-slate-500 bg-white">
                     <div className="text-sm font-semibold text-slate-700">Tidak ada data Master Harga Beli</div>
-                    <div className="mt-1">
-                      {statusFilter !== 'all' || searchTerm
-                        ? 'Coba sesuaikan kata kunci pencarian atau reset filter status'
-                        : 'Klik tombol Tambah Master Harga Beli untuk membuat data baru'}
-                    </div>
                     {(statusFilter !== 'all' || searchTerm) && (
                       <button
                         onClick={() => {
@@ -413,11 +408,8 @@ return (
                 </div>
                 <div className="min-w-0">
                   <h2 className="text-sm font-bold text-gray-900 tracking-tight truncate">
-                    {editingItem ? 'Edit Master Harga Beli' : 'Tambah Master Harga Beli Baru'}
+                    {editingItem ? 'Edit Harga Beli' : 'Tambah Harga Beli'}
                   </h2>
-                  <p className="text-[11px] text-gray-500 font-medium">
-                    Kode harga beli untuk sortir & timbang bal
-                  </p>
                 </div>
               </div>
               <button
@@ -447,7 +439,7 @@ return (
                 <input
                   type="text"
                   list="grade-list-options"
-                  placeholder="Pilih atau ketik: A, B, 30, 80..."
+                  placeholder="Kode grade"
                   value={formKode}
                   onChange={(e) => setFormKode(e.target.value)}
                   className="w-full bg-white border border-gray-300 rounded-sm px-3 py-2 text-xs font-mono font-bold uppercase placeholder:normal-case placeholder:font-sans placeholder:font-normal text-gray-900 focus:outline-none focus:border-[#b81d24]"
@@ -458,9 +450,6 @@ return (
                     <option key={grade} value={grade} />
                   ))}
                 </datalist>
-                <p className="text-[10px] text-gray-500 mt-1">
-                  Kode ini yang dipilih petugas sortir untuk setiap bal. Pilih dari daftar grade yang ada atau ketik grade baru.
-                </p>
               </div>
 
               {/* Harga Beli */}
@@ -475,7 +464,7 @@ return (
                   <input
                     type="number"
                     min="0"
-                    placeholder="Contoh: 140000"
+                    placeholder="0"
                     value={formHarga}
                     onChange={(e) => setFormHarga(e.target.value === '' ? '' : Number(e.target.value))}
                     className="w-full bg-white border border-gray-300 rounded-sm pl-9 pr-12 py-2 text-xs font-bold text-gray-900 placeholder:font-normal focus:outline-none focus:border-[#b81d24]"
@@ -512,9 +501,6 @@ return (
                   <label htmlFor="chk-status-aktif-beli" className="text-xs font-semibold text-gray-700 block cursor-pointer">
                     Status Kode Harga
                   </label>
-                  <p className="text-[11px] text-gray-500">
-                    Nonaktifkan bila kode harga sudah tidak dipakai
-                  </p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer shrink-0">
                   <input

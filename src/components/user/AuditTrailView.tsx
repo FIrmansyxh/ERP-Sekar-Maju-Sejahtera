@@ -1,21 +1,13 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { 
-  ShieldCheck, 
-  Search, 
-  RefreshCw, 
-  Download, 
-  Clock, 
-  User, 
-  Layers, 
-  FileText, 
-  AlertTriangle, 
-  CheckCircle2,
-  Trash2,
-  Filter
+import {
+  ShieldCheck,
+  Search,
+  RefreshCw,
+  Download,
+  FileText
 } from 'lucide-react';
 import { AuditLogEntry } from '../../types';
 import { loadAuditLogData } from '../../utils/storage';
-import { formatDateTimeIndo } from '../../utils/formatters';
 import { downloadExcelReport, todayStamp } from '../../utils/excelExport';
 import { Pagination } from '../common/Pagination';
 
@@ -25,7 +17,7 @@ export const AuditTrailView: React.FC = () => {
   const [filterModul, setFilterModul] = useState<string>('all');
   const [filterAksi, setFilterAksi] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [itemsPerPage, setItemsPerPage] = useState<number>(15);
+  const [itemsPerPage] = useState<number>(15);
 
   const refreshLogs = () => {
     const data = loadAuditLogData();
@@ -120,9 +112,9 @@ export const AuditTrailView: React.FC = () => {
       case 'UBAH_TRANSAKSI':
         return <span className="px-2 py-0.5 text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200 rounded">KOREKSI</span>;
       case 'HAPUS_TRANSAKSI':
-        return <span className="px-2 py-0.5 text-[11px] font-medium bg-rose-50 text-rose-700 border border-rose-200 rounded">HAPUS</span>;
+        return <span className="px-2 py-0.5 text-[11px] font-medium bg-red-50 text-red-700 border border-red-200 rounded">HAPUS</span>;
       case 'TIMBANG_BAL':
-        return <span className="px-2 py-0.5 text-[11px] font-medium bg-sky-50 text-sky-700 border border-sky-200 rounded">TIMBANG</span>;
+        return <span className="px-2 py-0.5 text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200 rounded">TIMBANG</span>;
       default:
         return <span className="px-2 py-0.5 text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200 rounded">{aksi}</span>;
     }
@@ -137,12 +129,7 @@ export const AuditTrailView: React.FC = () => {
             <ShieldCheck className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">
-              Audit Trail & Rekaman Log Aktivitas Sistem
-            </h1>
-            <p className="text-xs text-gray-500">
-              Pencatatan riwayat kronologis otomatis untuk transaksi, koreksi timbangan, perubahan data, dan penghapusan record.
-            </p>
+            <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">Audit Trail</h1>
           </div>
         </div>
         <div className="flex items-center space-x-2 shrink-0">
@@ -179,7 +166,7 @@ export const AuditTrailView: React.FC = () => {
                 setSearchQuery(e.target.value);
                 setCurrentPage(1);
               }}
-              placeholder="Ketik nama user, kupon, atau deskripsi..."
+              placeholder="Cari user, kupon, deskripsi"
               className="w-full pl-8 pr-3 py-1.5 border border-slate-300 rounded text-xs focus:ring-1 focus:ring-[#b81d24] focus:outline-none"
             />
           </div>
@@ -239,10 +226,7 @@ export const AuditTrailView: React.FC = () => {
                 <tr>
                   <td colSpan={6} className="p-8 text-center text-slate-400">
                     <FileText className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                    <p className="font-semibold text-slate-700">Belum ada riwayat aktivitas audit yang tercatat.</p>
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      Setiap aktivitas simpan timbangan, koreksi data, atau hapus transaksi akan otomatis terekam di sini.
-                    </p>
+                    <p className="font-semibold text-slate-700">Belum ada aktivitas tercatat</p>
                   </td>
                 </tr>
               ) : (

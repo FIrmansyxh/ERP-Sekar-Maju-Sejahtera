@@ -1,180 +1,172 @@
-# Laporan Integrasi & Panduan Pengecekan Manual (Tahap 1)
+# Panduan Pengujian Manual (UAT)
 
-Dokumen ini memuat ringkasan perubahan teknis integrasi API Frontend (`ERP-Sekar-Maju-Sejahtera`) ke Backend (`ERP-Sekar-Maju-Sejahtera-BE`), serta panduan langkah demi langkah untuk pengujian fungsional secara manual.
+Diperbarui: 2026-09-21 · Frontend v3.0.x · Dipakai untuk trial dan pelatihan sebelum serah terima.
 
----
-
-## 1. Status Pekerjaan & Lingkungan Saat Ini
-
-- **Status Git**: Semua perubahan masih berada di lokal (`unstaged / uncommitted`). **Belum ada commit maupun push/deploy** ke server/Git repository.
-- **Frontend Server**: Berjalan di terminal lokal via `npm run dev` (Vite, default `http://localhost:5173`).
-- **Backend Server**: Berjalan di terminal lokal via `php artisan serve` (default `http://127.0.0.1:8000`).
-- **Kompilasi TypeScript**: Lolos pemeriksaan (`npx tsc --noEmit` exit code 0 tanpa error).
-- **Route API**: 36 rute endpoint API Backend aktif dan tervalidasi.
+Tujuan dokumen ini: membuktikan setiap menu berfungsi penuh **dan** setiap perubahan benar-benar tersimpan di
+database server, bukan hanya di layar atau peramban. Skenario disusun mengikuti alur kerja gudang: master data,
+pembelian (Sortir, Timbangan, Kasir), pengiriman, laporan, lalu pengguna.
 
 ---
 
-## 2. Berkas yang Diperbarui (Lokal)
+## 1. Persiapan
 
-### A. Frontend (`ERP-Sekar-Maju-Sejahtera`)
-1. **`src/services/erpApi.ts`**:
-   - Menambahkan method sinkronisasi API:
-     - `saveHargaBeli(newPrice)`: Mengirim perubahan harga beli ke `/api/v1/master/harga-beli`.
-     - `updateBarang(barang)`: Mengirim update status stok & catatan ke `/api/v1/barang/{id}/status`.
-     - `getBatchSampleList()` & `saveBatchSample(batch)`: Mengambil dan menyimpan pengiriman batch sample ke `/api/v1/sample-batch`.
-     - `getPengirimanList()` & `savePengiriman(pengiriman)`: Mengambil dan menyimpan Delivery Order (DO) ke `/api/v1/pengiriman`.
-2. **`src/App.tsx`**:
-   - Menghubungkan proses inisialisasi aplikasi dengan `getBatchSampleList` dan `getPengirimanList` saat user login.
-   - Menghubungkan handler UI form:
-     - `handleSaveNewPrice` -> `ErpApiService.saveHargaBeli`
-     - `handleUpdateBarang` -> `ErpApiService.updateBarang`
-     - `handleSaveBatchSample` -> `ErpApiService.saveBatchSample`
-     - `handleSaveNewPengiriman` -> `ErpApiService.savePengiriman`
+| Kebutuhan | Keterangan |
+|---|---|
+| Alamat | Alamat **staging** untuk trial (data boleh dikotori), alamat **produksi** hanya untuk pemakaian nyata |
+| Peramban | Chrome atau Edge terbaru, **bukan** jendela penyamaran |
+| Akun | Satu akun per peran yang diuji (Super Admin, Admin Sortir, Admin Timbang, Admin Kasir, Admin Pengiriman, Kepala Gudang) |
+| Dua komputer | Diperlukan untuk skenario "terlihat di komputer lain" (bagian 4) |
+| Perangkat | Pemindai barcode dan timbangan bila tersedia |
 
-### B. Backend (`ERP-Sekar-Maju-Sejahtera-BE`)
-1. **`app/Http/Controllers/Api/MasterDataController.php`**:
-   - Penyesuaian `storeHarga` untuk melakukan `updateOrCreate` data harga beli per grade dan menonaktifkan harga lama dengan aman.
-2. **`app/Http/Controllers/Api/BarangController.php`**:
-   - Penyesuaian `updateStatus` agar dapat menerima pembaruan field `catatan` dan `status_stok`.
-3. **`app/Http/Controllers/Api/SampleController.php`**:
-   - Penggunaan user auth yang aman (`optional(auth('sanctum')->user())->user_id`) untuk mencegah 500 error bila token offline.
-4. **`app/Http/Controllers/Api/PengirimanController.php`**:
-   - Penggunaan user auth yang aman untuk pembuatan surat jalan / pengiriman DO.
+### Cara membuktikan data tersimpan di server
 
----
+Setiap skenario diakhiri tiga pemeriksaan yang sama. Anggap gagal bila salah satunya tidak terpenuhi.
 
-## 3. Alur Pengecekan & Pengujian Manual (Step-by-Step)
+1. **Header bersih.** Tidak ada lencana kuning/merah "N simpanan belum sampai ke server" atau
+   "perubahan tidak tersimpan utuh di server" di kanan atas setelah beberapa detik.
+2. **Tahan muat ulang.** Tekan F5, lalu buka menu yang sama: data tetap seperti yang baru disimpan.
+3. **Terlihat di komputer lain** (untuk skenario yang ditandai ⧉): login di komputer kedua, data yang sama tampil.
 
-Buka aplikasi di browser (misal: `http://localhost:5173`) dan buka **DevTools (F12) > tab Network** untuk memantau request HTTP.
+Untuk pemeriksaan teknis, buka DevTools (F12) → tab Network dan cari permintaan ke `/api/v1/...` dengan status
+`200`/`201`. Endpoint per skenario tercantum di kolom "Endpoint".
 
----
+### Arti lencana di Header
 
-### Pengujian 1: Master Data Harga Beli (Petani / Grade)
-- **Tujuan**: Memastikan nominal harga beli tersimpan ke database backend dan tetap muncul setelah refresh.
-- **Langkah Pengujian**:
-  1. Masuk ke menu **Master Data** > pilih tab **Harga Beli**.
-  2. Klik tombol **Tambah / Ubah Harga**, pilih salah satu grade (contoh: *Grade A* atau *Grade B*), lalu masukkan nominal baru (misal: `125000`).
-  3. Klik tombol **Simpan**.
-- **Kriteria Keberhasilan**:
-  - Muncul dialog/notifikasi sukses.
-  - Pada tab **Network (F12)**, terdapat request `POST /api/v1/master/harga-beli` dengan response HTTP status `200` atau `201`.
-  - **Tekan F5 (Refresh browser)**: Pastikan nominal harga yang baru saja diinput tetap bernilai `125000` (tidak kembali ke nominal bawaan awal).
-
----
----
-
-### Pengujian 3: Pengiriman Sample & Batch Sample
-- **Tujuan**: Memastikan pembuatan batch sample tersimpan ke backend dan riwayatnya termuat dari API.
-- **Langkah Pengujian**:
-  1. Masuk ke menu **Sample & Grading** / **Pengiriman Sample**.
-  2. Klik tombol **Buat Batch Baru / Kirim Sample**.
-  3. Isi data batch (Nama Tujuan Pabrik, Tanggal, daftar sample/grade yang dikirim).
-  4. Klik tombol **Simpan / Kirim**.
-- **Kriteria Keberhasilan**:
-  - Batch baru langsung bertambah pada daftar/riwayat batch sample.
-  - Pada tab **Network (F12)**, terdapat request `POST /api/v1/sample-batch` dengan status HTTP `200` atau `201`.
-  - **Tekan F5 (Refresh browser)**: Batch sample baru tersebut tetap muncul pada tabel riwayat (berhasil dimuat via `GET /api/v1/sample-batch`).
+| Lencana | Arti | Tindakan |
+|---|---|---|
+| Tidak ada | Semua perubahan sudah di server | - |
+| Abu-abu "Menyimpan ke server (N)" | Sedang dikirim | Tunggu beberapa detik |
+| Kuning "N simpanan belum sampai ke server" + tombol Kirim ulang | Jaringan/server gagal, dicoba ulang otomatis | Jangan tutup halaman; periksa koneksi |
+| Merah "N perubahan tidak tersimpan utuh di server" | Server menolak atau menyimpan sebagian | Catat pesan pada tooltip lencana, laporkan ke tim backend |
+| Merah "Sesi login habis" | Token kedaluwarsa | Keluar lalu login ulang; antrean terkirim otomatis |
 
 ---
 
-### Pengujian 4: Pengiriman Reguler (Delivery Order / Surat Jalan)
-- **Tujuan**: Memastikan pembuatan pengiriman barang (DO) tersimpan ke database backend.
-- **Langkah Pengujian**:
-  1. Masuk ke menu **Pengiriman Barang / Delivery Order (DO)**.
-  2. Klik **Buat Pengiriman Baru**.
-  3. Isi data pengiriman: pilih nomor DO, tujuan/pembeli, nama supir / plat nomor, tanggal pengiriman, dan centang/pilih bal barang yang akan dikirim.
-  4. Klik tombol **Konfirmasi & Simpan Pengiriman**.
-- **Kriteria Keberhasilan**:
-  - Data DO baru tercatat di tabel daftar pengiriman.
-  - Pada tab **Network (F12)**, terdapat request `POST /api/v1/pengiriman` dengan status HTTP `200` atau `201`.
-  - **Tekan F5 (Refresh browser)**: Data DO baru tersebut tetap ada di riwayat pengiriman (berhasil dimuat via `GET /api/v1/pengiriman`).
+## 2. Skenario per menu
+
+Kolom "Hasil yang diharapkan" selalu ditambah tiga pemeriksaan di bagian 1.
+
+### 2.1 Login dan hak akses
+
+| No | Langkah | Hasil yang diharapkan | Endpoint |
+|---|---|---|---|
+| L1 | Login dengan username dan sandi benar | Masuk ke Home, nama dan peran tampil di Header | `POST /auth/login` |
+| L2 | Login dengan sandi salah | Ditolak dengan pesan galat, tidak masuk | `POST /auth/login` (4xx) |
+| L3 | Login dengan akun nonaktif | Ditolak | `POST /auth/login` (4xx) |
+| L4 | Login sebagai Admin Timbang, coba buka menu lain dari Home | Hanya menu Timbangan yang tersedia | - |
+| L5 | Diamkan 30 menit tanpa aktivitas | Keluar otomatis, kembali ke layar login | - |
+
+### 2.2 Master Petani ⧉
+
+| No | Langkah | Hasil yang diharapkan | Endpoint |
+|---|---|---|---|
+| P1 | Tambah Petani Baru: isi nama (HP dan alamat boleh kosong), Simpan | Petani muncul di urutan teratas dengan ID dari server | `POST /petani` |
+| P2 | Edit petani P1: ubah No. HP, Simpan | No. HP berubah | `PUT /petani/{id}` |
+| P3 | Nonaktifkan petani P1 dengan alasan | Status Nonaktif; petani tidak muncul di pilihan Sortir | `PUT /petani/{id}` |
+| P4 | Aktifkan kembali | Status Aktif; muncul lagi di Sortir | `PUT /petani/{id}` |
+| P5 | Import / Export → Import Data: tempel 3 nama (satu per baris), Impor | 3 petani tersimpan berurutan (baris pertama ID terkecil) | `POST /petani` ×3 |
+| P6 | Import / Export → Unduh Excel | Berkas .xlsx terunduh berisi seluruh petani | - |
+| P7 | Cetak kartu petani | Pratinjau kartu depan/belakang tampil dan bisa dicetak | - |
+| P8 | Ganti ID kartu | ID berubah di daftar dan kupon terkait | `PUT /petani/{id}/ganti-id` **(menunggu backend)** |
+
+### 2.3 Master Harga Beli dan Harga Jual ⧉
+
+| No | Langkah | Hasil yang diharapkan | Endpoint |
+|---|---|---|---|
+| H1 | Harga Beli → Tambah Master: kode `99`, harga `99000`, tanggal berlaku | Baris baru tampil | `POST /master/harga-beli` |
+| H2 | Edit harga kode `99` menjadi `98000` | Harga berubah, tidak ada baris ganda | `POST /master/harga-beli` (upsert) |
+| H3 | Nonaktifkan kode `99` | Status Nonaktif; kode tidak bisa dipilih di Sortir | `POST /master/harga-beli` |
+| H4 | Ulangi H1–H3 di Harga Jual (kode `HJ-99`) | Sama; kode nonaktif tidak muncul di pilihan harga jual Sample/DO | `POST /master/harga-jual` |
+
+### 2.4 Pembelian: Sortir → Timbangan → Kasir ⧉
+
+| No | Langkah | Hasil yang diharapkan | Endpoint |
+|---|---|---|---|
+| S1 | Sortir: isi No. Kupon, pilih petani, scan/ketik No Bal, pilih mutu, Tambah Bal (3 bal) | Kupon terbuka, 3 bal tampil di Daftar Bal | `POST /transaksi/sortir`, lalu `PUT /transaksi/{id}/sortir-items` |
+| S2 | Tambah 1 bal lagi, lalu ubah grade satu bal | Daftar bal 4, grade berubah | `PUT /transaksi/{id}/sortir-items` |
+| S3 | Pakai No. Kupon yang sudah ada | Ditandai Duplikat, tombol "Pakai Nomor Berikutnya" tersedia | - |
+| S4 | Selesai Sortir | Kupon hilang dari "Kupon Sortir Belum Selesai" | `PUT /transaksi/{id}/sortir-items` |
+| T1 | Timbangan: scan No Bal kupon S1, ketik bruto, Enter | Tara dan netto terisi otomatis, bal terkunci, kursor kembali ke kolom No Bal | `PUT /transaksi/{id}/timbang` |
+| T2 | Centang "Ada Ganti Tikar?" pada bal yang belum ditimbang, lalu timbang | Potongan tikar Rp 75.000 tercatat pada bal | `PUT /transaksi/{id}/timbang` |
+| T3 | Buka Kunci bal yang sudah ditimbang, timbang ulang | Berat baru tersimpan | `PUT /transaksi/{id}/timbang` |
+| T4 | Bal bertanda SB dengan bruto > 50 kg | Tombol simpan terkunci "Bobot Melebihi Toleransi" | - |
+| K1 | Kasir: kupon dengan bal belum ditimbang, klik Bayar | Ditolak; ditawarkan membuka kupon di Timbangan | - |
+| K2 | Setelah semua bal ditimbang, Bayar: ketik ulang jumlah bayar persis, centang tiket timbang | Kupon Lunas, masuk kartu "Lunas" | `PUT /transaksi/{id}/bayar` |
+| K3 | Bandingkan total Lunas dan Belum Lunas di Kasir dengan Laporan Pembelian (filter sama) | Angkanya sama persis | - |
+| K4 | Kupon belum lunas → ikon Edit | Kupon terbuka di Sortir (Mode Edit Kupon); bisa tambah/ubah/hapus bal | `PUT /transaksi/{id}/sortir-items` |
+| K5 | Kupon lunas → coba Edit / buka di Sortir atau Timbangan | Terkunci, hanya bisa dilihat | - |
+| K6 | Hapus kupon belum lunas dengan alasan | Kupon dan balnya hilang dari semua menu | `DELETE /transaksi/{id}` **(menunggu backend)** |
+| K7 | Cetak nota kupon lunas, unduh PDF | Nota per lembar, tidak ada baris terpotong | - |
+
+### 2.5 Pengiriman Sample dan Status & Detail Batch ⧉
+
+| No | Langkah | Hasil yang diharapkan | Endpoint |
+|---|---|---|---|
+| B1 | Pengiriman Sample: isi No. Surat Pengiriman Sample, tujuan, scan 3 bal, Simpan sebagai Draft | Batch berstatus DRAFT di Status & Detail Batch | `POST /sample-batch` (`status: "draft"`) |
+| B2 | Buka komputer kedua | Batch tampil sebagai Draft bila backend sudah menerima status `draft`; bila belum, tampil sebagai final (lihat Laporan Audit) | `GET /sample-batch` |
+| B3 | Edit batch B1: tambah 1 bal, ubah harga jual 1 bal, Simpan & Finalkan | Batch final berisi 4 bal dengan harga baru | `PUT /sample-batch/{id}` |
+| B4 | Nomor surat sample kembar | Ditolak dengan saran nomor berikutnya | - |
+| B5 | Detail batch → isi hasil sortir pembeli (ACC/Nego/Tolak) → Simpan Hasil Sortir Buyer | Jumlah ACC/Nego/Ditolak dan nilai deal berubah | `PUT /sample-batch/{id}` |
+| B6 | Cetak surat pengiriman sample | Surat tampil dengan kode harga, bukan nilai rupiah | - |
+| B7 | Hapus batch yang belum punya Surat Jalan | Batch hilang, bal tetap di stok gudang | `DELETE /sample-batch/{id}` **(menunggu backend; sementara `PUT status=dibatalkan`)** |
+| B8 | Dashboard: kartu "Sample Disetujui" dan Laporan Pengiriman tab Pengiriman Sample | Angka sesuai hasil B5 | - |
+
+### 2.6 Pengiriman Reguler (DO) dan Status Pengiriman ⧉
+
+| No | Langkah | Hasil yang diharapkan | Endpoint |
+|---|---|---|---|
+| D1 | Sumber Bal: Stok Gudang. Isi No. Surat Jalan, tujuan, sopir, nopol; scan 3 bal; pilih harga jual; Terbitkan Surat Jalan | Surat Jalan tampil di Status & Detail Batch (Akan Dikirim); bal berstatus Dikirim | `POST /pengiriman` |
+| D2 | Bal tanpa harga jual | Penerbitan ditolak, bal tanpa harga disebut | - |
+| D3 | Atur Netto: tambah baris potongan, periksa Netto Jual dan Total Nilai | Netto jual = bruto timbang ulang − potongan | - |
+| D4 | Dari Batch Sample: pilih batch final, centang semua bal, terbitkan | Bal batch tertandai sudah DO | `POST /pengiriman`, `PUT /sample-batch/{id}` |
+| D5 | Edit Surat Jalan yang belum Selesai: keluarkan 1 bal, simpan | Bal yang dikeluarkan kembali ke gudang | `PUT /pengiriman/{id}` **(menunggu backend)** |
+| D6 | Status: Berangkat → Tiba → Selesai (konfirmasi) | Status berubah; setelah Selesai, nilai masuk Dashboard dan tidak bisa diubah/dibatalkan | `PUT /pengiriman/{id}/status` **(menunggu backend)** |
+| D7 | Batalkan Surat Jalan yang belum Selesai | Surat Jalan hilang, bal kembali ke gudang | `DELETE /pengiriman/{id}` **(menunggu backend)** |
+
+### 2.7 Laporan dan Dashboard
+
+| No | Langkah | Hasil yang diharapkan |
+|---|---|---|
+| R1 | Buka tiap laporan | Data dimuat ulang dari server saat menu dibuka (tombol Muat Ulang Data di Dashboard) |
+| R2 | Terapkan filter tanggal/petani, lalu Unduh Excel | Isi Excel sama dengan tabel di layar |
+| R3 | Laporan Bal, Harga, Petani: nilai dan aset | Hanya kupon lunas yang dihitung; kredit ditampilkan terpisah |
+| R4 | Laporan Pembelian: rekap ganti tikar dan jasa | Jumlah bal ganti tikar dan potongan sama dengan data Timbangan |
+| R5 | Dashboard: Total Penjualan | Hanya Surat Jalan berstatus Selesai |
+
+### 2.8 Manajemen Pengguna ⧉
+
+| No | Langkah | Hasil yang diharapkan | Endpoint |
+|---|---|---|---|
+| U1 | Tambah Pengguna: username, sandi, role | Akun baru bisa login | `POST /users` |
+| U2 | Edit role pengguna U1 | Menu yang tampil berubah setelah login ulang | `PUT /users/{id}` |
+| U3 | Nonaktifkan U1 | U1 tidak bisa login | `PUT /users/{id}/status` |
+| U4 | Reset sandi U1 (server menyala) | Sandi baru berlaku | `PUT /users/{id}/reset-password` |
+| U5 | Reset sandi saat server mati | Ditolak; sandi tidak berubah di mana pun | - |
+| U6 | Matriks Wewenang | Daftar menu sama dengan menu samping | - |
 
 ---
 
-### Pengujian 5: Pengecekan Regresi Modul Sebelumnya (Opsional)
-Untuk memastikan modul yang telah diintegrasikan sebelumnya tetap stabil:
-1. **Manajemen Pengguna (User)**: Buat user baru di menu Pengguna, pastikan tersimpan ke `/api/v1/users` dan dapat login.
-2. **Data Petani**: Tambah/edit data petani di menu Petani, pastikan tersimpan ke `/api/v1/petani`.
-3. **Harga Jual Pabrik**: Perbarui harga jual di menu Master Data > Harga Jual, pastikan tersimpan ke `/api/v1/master/harga-jual`.
+## 3. Skenario gangguan jaringan
 
----
+| No | Langkah | Hasil yang diharapkan |
+|---|---|---|
+| G1 | Matikan jaringan komputer, timbang 2 bal | Layar tetap bekerja; Header kuning "2 simpanan belum sampai ke server" |
+| G2 | Coba tutup tab | Peramban memperingatkan ada simpanan tertunda |
+| G3 | Nyalakan jaringan | Lencana hilang sendiri dalam ≤ 1 menit (atau klik Kirim ulang); data ada di server |
+| G4 | Ulangi G1–G3 untuk edit harga jual | Sama |
 
----
+## 4. Skenario dua komputer (⧉)
 
-## 4. Hasil Kesimpulan Audit Konektivitas Keseluruhan Project
+1. Komputer A menambah bal di Sortir; komputer B membuka Timbangan: bal muncul tanpa muat ulang manual (paling
+   lambat beberapa detik).
+2. Komputer A mengubah master harga; komputer B membuka menu laporan (memuat ulang otomatis): harga baru tampil.
+3. Komputer A membatalkan Surat Jalan; komputer B memuat ulang: Surat Jalan hilang (setelah endpoint DELETE tersedia).
 
-| Modul / Komponen | Status Backend | Verifikasi Network / Endpoint |
-| :--- | :---: | :--- |
-| **Backend Service & Database** | 🟢 **Terhubung** | `php artisan serve` aktif, PostgreSQL port 5432 aktif, `/health` status `ok`. |
-| **Autentikasi (Login)** | 🟢 **Terhubung** | `POST /api/v1/auth/login` (Token Sanctum & User tersimpan). |
-| **Master Petani** | 🟢 **Terhubung** | `GET /petani`, `POST /petani`, `PUT /petani/{id}`, `DELETE /petani/{id}`. |
-| **Master Harga Beli** | 🟢 **Terhubung** | `GET /master/harga-beli`, `POST /master/harga-beli`. |
-| **Master Harga Jual** | 🟢 **Terhubung** | `GET /master/harga-jual`, `POST /master/harga-jual`. |
-| **Manajemen Pengguna (User)** | 🟢 **Terhubung** | `GET /users`, `POST /users`, `PUT /users/{id}`, `PUT /users/{id}/status`. |
-| **Pengiriman Batch Sample** | 🟢 **Terhubung** | `GET /sample-batch`, `POST /sample-batch`. |
-| **Pengiriman DO (Surat Jalan)**| 🟢 **Terhubung** | `GET /pengiriman`, `POST /pengiriman`. |
-| **Transaksi Pembelian (Tahap 2)**| 🟢 **Terhubung Penuh** | `GET /transaksi`, `POST /transaksi/sortir`, `PUT /transaksi/{id}/timbang`, `PUT /transaksi/{id}/bayar`. |
-| **Inventaris Bal Gudang** | 🟢 **Terhubung Penuh** | `GET /barang`, `PUT /barang/{id}/status`, auto-create bal saat pelunasan kasir. |
+## 5. Daftar periksa sebelum serah terima
 
----
-
-## 5. Alur Pengujian Transaksi Pembelian: Sortir -> Timbang -> Kasir (Tahap 2)
-
-Langkah-langkah berikut digunakan untuk menguji integrasi transaksi pembelian end-to-end langsung dari UI frontend ke database server:
-
-### Pengujian 6: Loket Sortir (Pendaftaran Kupon & Grade Bal)
-- **Tujuan**: Memastikan kupon antrian sortir yang dibuat masuk ke tabel `transaksi_pembelian` dan `transaksi_item_bal` di backend.
-- **Langkah Pengujian**:
-  1. Masuk ke modul **Pembelian** > **Sortir Mutu Grade**.
-  2. Pilih petani yang sudah terdaftar (contoh: *zaini*), isi nomor bal (misal: `1`), pilih grade (contoh: *30* atau *31*).
-  3. Klik tombol **Simpan Kupon** / **Cetak Kupon Sortir**.
-- **Kriteria Keberhasilan**:
-  - Muncul toast notifikasi sukses (contoh: *Kupon KUP-... berhasil disimpan!*).
-  - Pada tab **Network (F12)**, terdapat request `POST /api/v1/transaksi/sortir` berstatus HTTP `201 Created` dengan balikan objek `data` berisi `transaksi_id` resmi (misal `TRX-DDMMYYYY-XXX`).
-  - Kupon otomatis muncul di antrean tunggu timbangan.
-
----
-
-### Pengujian 7: Meja Timbangan (Pengisian Bruto, Tara, & Netto)
-- **Tujuan**: Memastikan data timbangan bal diperbarui secara permanen di backend.
-- **Langkah Pengujian**:
-  1. Masuk ke modul **Pembelian** > **Meja Timbangan Bal**.
-  2. Pilih transaksi kupon yang tadi dibuat di loket sortir.
-  3. Masukkan **Berat Bruto** (misal: `55` kg), periksa potongan tara (misal: `5` kg), pastikan berat netto terhitung (`50` kg).
-  4. Tentukan lokasi simpan (misal: *Blok A*), lalu klik tombol **Simpan Timbangan** / **Lanjut ke Kasir**.
-- **Kriteria Keberhasilan**:
-  - Pada tab **Network (F12)**, terdapat request `PUT /api/v1/transaksi/{id}/timbang` berstatus HTTP `200 OK`.
-  - Field `berat_kg` dan `status_timbang` bal berubah menjadi `selesai_timbang`.
-
----
-
-### Pengujian 8: Kasir & Pelunasan Pembelian
-- **Tujuan**: Memastikan transaksi berhasil dilunasi dan bal tembakau secara otomatis dibuatkan record inventarisnya di tabel `barang` backend.
-- **Langkah Pengujian**:
-  1. Masuk ke modul **Pembelian** > **Kasir & Pembayaran**.
-  2. Pilih transaksi yang sudah selesai ditimbang.
-  3. Klik tombol **Proses Pembayaran / Bayar**.
-  4. Pilih metode pembayaran (misal: *Cash* atau *Tunai*), pilih gudang tujuan (*Gudang Utama Pamekasan* / `PMK-01`), lalu klik tombol **Konfirmasi & Lunasi**.
-- **Kriteria Keberhasilan**:
-  - Pada tab **Network (F12)**, terdapat request `PUT /api/v1/transaksi/{id}/bayar` berstatus HTTP `200 OK`.
-  - Status pembayaran berubah menjadi **LUNAS** (`status_pembayaran: lunas`) dan status tahap menjadi **LENGKAP**.
-  - Nota pembayaran kasir dapat dicetak dengan nilai yang akurat.
-
----
-
-### Pengujian 9: Verifikasi Stok Bal Masuk ke Inventaris Gudang
-- **Tujuan**: Memastikan otomatisasi pembuatan stok bal di gudang dari transaksi kasir.
-- **Langkah Pengujian**:
-  1. Buka menu **Gudang / Bal Gudang** (Inventaris Bal).
-  2. Periksa baris bal tembakau yang baru saja dilunasi dari kasir.
-- **Kriteria Keberhasilan**:
-  - Bal tersebut otomatis terdaftar dengan ID bal (misal: `BAL-...`), status **Tersedia / Di Gudang**, dan lokasi blok yang sesuai.
-  - **Tekan F5 (Refresh Browser)**: Pastikan data transaksi di Kasir tetap berstatus **Lunas** dan bal di gudang tetap tersimpan (data berasal dari PostgreSQL backend, bukan hanya memori lokal sementara).
-
----
-
-## 6. Langkah Selanjutnya
-
-1. Lakukan verifikasi manual di browser mengikuti panduan **Pengujian 1 hingga 9** di atas.
-2. Jika ada perilaku UI atau respon API yang perlu disesuaikan, laporkan nomor pengujian terkait untuk penyesuaian instan.
-3. Setelah semua teruji dengan baik, project siap untuk dilakukan git commit & deploy.
+- [ ] Semua skenario bagian 2 tanpa tanda "(menunggu backend)" lulus di staging.
+- [ ] Skenario bertanda "(menunggu backend)" lulus setelah endpoint tersedia (lihat `DOKUMENTASI_DATABASE.md` 5.3).
+- [ ] Skenario gangguan jaringan (bagian 3) lulus.
+- [ ] Sandi awal Super Admin sudah diganti.
+- [ ] Backup PostgreSQL terjadwal dan pernah diuji pulih.
+- [ ] `npm test` dan build di GitHub Actions hijau pada commit yang dirilis.

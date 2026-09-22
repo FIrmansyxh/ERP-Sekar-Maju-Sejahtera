@@ -1,0 +1,40 @@
+name: CI
+
+# Pemeriksaan otomatis untuk setiap perubahan sebelum digabung ke main:
+# tipe (tsc strict), tes otomatis, dan build produksi. Tidak melakukan deploy.
+# Push ke main dan staging diperiksa oleh deploy.yml (tes + build sebelum deploy), jadi tidak diulang di sini.
+on:
+  pull_request:
+  push:
+    branches-ignore: [ main, staging ]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  periksa:
+    name: Tipe, Tes, dan Build
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: npm
+
+    - name: Install Dependencies (sesuai package-lock.json)
+      run: npm ci
+
+    - name: Pemeriksaan Tipe
+      run: npm run lint
+
+    - name: Tes Otomatis
+      run: npm test
+
+    - name: Build Produksi
+      run: npm run build

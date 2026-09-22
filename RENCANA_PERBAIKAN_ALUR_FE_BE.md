@@ -1,6 +1,6 @@
 # Rencana Perbaikan Alur FE → BE → Local Storage
 
-Tanggal review: 2026-09-18  
+Tanggal review: 2026-09-18 (status diperbarui 2026-09-21)  
 Scope: alur aplikasi **saat ini** (bukan redesign `newplan-db.md`).  
 Dokumen terkait DB redesign ditahan sampai perintah: `lanjut rencana mapping db`.
 
@@ -12,7 +12,9 @@ Dokumen terkait DB redesign ditahan sampai perintah: `lanjut rencana mapping db`
 |------|--------|---------|
 | **A (P0)** | **Selesai (2026-09-18)** | `PUT /transaksi/{id}/sortir-items`, `PUT /sample-batch/{id}`, DO stok=`keluar`, sync FE API-first + refetch barang setelah bayar/sample/DO |
 | **D (keandalan simpan)** | **Selesai FE (2026-09-20)** | Antrean sinkron kupon, verifikasi hasil server, percobaan ulang, muat ulang server tidak menimpa perubahan tertunda, lencana status di Header. Perlu dukungan BE: lihat `DOKUMENTASI_DATABASE.md` bagian 6 |
-| B (P1) | Belum | Delete harga/transaksi, auth:sanctum, wire update barang UI |
+| **E (antrean mutasi non-kupon)** | **Selesai FE (2026-09-21)** | Hapus batch sample/Surat Jalan/kupon, edit petani/harga/batch/Surat Jalan, status bal dan akun kini lewat `antrianMutasi` (dicoba ulang, diverifikasi, ditimpakan ke daftar server dua kali). Perlu dukungan BE: `DOKUMENTASI_DATABASE.md` bagian 5.3 |
+| **F (audit menyeluruh)** | **Selesai FE (2026-09-21)** | Daftar sample lama yang hanya lokal dihapus (laporan sample dari batch server), Jumlah Bayar Kasir = Laporan Pembelian, bal karangan di payload kupon dihapus, status Draft batch dikirim ke server dengan fallback, jalur mati `/koreksi` dan `/dashboard/stats` dilepas, `deploy.yml` yang rusak (konflik merge) dipulihkan. Rincian: `LAPORAN_AUDIT_2026-09-21.md` |
+| B (P1) | Sebagian | Delete harga tidak ada di UI. Delete transaksi/batch/DO dan wire update barang sudah di FE; endpoint BE menunggu (5.3). auth:sanctum belum |
 | **C3 laporan** | **Selesai sebagian (2026-09-18)** | Refresh list saat buka `modul-6-*`, `getDashboardStats` + fallback SQL, mapper DO isi `total_berat_kg`/`total_nilai_deal`, laporan valuasi pakai `barangLunasList` |
 | C (P2 sisanya) | Belum | RBAC BE, deprecate sample legacy |
 
@@ -44,6 +46,10 @@ Mutasi menu:
 ---
 
 ## 2. Matriks menu: apa yang sudah pas vs tidak
+
+> Matriks dan temuan di bagian 2–3 adalah kondisi saat review 2026-09-18 dan disimpan sebagai riwayat.
+> Kondisi terkini per menu (baca/tambah/ubah/hapus dan endpoint yang masih ditunggu dari backend) ada di
+> `DOKUMENTASI_DATABASE.md` bagian 5.3.
 
 | Menu | Read API | Create API | Update API | Delete API | Local | Status |
 |------|----------|------------|------------|------------|-------|--------|

@@ -6,6 +6,7 @@ import {
   TabelHarga,
 } from '../types';
 import {
+  hitungJumlahBayarBal,
   hitungNilaiBal as hitungNilaiBalOriginal,
   hitungModalTransaksi as hitungModalTransaksiOriginal,
   hitungTotalModalPembelian as hitungTotalModalPembelianOriginal,
@@ -17,6 +18,7 @@ import {
 
 // Re-export types for consumers
 export type { ShippedBalMetrics, ValuasiStokGudangResult };
+export { hitungJumlahBayarBal };
 
 /**
  * Interface input fleksibel untuk kalkulasi modal bal

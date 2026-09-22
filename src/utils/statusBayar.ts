@@ -8,12 +8,26 @@ import { Barang, TransaksiPembelian } from '../types';
  * belum lunas alias kredit, dan belum boleh masuk nilai pembelian, aset,
  * maupun valuasi stok.
  */
-export const isTransaksiLunas = (
-  tx?: Pick<TransaksiPembelian, 'status_pembayaran' | 'metode_pembayaran'> | null
-): boolean => tx?.status_pembayaran === 'lunas' || tx?.metode_pembayaran === 'cash';
+/** Bagian kupon yang menentukan status bayar; longgar agar juga menerima ringkasan kupon di laporan. */
+export interface DataStatusBayar {
+  status_pembayaran?: string | null;
+  metode_pembayaran?: string | null;
+}
 
-export const labelStatusBayar = (tx?: Pick<TransaksiPembelian, 'status_pembayaran' | 'metode_pembayaran'> | null): string =>
-  isTransaksiLunas(tx) ? 'Lunas' : 'Belum Lunas';
+export const isTransaksiLunas = (tx?: DataStatusBayar | null): boolean =>
+  tx?.status_pembayaran === 'lunas' || tx?.metode_pembayaran === 'cash';
+
+/**
+ * Kupon yang sudah dibayar di Kasir terkunci: bal tidak boleh ditambah, diubah, dihapus,
+ * atau ditimbang ulang dari Sortir, Kasir, maupun Timbangan. Mengembalikan alasan penolakan,
+ * atau null bila kupon masih boleh diubah.
+ */
+export function alasanKuponTerkunciBayar(tx?: (DataStatusBayar & { no_kupon: string }) | null): string | null {
+  if (!tx || !isTransaksiLunas(tx)) return null;
+  return `Kupon ${tx.no_kupon} sudah dibayar di Kasir sehingga tidak bisa diubah lagi.`;
+}
+
+export const labelStatusBayar =(tx?: DataStatusBayar | null): string => (isTransaksiLunas(tx) ? 'Lunas' : 'Belum Lunas');
 
 /**
  * Bal yang boleh dihitung sebagai aset, nilai pembelian, dan valuasi: bal dari kupon

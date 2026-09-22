@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { TransaksiPembelian } from '../../types';
 import { formatRupiah } from '../../utils/formatters';
+import { tampilkanInfo } from '../../utils/dialog';
 import { sortTransaksiItemsByInputOrder } from '../../utils/kuponSortir';
 
 interface PembayaranKasirModalProps {
@@ -64,19 +65,19 @@ export const PembayaranKasirModal: React.FC<PembayaranKasirModalProps> = ({
     e.preventDefault();
 
     if (hasUnweighedBal) {
-      alert(
-        `⚠️ Pembayaran Ditolak!\n\nKupon ${transaksi.no_kupon} masih memiliki ${unweighedItems.length} bal yang belum ditimbang di modul Timbangan.\n\nSesuai SOP, seluruh bal dalam 1 kupon harus ditimbang semua terlebih dahulu baru bisa lanjut ke proses pembayaran kasir.`
+      tampilkanInfo(
+        `Kupon ${transaksi.no_kupon} masih memiliki ${unweighedItems.length} bal yang belum ditimbang.`
       );
       return;
     }
 
     if (!isCashMatched) {
-      alert(`Nominal Cash belum pas! Silakan ketik tepat senilai ${formatRupiah(totalBersih)}.`);
+      tampilkanInfo(`Nominal Cash belum pas! Silakan ketik tepat senilai ${formatRupiah(totalBersih)}.`);
       return;
     }
 
     if (!isTiketFisikDiserahkan) {
-      alert('Harap pastikan tiket timbang fisik asli telah diserahkan sebelum mencairkan kas.');
+      tampilkanInfo('Harap pastikan tiket timbang fisik asli telah diserahkan sebelum mencairkan kas.');
       return;
     }
 
@@ -110,12 +111,7 @@ export const PembayaranKasirModal: React.FC<PembayaranKasirModalProps> = ({
               <Receipt className="w-4 h-4 text-[#b81d24]" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-sm font-bold text-gray-900 tracking-tight">
-                Pencairan Kas & Pembayaran Tunai
-              </h2>
-              <p className="text-[11px] text-gray-500 font-medium">
-                Pencatatan realisasi kas keluar loket kasir & serah terima tunai
-              </p>
+              <h2 className="text-sm font-bold text-gray-900 tracking-tight">Pembayaran Tunai</h2>
             </div>
           </div>
           <button 
@@ -135,7 +131,7 @@ export const PembayaranKasirModal: React.FC<PembayaranKasirModalProps> = ({
             <strong className="text-gray-900 font-mono text-xs">{transaksi.no_kupon}</strong>
           </div>
           <span className="text-[11px] text-gray-500">
-            Metode: <strong className="text-gray-800 font-medium">Kas Keluar (Tunai / Cash)</strong>
+            Metode: <strong className="text-gray-800 font-medium">Tunai</strong>
           </span>
         </div>
 
@@ -148,20 +144,13 @@ export const PembayaranKasirModal: React.FC<PembayaranKasirModalProps> = ({
               <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
               <div className="space-y-1">
                 <p className="font-bold text-xs text-amber-950">
-                  Pembayaran Dikunci: Masih Ada Bal Belum Ditimbang
-                </p>
-                <p className="text-[11px] text-amber-800 leading-relaxed">
-                  Kupon <strong className="font-mono text-amber-950">{transaksi.no_kupon}</strong> masih memiliki{' '}
-                  <strong>{unweighedItems.length} dari {balCount} bal</strong> yang belum ditimbang di Proses 2 (Timbangan).
+                  {unweighedItems.length} dari {balCount} bal belum ditimbang
                 </p>
                 {unweighedItems.length > 0 && (
                   <div className="mt-1 font-mono text-[10px] text-amber-900 bg-amber-100/70 px-2 py-1 rounded-sm border border-amber-200">
                     Bal belum ditimbang: <strong>{unweighedItems.map((b) => b.no_bal).join(', ')}</strong>
                   </div>
                 )}
-                <p className="text-[10px] text-amber-700 italic pt-0.5">
-                  * Sesuai SOP, seluruh bal dalam 1 kupon harus ditimbang lengkap terlebih dahulu baru dapat dicairkan.
-                </p>
               </div>
             </div>
           )}
@@ -202,12 +191,7 @@ export const PembayaranKasirModal: React.FC<PembayaranKasirModalProps> = ({
             {/* Banner Jumlah Bayar - Clean ERP Financial Display */}
             <div className="bg-gray-50 border border-gray-300 p-3.5 rounded-sm flex items-center justify-between">
               <div>
-                <span className="text-[11px] font-bold text-gray-700 uppercase tracking-wider block">
-                  Jumlah Bayar (Diserahkan ke Petani)
-                </span>
-                <span className="text-[11px] text-gray-500">
-                  Uang tunai pas sesuai rekapan timbangan
-                </span>
+                <span className="text-[11px] font-bold text-gray-700 uppercase tracking-wider block">Jumlah Bayar</span>
               </div>
               <div className="text-right">
                 <span className="text-xl font-bold font-mono text-[#b81d24]">
@@ -221,7 +205,7 @@ export const PembayaranKasirModal: React.FC<PembayaranKasirModalProps> = ({
           <div className="bg-white border border-gray-200 p-4 rounded-sm space-y-2.5">
             <div className="flex justify-between items-center">
               <label className="block text-xs font-bold text-gray-800">
-                Ketik Ulang Nominal Cash (Jumlah Bayar) <span className="text-red-500">*</span>
+                Ketik Ulang Jumlah Bayar <span className="text-[#b81d24]">*</span>
               </label>
               <span className="text-[11px] text-gray-500 font-mono">
                 Target: <strong className="text-gray-800">{formatRupiah(totalBersih)}</strong>
@@ -241,7 +225,7 @@ export const PembayaranKasirModal: React.FC<PembayaranKasirModalProps> = ({
                   const raw = e.target.value.replace(/\D/g, '');
                   setInputCash(raw);
                 }}
-                placeholder={`Ketik ulang ${totalBersih.toLocaleString('id-ID')}`}
+                placeholder={totalBersih.toLocaleString('id-ID')}
                 className="w-full bg-white border border-gray-300 rounded-sm pl-10 pr-20 py-2 text-sm font-mono font-bold text-gray-900 focus:border-gray-800 focus:outline-none transition"
               />
               {isCashMatched && (
@@ -253,19 +237,10 @@ export const PembayaranKasirModal: React.FC<PembayaranKasirModalProps> = ({
             </div>
 
             {/* Real-time Status Guide - Minimalist */}
-            {numericCash === 0 ? (
-              <p className="text-[11px] text-gray-500">
-                Ketikkan nominal uang tunai yang diserahkan ke petani (harus pas senilai <strong className="text-gray-700">{formatRupiah(totalBersih)}</strong>).
-              </p>
-            ) : isCashMatched ? (
-              <p className="text-[11px] text-emerald-700 font-medium flex items-center space-x-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                <span>Nominal pas & terverifikasi ({formatRupiah(numericCash)}). Siap diproses.</span>
-              </p>
-            ) : (
+            {numericCash === 0 || isCashMatched ? null : (
               <p className="text-[11px] text-red-600 font-medium flex items-center space-x-1.5">
                 <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
-                <span>Nominal belum pas (ketik: {formatRupiah(numericCash)}, selisih {formatRupiah(Math.abs(numericCash - totalBersih))}).</span>
+                <span>Selisih {formatRupiah(Math.abs(numericCash - totalBersih))}</span>
               </p>
             )}
           </div>
@@ -274,14 +249,14 @@ export const PembayaranKasirModal: React.FC<PembayaranKasirModalProps> = ({
           <div className="space-y-3 bg-white border border-gray-200 p-4 rounded-sm">
             <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider border-b border-gray-100 pb-1.5 flex items-center space-x-1.5">
               <FileCheck className="w-3.5 h-3.5 text-gray-600" />
-              <span>Detail Pencatatan Kasir</span>
+              <span>Pencatatan Kasir</span>
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* No Transaksi Referensi */}
               <div>
                 <label className="block text-[11px] font-semibold text-gray-600 mb-1">
-                  No. Kupon (Referensi)
+                  No. Kupon
                 </label>
                 <input
                   type="text"
@@ -301,7 +276,6 @@ export const PembayaranKasirModal: React.FC<PembayaranKasirModalProps> = ({
                   readOnly
                   value={dibayarOleh}
                   className="w-full bg-gray-50 border border-gray-200 rounded-sm px-2.5 py-1.5 text-xs text-gray-800 font-medium cursor-not-allowed focus:outline-none"
-                  title="Petugas kasir yang bertugas di loket pembayaran"
                 />
               </div>
             </div>
@@ -317,7 +291,7 @@ export const PembayaranKasirModal: React.FC<PembayaranKasirModalProps> = ({
                   className="mt-0.5 rounded-sm text-gray-900 focus:ring-gray-800 cursor-pointer"
                 />
                 <label htmlFor="check-tiket-fisik" className="text-xs text-gray-700 font-normal cursor-pointer leading-relaxed">
-                  <strong>Verifikasi Penyerahan Tiket Timbang:</strong> Tiket fisik asli telah diserahkan dan uang tunai sebesar <strong>{formatRupiah(totalBersih)}</strong> diserahkan ke petani.
+                  Tiket timbang diterima dan uang <strong>{formatRupiah(totalBersih)}</strong> sudah diserahkan ke petani
                 </label>
               </div>
 
@@ -331,7 +305,7 @@ export const PembayaranKasirModal: React.FC<PembayaranKasirModalProps> = ({
                 />
                 <label htmlFor="check-cetak-nota" className="text-xs text-gray-700 font-normal cursor-pointer flex items-center space-x-1.5">
                   <Printer className="w-3.5 h-3.5 text-gray-500" />
-                  <span>Buka dialog cetak Nota Pembelian otomatis setelah pembayaran selesai</span>
+                  <span>Cetak nota setelah bayar</span>
                 </label>
               </div>
             </div>

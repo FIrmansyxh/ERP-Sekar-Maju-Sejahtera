@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Suspense, useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { 
   Petani, 
   Barang, 
   TabelHarga, 
-  TransaksiPembelian, 
-  PengirimanSample, 
+  TransaksiPembelian,
   PengirimanBarang,
   User,
   UserRole,
@@ -23,8 +22,6 @@ import {
   saveHargaJualData,
   loadTransaksiData, 
   saveTransaksiData,
-  loadSampleData, 
-  saveSampleData,
   loadBatchSampleData,
   saveBatchSampleData,
   loadPengirimanData, 
@@ -40,74 +37,72 @@ import {
 } from './utils/storage';
 import { mergeKuponParalel, normalizeStatusBal, resolveStatusStok } from './utils/kuponSortir';
 import { filterBarangLunas } from './utils/statusBayar';
+import { barisSampleDariBatch } from './utils/statusBatchSample';
 import { balTerkirimDariTransaksi, isSuratJalanTerkunci, pesanSuratJalanTerkunci, pesanTransaksiTerkunci } from './utils/kunciHapus';
+import {
+  cariSuratJalanBentrok,
+  keluarkanBal,
+  kembalikanBalKeGudang,
+  masukkanBalKeMuatan,
+  LABEL_STATUS_PENGIRIMAN,
+  sesuaikanBatchSetelahPerubahanDO,
+} from './utils/alurPengiriman';
 import { clearAllDrafts, getDraftRecovery, markDraftCleanExit, touchDraftAlive } from './utils/draftStorage';
 import { hasModuleAccess } from './utils/rbac';
 import { antrianSinkron } from './services/antrianSinkron';
 import { normalizeKg, generatePetaniId } from './utils/formatters';
 import { hashPassword } from './utils/crypto';
+import { POTONGAN_GANTI_TIKAR } from './config/aturanTimbang';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 
 // Auth Login View
 import { LoginView } from './components/auth/LoginView';
 import { ErpApiService } from './services/erpApi';
+import { antrianMutasi } from './services/antrianMutasi';
+import { catatMutasi, catatStatusBal, handlerMutasi, kirimPetani, serverAktif } from './services/kirimMutasi';
+import {
+  overlayBarang,
+  overlayBatchSample,
+  overlayHargaBeli,
+  overlayHargaJual,
+  overlayPengiriman,
+  overlayPetani,
+  overlayTransaksi,
+  overlayUser,
+} from './services/overlayDaftar';
+import type { HasilBatchSample } from './services/kirimMutasi';
 
-// User Management 
-import { UserManagement } from './components/user/UserManagement';
-
-// Home Dashboard 
 import { HomeDashboardView } from './components/home/HomeDashboardView';
-
-//  Dashboard Laporan & Analytic ERP
-import { DashboardAnalyticView } from './components/laporan/DashboardAnalyticView';
-
-// Laporan Bal Tembakau
-import { LaporanBalView } from './components/laporan/LaporanBalView';
-
-// Laporan Detail Bal Tembakau
-import { LaporanKodeBalView } from './components/laporan/LaporanKodeBalView';
-
-// Laporan Mutu Grade & Analisis Stok Inventaris
-import { LaporanGradeView } from './components/laporan/LaporanGradeView';
-
-//  Laporan Pembelian Barang
-import { LaporanPembelianBarangView } from './components/laporan/LaporanPembelianBarangView';
-
-// Laporan Petani & Rekapitulasi Setoran
-import { LaporanPetaniView } from './components/laporan/LaporanPetaniView';
-
-// Laporan Pengiriman & Distribusi Tembakau
-import { LaporanPengirimanView } from './components/laporan/LaporanPengirimanView';
-
-// PRD 4.1: Master Petani
-import { PetaniTable } from './components/petani/PetaniTable';
 import { PetaniFormModal } from './components/petani/PetaniFormModal';
 import { PetaniCardPrintModal } from './components/petani/PetaniCardPrintModal';
 import { PetaniDetailDrawer } from './components/petani/PetaniDetailDrawer';
 import { PetaniDeactivateModal } from './components/petani/PetaniDeactivateModal';
 import { PetaniResetCardModal } from './components/petani/PetaniResetCardModal';
 import { PetaniImportExportModal } from './components/petani/PetaniImportExportModal';
+import { AlertCircle, CheckCircle2 } from 'lucide-react';
+import { lazyNamed } from './utils/lazyHalaman';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { MemuatHalaman } from './components/common/MemuatHalaman';
 
-// PRD 4.2: Master Harga Beli
-import { HargaManagement } from './components/harga/HargaManagement';
-
-//  Transaksi Pembelian Timbang & Kupon (3 Sub-menus: Sortir, Timbangan, Kasir)
-import { SortirPageView } from './components/transaksi/SortirPageView';
-import { TimbanganPageView } from './components/transaksi/TimbanganPageView';
-import { KasirPageView } from './components/transaksi/KasirPageView';
-
-// PRD 6.1: Pengiriman Reguler (DO Luar)
-import { PengirimanManagement } from './components/pengiriman/PengirimanManagement';
-
-// PRD 6.2: Pengiriman Sample
-import { SampleManagement } from './components/sample/SampleManagement';
-
-import { StatusBatchPengirimanManagement } from './components/pengiriman/StatusBatchPengirimanManagement';
-import { HargaJualManagement } from './components/harga_jual/HargaJualManagement';
-import { DedicatedPrintView } from './components/print/DedicatedPrintView';
-
-import { CheckCircle2 } from 'lucide-react';
+// Setiap menu diunduh saat pertama dibuka, sehingga halaman login dan Beranda tidak memuat kode laporan, PDF, dan grafik.
+const UserManagement = lazyNamed(() => import('./components/user/UserManagement'), 'UserManagement');
+const DashboardAnalyticView = lazyNamed(() => import('./components/laporan/DashboardAnalyticView'), 'DashboardAnalyticView');
+const LaporanBalView = lazyNamed(() => import('./components/laporan/LaporanBalView'), 'LaporanBalView');
+const LaporanGradeView = lazyNamed(() => import('./components/laporan/LaporanGradeView'), 'LaporanGradeView');
+const LaporanPembelianBarangView = lazyNamed(() => import('./components/laporan/LaporanPembelianBarangView'), 'LaporanPembelianBarangView');
+const LaporanPetaniView = lazyNamed(() => import('./components/laporan/LaporanPetaniView'), 'LaporanPetaniView');
+const LaporanPengirimanView = lazyNamed(() => import('./components/laporan/LaporanPengirimanView'), 'LaporanPengirimanView');
+const PetaniTable = lazyNamed(() => import('./components/petani/PetaniTable'), 'PetaniTable');
+const HargaManagement = lazyNamed(() => import('./components/harga/HargaManagement'), 'HargaManagement');
+const SortirPageView = lazyNamed(() => import('./components/transaksi/SortirPageView'), 'SortirPageView');
+const TimbanganPageView = lazyNamed(() => import('./components/transaksi/TimbanganPageView'), 'TimbanganPageView');
+const KasirPageView = lazyNamed(() => import('./components/transaksi/KasirPageView'), 'KasirPageView');
+const PengirimanManagement = lazyNamed(() => import('./components/pengiriman/PengirimanManagement'), 'PengirimanManagement');
+const SampleManagement = lazyNamed(() => import('./components/sample/SampleManagement'), 'SampleManagement');
+const StatusBatchPengirimanManagement = lazyNamed(() => import('./components/pengiriman/StatusBatchPengirimanManagement'), 'StatusBatchPengirimanManagement');
+const HargaJualManagement = lazyNamed(() => import('./components/harga_jual/HargaJualManagement'), 'HargaJualManagement');
+const DedicatedPrintView = lazyNamed(() => import('./components/print/DedicatedPrintView'), 'DedicatedPrintView');
 
 export default function App() {
   // Check URL params for standalone print route (e.g. ?cetak=nota&id=... or ?cetak=surat_jalan&id=...)
@@ -237,16 +232,19 @@ export default function App() {
 
   // ERP State collections
   const [petaniList, setPetaniList] = useState<Petani[]>(() => loadPetaniData());
-  const [barangList, setBarangList] = useState<Barang[]>(() => loadBarangData());
+  const [barangList, setBarangList] = useState<Barang[]>(() => normalizeStatusBal(loadBarangData()));
   const [hargaList, setHargaList] = useState<TabelHarga[]>(() => loadHargaData());
   const [transaksiList, setTransaksiList] = useState<TransaksiPembelian[]>(() => loadTransaksiData());
-  const [sampleList, setSampleList] = useState<PengirimanSample[]>(() => loadSampleData());
   const [pengirimanList, setPengirimanList] = useState<PengirimanBarang[]>(() => loadPengirimanData());
-
-  
   const [hargaJualList, setHargaJualList] = useState<MasterHargaJual[]>(() => loadHargaJualData());
   const [batchSampleList, setBatchSampleList] = useState<BatchPengirimanSample[]>(() => loadBatchSampleData());
+  // Baris sample per bal untuk laporan, diturunkan dari batch sample (tersimpan di server)
+  const sampleRows = useMemo(() => barisSampleDariBatch(batchSampleList), [batchSampleList]);
   const [selectedBatchIdForShipment, setSelectedBatchIdForShipment] = useState<string>('');
+  // Surat Jalan yang sedang diedit di halaman Pengiriman Reguler (dipilih dari Status Pengiriman)
+  const [editPengirimanId, setEditPengirimanId] = useState<string | null>(null);
+  // Batch sample yang sedang diedit di halaman Pengiriman Sample (dipilih dari Status & Detail Batch)
+  const [editBatchId, setEditBatchId] = useState<string | null>(null);
   
 
   const [activeModuleId, setActiveModuleId] = useState<string>(() => {
@@ -292,37 +290,56 @@ export default function App() {
       ErpApiService.getPengirimanList(),
     ]);
 
+    // Memuat semua daftar bisa makan beberapa detik. Perubahan yang dibuat operator selama menunggu (centang ganti
+    // tikar, hapus batch, edit petani) sudah ada di antrean tetapi belum tentu ada di daftar yang baru tiba, jadi
+    // antrean diterapkan LAGI tepat sebelum daftar dipasang ke layar.
     let fromBackend = false;
     if (petaniRes.fromBackend) {
-      setPetaniList(petaniRes.data);
+      const daftar = overlayPetani(petaniRes.data);
+      setPetaniList(daftar);
+      savePetaniData(daftar);
       fromBackend = true;
     }
     if (barangRes.fromBackend) {
-      setBarangList(normalizeStatusBal(barangRes.data));
+      const daftar = normalizeStatusBal(overlayBarang(barangRes.data));
+      setBarangList(daftar);
+      saveBarangData(daftar);
       fromBackend = true;
     }
     if (transaksiRes.fromBackend) {
-      setTransaksiList(transaksiRes.data);
+      const daftar = overlayTransaksi(transaksiRes.data);
+      setTransaksiList(daftar);
+      saveTransaksiData(daftar);
       fromBackend = true;
     }
     if (hargaRes.fromBackend) {
-      setHargaList(hargaRes.data);
+      const daftar = overlayHargaBeli(hargaRes.data);
+      setHargaList(daftar);
+      saveHargaData(daftar);
       fromBackend = true;
     }
     if (userRes.fromBackend) {
-      setUserList(userRes.data);
+      const daftar = overlayUser(userRes.data);
+      setUserList(daftar);
+      saveUserData(daftar);
       fromBackend = true;
     }
     if (hargaJualRes.fromBackend) {
-      setHargaJualList(hargaJualRes.data);
+      const daftar = overlayHargaJual(hargaJualRes.data);
+      setHargaJualList(daftar);
+      saveHargaJualData(daftar);
       fromBackend = true;
     }
     if (batchRes.fromBackend) {
-      setBatchSampleList(batchRes.data);
+      const daftar = overlayBatchSample(batchRes.data);
+      setBatchSampleList(daftar);
+      saveBatchSampleData(daftar);
       fromBackend = true;
     }
     if (pengirimanRes.fromBackend) {
-      setPengirimanList(pengirimanRes.data);
+      const daftar = overlayPengiriman(pengirimanRes.data);
+      setPengirimanList(daftar);
+      savePengirimanData(daftar);
       fromBackend = true;
     }
     return { fromBackend };
@@ -337,13 +354,92 @@ export default function App() {
   // Antrean sinkron kupon: mengirim ulang simpanan yang tertinggal (juga dari sesi sebelumnya) sampai berhasil
   useEffect(() => {
     if (!currentUser) return;
-    antrianSinkron.pasang((tx, dasar, opsi) => ErpApiService.syncTransaksi(tx, dasar, { ...opsi, tanpaCekKesehatan: true }));
+    antrianSinkron.pasang((tx, dasar) => ErpApiService.syncTransaksi(tx, dasar, { tanpaCekKesehatan: true }));
+  }, [currentUser]);
+
+  // Antrean perubahan lain (petani, harga, batch sample, Surat Jalan, status bal, kupon dihapus): dikirim ulang sampai
+  // berhasil, dan hasil server digabung ke layar begitu tugasnya selesai.
+  useEffect(() => {
+    if (!currentUser) return;
+    antrianMutasi.pasang(handlerMutasi);
+    const muatUlangBal = async () => {
+      try {
+        const res = await ErpApiService.getBarangList();
+        if (res.fromBackend) setBarangList(normalizeStatusBal(res.data));
+      } catch (err) {
+        console.warn('Gagal memuat ulang bal setelah perubahan tersimpan:', err);
+      }
+    };
+    return antrianMutasi.saatSelesai((tugas, hasil) => {
+      const kunci = `${tugas.entitas}:${tugas.aksi}`;
+      if (kunci === 'batch_sample:simpan') {
+        const gabungan = (hasil as HasilBatchSample | undefined)?.gabungan;
+        const kirim = tugas.data as BatchPengirimanSample;
+        if (gabungan) {
+          setBatchSampleList((prev) => {
+            const next = prev.map((b) => (b.batch_id === kirim.batch_id || b.kode_batch === kirim.kode_batch ? gabungan : b));
+            saveBatchSampleData(next);
+            return next;
+          });
+        }
+        void muatUlangBal();
+      } else if (kunci === 'pengiriman:simpan') {
+        const lama = tugas.data as PengirimanBarang;
+        const disimpan = hasil as PengirimanBarang | undefined;
+        const idBaru = disimpan?.pengiriman_id || lama.pengiriman_id;
+        if (disimpan && tugas.tambahan?.baru === true) {
+          setPengirimanList((prev) => {
+            const next = prev.map((p) => (p.pengiriman_id === lama.pengiriman_id ? { ...disimpan, pengiriman_id: idBaru } : p));
+            savePengirimanData(next);
+            return next;
+          });
+          if (idBaru !== lama.pengiriman_id) {
+            setBarangList((prev) => {
+              const next = prev.map((b) => (b.pengiriman_id === lama.pengiriman_id ? { ...b, pengiriman_id: idBaru } : b));
+              saveBarangData(next);
+              return next;
+            });
+          }
+        }
+        void muatUlangBal();
+      } else if (kunci === 'pengiriman:hapus' || kunci === 'batch_sample:hapus' || kunci === 'transaksi:hapus') {
+        void muatUlangBal();
+      } else if (kunci === 'petani:simpan') {
+        const lama = tugas.data as Petani;
+        const disimpan = hasil as Petani | undefined;
+        if (disimpan) {
+          setPetaniList((prev) => {
+            const next = prev.map((p) => (p.petani_id === lama.petani_id ? { ...p, ...disimpan, statistik: p.statistik ?? disimpan.statistik } : p));
+            savePetaniData(next);
+            return next;
+          });
+        }
+      } else if (kunci === 'harga_beli:simpan') {
+        const disimpan = hasil as TabelHarga | undefined;
+        if (disimpan?.harga_id) {
+          setHargaList((prev) => {
+            const next = prev.map((h) => (h.harga_id === (tugas.data as TabelHarga).harga_id ? disimpan : h));
+            saveHargaData(next);
+            return next;
+          });
+        }
+      } else if (kunci === 'harga_jual:simpan') {
+        const disimpan = hasil as MasterHargaJual | undefined;
+        if (disimpan?.harga_jual_id) {
+          setHargaJualList((prev) => {
+            const next = prev.map((h) => (h.harga_jual_id === (tugas.data as MasterHargaJual).harga_jual_id ? disimpan : h));
+            saveHargaJualData(next);
+            return next;
+          });
+        }
+      }
+    });
   }, [currentUser]);
 
   // Peringatan bila halaman ditutup padahal masih ada simpanan yang belum sampai ke server
   useEffect(() => {
     const peringatan = (e: BeforeUnloadEvent) => {
-      if (antrianSinkron.ringkasan().menunggu > 0) {
+      if (antrianSinkron.ringkasan().menunggu > 0 || antrianMutasi.ringkasan().menunggu > 0) {
         e.preventDefault();
         e.returnValue = '';
       }
@@ -352,33 +448,6 @@ export default function App() {
     return () => window.removeEventListener('beforeunload', peringatan);
   }, []);
 
-  const [dashboardServerStats, setDashboardServerStats] = useState<{
-    transaksi: {
-      total_transaksi: number;
-      total_bal: number;
-      total_berat_kg: number;
-      total_pembelian: number;
-    } | null;
-    stok_valuasi: Array<{
-      gudang_id?: string;
-      kode_grade?: string;
-      bal_di_gudang?: number;
-      kg_di_gudang?: number;
-      valuasi_beli?: number;
-    }>;
-    pengiriman: {
-      total_pengiriman: number;
-      total_bal_terkirim: number;
-      total_berat_terkirim: number;
-      total_nilai_deal: number;
-    } | null;
-    pengiriman_terkirim?: {
-      total_pengiriman: number;
-      total_bal_terkirim: number;
-      total_berat_terkirim: number;
-      total_nilai_deal: number;
-    } | null;
-  } | null>(null);
   const [laporanRefreshing, setLaporanRefreshing] = useState(false);
 
   // Saat buka modul laporan: refresh list sumber dari BE agar angka tidak usang
@@ -389,12 +458,6 @@ export default function App() {
     (async () => {
       try {
         await refreshOperationalLists();
-        if (activeModuleId === 'modul-6-dashboard-analytic') {
-          const statsRes = await ErpApiService.getDashboardStats();
-          if (!cancelled) {
-            setDashboardServerStats(statsRes.fromBackend ? statsRes.data : null);
-          }
-        }
       } finally {
         if (!cancelled) setLaporanRefreshing(false);
       }
@@ -433,25 +496,14 @@ export default function App() {
 
   // Toast Notification
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // 'info' dipakai untuk pemberitahuan, penolakan, dan kegagalan; tampil dengan ikon peringatan, bukan centang
   const showToast = (message: string, type: 'success' | 'info' = 'success') => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ message, type });
-    setTimeout(() => setToast(null), 3500);
+    toastTimerRef.current = setTimeout(() => setToast(null), type === 'info' ? 6000 : 3500);
   };
-
-  // Initial Load from localStorage
-  useEffect(() => {
-    setUserList(loadUserData());
-    setPetaniList(loadPetaniData());
-    setBarangList(normalizeStatusBal(loadBarangData()));
-    setHargaList(loadHargaData());
-    setTransaksiList(loadTransaksiData());
-    setSampleList(loadSampleData());
-    setPengirimanList(loadPengirimanData());
-    setHargaJualList(loadHargaJualData());
-    setBatchSampleList(loadBatchSampleData());
-
-  }, []);
 
   // Kupon yang dikerjakan paralel (mis. Sortir dan Timbangan di tab/jendela lain)
   // langsung ikut diperbarui begitu tab lain menyimpan perubahan.
@@ -489,6 +541,8 @@ export default function App() {
 
   const handleSidebarClick = (moduleId: string) => {
     setSelectedBatchIdForShipment('');
+    setEditPengirimanId(null);
+    setEditBatchId(null);
     setTargetKuponNo(undefined);
     setTargetTxId(undefined);
     setTargetBalNo(undefined);
@@ -577,15 +631,16 @@ export default function App() {
     resetIdleTimer();
 
     // Listen to standard activity events
-    const activityEvents = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'];
+    // Fase capture: gulir di dalam area menu (bukan jendela) juga dihitung aktivitas; scroll tidak menggelembung
+    const activityEvents = ['mousemove', 'mousedown', 'keydown', 'wheel', 'scroll', 'touchstart'];
     activityEvents.forEach((eventName) => {
-      window.addEventListener(eventName, handleUserActivity);
+      window.addEventListener(eventName, handleUserActivity, { capture: true, passive: true });
     });
 
     return () => {
       clearTimeout(idleTimer);
       activityEvents.forEach((eventName) => {
-        window.removeEventListener(eventName, handleUserActivity);
+        window.removeEventListener(eventName, handleUserActivity, { capture: true });
       });
     };
   }, [currentUser]);
@@ -616,24 +671,21 @@ export default function App() {
     }
   };
 
-  const handleDeleteUser = (userId: string) => {
-    const target = userList.find((u) => u.user_id === userId);
-    const updated = userList.filter((u) => u.user_id !== userId);
-    setUserList(updated);
-    saveUserData(updated);
-    showToast(`Akun pengguna "${target?.nama_lengkap || userId}" berhasil dihapus dari sistem.`);
-  };
-
+  
   const handleToggleUserStatus = async (userId: string) => {
     const target = userList.find((u) => u.user_id === userId);
     if (!target) return;
     const nextStatus = !target.status_aktif;
 
-    try {
-      await ErpApiService.toggleUserStatus(userId, nextStatus);
-    } catch (err: any) {
-      console.warn('Gagal mengubah status pengguna di backend:', err);
-    }
+    // Kata sandi tidak ikut disimpan di antrean
+    const { password: _sandi, ...penggunaTanpaSandi } = target;
+    void catatMutasi({
+      entitas: 'user',
+      id: userId,
+      aksi: 'status',
+      data: { ...penggunaTanpaSandi, status_aktif: nextStatus },
+      label: `Status akun ${target.username}`,
+    });
 
     const updated = userList.map((u) => {
       if (u.user_id === userId) {
@@ -647,10 +699,18 @@ export default function App() {
   };
 
   const handleResetUserPassword = async (userId: string, newPass: string) => {
-    try {
-      await ErpApiService.resetUserPassword(userId, newPass);
-    } catch (err: any) {
-      console.warn('Gagal mereset kata sandi di backend:', err);
+    // Kata sandi baru tidak boleh tersimpan di komputer ini saja: harus sampai ke server, atau dibatalkan
+    if (serverAktif()) {
+      try {
+        const sampai = await ErpApiService.resetUserPassword(userId, newPass);
+        if (!sampai) {
+          showToast('Kata sandi belum diubah: server tidak dapat dihubungi. Coba lagi saat tersambung.', 'info');
+          return;
+        }
+      } catch (err: any) {
+        showToast(`Kata sandi belum diubah: ${err?.message || 'server menolak'}.`, 'info');
+        return;
+      }
     }
     const hashedPass = await hashPassword(newPass);
     const updated = userList.map((u) => u.user_id === userId ? { ...u, password: hashedPass } : u);
@@ -662,56 +722,54 @@ export default function App() {
 
   // --- PRD 4.1: Petani Handlers ---
   const handleSavePetani = async (petaniData: Petani) => {
-    const exists = Boolean(editingPetani);
+    const tutupFormulir = () => {
+      setIsFormModalOpen(false);
+      setEditingPetani(null);
+    };
 
+    // Ubah data: layar langsung diperbarui, pengiriman ke server lewat antrean (dicoba ulang sampai berhasil)
+    if (editingPetani) {
+      const diubah = petaniList.map((p) => (p.petani_id === petaniData.petani_id ? { ...p, ...petaniData } : p));
+      const baris = diubah.find((p) => p.petani_id === petaniData.petani_id);
+      setPetaniList(diubah);
+      savePetaniData(diubah);
+      if (baris) {
+        void catatMutasi({ entitas: 'petani', id: baris.petani_id, aksi: 'simpan', data: baris, label: `Petani ${baris.nama_petani}` });
+      }
+      showToast(`Data petani "${petaniData.nama_petani}" diperbarui.`);
+      tutupFormulir();
+      return;
+    }
+
+    // Petani baru: server yang menentukan ID. Bila server menolak, petani tidak dibuat hanya di komputer ini.
     try {
-      const saved = await ErpApiService.savePetani(petaniData, exists);
-
-      let updated: Petani[];
-      if (exists) {
-        updated = petaniList.map((p) =>
-          p.petani_id === saved.petani_id ? saved : p
-        );
-        showToast(`Data petani "${saved.nama_petani}" berhasil diperbarui.`);
-      } else {
-        updated = [saved, ...petaniList.filter((p) => p.petani_id !== saved.petani_id)];
-        showToast(`Petani baru "${saved.nama_petani}" (${saved.petani_id}) berhasil disimpan!`);
-      }
-
+      const saved = serverAktif() ? await kirimPetani(petaniData as Petani, true) : await ErpApiService.savePetani(petaniData, false);
+      const updated = [saved, ...petaniList.filter((p) => p.petani_id !== saved.petani_id)];
       setPetaniList(updated);
       savePetaniData(updated);
-      setIsFormModalOpen(false);
-      setEditingPetani(null);
-      if (!exists) {
-        setHighlightPetaniId(saved.petani_id);
-      }
+      showToast(`Petani baru "${saved.nama_petani}" (${saved.petani_id}) berhasil disimpan!`);
+      tutupFormulir();
+      setHighlightPetaniId(saved.petani_id);
     } catch (err: any) {
-      console.warn('Fallback penyimpanan lokal petani:', err);
-      let updated: Petani[];
-      let savedId = petaniData.petani_id;
-      if (exists) {
-        updated = petaniList.map((p) =>
-          p.petani_id === petaniData.petani_id ? { ...p, ...petaniData } : p
-        );
-        showToast(`Data petani "${petaniData.nama_petani}" berhasil diperbarui.`);
-      } else {
-        const fallbackSaved: Petani = {
-          ...petaniData,
-          petani_id: petaniData.petani_id || generatePetaniId(petaniList),
-          status_aktif: true,
-          tanggal_daftar: petaniData.tanggal_daftar || new Date().toISOString().split('T')[0],
-        };
-        savedId = fallbackSaved.petani_id;
-        updated = [fallbackSaved, ...petaniList.filter((p) => p.petani_id !== fallbackSaved.petani_id)];
-        showToast(`Petani baru "${fallbackSaved.nama_petani}" (${fallbackSaved.petani_id}) berhasil disimpan!`);
+      // Server menjawab dengan penolakan: tampilkan alasannya dan biarkan formulir terbuka
+      if (typeof err?.status === 'number') {
+        showToast(`Petani belum tersimpan: ${err?.message || 'server menolak data'}.`, 'info');
+        return;
       }
+      // Server tidak terjangkau: simpan di komputer ini dan kirim otomatis saat tersambung
+      const lokal: Petani = {
+        ...petaniData,
+        petani_id: petaniData.petani_id || generatePetaniId(petaniList),
+        status_aktif: true,
+        tanggal_daftar: petaniData.tanggal_daftar || new Date().toISOString().split('T')[0],
+      };
+      const updated = [lokal, ...petaniList.filter((p) => p.petani_id !== lokal.petani_id)];
       setPetaniList(updated);
       savePetaniData(updated);
-      setIsFormModalOpen(false);
-      setEditingPetani(null);
-      if (!exists) {
-        setHighlightPetaniId(savedId);
-      }
+      void catatMutasi({ entitas: 'petani', id: lokal.petani_id, aksi: 'simpan', data: lokal, tambahan: { baru: true }, label: `Petani ${lokal.nama_petani}` });
+      showToast(`Petani baru "${lokal.nama_petani}" (${lokal.petani_id}) disimpan di komputer ini dan akan dikirim ke server otomatis.`, 'info');
+      tutupFormulir();
+      setHighlightPetaniId(lokal.petani_id);
     }
   };
 
@@ -725,21 +783,13 @@ export default function App() {
 
     const isNowActive = !target.status_aktif;
 
-    try {
-      await ErpApiService.savePetani({
-        petani_id: petaniId,
-        status_aktif: isNowActive,
-        alasan_nonaktif: isNowActive ? undefined : reason,
-      }, true);
-    } catch (err) {
-      console.warn('Gagal sync status petani ke PostgreSQL:', err);
-    }
-
     const updated = petaniList.map((p) =>
       p.petani_id === petaniId
         ? { ...p, status_aktif: isNowActive, alasan_nonaktif: isNowActive ? undefined : reason }
         : p,
     );
+    const barisBaru = updated.find((p) => p.petani_id === petaniId);
+    if (barisBaru) void catatMutasi({ entitas: 'petani', id: petaniId, aksi: 'status', data: barisBaru, label: `Status petani ${barisBaru.nama_petani}` });
 
     setPetaniList(updated);
     savePetaniData(updated);
@@ -777,6 +827,10 @@ export default function App() {
 
     setPetaniList(updated);
     savePetaniData(updated);
+    const petaniBaru = updated.find((p) => p.petani_id === newCardNumber);
+    if (petaniBaru) {
+      void catatMutasi({ entitas: 'petani', id: newCardNumber, idAlt: petaniId, aksi: 'ganti_id', data: petaniBaru, label: `ID kartu petani ${petaniId} menjadi ${newCardNumber}` });
+    }
 
     // Sinkronisasi id petani pada data transaksi jika ada
     const updatedTx = transaksiList.map((t) => {
@@ -820,14 +874,15 @@ export default function App() {
     for (let i = 0; i < daftar.length; i++) {
       const p = daftar[i];
       try {
-        const hasil = await ErpApiService.savePetani({
+        const isian = {
           nama_petani: p.nama_petani.trim(),
           no_hp: p.no_hp || '',
           alamat: p.alamat || '',
           desa_kecamatan: p.desa_kecamatan || undefined,
           status_aktif: true,
           tanggal_daftar: new Date().toISOString().split('T')[0],
-        }, false);
+        };
+        const hasil = serverAktif() ? await kirimPetani(isian as Petani, true) : await ErpApiService.savePetani(isian, false);
         tersimpan.push(hasil);
       } catch (err: any) {
         // Berhenti agar urutan ID tidak loncat; sisa daftar bisa diimpor ulang
@@ -850,25 +905,7 @@ export default function App() {
     }
   };
 
-  const handleDeletePetani = async (petaniId: string) => {
-    const target = petaniList.find((p) => p.petani_id === petaniId);
-    try {
-      await ErpApiService.deletePetani(petaniId);
-    } catch (err: any) {
-      console.warn('Gagal menonaktifkan petani di backend API:', err);
-    }
-
-    const updated = petaniList.map((p) =>
-      p.petani_id === petaniId
-        ? { ...p, status_aktif: false, alasan_nonaktif: 'Dinonaktifkan oleh pengguna' }
-        : p
-    );
-    setPetaniList(updated);
-    savePetaniData(updated);
-    setViewingPetani(null);
-    showToast(`Data petani "${target?.nama_petani || petaniId}" (${target?.petani_id || ''}) berhasil dinonaktifkan.`);
-  };
-
+  
   // --- PRD 4.2: Harga Handlers ---
   const handleSaveNewPrice = async (newPrice: TabelHarga, oldPriceIdToArchive?: string) => {
     // Layar diperbarui langsung; sinkron ke server berjalan di belakang
@@ -901,39 +938,17 @@ export default function App() {
     terapkanHarga(newPrice);
     showToast(`Tarif Grade ${newPrice.kode_grade} (Rp ${newPrice.harga_per_kg.toLocaleString('id-ID')}) berhasil disimpan.`);
 
-    try {
-      const saved = await ErpApiService.saveHargaBeli(newPrice);
-      if (saved && saved !== newPrice) terapkanHarga(saved);
-    } catch (err: any) {
-      console.warn('Gagal sinkron harga ke server backend, tersimpan lokal:', err);
-      showToast(`Tarif Grade ${newPrice.kode_grade} tersimpan lokal, belum masuk server (${err?.message || 'koneksi error'}).`, 'info');
+    // Tarif lama yang diarsipkan ikut dikirim agar statusnya sama di server
+    const tarifLama = oldPriceIdToArchive && oldPriceIdToArchive !== newPrice.harga_id ? hargaList.find((h) => h.harga_id === oldPriceIdToArchive) : undefined;
+    if (tarifLama) {
+      void catatMutasi({ entitas: 'harga_beli', id: tarifLama.harga_id, aksi: 'simpan', data: { ...tarifLama, status: 'nonaktif' as const }, label: `Tarif Grade ${tarifLama.kode_grade} (arsip)` });
     }
+    void catatMutasi({ entitas: 'harga_beli', id: newPrice.harga_id, aksi: 'simpan', data: newPrice, label: `Tarif Grade ${newPrice.kode_grade}` });
   };
 
-  const handleDeleteHarga = (hargaId: string) => {
-    const target = hargaList.find((h) => h.harga_id === hargaId);
-    const updated = hargaList.filter((h) => h.harga_id !== hargaId);
-    setHargaList(updated);
-    saveHargaData(updated);
-    showToast(`Tarif Grade "${target?.kode_grade || hargaId}" (Rp ${(target?.harga_per_kg || 0).toLocaleString('id-ID')}) berhasil dihapus dari Master Harga.`);
-  };
-
+  
   // --- PRD 5.6: Barang / Inventaris Handlers ---
-  const handleUpdateBarang = async (updated: Barang) => {
-    if (currentUser?.status_aktif === false) return showToast('Akun Anda dinonaktifkan.', 'info');
-    const list = barangList.map((b) => (b.barang_id === updated.barang_id ? updated : b));
-    setBarangList(list);
-    saveBarangData(list);
-
-    try {
-      await ErpApiService.updateBarang(updated);
-    } catch (err: any) {
-      console.warn('Gagal memperbarui data barang di backend API:', err);
-    }
-
-    showToast(`Data bal ${updated.no_bal} berhasil diperbarui di PostgreSQL.`);
-  };
-
+  
   // ---  Transaksi Pembelian Handlers ---
   const handleSaveTransaksi = async (
     newTx: TransaksiPembelian,
@@ -1069,7 +1084,7 @@ export default function App() {
       recordAuditLog({
         user_nama: currentUser?.nama_lengkap || 'Sistem',
         user_role: currentRole,
-        modul: meta.koreksi ? 'Koreksi Transaksi' : 'Transaksi Pembelian',
+        modul: 'Transaksi Pembelian',
         aksi: meta.audit.aksi,
         target_id: newTx.no_kupon,
         deskripsi: meta.audit.deskripsi,
@@ -1130,7 +1145,7 @@ export default function App() {
     //    diverifikasi. Merge hasil tanpa menghapus bal paralel. Simpanan yang tergantikan simpanan lebih baru
     //    tidak perlu digabung ke layar karena hasil simpanan terbarulah yang membawa keadaan akhir.
     try {
-      const hasilAntrian = await antrianSinkron.masukkan(newTx, oldTx, { koreksi: Boolean(meta.koreksi) });
+      const hasilAntrian = await antrianSinkron.masukkan(newTx, oldTx);
       const syncResult =
         hasilAntrian.terbaru && hasilAntrian.hasil ? hasilAntrian.hasil : { syncedTx: newTx, fromBackend: false };
       if (syncResult.fromBackend && syncResult.syncedTx) {
@@ -1156,7 +1171,7 @@ export default function App() {
               return {
                 ...base,
                 ganti_tikar: gantiTikar,
-                potongan_tikar: gantiTikar ? potTikar || 75000 : 0,
+                potongan_tikar: gantiTikar ? potTikar || POTONGAN_GANTI_TIKAR : 0,
               };
             })
           : [...beItems];
@@ -1179,23 +1194,46 @@ export default function App() {
 
         commitLocalTx(syncedTx, false, Boolean(meta.timpaPenuh));
 
-        if (syncedTx.status_pembayaran === 'lunas' || meta.koreksi) {
+        // Setelah dibayar server menerbitkan stok bal; daftar bal diambil ulang dari server
+        if (syncedTx.status_pembayaran === 'lunas') {
           try {
             const barangRes = await ErpApiService.getBarangList();
             if (barangRes.fromBackend) setBarangList(normalizeStatusBal(barangRes.data));
           } catch (err) {
-            console.warn('Gagal refresh barang setelah simpan/koreksi:', err);
+            console.warn('Gagal memuat ulang bal setelah pembayaran:', err);
           }
         }
-      } else if (meta.koreksi) {
-        showToast('Koreksi tersimpan lokal. Server offline — sync ulang saat online.', 'info');
       }
     } catch (err) {
-      console.warn('Gagal sinkronisasi transaksi ke backend API, data lokal tetap dipakai:', err);
-      if (meta.koreksi) {
-        showToast(`Koreksi lokal OK, gagal sync server: ${err instanceof Error ? err.message : 'error'}`, 'info');
-      }
+      // Simpanan tetap di antrean dan dicoba ulang otomatis; statusnya tampil di Header
+      console.warn('Kupon belum terkirim ke server, dicoba ulang otomatis:', err);
     }
+  };
+
+  /**
+   * Tarik ulang daftar kupon dari server dan gabungkan dengan data lokal (mergeKuponParalel), supaya
+   * perubahan dari PC lain (mis. ganti tikar, grade, harga) terlihat tanpa menimpa isian yang sedang
+   * diketik di perangkat ini. Dipakai Sortir & Timbangan lewat polling ringan (lihat onRefreshTransaksiList
+   * di masing-masing komponen) agar salinan lokal kupon yang dibiarkan terbuka lama tidak menjadi basi —
+   * kupon basi yang disimpan ulang bisa menimpa balik field sortir (ganti tikar dll.) bal lain di kupon
+   * yang sama ke nilai lama.
+   */
+  const handleRefreshTransaksiList = async (): Promise<TransaksiPembelian[]> => {
+    const res = await ErpApiService.getTransaksiList();
+    if (!res.fromBackend) return loadTransaksiData();
+    const prev = loadTransaksiData();
+    const byId = new Map(prev.map((t) => [t.transaksi_id, t]));
+    const fromServer = res.data.map((incoming) =>
+      mergeKuponParalel(byId.get(incoming.transaksi_id), incoming)
+    );
+    const serverIds = new Set(fromServer.map((t) => t.transaksi_id));
+    const localOnly = prev.filter((t) => !serverIds.has(t.transaksi_id));
+    const next = [...fromServer, ...localOnly];
+    // Layar hanya diperbarui bila data memang berubah, agar isian operator tidak terganggu
+    if (JSON.stringify(next) === JSON.stringify(prev)) return prev;
+    setTransaksiList(next);
+    saveTransaksiData(next);
+    return next;
   };
 
   const handleDeleteTransaksi = (transaksiId: string, alasanHapus?: string) => {
@@ -1224,8 +1262,16 @@ export default function App() {
       rincian_perubahan: [`Alasan: ${alasanHapus || '-'}`],
     });
 
-    // Kupon yang dihapus tidak perlu lagi dikirim ke server lewat antrean
+    // Kupon yang dihapus tidak perlu lagi dikirim ke server lewat antrean; penghapusannya sendiri harus sampai ke server
     antrianSinkron.batalkan(transaksiId);
+    void catatMutasi({
+      entitas: 'transaksi',
+      id: transaksiId,
+      idAlt: txToDelete.no_kupon,
+      aksi: 'hapus',
+      tambahan: { alasan: alasanHapus },
+      label: `Hapus kupon ${txToDelete.no_kupon}`,
+    });
 
     // 1. Remove from transaksiList
     const updatedTxList = transaksiList.filter((t) => t.transaksi_id !== transaksiId);
@@ -1266,45 +1312,11 @@ export default function App() {
     savePetaniData(updatedPetaniList);
 
     // 4. Record Detailed Audit Log for Deletion
-    const itemBalList = (txToDelete.items && txToDelete.items.length > 0)
-      ? txToDelete.items.map((i) => i.no_bal || i.barcode).join(', ')
-      : txToDelete.no_bal || '-';
-    const totalNilai = txToDelete.harga_final || txToDelete.total_harga_beli || 0;
 
     
 
     
     showToast(`Transaksi ${transaksiId} dan data bal terkait berhasil dihapus.`);
-  };
-
-  // --- PRD 6.2: Pengiriman Sample Handlers ---
-  const handleSaveNewSample = (sample: PengirimanSample) => {
-    if (currentUser?.status_aktif === false) return showToast('Akun Anda dinonaktifkan.', 'info');
-    const updated = [sample, ...sampleList];
-    setSampleList(updated);
-    saveSampleData(updated);
-    showToast(`Sample bal ${sample.no_bal || "-"} berhasil dikirim.`);
-  };
-
-  const handleSaveBatchSamples = (newSamples: PengirimanSample[], updatedBarangs: Barang[]) => {
-    if (currentUser?.status_aktif === false) return showToast('Akun Anda dinonaktifkan.', 'info');
-    const updatedSampleList = [...newSamples, ...sampleList];
-    setSampleList(updatedSampleList);
-    saveSampleData(updatedSampleList);
-
-    const updatedBarangMap = new Map(updatedBarangs.map((b) => [b.barang_id, b]));
-    const updatedBarangList = barangList.map((b) => updatedBarangMap.get(b.barang_id) || b);
-    setBarangList(updatedBarangList);
-    saveBarangData(updatedBarangList);
-
-    showToast(`${newSamples.length} sampel tembakau berhasil diproses kirim ke Lab QC!`);
-  };
-
-  const handleUpdateSample = (sample: PengirimanSample) => {
-    const updated = sampleList.map((s) => (s.sample_id === sample.sample_id ? sample : s));
-    setSampleList(updated);
-    saveSampleData(updated);
-    showToast(`Status sampel bal ${sample.no_bal || "-"} diupdate menjadi "${sample.status.toUpperCase()}".`);
   };
 
   // --- PRD 6.1: Pengiriman Barang (DO) Handlers ---
@@ -1313,7 +1325,9 @@ export default function App() {
 
     const updatedSet = new Set(updatedBarangIds);
 
-    // 1) Langsung tampil: surat jalan baru, bal berstatus keluar, dan tanda DO pada batch sample
+    // 1) Langsung tampil: surat jalan baru dan tanda DO pada batch sample. Bal TIDAK langsung berstatus
+    // keluar di sini: bal baru benar-benar keluar gudang saat Surat Jalan ini berstatus Selesai
+    // (lihat handleUpdatePengirimanStatus). Selama belum Selesai, bal tetap tampil "Di Gudang".
     setPengirimanList((prev) => {
       const next = [newPengiriman, ...prev.filter((p) => p.pengiriman_id !== newPengiriman.pengiriman_id)];
       savePengirimanData(next);
@@ -1321,9 +1335,7 @@ export default function App() {
     });
     setBarangList((prev) => {
       const next = prev.map((b) =>
-        updatedSet.has(b.barang_id)
-          ? { ...b, status_stok: 'keluar' as const, pengiriman_id: newPengiriman.pengiriman_id }
-          : b
+        updatedSet.has(b.barang_id) ? { ...b, pengiriman_id: newPengiriman.pengiriman_id } : b
       );
       saveBarangData(next);
       return next;
@@ -1351,37 +1363,22 @@ export default function App() {
       batchTerkait = updatedBatches.find((b) => b.batch_id === targetBatchId || b.kode_batch === targetBatchId);
     }
 
-    showToast(`Surat Jalan ${newPengiriman.no_surat_jalan} diterbitkan (${newPengiriman.total_bal || updatedBarangIds.length} bal keluar)!`);
+    showToast(`Surat Jalan ${newPengiriman.no_surat_jalan} diterbitkan (${newPengiriman.total_bal || updatedBarangIds.length} bal dimuat)!`);
 
-    // 2) Sinkron ke server di belakang; server hanya menentukan ID, rincian lokal tetap dipakai
-    try {
-      const saved = await ErpApiService.savePengiriman(newPengiriman, updatedBarangIds);
-      const idBaru = saved.pengiriman_id || newPengiriman.pengiriman_id;
-      setPengirimanList((prev) => {
-        const next = prev.map((p) => (p.pengiriman_id === newPengiriman.pengiriman_id ? { ...saved, pengiriman_id: idBaru } : p));
-        savePengirimanData(next);
-        return next;
-      });
-      if (idBaru !== newPengiriman.pengiriman_id) {
-        setBarangList((prev) => {
-          const next = prev.map((b) => (b.pengiriman_id === newPengiriman.pengiriman_id ? { ...b, pengiriman_id: idBaru } : b));
-          saveBarangData(next);
-          return next;
-        });
-      }
-      const barangRes = await ErpApiService.getBarangList();
-      if (barangRes.fromBackend) setBarangList(barangRes.data);
-    } catch (err: any) {
-      console.warn('Gagal menyimpan pengiriman ke API backend, tersimpan lokal:', err);
-    }
+    // 2) Sinkron ke server lewat antrean (dicoba ulang sampai berhasil); ID dari server digabung saat selesai
+    void catatMutasi({
+      entitas: 'pengiriman',
+      id: newPengiriman.pengiriman_id,
+      idAlt: newPengiriman.no_surat_jalan,
+      aksi: 'simpan',
+      data: newPengiriman,
+      tambahan: { baru: true },
+      label: `Surat Jalan ${newPengiriman.no_surat_jalan}`,
+    });
 
-    // Persist flag DO ke BE bila batch sudah ada di server
+    // Tanda DO pada batch sample asal juga harus sampai ke server
     if (batchTerkait) {
-      try {
-        await ErpApiService.updateBatchSample(batchTerkait);
-      } catch {
-        /* offline / batch lokal */
-      }
+      void catatMutasi({ entitas: 'batch_sample', id: batchTerkait.batch_id, idAlt: batchTerkait.kode_batch, aksi: 'simpan', data: batchTerkait, label: `Batch sample ${batchTerkait.kode_batch}` });
     }
   };
 
@@ -1399,21 +1396,10 @@ export default function App() {
     terapkan(item);
     showToast(`Harga jual "${item.kode}" berhasil disimpan.`);
 
-    try {
-      const saved = await ErpApiService.saveHargaJual(item);
-      if (saved && saved.harga_jual_id) terapkan(saved);
-    } catch (err: any) {
-      showToast(err?.message || 'Harga jual tersimpan lokal, belum masuk server.', 'info');
-    }
+    void catatMutasi({ entitas: 'harga_jual', id: item.harga_jual_id, aksi: 'simpan', data: item, label: `Harga jual ${item.kode}` });
   };
 
-  const handleDeleteHargaJual = (id: string) => {
-    const updated = hargaJualList.filter((h) => h.harga_jual_id !== id);
-    setHargaJualList(updated);
-    saveHargaJualData(updated);
-    showToast('Harga jual berhasil dihapus.');
-  };
-
+  
 
   const handleSaveBatchSample = async (newBatch: BatchPengirimanSample, updatedBarangs: Barang[]) => {
     if (currentUser?.status_aktif === false) return showToast('Akun Anda dinonaktifkan.', 'info');
@@ -1432,27 +1418,29 @@ export default function App() {
         return next;
       });
     }
-    showToast(`Batch Sample ${newBatch.kode_batch} berhasil dikirim ke ${newBatch.tujuan_buyer}!`);
+    showToast(
+      newBatch.status === 'draft'
+        ? `Batch Sample ${newBatch.kode_batch} disimpan sebagai Draft. Finalkan di Status & Detail Batch bila sudah siap dipakai.`
+        : `Batch Sample ${newBatch.kode_batch} berhasil dikirim ke ${newBatch.tujuan_buyer}!`
+    );
 
-    // 2) Sinkron ke server di belakang (No. Surat Sample manual tetap dipakai)
-    try {
-      const saved = await ErpApiService.saveBatchSample(newBatch);
-      setBatchSampleList((prev) => {
-        const next = prev.map((b) => (b.batch_id === newBatch.batch_id ? saved : b));
-        saveBatchSampleData(next);
-        return next;
-      });
-      const barangRes = await ErpApiService.getBarangList();
-      if (barangRes.fromBackend) setBarangList(barangRes.data);
-    } catch (err: any) {
-      console.warn('Gagal menyimpan batch sample ke API backend, tersimpan lokal:', err);
-    }
+    // 2) Sinkron ke server lewat antrean (No. Surat Sample manual tetap dipakai); dicoba ulang sampai berhasil
+    void catatMutasi({
+      entitas: 'batch_sample',
+      id: newBatch.batch_id,
+      idAlt: newBatch.kode_batch,
+      aksi: 'simpan',
+      data: newBatch,
+      tambahan: { baru: true },
+      label: `Batch sample ${newBatch.kode_batch}`,
+    });
   };
 
 
   const handleDeleteBatchSample = (batchId: string, revertedBarangs?: Barang[]) => {
     if (currentUser?.status_aktif === false) return showToast('Akun Anda dinonaktifkan.', 'info');
-    const kodeBatch = batchSampleList.find((b) => b.batch_id === batchId)?.kode_batch || '';
+    const batchTarget = batchSampleList.find((b) => b.batch_id === batchId);
+    const kodeBatch = batchTarget?.kode_batch || '';
     const list = batchSampleList.filter(b => b.batch_id !== batchId);
     setBatchSampleList(list);
     saveBatchSampleData(list);
@@ -1462,7 +1450,19 @@ export default function App() {
       const newBarangList = barangList.map((b) => updatedBarangMap.get(b.barang_id) || b);
       setBarangList(newBarangList);
       saveBarangData(newBarangList);
+      // Bal kembali ke stok gudang juga di server
+      catatStatusBal(revertedBarangs, barangList);
     }
+
+    // Penghapusan harus sampai ke server; kalau tidak, batch muncul lagi saat data dimuat ulang
+    void catatMutasi({
+      entitas: 'batch_sample',
+      id: batchId,
+      idAlt: kodeBatch || undefined,
+      aksi: 'hapus',
+      tambahan: { batch: batchTarget },
+      label: `Hapus batch sample ${kodeBatch}`,
+    });
     
     showToast(`Batch ${kodeBatch} berhasil dihapus.`);
   };
@@ -1484,107 +1484,208 @@ export default function App() {
     }
     showToast(`Batch ${updatedBatch.kode_batch} berhasil diperbarui.`);
 
-    // 2) Sinkron ke server di belakang
-    try {
-      const saved = await ErpApiService.updateBatchSample(updatedBatch);
-      setBatchSampleList((prev) => {
-        const next = prev.map((b) => (b.batch_id === updatedBatch.batch_id ? saved : b));
-        saveBatchSampleData(next);
-        return next;
-      });
-    } catch (err: any) {
-      console.warn('Gagal update batch sample ke API, tersimpan lokal:', err);
+    // 2) Sinkron ke server lewat antrean: daftar bal lengkap dan harga ikut terkirim, dicoba ulang sampai berhasil
+    void catatMutasi({
+      entitas: 'batch_sample',
+      id: updatedBatch.batch_id,
+      idAlt: updatedBatch.kode_batch,
+      aksi: 'simpan',
+      data: updatedBatch,
+      label: `Batch sample ${updatedBatch.kode_batch}`,
+    });
+    // Bal yang masuk atau keluar batch berubah statusnya juga di server
+    catatStatusBal(updatedBarangs, barangList);
+  };
+
+  /**
+   * Menyimpan hasil edit Surat Jalan yang belum Selesai (tambah/keluarkan bal, berat, harga, potongan, tujuan, dll.).
+   * Bal baru menjadi keluar, bal yang dikeluarkan kembali ke gudang, dan tanda "sudah dikirim DO" pada batch sample
+   * disesuaikan. Mengembalikan false bila ditolak.
+   */
+  const handleUpdatePengiriman = (updatedPengiriman: PengirimanBarang, balDitambah: string[] = [], balDikeluarkan: string[] = []): boolean => {
+    const lama = pengirimanList.find((p) => p.pengiriman_id === updatedPengiriman.pengiriman_id);
+    if (!lama) {
+      showToast('Surat Jalan yang diedit tidak ditemukan.', 'info');
+      return false;
     }
+    if (isSuratJalanTerkunci(lama)) {
+      showToast(`Surat Jalan ${lama.no_surat_jalan} sudah Selesai dan tidak dapat diedit lagi.`, 'info');
+      return false;
+    }
+    if (currentUser?.status_aktif === false) {
+      showToast('Akun Anda dinonaktifkan.', 'info');
+      return false;
+    }
+    const tambah = new Set(balDitambah);
+    const keluar = new Set(balDikeluarkan);
+    // Bal baru tidak boleh sudah dipakai Surat Jalan lain
+    const bentrok = cariSuratJalanBentrok(pengirimanList, lama.pengiriman_id, tambah);
+    if (bentrok) {
+      showToast(`Ada bal yang sudah tercatat di Surat Jalan ${bentrok.no_surat_jalan}. Keluarkan dari muatan lalu simpan lagi.`, 'info');
+      return false;
+    }
+
+    // Status tidak berubah lewat edit; status diatur lewat halaman Status Pengiriman
+    const baru: PengirimanBarang = { ...updatedPengiriman, status: lama.status };
+    setPengirimanList((prev) => {
+      const next = prev.map((p) => (p.pengiriman_id === baru.pengiriman_id ? baru : p));
+      savePengirimanData(next);
+      return next;
+    });
+    // Bal baru masuk muatan TIDAK langsung berstatus keluar (baru keluar sungguhan saat Selesai);
+    // bal yang dikeluarkan dari muatan hanya dibalik ke gudang bila kebetulan sudah keluar (data lama).
+    const barangSetelahEdit = masukkanBalKeMuatan(kembalikanBalKeGudang(barangList, keluar), tambah, baru.pengiriman_id);
+    setBarangList(barangSetelahEdit);
+    saveBarangData(barangSetelahEdit);
+    // Bal yang statusnya benar-benar berubah (jarang di sini, hanya kasus data lama) disinkronkan ke server
+    const idBalBerubah = new Set<string>([...tambah, ...keluar]);
+    catatStatusBal(barangSetelahEdit.filter((b) => idBalBerubah.has(b.barang_id)), barangList);
+
+    const sesuaiBatch = sesuaikanBatchSetelahPerubahanDO(batchSampleList, lama.batch_sample_id_ref, tambah, keluar);
+    const batchTerkait = sesuaiBatch.batchTerkait;
+    if (batchTerkait) {
+      setBatchSampleList(sesuaiBatch.batchList);
+      saveBatchSampleData(sesuaiBatch.batchList);
+    }
+
+    const perubahanBal = [
+      tambah.size > 0 ? `${tambah.size} bal ditambah` : '',
+      keluar.size > 0 ? `${keluar.size} bal dikeluarkan` : '',
+    ].filter(Boolean).join(', ');
+    showToast(`Surat Jalan ${baru.no_surat_jalan} diperbarui${perubahanBal ? ` (${perubahanBal})` : ''}.`);
+
+    // Sinkron ke server lewat antrean (dicoba ulang sampai berhasil); bal dimuat ulang dari server saat selesai
+    void catatMutasi({
+      entitas: 'pengiriman',
+      id: baru.pengiriman_id,
+      idAlt: baru.no_surat_jalan,
+      aksi: 'simpan',
+      data: baru,
+      label: `Surat Jalan ${baru.no_surat_jalan}`,
+    });
+    if (batchTerkait) {
+      void catatMutasi({ entitas: 'batch_sample', id: batchTerkait.batch_id, idAlt: batchTerkait.kode_batch, aksi: 'simpan', data: batchTerkait, label: `Batch sample ${batchTerkait.kode_batch}` });
+    }
+    return true;
   };
 
-  const handleUpdatePengiriman = (updatedPengiriman: PengirimanBarang) => {
-    const list = pengirimanList.map(p => p.pengiriman_id === updatedPengiriman.pengiriman_id ? updatedPengiriman : p);
-    setPengirimanList(list);
-    savePengirimanData(list);
-    showToast(`Data pengiriman DO berhasil diperbarui.`);
-  };
-
-  const handleDeletePengiriman = (pengirimanId: string, revertedBarangs?: Barang[]) => {
+  /**
+   * Membatalkan Surat Jalan yang belum Selesai: bal kembali ke gudang dan, bila berasal dari
+   * batch sample, tanda "sudah dikirim DO" pada bal-bal itu dicabut agar bisa dibuatkan Surat Jalan lagi.
+   */
+  const handleDeletePengiriman = (pengirimanId: string) => {
     const target = pengirimanList.find((p) => p.pengiriman_id === pengirimanId);
-    if (target && isSuratJalanTerkunci(target)) {
+    if (!target) return;
+    if (isSuratJalanTerkunci(target)) {
       showToast(pesanSuratJalanTerkunci(target), 'info');
       return;
     }
+    if (currentUser?.status_aktif === false) return showToast('Akun Anda dinonaktifkan.', 'info');
 
-    const list = pengirimanList.filter((p) => p.pengiriman_id !== pengirimanId);
-    setPengirimanList(list);
-    savePengirimanData(list);
+    setPengirimanList((prev) => {
+      const next = prev.filter((p) => p.pengiriman_id !== pengirimanId);
+      savePengirimanData(next);
+      return next;
+    });
 
-    if (revertedBarangs && revertedBarangs.length > 0) {
-      const updatedBarangMap = new Map(revertedBarangs.map((b) => [b.barang_id, b]));
-      const newBarangList = barangList.map((b) => updatedBarangMap.get(b.barang_id) || b);
-      setBarangList(newBarangList);
-      saveBarangData(newBarangList);
+    const idBal = new Set(target.barang_ids || []);
+    const barangSetelahBatal = kembalikanBalKeGudang(barangList, idBal);
+    setBarangList(barangSetelahBatal);
+    saveBarangData(barangSetelahBatal);
+    // Bal kembali ke stok gudang juga di server (kalau tidak, statusnya balik "keluar" lagi saat data dimuat ulang)
+    catatStatusBal(barangSetelahBatal.filter((b) => idBal.has(b.barang_id)), barangList);
+
+    // Batch sample asal ditutup otomatis saat semua bal punya DO; dengan DO dibatalkan ia terbuka lagi
+    const sesuaiBatch = sesuaikanBatchSetelahPerubahanDO(batchSampleList, target.batch_sample_id_ref, new Set(), idBal);
+    const batchTerkait = sesuaiBatch.batchTerkait;
+    if (batchTerkait) {
+      setBatchSampleList(sesuaiBatch.batchList);
+      saveBatchSampleData(sesuaiBatch.batchList);
     }
-    
-    showToast(`Pengiriman (DO) berhasil dihapus.`);
+
+    showToast(`Surat Jalan ${target.no_surat_jalan} dibatalkan; ${idBal.size} bal kembali ke gudang.`);
+
+    // Pembatalan harus sampai ke server; kalau tidak, Surat Jalan muncul lagi saat data dimuat ulang
+    void catatMutasi({
+      entitas: 'pengiriman',
+      id: pengirimanId,
+      idAlt: target.no_surat_jalan,
+      aksi: 'hapus',
+      label: `Batalkan Surat Jalan ${target.no_surat_jalan}`,
+    });
+    if (batchTerkait) {
+      void catatMutasi({ entitas: 'batch_sample', id: batchTerkait.batch_id, idAlt: batchTerkait.kode_batch, aksi: 'simpan', data: batchTerkait, label: `Batch sample ${batchTerkait.kode_batch}` });
+    }
   };
 
   const handleUpdatePengirimanStatus = (pengirimanId: string, newStatus: string) => {
-    const updated = pengirimanList.map(p => p.pengiriman_id === pengirimanId ? { ...p, status: newStatus as any } : p);
+    const target = pengirimanList.find((p) => p.pengiriman_id === pengirimanId);
+    if (!target || target.status === newStatus) return;
+    // Selesai bersifat final: nilai penjualan sudah masuk laporan
+    if (isSuratJalanTerkunci(target)) {
+      showToast(`Surat Jalan ${target.no_surat_jalan} sudah Selesai dan statusnya tidak dapat diubah lagi.`, 'info');
+      return;
+    }
+
+    const updated = pengirimanList.map((p) => (p.pengiriman_id === pengirimanId ? { ...p, status: newStatus as PengirimanBarang['status'] } : p));
     setPengirimanList(updated);
     savePengirimanData(updated);
-    showToast(`Status surat jalan ${pengirimanList.find((p) => p.pengiriman_id === pengirimanId)?.no_surat_jalan || ''} menjadi ${newStatus}.`);
+
+    // Bal baru benar-benar "keluar" gudang tepat saat Surat Jalan ini Selesai; sebelum itu masih "Di Gudang"
+    if (newStatus === 'selesai') {
+      const idBal = new Set(target.barang_ids || []);
+      const barangSetelahSelesai = keluarkanBal(barangList, idBal, pengirimanId);
+      setBarangList(barangSetelahSelesai);
+      saveBarangData(barangSetelahSelesai);
+      catatStatusBal(barangSetelahSelesai.filter((b) => idBal.has(b.barang_id)), barangList);
+    }
+
+    showToast(
+      newStatus === 'selesai'
+        ? `Surat Jalan ${target.no_surat_jalan} Selesai; ${target.barang_ids?.length || 0} bal keluar gudang dan nilai penjualannya kini masuk laporan.`
+        : `Status Surat Jalan ${target.no_surat_jalan} menjadi ${LABEL_STATUS_PENGIRIMAN[newStatus] || newStatus}.`
+    );
+
+    const barisBaru = updated.find((p) => p.pengiriman_id === pengirimanId);
+    if (barisBaru) {
+      void catatMutasi({
+        entitas: 'pengiriman',
+        id: pengirimanId,
+        idAlt: barisBaru.no_surat_jalan,
+        aksi: 'status',
+        data: barisBaru,
+        label: `Status Surat Jalan ${barisBaru.no_surat_jalan}`,
+      });
+    }
   };
 
   // Laporan nilai/aset hanya memakai bal dari kupon yang sudah dibayar
   const barangLunasList = useMemo(() => filterBarangLunas(barangList, transaksiList), [barangList, transaksiList]);
 
   const totalPetani = petaniList.length;
-  const totalAktif = petaniList.filter((p) => p.status_aktif).length;
-  const totalNonaktif = totalPetani - totalAktif;
 
-  // Breadcrumb title map
-  const getPageTitleAndBreadcrumb = () => {
-    switch (activeModuleId) {
-      case 'modul-home':
-        return { title: 'Dasbor Menu Utama', breadcrumb: 'PT. SEKAR MAJU SEJAHTERA / Beranda' };
-      case 'modul-6-dashboard-analytic':
-        return { title: 'Dashboard Laporan & Analytic ERP', breadcrumb: 'Beranda / Dashboard Analytic' };
-      case 'modul-6-laporan-bal':
-        return { title: 'Laporan Bal Tembakau', breadcrumb: 'Beranda / Laporan Bal' };
-      case 'modul-6-laporan-kode-bal':
-        return { title: 'Laporan Kode Bal', breadcrumb: 'Beranda / Laporan Kode Bal' };
-      case 'modul-6-laporan-grade':
-        return { title: 'Laporan Harga', breadcrumb: 'Beranda / Laporan Harga' };
-      case 'modul-6-laporan-pembelian':
-        return { title: 'Laporan Pembelian Barang', breadcrumb: 'Beranda / Laporan Pembelian' };
-      case 'modul-6-laporan-petani':
-        return { title: 'Laporan Petani & Rekapitulasi Setoran', breadcrumb: 'Beranda / Laporan Petani' };
-      case 'modul-6-laporan-pengiriman':
-        return { title: 'Laporan Pengiriman & Distribusi Tembakau', breadcrumb: 'Beranda / Laporan Pengiriman' };
-      case 'modul-1-petani':
-        return { title: 'Master Data Petani', breadcrumb: 'Beranda / Master Petani' };
-      case 'modul-3-harga':
-        return { title: 'Master Harga Beli', breadcrumb: 'Beranda / Master Harga' };
-      case 'modul-3-harga-jual':
-        return { title: 'Master Harga Jual Pabrik', breadcrumb: 'Beranda / Master Harga Jual' };
-      case 'modul-0-sortir':
-        return { title: 'Sortir Mutu Grade & Sample Bal', breadcrumb: 'Beranda / Pembelian / Sortir' };
-      case 'modul-0-timbangan':
-        return { title: 'Meja Timbangan Bal', breadcrumb: 'Beranda / Pembelian / Timbangan' };
-      case 'modul-0-kasir':
-      case 'modul-0-transaksi':
-        return { title: 'Data Pembelian Barang (Kasir & Cetak Nota)', breadcrumb: 'Beranda / Pembelian / Kasir' };
-      case 'modul-5-pengiriman':
-        return { title: 'Pengiriman Reguler (DO Luar)', breadcrumb: 'Beranda / Pengiriman DO' };
-      case 'modul-4-sample':
-        return { title: 'Pengiriman Sample', breadcrumb: 'Beranda / Pengiriman Sample' };
-      case 'modul-status-batch':
-        return { title: 'Status & Detail Batch Sample', breadcrumb: 'Beranda / Status Batch' };
-      case 'modul-users':
-        return { title: 'Manajemen Pengguna (RBAC)', breadcrumb: 'Beranda / Manajemen Pengguna' };
-      default:
-        return { title: 'Sistem Data Gudang Tembakau', breadcrumb: 'PT. SEKAR MAJU SEJAHTERA / Sistem Data Gudang' };
-    }
+  // Judul di Header sama dengan nama menu di Sidebar
+  const JUDUL_MODUL: Record<string, string> = {
+    'modul-home': 'Home',
+    'modul-6-dashboard-analytic': 'Dashboard Analytic',
+    'modul-6-laporan-bal': 'Laporan Bal',
+    'modul-6-laporan-grade': 'Laporan Harga',
+    'modul-6-laporan-pembelian': 'Laporan Pembelian',
+    'modul-6-laporan-petani': 'Laporan Petani',
+    'modul-6-laporan-pengiriman': 'Laporan Pengiriman',
+    'modul-1-petani': 'Master Petani',
+    'modul-3-harga': 'Master Harga Beli',
+    'modul-3-harga-jual': 'Master Harga Jual',
+    'modul-0-sortir': 'Sortir',
+    'modul-0-timbangan': 'Timbangan',
+    'modul-0-kasir': 'Kasir',
+    'modul-0-transaksi': 'Kasir',
+    'modul-4-sample': 'Pengiriman Sample',
+    'modul-status-batch': 'Status & Detail Batch',
+    'modul-5-pengiriman': 'Pengiriman Reguler (DO)',
+    'modul-users': 'Manajemen Pengguna',
   };
-
-  const pageInfo = getPageTitleAndBreadcrumb();
+  const pageTitle = JUDUL_MODUL[activeModuleId] || 'Home';
 
   // Seluruh halaman berada di balik autentikasi, termasuk rute cetak mandiri.
   if (!currentUser) {
@@ -1594,6 +1695,7 @@ export default function App() {
   // Halaman cetak mandiri (?cetak=nota&id=...)
   if (printParam) {
     return (
+      <Suspense fallback={<MemuatHalaman />}>
       <DedicatedPrintView
         type={printParam.type}
         id={printParam.id}
@@ -1608,6 +1710,7 @@ export default function App() {
         petaniList={petaniList}
         tabelHarga={hargaList}
       />
+      </Suspense>
     );
   }
 
@@ -1616,15 +1719,10 @@ export default function App() {
       
       {/* Top Professional ERP Header */}
       <Header
-        totalPetani={totalPetani}
-        totalAktif={totalAktif}
-        totalNonaktif={totalNonaktif}
-        pageTitle={pageInfo.title}
-        pageBreadcrumb={pageInfo.breadcrumb}
+        pageTitle={pageTitle}
         currentUser={currentUser}
         onLogout={handleLogout}
         onOpenUsers={() => handleSelectModule('modul-users')}
-        allUsers={userList}
         onToggleSidebar={handleToggleSidebar}
         onMouseEnterToggle={handleMouseEnterToggle}
         onMouseLeaveToggle={handleMouseLeaveToggle}
@@ -1643,7 +1741,7 @@ export default function App() {
             }}
             petaniCount={totalPetani}
             transaksiCount={transaksiList.length}
-            sampleCount={sampleList.length}
+            sampleCount={batchSampleList.length}
             pengirimanCount={pengirimanList.length}
             hargaJualCount={hargaJualList.length}
             hargaCount={hargaList.length}
@@ -1666,7 +1764,7 @@ export default function App() {
               }}
               petaniCount={totalPetani}
               transaksiCount={transaksiList.length}
-              sampleCount={sampleList.length}
+              sampleCount={batchSampleList.length}
               pengirimanCount={pengirimanList.length}
               hargaJualCount={hargaJualList.length}
               hargaCount={hargaList.length}
@@ -1678,17 +1776,14 @@ export default function App() {
 
         {/* Center Main Stage */}
         <main className="flex-1 overflow-y-auto p-3 sm:p-4 bg-gray-50/40">
+          <ErrorBoundary key={activeModuleId} area={pageTitle}>
+          <Suspense fallback={<MemuatHalaman />}>
           <div className="w-full space-y-2.5">
-            
+
             {/* Dashboard Menu */}
             {activeModuleId === 'modul-home' && (
               <HomeDashboardView
                 onNavigate={(modId) => handleSelectModule(modId)}
-                petaniList={petaniList}
-                barangList={barangList}
-                transaksiList={transaksiList}
-                sampleList={sampleList}
-                pengirimanList={pengirimanList}
                 currentUser={currentUser}
                 userCount={userList.length}
               />
@@ -1699,11 +1794,11 @@ export default function App() {
               <DashboardAnalyticView
                 transaksiList={transaksiList}
                 barangList={barangList}
-                sampleList={sampleList}
+                sampleList={sampleRows}
+                batchSampleList={batchSampleList}
                 pengirimanList={pengirimanList}
                 hargaList={hargaList}
                 hargaJualList={hargaJualList}
-                serverStats={dashboardServerStats}
                 isRefreshing={laporanRefreshing}
                 userRole={currentRole}
                 onNavigateToModule={(modId) => handleSelectModule(modId)}
@@ -1711,8 +1806,6 @@ export default function App() {
                   setLaporanRefreshing(true);
                   try {
                     await refreshOperationalLists();
-                    const statsRes = await ErpApiService.getDashboardStats();
-                    setDashboardServerStats(statsRes.fromBackend ? statsRes.data : null);
                   } finally {
                     setLaporanRefreshing(false);
                   }
@@ -1732,11 +1825,6 @@ export default function App() {
               />
             )}
 
-            {/* Laporan Kode Bal */}
-            {activeModuleId === 'modul-6-laporan-kode-bal' && (
-              <LaporanKodeBalView barangList={barangLunasList} />
-            )}
-
             {/* Laporan Harga */}
             {activeModuleId === 'modul-6-laporan-grade' && (
               <LaporanGradeView
@@ -1746,7 +1834,6 @@ export default function App() {
                 barangList={barangLunasList}
                 transaksiList={transaksiList}
                 pengirimanList={pengirimanList}
-                sampleList={sampleList}
                 userRole={currentRole}
                 onNavigateToHarga={() => handleSelectModule('modul-3-harga')}
                 onNavigateToHargaJual={() => handleSelectModule('modul-3-harga-jual')}
@@ -1778,7 +1865,7 @@ export default function App() {
             {activeModuleId === 'modul-6-laporan-pengiriman' && (
               <LaporanPengirimanView
                 pengirimanList={pengirimanList}
-                sampleList={sampleList}
+                sampleList={sampleRows}
                 barangList={barangList}
                 userRole={currentRole}
                 onNavigateToSample={() => handleSelectModule('modul-4-sample')}
@@ -1862,23 +1949,7 @@ export default function App() {
                   handleSaveTransaksi(newTx, newBarangs, { ...meta, silent: true });
                   showToast(`Data timbangan kupon ${newTx.no_kupon} diperbarui!`);
                 }}
-                onRefreshTransaksiList={async () => {
-                  const res = await ErpApiService.getTransaksiList();
-                  if (!res.fromBackend) return loadTransaksiData();
-                  const prev = loadTransaksiData();
-                  const byId = new Map(prev.map((t) => [t.transaksi_id, t]));
-                  const fromServer = res.data.map((incoming) =>
-                    mergeKuponParalel(byId.get(incoming.transaksi_id), incoming)
-                  );
-                  const serverIds = new Set(fromServer.map((t) => t.transaksi_id));
-                  const localOnly = prev.filter((t) => !serverIds.has(t.transaksi_id));
-                  const next = [...fromServer, ...localOnly];
-                  // Layar hanya diperbarui bila data memang berubah, agar isian operator tidak terganggu
-                  if (JSON.stringify(next) === JSON.stringify(prev)) return prev;
-                  setTransaksiList(next);
-                  saveTransaksiData(next);
-                  return next;
-                }}
+                onRefreshTransaksiList={handleRefreshTransaksiList}
                 onNavigateToKasir={(kuponNo, txId) => {
                   setTargetKuponNo(kuponNo);
                   setTargetTxId(txId);
@@ -1923,7 +1994,6 @@ export default function App() {
             {/* PRD 6.2: Pengiriman Sample */}
             {activeModuleId === 'modul-4-sample' && (
               <SampleManagement
-                sampleList={sampleList}
                 batchSampleList={batchSampleList}
                 barangList={barangList}
                 
@@ -1932,13 +2002,8 @@ export default function App() {
                 hargaList={hargaList}
                 transaksiList={transaksiList}
                 userRole={currentRole}
-                onSaveNewSample={handleSaveNewSample}
-                onSaveBatchSamples={handleSaveBatchSamples}
-
                 onSaveBatchSample={handleSaveBatchSample}
                 onUpdateBatchSample={handleUpdateBatchSample}
-                onDeleteBatchSample={handleDeleteBatchSample}
-                onUpdateSample={handleUpdateSample}
                 onNavigateToPengiriman={(batchId) => {
                   if (batchId) {
                     setSelectedBatchIdForShipment(batchId);
@@ -1947,6 +2012,9 @@ export default function App() {
                     handleSelectModule('modul-status-batch');
                   }
                 }}
+                onNavigateToStatusBatch={() => handleSelectModule('modul-status-batch')}
+                editBatchId={editBatchId}
+                onSelesaiEdit={() => setEditBatchId(null)}
               />
             )}
 
@@ -1955,7 +2023,6 @@ export default function App() {
               <PengirimanManagement
                 pengirimanList={pengirimanList}
                 barangList={barangList}
-                sampleList={sampleList}
                 batchSampleList={batchSampleList}
                 selectedBatchId={selectedBatchIdForShipment}
                 
@@ -1968,6 +2035,8 @@ export default function App() {
                 onUpdatePengiriman={handleUpdatePengiriman}
                 onDeletePengiriman={handleDeletePengiriman}
                 onNavigateToStatusBatch={() => handleSelectModule('modul-status-batch')}
+                editPengirimanId={editPengirimanId}
+                onSelesaiEdit={() => setEditPengirimanId(null)}
               />
             )}
 
@@ -2002,6 +2071,14 @@ export default function App() {
                 onDeleteBatchSample={handleDeleteBatchSample}
                 onUpdatePengirimanStatus={handleUpdatePengirimanStatus}
                 onDeletePengiriman={handleDeletePengiriman}
+                onEditPengiriman={(pengirimanId) => {
+                  setEditPengirimanId(pengirimanId);
+                  handleSelectModule('modul-5-pengiriman');
+                }}
+                onEditBatchSample={(batchId) => {
+                  setEditBatchId(batchId);
+                  handleSelectModule('modul-4-sample');
+                }}
                 onNavigateToPengirimanWithBatch={(batchId) => {
                   setSelectedBatchIdForShipment(batchId);
                   handleSelectModule('modul-5-pengiriman');
@@ -2009,10 +2086,9 @@ export default function App() {
               />
             )}
 
-            {/* Log Aktivitas */}
-            
-
           </div>
+          </Suspense>
+          </ErrorBoundary>
         </main>
 
       </div>
@@ -2075,6 +2151,7 @@ export default function App() {
 
       {/* Universal In-App Print & PDF Preview Modal */}
       {embeddedPrintDoc && (
+        <Suspense fallback={null}>
         <DedicatedPrintView
           type={embeddedPrintDoc.type}
           id={embeddedPrintDoc.id}
@@ -2087,13 +2164,21 @@ export default function App() {
           petaniList={petaniList}
           tabelHarga={hargaList}
         />
+        </Suspense>
       )}
 
       {/* Toast Notification Popup */}
       {toast && (
-        <div className="fixed bottom-5 right-5 z-50 flex items-center space-x-2 bg-slate-900 text-white px-4 py-3 rounded-sm shadow-xl border border-slate-800 animate-in slide-in-from-bottom-5 duration-150">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span className="text-xs font-semibold">{toast.message}</span>
+        <div
+          className="fixed bottom-5 right-5 z-50 max-w-md flex items-start space-x-2 bg-slate-900 text-white px-4 py-3 rounded-sm shadow-xl border border-slate-800"
+          role={toast.type === 'info' ? 'alert' : 'status'}
+        >
+          {toast.type === 'info' ? (
+            <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-px" />
+          ) : (
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-px" />
+          )}
+          <span className="text-xs font-semibold leading-relaxed">{toast.message}</span>
         </div>
       )}
 

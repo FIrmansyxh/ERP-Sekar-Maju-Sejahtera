@@ -1,6 +1,6 @@
 # Dokumentasi Database & Sinkronisasi Data
 
-Tanggal: 2026-09-20 · Berlaku untuk: frontend v3.0.x (repositori ini) dan backend Laravel + PostgreSQL (repositori terpisah).
+Tanggal: 2026-09-20, diperbarui 2026-09-21 (audit menyeluruh, lihat `LAPORAN_AUDIT_2026-09-21.md`) · Berlaku untuk: frontend v3.0.x (repositori ini) dan backend Laravel + PostgreSQL (repositori terpisah).
 
 Dokumen ini menjelaskan bagaimana data kupon, bal, timbangan, dan pembayaran mengalir dari layar ke
 database, apa yang harus dijamin database, dan bagaimana mencari, menambah, mengurangi, memproses,
@@ -82,7 +82,7 @@ stateDiagram-v2
   (`status_pembayaran = 'lunas'` atau `metode_pembayaran = 'cash'`). Bayar hanya boleh bila semua bal sudah
   ditimbang. Kupon lunas tidak bisa diedit (tambah, ubah, hapus bal).
 - **Status stok bal:** `proses_sortir` (belum ditimbang) → `di_gudang` (sudah ditimbang) →
-  `terkirim_sample` / `keluar` (sudah dikirim lewat Surat Jalan; tidak boleh dihapus lagi).
+  `keluar` (sudah dikirim lewat Surat Jalan; tidak boleh dihapus lagi). **Batch Sample / Reclass tidak mengubah status bal** (Reclass hanya penentuan harga ulang); bal baru keluar dari gudang saat masuk Surat Jalan. Status lama `terkirim_sample` tidak dipakai lagi dan dianggap `di_gudang` / `proses_sortir` oleh FE.
 - **Nilai aset dan valuasi hanya dari kupon lunas.** Jumlah bal (rekap kode, stok) menghitung semua kupon.
 
 ---
@@ -148,7 +148,8 @@ Model layar: `TransaksiPembelian` dan `TransaksiItemBal` (`src/types/index.ts`).
 | `items[].ganti_tikar`, `potongan_tikar` | `sortir_bal.ganti_tikar`; `kasir_detail.potongan_tikar` | tikar dicentang di Timbangan sebelum nota ada: nilainya harus ditulis ke `sortir_bal` |
 | `items[].berat_bruto_kg`, `potongan_tara_kg`, `berat_kg`, `is_netto_manual` | `timbangan.*` | satu baris per bal setelah ditimbang; berat 0 = belum ada baris |
 | `items[].potongan_kuli`, `potongan_tali` | `kasir_detail.potongan_kuli / potongan_tali` | konstanta 7.000 dan 3.000 per bal di FE (`config/aturanTimbang.ts`). **Usulan:** tabel tarif berlaku per tanggal, disalin per bal |
-| `items[].lokasi_simpan` (`Blok A`) | (tidak ada) | sistem hanya satu gudang; boleh dibuang dari payload |
+| `items[].lokasi_simpan` (`Blok A`) | (tidak ada) | sistem hanya satu gudang. FE masih mengirim `Blok A` hanya demi kompatibilitas validasi lama; setelah backend tidak mewajibkannya, field ini dibuang dari payload |
+| `items[]` kosong | | Sejak 2026-09-21 kupon tanpa bal dikirim dengan `items: []` apa adanya. Sebelumnya FE mengarang satu bal (`no_bal "1"`, grade `A`, Rp 100.000/kg); backend sebaiknya menolak kupon tanpa bal dengan 422 |
 | `items[].diubah_lokal_pada` | (tidak ada) | penanda waktu FE untuk gabung data. Padanannya di server: `updated_at` / `versi` |
 
 Aturan hitung (sumber tunggal di FE, harus sama di server):
@@ -158,7 +159,8 @@ tara       : SB = 2 kg; HF/lainnya bruto <50 = 3, 50-59 = 5, >=60 = 6; TS/T <50 
 netto      = bruto - tara            (kecuali is_netto_manual = true)
 total_kotor per bal = netto x harga_beli_per_kg
 potongan per bal    = kuli (7.000) + tali (3.000) + tikar (75.000 bila ganti tikar)
-subtotal_bersih     = total_kotor - potongan
+subtotal_bersih     = max(0, total_kotor - potongan); bal yang belum ditimbang = 0
+jumlah bayar kupon  = jumlah subtotal_bersih (angka yang sama di Kasir, Nota, dan Laporan Pembelian)
 Nilai Kotor (laporan pembelian) = Nilai Beli + Tali + Kuli + Tikar
 ```
 
@@ -179,12 +181,18 @@ Semua di bawah `/api/v1`, JSON, `Authorization: Bearer <token Sanctum>`. Batas w
 | `PUT /transaksi/{id}/sortir-items` | mengganti daftar bal kupon yang ada (tambah, ubah, hapus) | `status_tahap`, `items[]` lengkap |
 | `PUT /transaksi/{id}/timbang` | menyimpan hasil timbang dan ganti tikar | `items[]` dengan `berat_*`, `ganti_tikar`, `potongan_tikar` |
 | `PUT /transaksi/{id}/bayar` | pelunasan Kasir | `metode_pembayaran`, `catatan_kasir` |
-| `PUT /transaksi/{id}/koreksi` | koreksi kasir lama (tidak dipakai UI lagi) | |
 | `GET /barang`, `PUT /barang/{id}/status` | stok bal | |
-| `GET/POST /sample-batch`, `PUT /sample-batch/{id}` | pengiriman sample | |
+| `GET/POST /sample-batch`, `PUT /sample-batch/{id}` | pengiriman sample; juga sumber angka sample di Dashboard dan Laporan Pengiriman | Status Draft dikirim **apa adanya** (`status: "draft"`). Bila server menolaknya (4xx/5xx), FE mengulang sekali dengan `sample`, lalu memakai `sample` untuk kiriman berikutnya dan menjaga Draft di sisi aplikasi. Begitu backend menerima dan menyimpan `draft`, status itu otomatis ikut tersimpan dan terlihat di komputer lain tanpa perubahan FE |
 | `GET/POST /pengiriman` | Surat Jalan (DO) | |
-| `GET /dashboard/stats` | ringkasan dashboard | |
+| `PUT /pengiriman/{id}` | edit Surat Jalan yang **belum Selesai** | **Belum ada di backend.** Body sama dengan `POST /pengiriman` (`no_surat_jalan, tujuan, driver_nama, plat_nomor, tanggal_kirim, aturan_netto, items[]`); server mengganti seluruh isi DO, bal baru menjadi `keluar`, bal yang dikeluarkan kembali `di_gudang`; tolak (409) bila `selesai` atau bal dipakai DO lain |
+| `DELETE /pengiriman/{id}` | batalkan Surat Jalan yang **belum Selesai** | **Belum ada di backend.** Hapus DO dan `pengiriman_reguler_bal`-nya, kembalikan bal ke `di_gudang`; tolak (409) bila status `selesai` |
+| `PUT /pengiriman/{id}/status` | ubah status Surat Jalan | **Belum ada di backend.** Body `{ status }`; `selesai` bersifat final (tolak perubahan/hapus sesudahnya) |
 | `GET/POST/PUT /users…` | manajemen pengguna | |
+
+Sejak 2026-09-21 FE **tidak lagi memanggil** `GET /dashboard/stats` (hanya dipakai kartu pembanding untuk
+pengembang yang tampil ke pengguna; angka Dashboard dihitung dari daftar yang sudah dimuat dari server) dan
+`PUT /transaksi/{id}/koreksi` (modal Koreksi sudah diganti Edit lewat Sortir). Kedua rute boleh dipertahankan
+di backend tetapi tidak ada pemanggilnya.
 
 **Urutan panggilan untuk satu simpanan kupon** (dikerjakan `ErpApiService.syncTransaksi`, dipanggil oleh
 antrean sinkron): kupon baru = `POST sortir` → `PUT timbang` bila ada bal ditimbang; kupon ada =
@@ -216,6 +224,64 @@ dihitung dari `netto_jual_kg` (bila server menghitung dari bruto, nilainya berbe
 Sampai kolom itu ada, FE mempertahankan netto, aturan, dan total nilai dari data lokal saat memuat ulang
 dari server (`ErpApiService.gabungPengirimanServer`); Surat Jalan yang dimuat dari komputer lain akan
 menampilkan nilai versi bruto.
+
+### 5.2 Status Surat Jalan, pembatalan, dan kapan penjualan tercatat
+
+Status: `dimuat` / `dikirim` (Akan Dikirim) → `dalam_perjalanan` → `diterima` (Tiba di Pabrik) → `selesai`.
+
+- **Selama belum `selesai`**, Surat Jalan (sudah dibuat maupun sudah dicetak) boleh dibatalkan/dihapus. Bal
+  kembali ke `di_gudang`; bila berasal dari batch sample, tanda `sudah_dikirim_do` bal itu dicabut dan batch
+  yang sempat `selesai` dibuka lagi (`diproses`).
+- **Selama belum `selesai`, Surat Jalan juga boleh diedit** (ikon pensil di Status Pengiriman membuka formulir
+  Pengiriman Reguler): tambah/keluarkan bal, bruto timbang ulang, harga jual, Atur Netto, tujuan, sopir, plat,
+  tanggal, dan No. Surat Jalan (tetap anti-kembar). Status dan petugas penerbit tidak berubah lewat edit. Harga jual
+  saat diterbitkan dipertahankan sampai petugas memilih kode harga baru, jadi perubahan Master Harga Jual tidak
+  mengubah nilai Surat Jalan lama diam-diam.
+- **Nilai penjualan hanya dihitung dari Surat Jalan `selesai`** (Dashboard: Total Penjualan, Keuntungan Bersih,
+  Bal Terjual; total Excel Laporan Pengiriman). Angka `serverStats` di Dashboard dihitung server dan bisa lebih
+  besar sampai server mengikuti aturan yang sama.
+- **`selesai` final**: tidak bisa dihapus dan statusnya tidak bisa diubah lagi (FE meminta konfirmasi lebih dulu).
+- Selama bal masih tercatat di Surat Jalan, kupon pembelian yang memuatnya tetap tidak dapat dihapus.
+
+**Yang perlu dari backend:** `PUT /pengiriman/{id}`, `DELETE /pengiriman/{id}`, dan `PUT /pengiriman/{id}/status` di
+atas. Tanpa ketiganya, edit, pembatalan, dan perubahan status hanya tersimpan di komputer yang mengerjakannya, dan
+`GET /pengiriman` dapat mengembalikan isi lama (atau Surat Jalan yang sudah dibatalkan) saat data dimuat ulang.
+
+### 5.3 Paritas CRUD frontend ke backend (audit 2026-09-21)
+
+Keluhan pemakaian: (1) batch sample yang dihapus muncul lagi beberapa detik kemudian, (2) edit data "mental"
+saat halaman dimuat ulang, (3) centang ganti tikar kadang hilang. Akar bersama: **perubahan hanya terjadi di
+komputer ini**, atau gagal terkirim tanpa percobaan ulang, lalu data server yang dimuat ulang menggantikan layar.
+Pemuatan ulang terjadi otomatis setelah login (beberapa detik) dan setiap kali menu Laporan dibuka.
+
+**Perbaikan di FE (selesai):** semua perubahan selain kupon kini masuk antrean mutasi
+(`services/antrianMutasi.ts`, pengirim di `services/kirimMutasi.ts`): disimpan di peramban, dicoba ulang
+sampai berhasil, jawaban server dicocokkan dengan yang dikirim, dan daftar server selalu ditimpa dengan perubahan
+yang belum selesai, **dua kali** (saat daftar diterima dan tepat sebelum dipasang ke layar, karena pemuatan bisa
+makan beberapa detik). Yang belum tersimpan utuh tampil di Header. Sisa yang **harus disediakan backend** ada di
+kolom terakhir tabel ini; tanpanya FE tetap aman (perubahan menunggu dan terlihat) tetapi belum sampai ke database.
+
+| Menu / data | Baca | Tambah | Ubah | Hapus | Perlu dari backend |
+|-------------|------|--------|------|-------|--------------------|
+| Master Petani | `GET /petani` | `POST /petani` (server menentukan ID; ditolak = tidak dibuat lokal) | `PUT /petani/{id}` lewat antrean; verifikasi nama, HP, alamat, status | tidak ada (nonaktif = ubah) | **`PUT /petani/{id}/ganti-id`** `{petani_id_baru}`: ganti ID kartu, cascade ke kupon dan bal. Tanpa ini ganti ID kartu kembali ke ID lama saat dimuat ulang |
+| Master Harga Beli | `GET /master/harga-beli` | `POST` (upsert) | `POST` (upsert) lewat antrean; verifikasi harga dan status | tidak ada di UI | Upsert harus menyimpan `status` dan tidak membuat baris ganda untuk `harga_id` yang sama |
+| Master Harga Jual | `GET /master/harga-jual` | `POST` (upsert) | `POST` (upsert) lewat antrean; verifikasi harga dan status | tidak ada di UI | sama |
+| Pengguna | `GET /users` | `POST /users` (galat ditampilkan) | `PUT /users/{id}`; status aktif lewat antrean `PUT /users/{id}/status`; reset sandi harus sampai ke server, kalau tidak dibatalkan | tidak ada di UI | tidak ada |
+| Sortir / Timbangan / Kasir (kupon) | `GET /transaksi` | `POST /transaksi/sortir` | `PUT sortir-items`, `PUT timbang`, `PUT bayar` lewat antrean kupon | **`DELETE /transaksi/{id}?alasan=`** | Hapus kupon beserta bal (cascade); tolak 409 bila ada bal yang sudah masuk Surat Jalan. **Wajib menyimpan `ganti_tikar`/`potongan_tikar` juga untuk bal yang belum ditimbang** (lewat `sortir-items`); jawaban harus memuat `items` lengkap |
+| Stok bal | `GET /barang` | dibuat saat kupon dibayar | `PUT /barang/{id}/status` lewat antrean (`di_gudang`, `keluar`) | ikut kupon | **Bal harus dibuat saat disortir** (`POST sortir` / `PUT sortir-items`), bukan saat dibayar, dengan status `proses_sortir` (diterima dan disimpan), lalu `di_gudang` setelah ditimbang. Alasannya: bal yang sudah disortir (ada No Bal dan harga) sudah terkumpul dan boleh dipilih di Pengiriman Sample walau belum ditimbang dan belum dibayar. Item kupon di jawaban `GET /transaksi` harus memuat `barang_id`. Sampai itu ada, FE membuat bal dari item kupon (dicocokkan lewat No Bal) sehingga tetap tampil, tetapi pengiriman sample untuk bal itu ditolak server (bal belum ada) dan menunggu di Header |
+| Batch Sample | `GET /sample-batch` | `POST /sample-batch` | **`PUT /sample-batch/{id}` harus menyamakan isi batch dengan `items[]` yang dikirim** (bal yang tidak ada keluar dari batch, harga tawaran dan `kode_harga_jual` per bal diperbarui; **status bal tidak diubah**). FE mengirim `barang_id` tiap item | **`DELETE /sample-batch/{id}`**: hapus batch saja (bal tidak diubah), tolak 409 bila ada bal sudah masuk Surat Jalan | Sampai DELETE ada, FE membatalkan lewat `PUT status=dibatalkan` dan menyembunyikan batch itu selamanya di komputer ini (komputer lain masih melihatnya). Status `draft` perlu diterima (FE sudah mengirimnya, lihat bagian 5) |
+| Laporan sample (Dashboard, Laporan Pengiriman) | dari `GET /sample-batch` | tidak ada | tidak ada | tidak ada | Tidak ada. Daftar "sample lama" per bal yang dulu hanya tersimpan di peramban (`erp_tembakau_sample_v40`) sudah dihapus; angka sample kini dihitung dari batch sample final (bukan Draft, bukan dibatalkan) |
+| Surat Jalan (DO) | `GET /pengiriman` | `POST /pengiriman` | **`PUT /pengiriman/{id}`**, **`PUT /pengiriman/{id}/status`** | **`DELETE /pengiriman/{id}`** | Ketiganya sudah dijelaskan di bagian 5 dan 5.2; belum ada di backend. Sampai ada, perubahan menunggu di antrean dan tampil merah di Header |
+| Audit trail | tidak ada | tidak ada | tidak ada | tidak ada | Riwayat aktivitas hanya di komputer ini (usulan: `POST /audit-log`, `GET /audit-log`) |
+
+**Aturan respons yang dipegang FE** (agar verifikasi tidak menandai simpanan sebagai gagal):
+- Jawaban simpan memuat baris lengkap seperti `GET`-nya (termasuk `items`).
+- 404 bermakna dua: rute tidak ada ("route ... could not be found", atau 405) atau baris tidak ada ("No query
+  results ..."). FE menganggap hapus pada baris yang tidak ada sebagai berhasil, tetapi rute yang tidak ada
+  sebagai belum tersedia.
+- 401/403 = sesi habis (Header meminta login ulang); 4xx lain = ditolak dan dicoba lagi tiap 5 menit;
+  jaringan/5xx dicoba ulang 3, 6, 12, 30, lalu tiap 60 detik.
+- Semua PUT/POST/DELETE **idempoten**: dikirim ulang dengan isi yang sama harus menghasilkan keadaan yang sama.
 
 ---
 
@@ -464,7 +530,12 @@ di server]**:
 | `src/services/apiClient.ts` | HTTP, token, batas waktu, `ApiError` berisi kode status |
 | `src/services/erpApi.ts` | Semua panggilan API dan pemetaan jawaban ke model layar |
 | `src/services/antrianSinkron.ts` | Antrean kirim kupon: serialisasi, penggabungan, percobaan ulang, verifikasi, pemulihan |
+| `src/services/antrianMutasi.ts` | Antrean perubahan non-kupon (petani, harga, pengguna, status bal, batch sample, Surat Jalan, hapus) |
+| `src/services/kirimMutasi.ts` | Pengirim per entitas untuk antrean mutasi, termasuk verifikasi jawaban server dan fallback status Draft |
+| `src/services/overlayDaftar.ts` | Menimpakan perubahan yang belum sampai server ke daftar yang baru dimuat |
 | `src/utils/kuponSortir.ts` | Hitung ulang kupon, gabung data paralel, aturan bal susulan |
+| `src/utils/financialCalculations.ts` | Nilai bal, jumlah bayar per bal (`hitungJumlahBayarBal`), valuasi, penjualan |
+| `src/utils/statusBatchSample.ts` | Status Draft batch sample dan baris sample per bal untuk laporan (`barisSampleDariBatch`) |
 | `src/utils/storage.ts` | Penyimpanan lokal berversi (`_v40`), kompresi, pembersihan kunci lama |
 | `src/utils/rekapKodeBal.ts` | Rekap jumlah bal per kode dan per petani (padanan SQL bagian 7.2) |
 | `src/utils/paginasiNota.ts` | Pembagian halaman nota agar baris tidak terpotong |
@@ -474,4 +545,5 @@ di server]**:
 
 Kunci penyimpanan lokal: data aplikasi `erp_tembakau_*_v40` (dibersihkan otomatis saat versi skema naik);
 preferensi tampilan dan antrean memakai awalan `sms_` agar tidak ikut terhapus pembersihan itu
-(`sms_antrian_sinkron_v1`, `sms_laporan_tampilan_*`).
+(`sms_antrian_sinkron_v1`, `sms_antrian_mutasi_v1`, `sms_laporan_tampilan_*`). Kunci lama
+`erp_tembakau_sample_v40` (daftar sample per bal yang hanya lokal) tidak dipakai lagi dan dibersihkan otomatis.

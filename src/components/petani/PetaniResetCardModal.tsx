@@ -1,12 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  X, 
-  RotateCcw, 
-  Sparkles, 
-  AlertCircle, 
-  Check, 
-  CreditCard,
-  History,
+import {
+  RotateCcw,
+  Sparkles,
   ArrowLeft,
   Save
 } from 'lucide-react';
@@ -99,7 +94,7 @@ export const PetaniResetCardModal: React.FC<PetaniResetCardModalProps> = ({
               <h2 className="text-sm font-bold text-gray-900 tracking-tight">
                 Penerbitan Ulang ID Petani
               </h2>
-              <p className="text-[11px] text-gray-500">Ganti kartu hilang/rusak dengan aman</p>
+
             </div>
           </div>
 
@@ -107,7 +102,7 @@ export const PetaniResetCardModal: React.FC<PetaniResetCardModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-1.5 text-xs font-semibold text-white bg-[#545b62] hover:bg-[#464c52] rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
+              className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Batal</span>
@@ -143,7 +138,7 @@ export const PetaniResetCardModal: React.FC<PetaniResetCardModalProps> = ({
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label className="font-semibold text-gray-700">
-                ID Petani Baru <span className="text-red-500">*</span>
+                ID Petani Baru <span className="text-[#b81d24]">*</span>
               </label>
               <button
                 type="button"
@@ -151,7 +146,7 @@ export const PetaniResetCardModal: React.FC<PetaniResetCardModalProps> = ({
                 className="text-[11px] text-[#b81d24] hover:underline font-semibold flex items-center space-x-1 cursor-pointer"
               >
                 <Sparkles className="w-3 h-3" />
-                <span>Generate Saran</span>
+                <span>Isi Saran ID</span>
               </button>
             </div>
 
@@ -163,7 +158,7 @@ export const PetaniResetCardModal: React.FC<PetaniResetCardModalProps> = ({
                 setNewCardNumber(e.target.value.toUpperCase());
                 setError('');
               }}
-              placeholder="Contoh: KRT-WRA-1002"
+              placeholder="ID petani baru"
               className="w-full uppercase font-mono font-bold text-xs rounded-sm px-2.5 py-1.5 border border-[#ced4da] focus:border-[#b81d24] focus:outline-none bg-white text-gray-900"
             />
             {error && <p className="text-[11px] text-red-600 font-medium">{error}</p>}
@@ -177,13 +172,9 @@ export const PetaniResetCardModal: React.FC<PetaniResetCardModalProps> = ({
               type="text"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="Contoh: Kartu fisik patah, hilang di kebun..."
+              placeholder="Alasan penggantian"
               className="w-full text-xs rounded-sm px-2.5 py-1.5 border border-[#ced4da] focus:border-[#b81d24] focus:outline-none bg-white text-gray-900"
             />
-          </div>
-
-          <div className="bg-[#f8f9fa] border border-gray-300 p-2.5 text-[11px] text-gray-600">
-            <strong>Catatan Keamanan:</strong> ID Petani lama akan secara otomatis dinonaktifkan dari sistem loket dan dicatat dalam log riwayat mutasi kartu.
           </div>
 
         </form>

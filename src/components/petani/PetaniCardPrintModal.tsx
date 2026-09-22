@@ -1,13 +1,10 @@
 import React, { useRef, useState } from 'react';
-import { 
-  Printer, 
-  Download, 
-  User, 
+import {
+  Printer,
+  Download,
+  User,
   ArrowLeft,
-  Building2,
-  ShieldCheck,
-  MapPin,
-  Phone
+  ShieldCheck
 } from 'lucide-react';
 import { Petani } from '../../types';
 import { formatDateIndo, formatRupiah } from '../../utils/formatters';
@@ -66,7 +63,7 @@ export const PetaniCardPrintModal: React.FC<PetaniCardPrintModalProps> = ({
             </div>
             <div className="min-w-0">
               <h2 className="text-sm font-bold text-gray-900 tracking-tight truncate">
-                Cetak Kartu Tanda Anggota / ID Petani
+                Cetak Kartu Petani
               </h2>
               <p className="text-[11px] text-gray-500 font-medium">
                 ID Petani: <span className="font-mono font-bold text-gray-800">{petani.petani_id}</span>
