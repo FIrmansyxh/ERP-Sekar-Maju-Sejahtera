@@ -4,9 +4,11 @@ name: Auto Deploy Frontend to VPS
 # Alamat API tidak perlu diatur saat build: aplikasi memakai {origin}/api/v1 dari domain yang dibuka.
 # Bila frontend dan API berbeda domain, tambahkan env VITE_API_BASE_URL (lengkap dengan /api/v1) pada langkah build.
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch: # Auto-deploy dinonaktifkan sementara
+  # push:
+  #   branches:
+  #     - main
+  #     - staging
 
 # Cegah build ganda bertumpuk jika ada beberapa push berurutan
 concurrency:

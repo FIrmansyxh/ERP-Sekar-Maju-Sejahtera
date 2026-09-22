@@ -19,3 +19,6 @@ Thumbs.db
 
 # Data dummy untuk uji manual (tidak boleh masuk repositori/produksi)
 dummy-data/
+
+# Script deploy lokal (dijalankan dari laptop, tidak perlu di repo)
+deploy-staging.ps1
