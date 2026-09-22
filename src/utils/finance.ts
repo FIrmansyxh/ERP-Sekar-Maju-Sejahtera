@@ -9,6 +9,7 @@ import {
   hitungJumlahBayarBal,
   hitungNilaiBal as hitungNilaiBalOriginal,
   hitungModalTransaksi as hitungModalTransaksiOriginal,
+  nettoTransaksi as nettoTransaksiOriginal,
   hitungTotalModalPembelian as hitungTotalModalPembelianOriginal,
   hitungValuasiStokGudang as hitungValuasiStokGudangOriginal,
   hitungProfitPengiriman as hitungProfitPengirimanOriginal,
@@ -77,6 +78,14 @@ export function hitungNilaiBal(
  */
 export function hitungModalTransaksi(transaksi: Partial<TransaksiPembelian>): number {
   return hitungModalTransaksiOriginal(transaksi);
+}
+
+/**
+ * Netto satu transaksi pembelian dari rincian bal (items), satu sumber dipakai semua laporan
+ * agar tidak beda angka dengan field berat_kg di level transaksi yang bisa telat sinkron.
+ */
+export function nettoTransaksi(transaksi: Partial<TransaksiPembelian>): number {
+  return nettoTransaksiOriginal(transaksi);
 }
 
 /**

@@ -9,24 +9,24 @@ interface HomeDashboardViewProps {
   userCount?: number;
 }
 
-/** Nama menu sama dengan menu samping, dikelompokkan dengan urutan yang sama. */
-const DAFTAR_MENU: Array<{ grup: string; nama: string; modId: string }> = [
-  { grup: 'Report & Analitik', nama: 'Dashboard Analytic', modId: 'modul-6-dashboard-analytic' },
-  { grup: 'Report & Analitik', nama: 'Laporan Bal', modId: 'modul-6-laporan-bal' },
-  { grup: 'Report & Analitik', nama: 'Laporan Harga', modId: 'modul-6-laporan-grade' },
-  { grup: 'Report & Analitik', nama: 'Laporan Pembelian', modId: 'modul-6-laporan-pembelian' },
-  { grup: 'Report & Analitik', nama: 'Laporan Petani', modId: 'modul-6-laporan-petani' },
-  { grup: 'Report & Analitik', nama: 'Laporan Pengiriman', modId: 'modul-6-laporan-pengiriman' },
-  { grup: 'Master Data', nama: 'Master Petani', modId: 'modul-1-petani' },
-  { grup: 'Master Data', nama: 'Master Harga Beli', modId: 'modul-3-harga' },
-  { grup: 'Master Data', nama: 'Master Harga Jual', modId: 'modul-3-harga-jual' },
-  { grup: 'Pembelian', nama: 'Sortir', modId: 'modul-0-sortir' },
-  { grup: 'Pembelian', nama: 'Timbangan', modId: 'modul-0-timbangan' },
-  { grup: 'Pembelian', nama: 'Kasir', modId: 'modul-0-kasir' },
-  { grup: 'Pengiriman Barang', nama: 'Pengiriman Sample', modId: 'modul-4-sample' },
-  { grup: 'Pengiriman Barang', nama: 'Status & Detail Batch', modId: 'modul-status-batch' },
-  { grup: 'Pengiriman Barang', nama: 'Pengiriman Reguler (DO)', modId: 'modul-5-pengiriman' },
-  { grup: 'Administrasi', nama: 'Manajemen Pengguna', modId: 'modul-users' },
+/** Nama menu sama dengan menu samping, urutan dikelompokkan per kategori (Report, Master Data, Pembelian, Pengiriman, Administrasi). */
+const DAFTAR_MENU: Array<{ nama: string; modId: string; fungsi: string }> = [
+  { nama: 'Dashboard Analytic', modId: 'modul-6-dashboard-analytic', fungsi: 'Ringkasan angka dan grafik utama dari seluruh proses' },
+  { nama: 'Laporan Bal', modId: 'modul-6-laporan-bal', fungsi: 'Rekap data bal berdasarkan kode, status, dan periode' },
+  { nama: 'Laporan Harga', modId: 'modul-6-laporan-grade', fungsi: 'Rekap harga per grade/kode hasil sortir' },
+  { nama: 'Laporan Pembelian', modId: 'modul-6-laporan-pembelian', fungsi: 'Rekap transaksi pembelian dari petani per kupon' },
+  { nama: 'Laporan Petani', modId: 'modul-6-laporan-petani', fungsi: 'Rekap aktivitas dan setoran per petani' },
+  { nama: 'Laporan Pengiriman', modId: 'modul-6-laporan-pengiriman', fungsi: 'Rekap pengiriman barang keluar ke pembeli' },
+  { nama: 'Master Petani', modId: 'modul-1-petani', fungsi: 'Kelola data induk petani' },
+  { nama: 'Master Harga Beli', modId: 'modul-3-harga', fungsi: 'Kelola harga beli per grade/kode' },
+  { nama: 'Master Harga Jual', modId: 'modul-3-harga-jual', fungsi: 'Kelola harga jual per grade/kode' },
+  { nama: 'Sortir', modId: 'modul-0-sortir', fungsi: 'Mencatat hasil sortir dan grade tiap bal' },
+  { nama: 'Timbangan', modId: 'modul-0-timbangan', fungsi: 'Mencatat berat bruto/netto hasil timbang bal' },
+  { nama: 'Kasir', modId: 'modul-0-kasir', fungsi: 'Memproses pembayaran kupon ke petani' },
+  { nama: 'Pengiriman Sample', modId: 'modul-4-sample', fungsi: 'Mengirim contoh bal ke calon pembeli' },
+  { nama: 'Status & Detail Batch', modId: 'modul-status-batch', fungsi: 'Memantau status dan detail batch sample' },
+  { nama: 'Pengiriman Reguler (DO)', modId: 'modul-5-pengiriman', fungsi: 'Membuat surat jalan pengiriman barang ke pembeli' },
+  { nama: 'Manajemen Pengguna', modId: 'modul-users', fungsi: 'Kelola akun dan hak akses pengguna' },
 ];
 
 export const HomeDashboardView: React.FC<HomeDashboardViewProps> = ({ onNavigate, currentUser, userCount = 0 }) => {
@@ -84,8 +84,8 @@ export const HomeDashboardView: React.FC<HomeDashboardViewProps> = ({ onNavigate
             <thead>
               <tr className="bg-slate-50/90 border-b border-slate-200 text-xs font-semibold text-slate-600">
                 <th className="py-2.5 px-4 w-16 text-center">No</th>
-                <th className="py-2.5 px-4">Menu</th>
-                <th className="py-2.5 px-4 w-56">Kelompok</th>
+                <th className="py-2.5 px-4 w-[1%] whitespace-nowrap">Menu</th>
+                <th className="py-2.5 px-4">Fungsi</th>
                 <th className="py-2.5 px-4 text-center w-24">Aksi</th>
               </tr>
             </thead>
@@ -93,8 +93,8 @@ export const HomeDashboardView: React.FC<HomeDashboardViewProps> = ({ onNavigate
               {menuList.map((item, idx) => (
                 <tr key={item.modId} onClick={() => onNavigate(item.modId)} className="hover:bg-slate-50/80 cursor-pointer transition-colors">
                   <td className="py-2.5 px-4 text-center font-mono text-slate-500">{idx + 1}</td>
-                  <td className="py-2.5 px-4 font-medium text-slate-900">{item.nama}</td>
-                  <td className="py-2.5 px-4 text-slate-600">{item.grup}</td>
+                  <td className="py-2.5 px-4 font-medium text-slate-900 whitespace-nowrap">{item.nama}</td>
+                  <td className="py-2.5 px-4 text-slate-600">{item.fungsi}</td>
                   <td className="py-2.5 px-4 text-center">
                     <button
                       onClick={(e) => {

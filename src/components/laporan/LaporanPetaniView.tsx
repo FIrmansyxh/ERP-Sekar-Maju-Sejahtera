@@ -11,7 +11,7 @@ import {
 import { Petani, TransaksiPembelian, Barang, UserRole } from '../../types';
 import { downloadExcelReport, periodeInfo, todayStamp } from '../../utils/excelExport';
 import { formatDateHariBulanTahun } from '../../utils/formatters';
-import { hitungModalTransaksi } from '../../utils/finance';
+import { hitungModalTransaksi, nettoTransaksi } from '../../utils/finance';
 import { isTransaksiLunas } from '../../utils/statusBayar';
 import { Pagination } from '../common/Pagination';
 import { useLaporanTampilan } from '../../hooks/useLaporanTampilan';
@@ -113,15 +113,15 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
 
       const totalTransaksi = filteredTxs.length;
 
-      // Calculate Bal count
+      // Calculate Bal count (items[] diutamakan, konsisten dengan Laporan Pembelian)
       let totalBal = 0;
       filteredTxs.forEach((t) => {
-        const balInTx = t.total_bal || (t.items && t.items.length) || (t.barang_ids && t.barang_ids.length) || 1;
+        const balInTx = (t.items && t.items.length) || t.total_bal || (t.barang_ids && t.barang_ids.length) || 1;
         totalBal += balInTx;
       });
 
-      // Calculate Netto Kg
-      const totalKg = filteredTxs.reduce((sum, t) => sum + (t.berat_kg || 0), 0);
+      // Calculate Netto Kg langsung dari items[], bukan dari cache berat_kg
+      const totalKg = filteredTxs.reduce((sum, t) => sum + nettoTransaksi(t), 0);
 
       // Nilai pembelian (setelah potongan) hanya dari kupon yang sudah dibayar;
       // kupon yang belum dibayar dicatat terpisah sebagai kredit
@@ -1154,7 +1154,7 @@ export const LaporanPetaniView: React.FC<LaporanPetaniViewProps> = ({
                               </div>
                             </td>
                             <td className="py-2.5 px-3 text-right font-mono font-semibold text-slate-900">
-                              {t.berat_kg} kg
+                              {nettoTransaksi(t)} kg
                             </td>
                             <td className="py-2.5 px-3 text-right font-mono text-slate-600">
                               Rp {t.harga_per_kg.toLocaleString('id-ID')}

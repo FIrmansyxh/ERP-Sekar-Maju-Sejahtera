@@ -34,6 +34,7 @@ import {
   hitungValuasiStokGudang,
   hitungProfitPengiriman,
   hitungModalTransaksi,
+  nettoTransaksi,
 } from '../../utils/finance';
 import { DistribusiStokHargaBeliChart } from './DistribusiStokHargaBeliChart';
 import { hitungResumeSample } from '../../utils/resumePengiriman';
@@ -103,7 +104,7 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
     return transaksiList.reduce((sum, t) => {
       // HANYA hitung tonase masuk jika transaksi sudah LUNAS (dibayar)
       if (!isTransaksiLunas(t)) return sum;
-      return sum + (t.berat_kg || 0);
+      return sum + nettoTransaksi(t);
     }, 0);
   }, [transaksiList]);
 
@@ -208,7 +209,7 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
       const balInTx = t.total_bal || (t.items && t.items.length) || (t.barang_ids && t.barang_ids.length) || 1;
 
       existing.balCount += balInTx;
-      existing.totalKg += (t.berat_kg || 0);
+      existing.totalKg += nettoTransaksi(t);
       existing.totalNilai += subtotal;
       map.set(key, existing);
     });
@@ -499,7 +500,7 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
           balCount,
           noBal,
           t.kode_grade || '-',
-          t.berat_kg,
+          nettoTransaksi(t),
           modal,
           potongan,
           bayar,
@@ -509,7 +510,7 @@ export const DashboardAnalyticView: React.FC<DashboardAnalyticViewProps> = ({
           `TOTAL (${rows.length} transaksi)`, '', '', '',
           rows.reduce((sum, r) => sum + r.balCount, 0),
           '', '',
-          rows.reduce((sum, r) => sum + (r.t.berat_kg || 0), 0),
+          rows.reduce((sum, r) => sum + nettoTransaksi(r.t), 0),
           rows.reduce((sum, r) => sum + r.modal, 0),
           rows.reduce((sum, r) => sum + r.potongan, 0),
           rows.reduce((sum, r) => sum + r.bayar, 0),

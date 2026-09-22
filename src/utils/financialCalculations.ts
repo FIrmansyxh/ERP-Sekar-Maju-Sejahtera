@@ -56,6 +56,19 @@ export function hitungJumlahBayarBal(nilaiBeli: number, netto: number, potongan:
 }
 
 /**
+ * Netto satu transaksi pembelian dihitung langsung dari rincian bal (items), bukan dari
+ * field berat_kg di level transaksi — field itu hanya cache hasil hitungUlangKupon() dan
+ * bisa telat sinkron pada data lama, sehingga laporan yang mempercayainya begitu saja bisa
+ * beda angka dengan laporan yang menjumlahkan items secara langsung.
+ */
+export function nettoTransaksi(transaksi: Partial<TransaksiPembelian>): number {
+  if (transaksi.items && transaksi.items.length > 0) {
+    return transaksi.items.reduce((sum, item) => sum + Number(item.berat_kg || 0), 0);
+  }
+  return Number(transaksi.berat_kg || 0);
+}
+
+/**
  * Menghitung total modal murni satu transaksi pembelian:
  * Total Modal = Total Berat Netto Bal * Harga Beli masing-masing bal
  * Murni mengabaikan potongan kuli, tali, atau tikar (bukan harga_final).
