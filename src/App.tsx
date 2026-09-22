@@ -1210,6 +1210,32 @@ export default function App() {
     }
   };
 
+  /**
+   * Tarik ulang daftar kupon dari server dan gabungkan dengan data lokal (mergeKuponParalel), supaya
+   * perubahan dari PC lain (mis. ganti tikar, grade, harga) terlihat tanpa menimpa isian yang sedang
+   * diketik di perangkat ini. Dipakai Sortir & Timbangan lewat polling ringan (lihat onRefreshTransaksiList
+   * di masing-masing komponen) agar salinan lokal kupon yang dibiarkan terbuka lama tidak menjadi basi —
+   * kupon basi yang disimpan ulang bisa menimpa balik field sortir (ganti tikar dll.) bal lain di kupon
+   * yang sama ke nilai lama.
+   */
+  const handleRefreshTransaksiList = async (): Promise<TransaksiPembelian[]> => {
+    const res = await ErpApiService.getTransaksiList();
+    if (!res.fromBackend) return loadTransaksiData();
+    const prev = loadTransaksiData();
+    const byId = new Map(prev.map((t) => [t.transaksi_id, t]));
+    const fromServer = res.data.map((incoming) =>
+      mergeKuponParalel(byId.get(incoming.transaksi_id), incoming)
+    );
+    const serverIds = new Set(fromServer.map((t) => t.transaksi_id));
+    const localOnly = prev.filter((t) => !serverIds.has(t.transaksi_id));
+    const next = [...fromServer, ...localOnly];
+    // Layar hanya diperbarui bila data memang berubah, agar isian operator tidak terganggu
+    if (JSON.stringify(next) === JSON.stringify(prev)) return prev;
+    setTransaksiList(next);
+    saveTransaksiData(next);
+    return next;
+  };
+
   const handleDeleteTransaksi = (transaksiId: string, alasanHapus?: string) => {
     if (currentUser?.status_aktif === false) {
       showToast('Akun Anda dinonaktifkan. Aksi tidak dapat dilakukan.', 'info');
@@ -1923,23 +1949,7 @@ export default function App() {
                   handleSaveTransaksi(newTx, newBarangs, { ...meta, silent: true });
                   showToast(`Data timbangan kupon ${newTx.no_kupon} diperbarui!`);
                 }}
-                onRefreshTransaksiList={async () => {
-                  const res = await ErpApiService.getTransaksiList();
-                  if (!res.fromBackend) return loadTransaksiData();
-                  const prev = loadTransaksiData();
-                  const byId = new Map(prev.map((t) => [t.transaksi_id, t]));
-                  const fromServer = res.data.map((incoming) =>
-                    mergeKuponParalel(byId.get(incoming.transaksi_id), incoming)
-                  );
-                  const serverIds = new Set(fromServer.map((t) => t.transaksi_id));
-                  const localOnly = prev.filter((t) => !serverIds.has(t.transaksi_id));
-                  const next = [...fromServer, ...localOnly];
-                  // Layar hanya diperbarui bila data memang berubah, agar isian operator tidak terganggu
-                  if (JSON.stringify(next) === JSON.stringify(prev)) return prev;
-                  setTransaksiList(next);
-                  saveTransaksiData(next);
-                  return next;
-                }}
+                onRefreshTransaksiList={handleRefreshTransaksiList}
                 onNavigateToKasir={(kuponNo, txId) => {
                   setTargetKuponNo(kuponNo);
                   setTargetTxId(txId);

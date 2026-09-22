@@ -48,7 +48,7 @@ import {
   saveCurrentUser,
   authenticateUser as authenticateLocalUser
 } from '../utils/storage';
-import { lengkapiBalDariKupon, pulihkanStatusSampleLama, sortTransaksiItemsByInputOrder } from '../utils/kuponSortir';
+import { lengkapiBalDariKupon, mergeKuponParalel, pulihkanStatusSampleLama, sortTransaksiItemsByInputOrder } from '../utils/kuponSortir';
 import { generatePetaniId } from '../utils/formatters';
 import { POTONGAN_GANTI_TIKAR, POTONGAN_KULI_PER_BAL, POTONGAN_TALI_PER_BAL } from '../config/aturanTimbang';
 
@@ -398,6 +398,22 @@ export class ErpApiService {
   }
 
   /**
+   * Kupon tunggal terbaru dari server, dipakai untuk menyegarkan salinan lokal SESAAT SEBELUM mengirim
+   * simpanan (bukan lewat tampilan) supaya bal saudara yang sudah basi tidak ikut menimpa balik data
+   * yang sudah benar di server (mis. ganti tikar yang diubah dari perangkat lain). Tidak pernah melempar
+   * galat — kegagalan di sini tidak boleh menahan simpanan; pengirim tetap jalan pakai data lokal.
+   */
+  public static async getTransaksiSatu(transaksiId: string): Promise<TransaksiPembelian | undefined> {
+    try {
+      const res = await api.get<any>(`/transaksi/${transaksiId}`);
+      if (res.status === 'success' && res.data) return this.mapBackendTransaksi(res.data);
+    } catch (err) {
+      console.warn(`Gagal menyegarkan kupon ${transaksiId} sebelum kirim, memakai salinan lokal:`, err);
+    }
+    return undefined;
+  }
+
+  /**
    * Permintaan kirim kupon ke server. Semuanya MELEMPAR galat bila gagal, supaya antrean sinkron
    * (antrianSinkron.ts) tahu dan mencoba lagi; dulu galat ditelan dan data hanya tersimpan lokal.
    */
@@ -552,9 +568,18 @@ export class ErpApiService {
     };
 
     // Kupon sudah ada di server: ganti daftar bal, lalu hasil timbang. Bila ternyata belum ada, buat baru.
+    //
+    // Sebelum mengirim, kupon ini disegarkan dulu dari server dan digabung ke salinan layar
+    // (mergeKuponParalel) SESAAT sebelum dikirim — bukan lewat tampilan, jadi kolom yang sedang diisi
+    // operator tidak pernah tersentuh. Ini menutup celah "kupon dibiarkan terbuka lama, bal saudara
+    // berubah dari perangkat lain, lalu simpanan berikutnya dari sini menimpa balik ganti tikar/grade/
+    // harga bal itu ke nilai lama": tanpa ini, endpoint sortir-items mengganti SELURUH daftar bal apa
+    // adanya dari layar, termasuk bagian yang sudah basi.
     const perbarui = async (bolehBuat: boolean): Promise<TransaksiPembelian> => {
       try {
-        return await kirimBerat(await this.updateSortirItemsTransaksi(newTx));
+        const segar = await this.getTransaksiSatu(newTx.transaksi_id);
+        const untukDikirim = segar ? mergeKuponParalel(newTx, segar) : newTx;
+        return await kirimBerat(await this.updateSortirItemsTransaksi(untukDikirim));
       } catch (err) {
         if (bolehBuat && this.galatBelumAda(err)) return buatBaru(false);
         throw err;
