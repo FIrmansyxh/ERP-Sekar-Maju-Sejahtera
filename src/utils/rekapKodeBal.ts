@@ -113,6 +113,42 @@ export interface RekapPetani {
   belumTimbang: number;
 }
 
+export interface RekapHargaKode {
+  kode: string;
+  jumlahBal: number;
+  totalHarga: number;
+  /** Rata-rata harga beli per kg (Rp/kg), dihitung sederhana dari harga yang diinput di Sortir. */
+  avgHarga: number;
+}
+
+/**
+ * Rekap jumlah bal dan rata-rata harga beli per kode bal (HF, SB, TS, dst.), dipakai Laporan Pembelian.
+ * Berbeda dari rekapPerKode: bal dihitung begitu sudah disortir dan diberi harga (harga_per_kg > 0),
+ * TIDAK menunggu ditimbang atau dibayar — pertanyaan yang dijawab adalah "berapa bal masuk dengan
+ * harga sekian", bukan nilai/aset pembelian.
+ */
+export function rekapHargaPerKode(rows: BalRekapInput[]): RekapHargaKode[] {
+  const peta = new Map<string, { jumlahBal: number; totalHarga: number }>();
+  for (const r of rows) {
+    const harga = r.harga_per_kg || 0;
+    if (harga <= 0) continue;
+    const kode = kodeBalRekap(r);
+    const item = peta.get(kode) || { jumlahBal: 0, totalHarga: 0 };
+    item.jumlahBal += 1;
+    item.totalHarga += harga;
+    peta.set(kode, item);
+  }
+  return Array.from(peta.entries())
+    .map(([kode, v]) => ({ kode, jumlahBal: v.jumlahBal, totalHarga: v.totalHarga, avgHarga: v.jumlahBal > 0 ? v.totalHarga / v.jumlahBal : 0 }))
+    .sort((a, b) => bandingKode(a.kode, b.kode));
+}
+
+export function totalRekapHargaKode(daftar: RekapHargaKode[]): RekapHargaKode {
+  const jumlahBal = daftar.reduce((s, r) => s + r.jumlahBal, 0);
+  const totalHarga = daftar.reduce((s, r) => s + r.totalHarga, 0);
+  return { kode: 'TOTAL', jumlahBal, totalHarga, avgHarga: jumlahBal > 0 ? totalHarga / jumlahBal : 0 };
+}
+
 export function rekapPerPetani(rows: BalRekapInput[]): { kodeList: string[]; baris: RekapPetani[] } {
   const kodeSet = new Set<string>();
   const peta = new Map<string, RekapPetani>();

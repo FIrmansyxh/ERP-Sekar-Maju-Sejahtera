@@ -23,6 +23,8 @@ import { POTONGAN_GANTI_TIKAR, POTONGAN_KULI_PER_BAL, POTONGAN_TALI_PER_BAL } fr
 import { useLaporanTampilan } from '../../hooks/useLaporanTampilan';
 import { LaporanTampilanToggle } from './LaporanTampilanToggle';
 import { LaporanPembelianRekap, nilaiKotor, RekapJasa, totalJasa } from './LaporanPembelianRekap';
+import { LaporanPembelianRekapHarga } from './LaporanPembelianRekapHarga';
+import { rekapHargaPerKode } from '../../utils/rekapKodeBal';
 import { PresetTanggal } from './PresetTanggal';
 
 export type SortField = 'default' | 'tanggal' | 'kupon' | 'petani' | 'no_bal' | 'bruto' | 'netto' | 'potongan_tali' | 'potongan_kuli' | 'potongan_tikar' | 'total_harga' | 'jumlah_bayar';
@@ -650,6 +652,18 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
   };
   const rekapSesuaiFilter = useMemo(() => hitungRekapJasa(filteredData), [filteredData]);
   const rekapSepanjangMasa = useMemo(() => hitungRekapJasa(dataSepanjangMasa), [dataSepanjangMasa]);
+
+  // Rekap jumlah bal & rata-rata harga per kode bal (SB, HF, TS, dst.): dihitung sejak sortir + harga
+  // diinput, tidak menunggu ditimbang, mengikuti filter yang sama dengan tabel utama.
+  const rekapHargaKode = useMemo(
+    () =>
+      rekapHargaPerKode(
+        filteredData.flatMap((row) =>
+          ringkasan(row).rincian.map((bal) => ({ no_bal: bal.noBal, harga_per_kg: bal.hargaBeli }))
+        )
+      ),
+    [filteredData, ringkasanMap]
+  );
   const adaFilterTanggal = Boolean(appliedFilters.startDate || appliedFilters.endDate);
   const konteksRekap = [
     periodeInfo(appliedFilters.startDate, appliedFilters.endDate),
@@ -1196,14 +1210,17 @@ export const LaporanPembelianBarangView: React.FC<LaporanPembelianBarangViewProp
       </div>
       )}
 
-      {/* Rekap ganti tikar, jasa, dan nilai kotor: sesuai filter dan sepanjang masa */}
+      {/* Rekap ganti tikar/jasa/nilai kotor, dan rekap bal & rata-rata harga per kode bal, berdampingan */}
       {tampilan.tampilRingkasan && (
-        <LaporanPembelianRekap
-          sesuaiFilter={rekapSesuaiFilter}
-          sepanjangMasa={rekapSepanjangMasa}
-          adaFilterTanggal={adaFilterTanggal}
-          konteks={konteksRekap}
-        />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+          <LaporanPembelianRekap
+            sesuaiFilter={rekapSesuaiFilter}
+            sepanjangMasa={rekapSepanjangMasa}
+            adaFilterTanggal={adaFilterTanggal}
+            konteks={konteksRekap}
+          />
+          <LaporanPembelianRekapHarga data={rekapHargaKode} konteks={konteksRekap} />
+        </div>
       )}
 
       {/* Data Table Card  */}

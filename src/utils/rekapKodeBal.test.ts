@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BalRekapInput, rataHargaRekap, rekapPerKode, totalRekapKode } from './rekapKodeBal';
+import { BalRekapInput, rataHargaRekap, rekapHargaPerKode, rekapPerKode, totalRekapHargaKode, totalRekapKode } from './rekapKodeBal';
 
 const bal = (no: string, extra: Partial<BalRekapInput> = {}): BalRekapInput => ({ no_bal: no, ...extra });
 
@@ -41,5 +41,40 @@ describe('rekapPerKode: semua bal dihitung, termasuk yang baru disortir', () => 
     expect(total).toMatchObject({ total: 5, belumTimbang: 2, kredit: 1, lunas: 2, netto: 90, bruto: 99 });
     expect(total.nilaiLunas).toBe(30 * 60000 + 20 * 100000);
     expect(total.nilaiKredit).toBe(40 * 50000);
+  });
+});
+
+describe('rekapHargaPerKode: dipakai Laporan Pembelian, dihitung sejak sortir + harga diinput', () => {
+  const rows: BalRekapInput[] = [
+    // sudah disortir, ada harga, belum ditimbang dan belum dibayar: tetap dihitung
+    bal('HF0001', { berat_kg: 0, harga_per_kg: 50000, status_bayar: 'belum_lunas' }),
+    bal('HF0002', { berat_kg: 0, harga_per_kg: 70000, status_bayar: 'belum_lunas' }),
+    // sudah ditimbang dan lunas: tetap dihitung dengan cara yang sama (harga sederhana, bukan tertimbang netto)
+    bal('HF0003', { berat_kg: 40, harga_per_kg: 60000, status_bayar: 'lunas' }),
+    bal('SB0001', { berat_kg: 20, harga_per_kg: 100000, status_bayar: 'lunas' }),
+    // belum diberi harga (baru scan No Bal, grade belum dipilih): tidak dihitung
+    bal('SB0002', { berat_kg: 0, harga_per_kg: 0 }),
+  ];
+
+  it('rata-rata harga per kode adalah rata-rata sederhana dari harga yang sudah diinput, termasuk yang belum ditimbang', () => {
+    const hf = rekapHargaPerKode(rows).find((r) => r.kode === 'HF')!;
+    expect(hf.jumlahBal).toBe(3);
+    expect(hf.avgHarga).toBeCloseTo((50000 + 70000 + 60000) / 3);
+  });
+
+  it('bal yang belum diberi harga tidak ikut dihitung ke kode manapun', () => {
+    const sb = rekapHargaPerKode(rows).find((r) => r.kode === 'SB')!;
+    expect(sb.jumlahBal).toBe(1);
+    expect(sb.avgHarga).toBe(100000);
+  });
+
+  it('total keseluruhan menjumlahkan semua kode dan menghitung ulang rata-ratanya', () => {
+    const total = totalRekapHargaKode(rekapHargaPerKode(rows));
+    expect(total.jumlahBal).toBe(4);
+    expect(total.avgHarga).toBeCloseTo((50000 + 70000 + 60000 + 100000) / 4);
+  });
+
+  it('daftar kosong menghasilkan total nol tanpa error', () => {
+    expect(totalRekapHargaKode([])).toMatchObject({ jumlahBal: 0, totalHarga: 0, avgHarga: 0 });
   });
 });
