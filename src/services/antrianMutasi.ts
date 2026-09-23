@@ -135,6 +135,8 @@ const barusSelesai = new Map<string, { tugas: TugasMutasi; pada: number }>();
 const tombstone = new Map<string, number>();
 const pendengar = new Set<() => void>();
 const pendengarSelesai = new Set<(tugas: TugasMutasi, hasil: unknown) => void>();
+const pendengarDihapusServer = new Set<(tugas: TugasMutasi, pesan: string) => void>();
+const pendengarHapusDitolak = new Set<(tugas: TugasMutasi, pesan: string) => void>();
 let handler: PetaHandlerMutasi = {};
 let pewaktu: ReturnType<typeof setInterval> | null = null;
 let sudahMuat = false;
@@ -265,12 +267,52 @@ function jalankan(kunci: string): Promise<void> {
         });
         return;
       } catch (err) {
+        const status = statusGalat(err);
+        if (status === 410) {
+          // Data sudah dihapus di server (dari perangkat lain). Simpanan ini dibuang agar tidak membuatnya ulang,
+          // dan data itu disembunyikan terus di perangkat ini.
+          antrian.delete(kunci);
+          if (t.aksi !== 'hapus') {
+            tombstone.set(kunciTombstone(t.entitas, t.id), Date.now());
+            if (t.idAlt) tombstone.set(kunciTombstone(t.entitas, t.idAlt), Date.now());
+            simpanTombstone();
+          }
+          simpan();
+          beritahu();
+          const pesan = pesanGalat(err);
+          pendengarDihapusServer.forEach((fn) => {
+            try {
+              fn(t, pesan);
+            } catch (e) {
+              console.warn('[Antrean mutasi] Pendengar hapus galat:', e);
+            }
+          });
+          return;
+        }
+        const butuhLogin = status === 401 || status === 403 || pesanGalat(err).toLowerCase().includes('unauthenticated');
+        if (t.aksi === 'hapus' && status && status >= 400 && status < 500 && ![404, 405, 408, 429].includes(status) && !butuhLogin) {
+          // Server menolak penghapusan dengan alasan yang jelas (mis. Surat Jalan sudah Selesai di perangkat lain).
+          // Jangan disembunyikan diam-diam selamanya di perangkat ini: batalkan, tampilkan alasannya, dan muat ulang
+          // datanya sehingga yang tampil sama dengan server.
+          antrian.delete(kunci);
+          simpan();
+          beritahu();
+          const pesan = pesanGalat(err);
+          pendengarHapusDitolak.forEach((fn) => {
+            try {
+              fn(t, pesan);
+            } catch (e) {
+              console.warn('[Antrean mutasi] Pendengar hapus ditolak galat:', e);
+            }
+          });
+          return;
+        }
         t.percobaan += 1;
         t.galat = pesanGalat(err);
-        const status = statusGalat(err);
-        t.butuhLoginUlang = status === 401 || status === 403 || t.galat.toLowerCase().includes('unauthenticated');
-        // Server menjawab dengan penolakan (bukan gangguan jaringan): jangan menghujani server tiap detik
-        t.ditolak = Boolean(status && status >= 400 && status < 500 && !t.butuhLoginUlang);
+        t.butuhLoginUlang = butuhLogin;
+        // Server menjawab dengan penolakan (bukan gangguan jaringan): jangan menghujani server tiap detik.
+        // 429 (terlalu banyak permintaan) dan 408 hanyalah gangguan sesaat: dicoba ulang seperti gangguan jaringan.
+        t.ditolak = Boolean(status && status >= 400 && status < 500 && status !== 429 && status !== 408 && !t.butuhLoginUlang);
         t.berikutnyaPada =
           Date.now() + (t.ditolak ? JEDA_DITOLAK_MS : jedaKustom ? jedaKustom(t.percobaan) : hitungJedaMutasi(t.percobaan));
         console.warn(`[Antrean mutasi] ${t.label}: gagal dikirim (percobaan ${t.percobaan}):`, err);
@@ -356,7 +398,11 @@ export const antrianMutasi = {
     if (t) {
       t.data = spek.data;
       t.idAlt = spek.idAlt ?? t.idAlt;
+      // Data yang belum pernah sampai ke server tetap berstatus "baru" walau sudah diedit lagi sebelum terkirim;
+      // dengan begitu tugas yang tidak baru (ubah) memang merujuk data yang sudah ada di server.
+      const masihBaru = t.tambahan?.baru === true;
       t.tambahan = spek.tambahan ?? t.tambahan;
+      if (masihBaru) t.tambahan = { ...(t.tambahan || {}), baru: true };
       t.label = spek.label ?? t.label;
       t.diperbaruiPada = Date.now();
       t.versi += 1;
@@ -428,6 +474,18 @@ export const antrianMutasi = {
   saatSelesai(fn: (tugas: TugasMutasi, hasil: unknown) => void): () => void {
     pendengarSelesai.add(fn);
     return () => pendengarSelesai.delete(fn);
+  },
+
+  /** Dipanggil bila server menjawab datanya sudah dihapus (410); simpanan dibuang, layar harus membuang datanya. */
+  saatDihapusServer(fn: (tugas: TugasMutasi, pesan: string) => void): () => void {
+    pendengarDihapusServer.add(fn);
+    return () => pendengarDihapusServer.delete(fn);
+  },
+
+  /** Dipanggil bila server menolak penghapusan dengan alasan tetap (mis. sudah Selesai); datanya harus tampil lagi. */
+  saatHapusDitolak(fn: (tugas: TugasMutasi, pesan: string) => void): () => void {
+    pendengarHapusDitolak.add(fn);
+    return () => pendengarHapusDitolak.delete(fn);
   },
 
   kirimUlangSekarang,

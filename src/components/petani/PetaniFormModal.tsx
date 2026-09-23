@@ -8,6 +8,7 @@ import {
 import { Petani } from '../../types';
 import { generatePetaniId } from '../../utils/formatters';
 import { ConfirmModal } from '../common/ConfirmModal';
+import { hariIniLokal } from '../../utils/rentangTanggal';
 
 interface PetaniFormModalProps {
   isOpen: boolean;
@@ -32,7 +33,7 @@ export const PetaniFormModal: React.FC<PetaniFormModalProps> = ({
     no_hp: '',
     alamat: '',
     status_aktif: true,
-    tanggal_daftar: new Date().toISOString().split('T')[0],
+    tanggal_daftar: hariIniLokal(),
     catatan: '',
   });
 
@@ -53,7 +54,7 @@ export const PetaniFormModal: React.FC<PetaniFormModalProps> = ({
           no_hp: '',
           alamat: '',
           status_aktif: true,
-          tanggal_daftar: new Date().toISOString().split('T')[0],
+          tanggal_daftar: hariIniLokal(),
           catatan: '',
         });
       }
@@ -98,7 +99,7 @@ export const PetaniFormModal: React.FC<PetaniFormModalProps> = ({
       alamat: (formData.alamat || '').trim(),
       desa_kecamatan: (formData.alamat || '').trim() || formData.desa_kecamatan || '',
       status_aktif: formData.status_aktif ?? true,
-      tanggal_daftar: formData.tanggal_daftar || new Date().toISOString().split('T')[0],
+      tanggal_daftar: formData.tanggal_daftar || hariIniLokal(),
       catatan: formData.catatan || '',
       statistik: formData.statistik || {
         total_setoran_bal: 0,

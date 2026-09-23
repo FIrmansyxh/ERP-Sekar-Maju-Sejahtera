@@ -149,6 +149,11 @@ export interface TransaksiItemBal {
    * Dipakai saat menggabungkan data agar perubahan terbaru tidak tertimpa versi lama/server.
    */
   diubah_lokal_pada?: number;
+  /**
+   * Waktu (ms) centang ganti tikar terakhir diubah dengan sengaja (bal dibuat di Sortir, atau GT dicentang/dilepas
+   * di Timbangan). Disimpan juga di server; perubahan GT yang lebih lama dari ini tidak pernah menimpa GT.
+   */
+  gt_diubah_pada?: number;
   lokasi_simpan?: string;
   sample_label_code?: string; // Kode barcode sample identik
   sample_label_printed?: boolean;

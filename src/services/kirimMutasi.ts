@@ -9,8 +9,9 @@ import {
   SpesifikasiMutasi,
   TugasMutasi,
 } from './antrianMutasi';
-import { statusKeServer } from '../utils/statusBatchSample';
+import { statusKeServer, tandaiServerKenalDraft } from '../utils/statusBatchSample';
 import type { Barang, BatchPengirimanSample, MasterHargaJual, PengirimanBarang, Petani, TabelHarga, User } from '../types';
+import { hariIniLokal } from '../utils/rentangTanggal';
 
 /**
  * Pengirim perubahan ke server untuk antrean mutasi (antrianMutasi.ts). Semua fungsi di sini MELEMPAR
@@ -51,7 +52,7 @@ function payloadPetani(p: Petani) {
     catatan: p.catatan || '',
     status_aktif: p.status_aktif ?? true,
     alasan_nonaktif: p.alasan_nonaktif || null,
-    tanggal_daftar: p.tanggal_daftar || new Date().toISOString().split('T')[0],
+    tanggal_daftar: p.tanggal_daftar || hariIniLokal(),
   };
 }
 
@@ -151,16 +152,18 @@ let serverTerimaDraft: boolean | null = null;
 /** Hanya untuk tes */
 export const aturUlangDukunganDraft = (): void => {
   serverTerimaDraft = null;
+  tandaiServerKenalDraft(null);
 };
 
 function payloadBatchSample(b: BatchPengirimanSample, terimaDraft = serverTerimaDraft !== false) {
   return {
+    batch_id: b.batch_id,
     status: statusKeServer(b.status, terimaDraft),
     kode_batch: b.kode_batch,
     dikirim_oleh: b.dikirim_oleh,
     tujuan_buyer: b.tujuan_buyer,
     permintaan_buyer: b.permintaan_buyer,
-    tanggal_kirim: b.tanggal_kirim || new Date().toISOString().split('T')[0],
+    tanggal_kirim: b.tanggal_kirim || hariIniLokal(),
     tanggal_respon: b.tanggal_respon,
     petugas_qc_pabrik: b.petugas_qc_pabrik,
     catatan: b.catatan,
@@ -209,12 +212,14 @@ export async function kirimBatchSample(b: BatchPengirimanSample, baru: boolean):
   try {
     const hasil = await kirim(true);
     serverTerimaDraft = true;
+    tandaiServerKenalDraft(true);
     return hasil;
   } catch (err) {
     // Server menjawab dengan penolakan: coba sekali lagi sebagai 'sample'. Bila berhasil, server memang belum mengenal Draft.
     if (typeof (err as { status?: number } | null)?.status !== 'number') throw err;
     const hasil = await kirim(false);
     serverTerimaDraft = false;
+    tandaiServerKenalDraft(false);
     return hasil;
   }
 }
@@ -270,7 +275,9 @@ export async function hapusBatchSample(b: BatchPengirimanSample): Promise<HasilK
 // ---------- Surat Jalan ----------
 function payloadPengiriman(p: PengirimanBarang) {
   return {
+    pengiriman_id: p.pengiriman_id,
     no_surat_jalan: p.no_surat_jalan,
+    status: p.status,
     tujuan: p.tujuan,
     jenis_pengeluaran: p.jenis_pengeluaran || 'Pabrik Rokok',
     driver_nama: p.driver_nama,

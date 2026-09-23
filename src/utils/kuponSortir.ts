@@ -1,7 +1,9 @@
 import { Barang, StatusStokBarang, TransaksiItemBal, TransaksiPembelian } from '../types';
 import { normalizeKg } from './formatters';
-import { POTONGAN_KULI_PER_BAL } from '../config/aturanTimbang';
+import { POTONGAN_GANTI_TIKAR, POTONGAN_KULI_PER_BAL } from '../config/aturanTimbang';
 import { isTransaksiLunas } from './statusBayar';
+import { balDihapusDariKupon, isIdBalServer } from './balDihapus';
+import { hariIniLokal } from './rentangTanggal';
 
 /**
  * Aturan kupon terbuka: Sortir dan Timbangan boleh mengerjakan kupon yang sama
@@ -169,7 +171,7 @@ export function buildBarangDariItem(tx: TransaksiPembelian, item: TransaksiItemB
     harga_per_kg: item.harga_per_kg,
     total_harga: berat * (item.harga_per_kg || 0),
     status_stok: resolveStatusStok(prev?.status_stok, berat),
-    tanggal_masuk: (tx.tanggal_transaksi || '').split(' ')[0] || prev?.tanggal_masuk || new Date().toISOString().split('T')[0],
+    tanggal_masuk: (tx.tanggal_transaksi || '').split(' ')[0] || prev?.tanggal_masuk || hariIniLokal(),
     petani_id: tx.petani_id,
     nama_petani: tx.nama_petani,
     desa_kecamatan: tx.desa_kecamatan || prev?.desa_kecamatan,
@@ -187,103 +189,179 @@ export function buildBarangDariItem(tx: TransaksiPembelian, item: TransaksiItemB
  */
 export const BATAS_PERUBAHAN_LOKAL_MS = 5 * 60 * 1000;
 
+export interface OpsiGabungKupon {
+  /**
+   * `incoming` adalah isi kupon apa adanya dari server (bukan simpanan dari layar). Bal ber-ID server di `prev`
+   * yang tidak ada lagi di server berarti sudah dihapus di perangkat lain, jadi tidak dibawa kembali.
+   */
+  incomingDariServer?: boolean;
+}
+
+/**
+ * Siapa yang menang antara dua cap waktu perubahan disengaja. Cap waktu dari server (yang disimpan server sejak
+ * 2026-09-23) dan dari layar bisa dibandingkan langsung: yang lebih baru menang. Bila hanya satu sisi punya cap
+ * waktu (server lama / data lama), sisi itu menang hanya selama BATAS_PERUBAHAN_LOKAL_MS.
+ * Mengembalikan 'lama', 'baru', atau null (tidak ada yang bisa memutuskan).
+ */
+function pemenangCapWaktu(capLama: number, capBaru: number): 'lama' | 'baru' | null {
+  if (capLama > 0 && capBaru > 0) return capBaru >= capLama ? 'baru' : 'lama';
+  const sekarang = Date.now();
+  if (capBaru > 0 && sekarang - capBaru < BATAS_PERUBAHAN_LOKAL_MS) return 'baru';
+  if (capLama > 0 && sekarang - capLama < BATAS_PERUBAHAN_LOKAL_MS) return 'lama';
+  return null;
+}
+
+/** Gabungan berat & field sortir satu bal dari dua versi (ganti tikar diputuskan terpisah oleh pilihGantiTikar). */
+function gabungBeratBal(old: TransaksiItemBal, it: TransaksiItemBal): TransaksiItemBal {
+  // Perubahan berat yang disengaja (timbang, buka kunci, koreksi) memakai tanda waktu:
+  // yang paling baru menang, termasuk berat turun atau kembali 0 saat kunci dibuka.
+  const pemenang = pemenangCapWaktu(old.diubah_lokal_pada || 0, it.diubah_lokal_pada || 0);
+  if (pemenang === 'baru') {
+    return { ...old, ...it, item_id: it.item_id || old.item_id, barang_id: it.barang_id || old.barang_id };
+  }
+  if (pemenang === 'lama') {
+    return {
+      ...it,
+      ...old,
+      item_id: old.item_id || it.item_id,
+      barang_id: old.barang_id || it.barang_id,
+      kode_grade: it.kode_grade || old.kode_grade,
+      harga_per_kg: it.harga_per_kg || old.harga_per_kg,
+    };
+  }
+
+  const oldW = old.berat_kg || 0;
+  const newW = it.berat_kg || 0;
+  if (newW >= oldW) {
+    return {
+      ...old,
+      ...it,
+      item_id: it.item_id || old.item_id,
+      barang_id: it.barang_id || old.barang_id,
+      // Pertahankan hasil timbang yang lebih berat
+      berat_kg: newW > 0 ? it.berat_kg : old.berat_kg,
+      berat_bruto_kg: (it.berat_bruto_kg || 0) > 0 ? it.berat_bruto_kg : old.berat_bruto_kg,
+      potongan_tara_kg: (it.berat_kg || 0) > 0 ? it.potongan_tara_kg : old.potongan_tara_kg,
+      status_timbang: newW > 0 ? it.status_timbang || 'selesai_timbang' : old.status_timbang,
+    };
+  }
+  return {
+    ...it,
+    ...old,
+    item_id: old.item_id || it.item_id,
+    barang_id: old.barang_id || it.barang_id,
+    // Field sortir dari incoming jika ada update grade/harga
+    kode_grade: it.kode_grade || old.kode_grade,
+    harga_per_kg: it.harga_per_kg || old.harga_per_kg,
+  };
+}
+
+const gtAktif = (it: Pick<TransaksiItemBal, 'ganti_tikar' | 'potongan_tikar'>): boolean =>
+  Boolean(it.ganti_tikar) || (Number(it.potongan_tikar) || 0) > 0;
+
+/**
+ * Menentukan ganti tikar (GT) satu bal dari dua versi, terpisah dari berat.
+ *
+ * Dulu GT ikut "pemenang" berat: hasil timbang di Timbangan (bertanda waktu baru) membawa GT dari salinan layar
+ * yang basi, sehingga GT yang baru dicentang dari Sortir/perangkat lain kembali tidak tercentang beberapa saat
+ * kemudian. Sekarang GT memakai cap waktunya sendiri (`gt_diubah_pada`, diisi hanya saat GT sengaja diubah):
+ * yang lebih baru menang. Tanpa cap waktu yang bisa memutuskan: data server menjadi acuan saat `incoming` berasal
+ * dari server; di antara dua salinan lokal, GT yang aktif di salah satunya dipertahankan (aturan lama).
+ */
+export function pilihGantiTikar(
+  hasil: TransaksiItemBal,
+  lama: TransaksiItemBal,
+  baru: TransaksiItemBal,
+  opsi: OpsiGabungKupon = {}
+): TransaksiItemBal {
+  const capLama = lama.gt_diubah_pada || 0;
+  const capBaru = baru.gt_diubah_pada || 0;
+  const pemenang = pemenangCapWaktu(capLama, capBaru);
+  let gt: boolean;
+  let tarif: number;
+  if (pemenang) {
+    const sumber = pemenang === 'baru' ? baru : lama;
+    gt = gtAktif(sumber);
+    tarif = Number(sumber.potongan_tikar) || 0;
+  } else if (opsi.incomingDariServer) {
+    gt = gtAktif(baru);
+    tarif = Number(baru.potongan_tikar) || 0;
+  } else {
+    gt = gtAktif(lama) || gtAktif(baru);
+    tarif = Math.max(Number(lama.potongan_tikar) || 0, Number(baru.potongan_tikar) || 0);
+  }
+  const potTikar = gt ? tarif || POTONGAN_GANTI_TIKAR : 0;
+  const kuli = hasil.potongan_kuli ?? POTONGAN_KULI_PER_BAL;
+  const tali = hasil.potongan_tali ?? 3000;
+  const potongan = kuli + tali + potTikar;
+  const cap =
+    pemenang === 'baru' ? capBaru : pemenang === 'lama' ? capLama : opsi.incomingDariServer ? capBaru : Math.max(capLama, capBaru);
+  return {
+    ...hasil,
+    ganti_tikar: gt,
+    potongan_tikar: potTikar,
+    potongan,
+    subtotal_bersih: (hasil.berat_kg || 0) > 0 ? Math.max(0, (hasil.total_kotor || 0) - potongan) : 0,
+    gt_diubah_pada: cap > 0 ? cap : undefined,
+  };
+}
 export function mergeKuponParalel(
   prev: TransaksiPembelian | undefined,
-  incoming: TransaksiPembelian
+  incoming: TransaksiPembelian,
+  opsi: OpsiGabungKupon = {}
 ): TransaksiPembelian {
+  // Bal yang dihapus di perangkat ini tidak boleh terbawa balik dari salinan mana pun
+  const dihapus = balDihapusDariKupon(incoming.transaksi_id);
+  const masihAda = (it: TransaksiItemBal) => !dihapus.has(String(it.no_bal).toUpperCase());
+
   if (!prev || prev.transaksi_id !== incoming.transaksi_id) {
-    return hitungUlangKupon(incoming, incoming.items || []);
+    return hitungUlangKupon(incoming, (incoming.items || []).filter(masihAda));
   }
 
   const incomingItemIds = new Map<string, TransaksiItemBal>();
   const incomingBarangIds = new Map<string, TransaksiItemBal>();
+  const incomingNoBal = new Set<string>();
   for (const it of incoming.items || []) {
     if (it.item_id) incomingItemIds.set(it.item_id, it);
     if (it.barang_id) incomingBarangIds.set(it.barang_id, it);
+    incomingNoBal.add(String(it.no_bal).toUpperCase());
   }
 
   const byNoBal = new Map<string, TransaksiItemBal>();
+  // Entri incoming bernomor lama yang kalah dari ganti No Bal yang lebih baru di prev
+  const incomingDilewati = new Set<TransaksiItemBal>();
   for (const it of prev.items || []) {
-    // Jika bal ini memiliki item_id / barang_id yang sama dengan item di incoming tetapi
-    // nomor bal-nya telah diedit/diubah di incoming, jangan masukkan entri nomor lama ini
+    if (!masihAda(it)) continue;
     const matchedIncoming = (it.item_id && incomingItemIds.get(it.item_id))
       || (it.barang_id && incomingBarangIds.get(it.barang_id));
     if (matchedIncoming && String(matchedIncoming.no_bal).toUpperCase() !== String(it.no_bal).toUpperCase()) {
+      // Bal yang sama dengan No Bal berbeda: ganti nomor yang bertanda waktu lebih baru yang dipakai.
+      // Tanpa tanda waktu, nomor dari incoming yang dipakai (perilaku lama).
+      if ((it.diubah_lokal_pada || 0) > (matchedIncoming.diubah_lokal_pada || 0)) {
+        incomingDilewati.add(matchedIncoming);
+      } else {
+        continue;
+      }
+    } else if (
+      !matchedIncoming &&
+      opsi.incomingDariServer &&
+      isIdBalServer(it.item_id) &&
+      !incomingNoBal.has(String(it.no_bal).toUpperCase())
+    ) {
+      // Bal pernah tersimpan di server tetapi sekarang tidak ada lagi di sana: dihapus dari perangkat lain
       continue;
     }
     byNoBal.set(String(it.no_bal).toUpperCase(), it);
   }
   for (const it of incoming.items || []) {
+    if (!masihAda(it) || incomingDilewati.has(it)) continue;
     const key = String(it.no_bal).toUpperCase();
     const old = byNoBal.get(key);
     if (!old) {
       byNoBal.set(key, it);
       continue;
     }
-    // Perubahan berat yang disengaja (timbang, buka kunci, koreksi) memakai tanda waktu:
-    // yang paling baru menang, termasuk berat turun atau kembali 0 saat kunci dibuka.
-    const stampOld = old.diubah_lokal_pada || 0;
-    const stampNew = it.diubah_lokal_pada || 0;
-    if (stampNew > stampOld) {
-      byNoBal.set(key, {
-        ...old,
-        ...it,
-        item_id: it.item_id || old.item_id,
-        barang_id: it.barang_id || old.barang_id,
-      });
-      continue;
-    }
-    if (stampOld > stampNew && Date.now() - stampOld < BATAS_PERUBAHAN_LOKAL_MS) {
-      byNoBal.set(key, {
-        ...it,
-        ...old,
-        item_id: old.item_id || it.item_id,
-        barang_id: old.barang_id || it.barang_id,
-        kode_grade: it.kode_grade || old.kode_grade,
-        harga_per_kg: it.harga_per_kg || old.harga_per_kg,
-      });
-      continue;
-    }
-
-    const oldW = old.berat_kg || 0;
-    const newW = it.berat_kg || 0;
-    if (newW >= oldW) {
-      const potTikar = Math.max(Number(it.potongan_tikar) || 0, Number(old.potongan_tikar) || 0);
-      const gantiTikar =
-        Boolean(it.ganti_tikar) ||
-        Boolean(old.ganti_tikar) ||
-        potTikar > 0;
-      byNoBal.set(key, {
-        ...old,
-        ...it,
-        item_id: it.item_id || old.item_id,
-        barang_id: it.barang_id || old.barang_id,
-        // Pertahankan hasil timbang yang lebih berat
-        berat_kg: newW > 0 ? it.berat_kg : old.berat_kg,
-        berat_bruto_kg: (it.berat_bruto_kg || 0) > 0 ? it.berat_bruto_kg : old.berat_bruto_kg,
-        potongan_tara_kg: (it.berat_kg || 0) > 0 ? it.potongan_tara_kg : old.potongan_tara_kg,
-        status_timbang: newW > 0 ? it.status_timbang || 'selesai_timbang' : old.status_timbang,
-        ganti_tikar: gantiTikar,
-        potongan_tikar: gantiTikar ? (potTikar || Number(it.potongan_tikar) || Number(old.potongan_tikar) || 75000) : 0,
-      });
-    } else {
-      const potTikar = Math.max(Number(it.potongan_tikar) || 0, Number(old.potongan_tikar) || 0);
-      const gantiTikar =
-        Boolean(it.ganti_tikar) ||
-        Boolean(old.ganti_tikar) ||
-        potTikar > 0;
-      byNoBal.set(key, {
-        ...it,
-        ...old,
-        item_id: old.item_id || it.item_id,
-        barang_id: old.barang_id || it.barang_id,
-        // Field sortir dari incoming jika ada update grade/harga
-        kode_grade: it.kode_grade || old.kode_grade,
-        harga_per_kg: it.harga_per_kg || old.harga_per_kg,
-        ganti_tikar: gantiTikar,
-        potongan_tikar: gantiTikar ? (potTikar || 75000) : 0,
-      });
-    }
+    byNoBal.set(key, pilihGantiTikar(gabungBeratBal(old, it), old, it, opsi));
   }
 
   const rank: Record<string, number> = { proses_sortir: 1, menunggu_timbang: 2, lengkap: 3 };

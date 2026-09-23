@@ -212,11 +212,15 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
       const itemsTerbaru = currentTx.items;
       setWorkingItems((prevItems) =>
         itemsTerbaru.map((it) => {
-          // Centang Ganti Tikar pada bal aktif yang belum ditimbang belum tersimpan, jangan ditimpa
+          // Centang Ganti Tikar pada bal aktif yang baru diubah di sini dan belum ikut di data terbaru, jangan
+          // ditimpa. Dulu GT lokal SELALU dipertahankan bila berbeda, sehingga GT yang diubah dari perangkat lain
+          // tertahan di layar ini, lalu ikut tersimpan balik saat bal ditimbang (GT "kembali tidak tercentang").
           if (it.item_id !== aktifId || (it.berat_kg || 0) > 0) return it;
           const lokal = prevItems.find((p) => p.item_id === it.item_id);
-          return lokal && Boolean(lokal.ganti_tikar) !== Boolean(it.ganti_tikar)
-            ? { ...it, ganti_tikar: lokal.ganti_tikar }
+          return lokal &&
+            Boolean(lokal.ganti_tikar) !== Boolean(it.ganti_tikar) &&
+            (lokal.gt_diubah_pada || 0) > (it.gt_diubah_pada || 0)
+            ? { ...it, ganti_tikar: lokal.ganti_tikar, potongan_tikar: lokal.potongan_tikar, gt_diubah_pada: lokal.gt_diubah_pada }
             : it;
         })
       );
@@ -469,6 +473,8 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
         ...it,
         ganti_tikar: nextGanti,
         potongan_tikar: potTikar,
+        // Cap waktu GT sendiri: hanya perubahan GT yang lebih baru yang boleh menimpa centang ini
+        gt_diubah_pada: Date.now(),
         diubah_lokal_pada: Date.now(),
         potongan: (it.potongan_kuli ?? POTONGAN_KULI_PER_BAL) + (it.potongan_tali ?? POTONGAN_TALI_PER_BAL) + potTikar,
         subtotal_bersih: Math.max(

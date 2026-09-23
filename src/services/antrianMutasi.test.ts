@@ -52,14 +52,68 @@ describe('antrianMutasi: pengiriman dan pencatatan', () => {
 
   it('ditolak server (4xx) ditandai bermasalah, sesi habis ditandai butuh login ulang', async () => {
     pasang({
-      'batch_sample:hapus': { kirim: async () => { throw galat(422, 'Data ditolak'); } },
+      'batch_sample:simpan': { kirim: async () => { throw galat(422, 'Data ditolak'); } },
       'pengiriman:hapus': { kirim: async () => { throw galat(401, 'Unauthenticated.'); } },
     });
-    await antrianMutasi.masukkan({ entitas: 'batch_sample', id: 'B1', aksi: 'hapus' });
+    await antrianMutasi.masukkan({ entitas: 'batch_sample', id: 'B1', aksi: 'simpan', data: { batch_id: 'B1' } });
     expect(antrianMutasi.ringkasan().bermasalah).toBe(1);
 
     await antrianMutasi.masukkan({ entitas: 'pengiriman', id: 'P1', aksi: 'hapus' });
     expect(antrianMutasi.ringkasan().butuhLoginUlang).toBe(true);
+  });
+
+  it('penghapusan yang ditolak server dengan alasan tetap dibatalkan dan dilaporkan, bukan disembunyikan selamanya', async () => {
+    pasang({ 'pengiriman:hapus': { kirim: async () => { throw galat(422, 'Surat Jalan sudah Selesai'); } } });
+    const ditolak: string[] = [];
+    const lepas = antrianMutasi.saatHapusDitolak((t, pesan) => ditolak.push(`${t.id}: ${pesan}`));
+    await antrianMutasi.masukkan({ entitas: 'pengiriman', id: 'P1', aksi: 'hapus' });
+    lepas();
+
+    expect(ditolak).toEqual(['P1: Surat Jalan sudah Selesai']);
+    expect(antrianMutasi.ringkasan().menunggu).toBe(0);
+    // Tidak lagi disembunyikan: Surat Jalan tetap tampil dari daftar server
+    expect(antrianMutasi.terapkanKeDaftar('pengiriman', [{ id: 'P1' }], { ambilId: (b: { id: string }) => b.id })).toHaveLength(1);
+  });
+
+  it('410 (sudah dihapus di perangkat lain): simpanan dibuang, tidak dibuat ulang, dan data disembunyikan', async () => {
+    let dikirim = 0;
+    pasang({ 'batch_sample:simpan': { kirim: async () => { dikirim += 1; throw galat(410, 'Batch sudah dihapus'); } } });
+    const dihapus: string[] = [];
+    const lepas = antrianMutasi.saatDihapusServer((t) => dihapus.push(t.id));
+    await antrianMutasi.masukkan({ entitas: 'batch_sample', id: 'B9', idAlt: 'SS-9', aksi: 'simpan', data: { id: 'B9' } });
+    lepas();
+
+    expect(dikirim).toBe(1);
+    expect(dihapus).toEqual(['B9']);
+    expect(antrianMutasi.ringkasan().menunggu).toBe(0);
+    const daftar = antrianMutasi.terapkanKeDaftar('batch_sample', [{ id: 'B9' }, { id: 'B10' }], { ambilId: (b: { id: string }) => b.id });
+    expect(daftar.map((b) => b.id)).toEqual(['B10']);
+  });
+
+  it('429 (terlalu banyak permintaan) dicoba ulang seperti gangguan jaringan, tidak ditandai ditolak', async () => {
+    pasang({ 'harga_jual:simpan': { kirim: async () => { throw galat(429, 'Too Many Attempts.'); } } });
+    await antrianMutasi.masukkan({ entitas: 'harga_jual', id: 'H1', aksi: 'simpan', data: { harga_jual_id: 'H1' } });
+    const r = antrianMutasi.ringkasan();
+    expect(r.menunggu).toBe(1);
+    expect(r.bermasalah).toBe(0);
+  });
+
+  it('data yang belum sampai ke server tetap berstatus baru walau diedit lagi sebelum terkirim', async () => {
+    const baru: unknown[] = [];
+    let gagal = true;
+    pasang({
+      'batch_sample:simpan': {
+        kirim: async (t: TugasMutasi) => {
+          baru.push(t.tambahan?.baru);
+          if (gagal) throw galat(0, 'jaringan');
+          return {};
+        },
+      },
+    });
+    await antrianMutasi.masukkan({ entitas: 'batch_sample', id: 'B1', aksi: 'simpan', data: { v: 1 }, tambahan: { baru: true } });
+    gagal = false;
+    await antrianMutasi.masukkan({ entitas: 'batch_sample', id: 'B1', aksi: 'simpan', data: { v: 2 } });
+    expect(baru).toEqual([true, true]);
   });
 
   it('simpanan beruntun digabung: yang terkirim terakhir adalah keadaan terbaru', async () => {

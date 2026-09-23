@@ -5,6 +5,12 @@ const dua = (n: number) => String(n).padStart(2, '0');
 /** Tanggal lokal (bukan UTC) dalam format YYYY-MM-DD, sama dengan format tanggal transaksi. */
 export const formatTanggalLokal = (d: Date): string => `${d.getFullYear()}-${dua(d.getMonth() + 1)}-${dua(d.getDate())}`;
 
+/**
+ * Tanggal hari ini menurut jam komputer (WIB), YYYY-MM-DD. Jangan memakai toISOString() untuk ini: hasilnya UTC,
+ * sehingga antara pukul 00.00 dan 06.59 WIB tanggal yang tercatat adalah tanggal kemarin.
+ */
+export const hariIniLokal = (): string => formatTanggalLokal(new Date());
+
 /** Rentang tanggal untuk pilihan cepat; 'semua' berarti tanpa batas tanggal (sepanjang masa). */
 export function rentangPreset(preset: PresetTanggal, sekarang: Date = new Date()): { start: string; end: string } {
   const hariIni = new Date(sekarang.getFullYear(), sekarang.getMonth(), sekarang.getDate());

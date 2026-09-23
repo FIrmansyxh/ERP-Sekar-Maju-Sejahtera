@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as apiClient from './apiClient';
 import { ErpApiService } from './erpApi';
 import { buatKupon } from '../test/fixtures';
+import { balDihapusDariKupon, catatBalDihapus } from '../utils/balDihapus';
 import type { TransaksiItemBal } from '../types';
 
 /**
@@ -72,6 +73,88 @@ describe('syncTransaksi: menyegarkan kupon dari server sebelum kirim (bukan lewa
     expect(balSatu).toBeDefined();
     expect(balSatu.ganti_tikar).toBe(true);
     expect(balSatu.potongan_tikar).toBe(50000);
+  });
+
+  it('bal yang dihapus di Sortir benar-benar tidak ikut dikirim walau server masih memuatnya', async () => {
+    // Regresi 2026-09-23: dulu penggabungan dengan versi server membawa balik bal yang baru dihapus
+    catatBalDihapus('TRX-3', '2');
+    const kuponLayar = buatKupon('TRX-3', { items: [item({ item_id: 'TRX-3-BAL-01', no_bal: '1' })] });
+    vi.spyOn(apiClient.api, 'get').mockResolvedValue({
+      status: 'success',
+      data: {
+        transaksi_id: 'TRX-3',
+        no_kupon: 'KUPTRX-3',
+        items: [rawServerItem({ item_id: 'TRX-3-BAL-01', no_bal: '1' }), rawServerItem({ item_id: 'TRX-3-BAL-02', no_bal: '2' })],
+      },
+    });
+    const dikirim: { items?: any[] } = {};
+    vi.spyOn(apiClient.api, 'put').mockImplementation(async (url: string, body?: unknown) => {
+      if (url.includes('/sortir-items')) {
+        dikirim.items = (body as { items?: any[] })?.items;
+        return { status: 'success', data: { transaksi_id: 'TRX-3', no_kupon: 'KUPTRX-3', items: [rawServerItem({ item_id: 'TRX-3-BAL-01', no_bal: '1' })] } };
+      }
+      throw new Error(`URL tak terduga dalam tes: ${url}`);
+    });
+
+    await ErpApiService.syncTransaksi(kuponLayar, { status_pembayaran: 'belum_lunas' }, { tanpaCekKesehatan: true });
+
+    expect(dikirim.items?.map((it) => it.no_bal)).toEqual(['1']);
+    // Server sudah tidak memuatnya: penanda hapus selesai tugasnya
+    expect(balDihapusDariKupon('TRX-3').size).toBe(0);
+  });
+
+  it('ganti No Bal di Sortir terkirim dengan item_id yang sama (tidak kembali ke nomor lama)', async () => {
+    const kuponLayar = buatKupon('TRX-4', {
+      items: [item({ item_id: 'TRX-4-BAL-01', no_bal: '1B', diubah_lokal_pada: Date.now() })],
+    });
+    vi.spyOn(apiClient.api, 'get').mockResolvedValue({
+      status: 'success',
+      data: { transaksi_id: 'TRX-4', no_kupon: 'KUPTRX-4', items: [rawServerItem({ item_id: 'TRX-4-BAL-01', no_bal: '1' })] },
+    });
+    const dikirim: { items?: any[] } = {};
+    vi.spyOn(apiClient.api, 'put').mockImplementation(async (url: string, body?: unknown) => {
+      if (url.includes('/sortir-items')) {
+        dikirim.items = (body as { items?: any[] })?.items;
+        return { status: 'success', data: { transaksi_id: 'TRX-4', no_kupon: 'KUPTRX-4', items: [rawServerItem({ item_id: 'TRX-4-BAL-01', no_bal: '1B' })] } };
+      }
+      throw new Error(`URL tak terduga dalam tes: ${url}`);
+    });
+
+    await ErpApiService.syncTransaksi(kuponLayar, { status_pembayaran: 'belum_lunas' }, { tanpaCekKesehatan: true });
+
+    expect(dikirim.items).toHaveLength(1);
+    expect(dikirim.items?.[0]).toMatchObject({ item_id: 'TRX-4-BAL-01', no_bal: '1B' });
+  });
+
+  it('hasil timbang dikirim dari versi yang sudah digabung, bukan salinan layar yang basi', async () => {
+    // Layar: bal 1 baru ditimbang di sini; bal 2 masih 0 di layar padahal sudah ditimbang 50 kg di perangkat lain
+    const kuponLayar = buatKupon('TRX-5', {
+      items: [
+        item({ item_id: 'TRX-5-BAL-01', no_bal: '1', berat_kg: 40, berat_bruto_kg: 45, diubah_lokal_pada: Date.now() }),
+        item({ item_id: 'TRX-5-BAL-02', no_bal: '2', berat_kg: 0 }),
+      ],
+    });
+    const serverBal2 = rawServerItem({ item_id: 'TRX-5-BAL-02', no_bal: '2', berat_kg: 50, berat_bruto_kg: 55, status_timbang: 'selesai_timbang', ganti_tikar: false, potongan_tikar: 0 });
+    vi.spyOn(apiClient.api, 'get').mockResolvedValue({
+      status: 'success',
+      data: { transaksi_id: 'TRX-5', no_kupon: 'KUPTRX-5', items: [rawServerItem({ item_id: 'TRX-5-BAL-01', no_bal: '1', ganti_tikar: false, potongan_tikar: 0 }), serverBal2] },
+    });
+    const timbang: { items?: any[] } = {};
+    vi.spyOn(apiClient.api, 'put').mockImplementation(async (url: string, body?: unknown) => {
+      if (url.includes('/sortir-items')) {
+        return { status: 'success', data: { transaksi_id: 'TRX-5', no_kupon: 'KUPTRX-5', items: [rawServerItem({ item_id: 'TRX-5-BAL-01', no_bal: '1' }), serverBal2] } };
+      }
+      if (url.includes('/timbang')) {
+        timbang.items = (body as { items?: any[] })?.items;
+        return { status: 'success', data: { transaksi_id: 'TRX-5', no_kupon: 'KUPTRX-5', items: [] } };
+      }
+      throw new Error(`URL tak terduga dalam tes: ${url}`);
+    });
+
+    await ErpApiService.syncTransaksi(kuponLayar, { status_pembayaran: 'belum_lunas' }, { tanpaCekKesehatan: true });
+
+    expect(timbang.items?.find((it) => it.no_bal === '1')?.berat_kg).toBe(40);
+    expect(timbang.items?.find((it) => it.no_bal === '2')?.berat_kg).toBe(50);
   });
 
   it('tetap mengirim data layar apa adanya bila kupon gagal disegarkan dari server (offline sesaat)', async () => {
