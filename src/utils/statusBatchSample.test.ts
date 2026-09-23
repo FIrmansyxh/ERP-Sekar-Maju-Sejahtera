@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { alasanBatchBelumFinal, barisSampleDariBatch, isBatchDraft, statusKeServer, statusSetelahSinkron } from './statusBatchSample';
+import { alasanBatchBelumFinal, barisSampleDariBatch, isBatchDraft, statusKeServer, statusSetelahSinkron, tandaiServerKenalDraft } from './statusBatchSample';
 import type { BatchPengirimanSample } from '../types';
 
 describe('isBatchDraft', () => {
@@ -36,6 +36,16 @@ describe('sinkron ke server', () => {
     expect(statusSetelahSinkron('draft', undefined)).toBe('draft');
     expect(statusSetelahSinkron('draft', 'diproses')).toBe('diproses');
     expect(statusSetelahSinkron('draft', 'dibatalkan')).toBe('dibatalkan');
+  });
+
+  it('server yang menyimpan Draft menjadi acuan: batch yang difinalkan di komputer lain terlihat final di sini', () => {
+    tandaiServerKenalDraft(true);
+    try {
+      expect(statusSetelahSinkron('draft', 'sample')).toBe('sample');
+      expect(statusSetelahSinkron('sample', 'draft')).toBe('draft');
+    } finally {
+      tandaiServerKenalDraft(null);
+    }
   });
 
   it('batch final mengikuti server seperti sebelumnya', () => {

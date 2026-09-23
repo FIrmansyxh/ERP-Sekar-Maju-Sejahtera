@@ -16,6 +16,7 @@ import {
 import { MasterHargaJual } from '../../types';
 import { formatRupiah } from '../../utils/formatters';
 import { Pagination } from '../common/Pagination';
+import { hariIniLokal } from '../../utils/rentangTanggal';
 
 interface HargaJualManagementProps {
   hargaJualList: MasterHargaJual[];
@@ -72,7 +73,7 @@ export const HargaJualManagement: React.FC<HargaJualManagementProps> = ({
     setEditingItem(null);
     setFormKode('');
     setFormHargaJual('');
-    const today = new Date().toISOString().split('T')[0];
+    const today = hariIniLokal();
     setFormTanggalBerlaku(today);
     setFormStatusAktif(true);
     setErrorMessage('');
@@ -84,7 +85,7 @@ export const HargaJualManagement: React.FC<HargaJualManagementProps> = ({
     setEditingItem(item);
     setFormKode(item.kode);
     setFormHargaJual(item.harga_jual);
-    setFormTanggalBerlaku(item.tanggal_berlaku || new Date().toISOString().split('T')[0]);
+    setFormTanggalBerlaku(item.tanggal_berlaku || hariIniLokal());
     setFormStatusAktif(item.status_aktif !== false);
     setErrorMessage('');
     setIsModalOpen(true);

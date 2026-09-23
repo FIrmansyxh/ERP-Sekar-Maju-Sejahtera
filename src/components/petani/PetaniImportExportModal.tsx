@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Petani } from '../../types';
 import { downloadExcelReport, todayStamp } from '../../utils/excelExport';
+import { hariIniLokal } from '../../utils/rentangTanggal';
 
 // Judul kolom dari file Excel ekspor dipetakan ke nama kolom impor
 const HEADER_ALIAS: Record<string, string> = {
@@ -132,7 +133,7 @@ export const PetaniImportExportModal: React.FC<PetaniImportExportModalProps> = (
         alamat: hanyaNama ? '' : cell(cols, alamatIdx),
         desa_kecamatan: (hanyaNama ? '' : cell(cols, desaIdx)) || undefined,
         status_aktif: true,
-        tanggal_daftar: new Date().toISOString().split('T')[0],
+        tanggal_daftar: hariIniLokal(),
       });
     }
 

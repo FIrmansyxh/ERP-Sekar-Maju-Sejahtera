@@ -36,6 +36,7 @@ import { openPrintDocument } from '../../utils/openDedicatedPrint';
 import { isSuratJalanTerkunci, pesanSuratJalanTerkunci } from '../../utils/kunciHapus';
 import { beratBrutoBal, beratBrutoItemSample } from '../../utils/beratKirim';
 import { alasanBatchBelumFinal, isBatchDraft } from '../../utils/statusBatchSample';
+import { hariIniLokal, formatTanggalLokal } from '../../utils/rentangTanggal';
 
 interface StatusBatchPengirimanManagementProps {
   batchSampleList: BatchPengirimanSample[];
@@ -51,6 +52,9 @@ interface StatusBatchPengirimanManagementProps {
   onDeletePengiriman?: (pengirimanId: string) => void;
   /** Membuka Surat Jalan yang belum Selesai di halaman Pengiriman untuk diedit. */
   onEditPengiriman?: (pengirimanId: string) => void;
+  /** Tarik ulang batch sample/Surat Jalan/bal dari server; dipakai polling ringan agar perubahan dari
+   * perangkat lain langsung terlihat di sini. */
+  onRefreshPengirimanData?: () => Promise<void>;
 }
 
 export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanManagementProps> = ({
@@ -65,7 +69,23 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
   onDeleteBatchSample,
   onDeletePengiriman,
   onEditPengiriman,
+  onRefreshPengirimanData,
 }) => {
+  // Poll ringan: batch/Surat Jalan/bal yang baru diubah di perangkat lain langsung terlihat di sini.
+  // Berhenti saat tab tidak terlihat (tidak membebani server) dan langsung menyegarkan begitu tab dibuka lagi.
+  useEffect(() => {
+    if (!onRefreshPengirimanData) return;
+    const segarkan = () => {
+      if (document.visibilityState === 'visible') onRefreshPengirimanData().catch(() => undefined);
+    };
+    const id = window.setInterval(segarkan, 8000);
+    document.addEventListener('visibilitychange', segarkan);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', segarkan);
+    };
+  }, [onRefreshPengirimanData]);
+
   // Main Module Tab
   const [activeMainTab, setActiveMainTab] = useState<'sample_batch' | 'pengiriman_batch'>('pengiriman_batch');
   const [isBatchDropdownOpen, setIsBatchDropdownOpen] = useState(false);
@@ -299,7 +319,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
         if (item.sample_item_id === sampleItemId) {
           const updated = { ...item, status_item: newStatus };
           const now = new Date();
-          updated.tanggal_evaluasi = now.toISOString().split('T')[0];
+          updated.tanggal_evaluasi = formatTanggalLokal(now);
 
           if (newStatus === 'disetujui') {
             if (!updated.harga_deal_kg) {
@@ -391,7 +411,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
             total_bal_ditolak: countTolak,
             total_bal_nego: countNego,
             total_nilai_deal: totalDeal,
-            tanggal_respon: new Date().toISOString().split('T')[0],
+            tanggal_respon: hariIniLokal(),
           };
 
           onUpdateBatchSample(updatedBatch);
@@ -442,7 +462,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
       total_bal_ditolak: countTolak,
       total_bal_nego: countNego,
       total_nilai_deal: totalDeal,
-      tanggal_respon: new Date().toISOString().split('T')[0],
+      tanggal_respon: hariIniLokal(),
     };
 
     onUpdateBatchSample(updatedBatch);
@@ -474,7 +494,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
       total_bal_ditolak: 0,
       total_bal_nego: countNego,
       total_nilai_deal: totalDeal,
-      tanggal_respon: new Date().toISOString().split('T')[0],
+      tanggal_respon: hariIniLokal(),
     };
 
     onUpdateBatchSample(updatedBatch);

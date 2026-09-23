@@ -14,6 +14,9 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { TransaksiPembelian, Petani, TabelHarga, Barang, TransaksiItemBal, UserRole, User as UserType, SaveTransaksiMeta } from '../../types';
+import { akhiranUnik } from '../../utils/idUnik';
+import { batalkanBalDihapus, catatBalDihapus } from '../../utils/balDihapus';
+import { idKuponTerkini } from '../../utils/aliasKupon';
 import { formatRupiah, formatNoKupon, formatDateHariBulanTahun, formatNumber, generateTransaksiId, hitungPotonganTaraKg, normalizeKg } from '../../utils/formatters';
 import { useSessionDraft } from '../../hooks/useSessionDraft';
 import { alasanKuponTerkunciBayar, isTransaksiLunas } from '../../utils/statusBayar';
@@ -22,6 +25,7 @@ import { isBalTerkirim } from '../../utils/kunciHapus';
 import { mintaKonfirmasi, tampilkanInfo } from '../../utils/dialog';
 import { POTONGAN_GANTI_TIKAR, POTONGAN_KULI_PER_BAL, POTONGAN_TALI_PER_BAL } from '../../config/aturanTimbang';
 import { rekapPerKode, BalRekapInput } from '../../utils/rekapKodeBal';
+import { hariIniLokal } from '../../utils/rentangTanggal';
 
 interface SortirPageViewProps {
   petaniList: Petani[];
@@ -34,6 +38,8 @@ interface SortirPageViewProps {
   onDeleteTransaksi?: (transaksiId: string, alasan?: string) => void;
   onNavigateToTimbangan: (kuponNo?: string, txId?: string, balNo?: string) => void;
   onAddPetani?: () => void;
+  /** Ambil daftar kupon terbaru dari server; dipakai sekali saat membuka kupon baru (bukan penyegaran berkala). */
+  onRefreshTransaksiList?: () => Promise<TransaksiPembelian[]>;
   /** Kupon yang langsung dibuka saat halaman ini dibuka dari tombol Edit di Kasir. */
   initialTxId?: string;
   /** Dipanggil setelah initialTxId diproses, agar tidak terpakai lagi saat halaman dibuka ulang. */
@@ -51,6 +57,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
   onDeleteTransaksi,
   onNavigateToTimbangan,
   onAddPetani,
+  onRefreshTransaksiList,
   initialTxId,
   onInitialTxHandled,
 }) => {
@@ -69,7 +76,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
     return `KUP${String(nextNum).padStart(4, '0')}`;
   });
   const [selectedPetaniId, setSelectedPetaniId, resetDraftPetani] = useSessionDraft<string>('sortir_petani', draftUserId, '');
-  const [tanggal, setTanggal] = useSessionDraft<string>('sortir_tanggal', draftUserId, () => new Date().toISOString().split('T')[0]);
+  const [tanggal, setTanggal] = useSessionDraft<string>('sortir_tanggal', draftUserId, () => hariIniLokal());
   const [petugasSortirNama] = useState(currentUser?.nama_lengkap || 'Sistem');
 
   // Kupon terbuka: tersimpan sejak bal pertama discan sehingga Timbangan di komputer
@@ -77,6 +84,12 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
   const [openTxId, setOpenTxId, resetOpenTxId] = useSessionDraft<string>('sortir_open_tx_id', draftUserId, '');
   // Mode edit kupon: kupon yang sortirnya sudah ditutup dibuka lagi dari Kasir untuk tambah, ubah, atau hapus bal
   const [susulanMode, setSusulanMode, resetSusulanMode] = useSessionDraft<boolean>('sortir_susulan', draftUserId, false);
+  // Kupon terbuka ternyata tersimpan di server dengan ID lain (dibuka juga dari komputer lain): ikuti ID server
+  useEffect(() => {
+    if (!openTxId || transaksiList.some((t) => t.transaksi_id === openTxId)) return;
+    const terkini = idKuponTerkini(openTxId);
+    if (terkini !== openTxId && transaksiList.some((t) => t.transaksi_id === terkini)) setOpenTxId(terkini);
+  }, [openTxId, transaksiList, setOpenTxId]);
   const openTx = useMemo(() => {
     if (!openTxId) return undefined;
     const tx = transaksiList.find((t) => t.transaksi_id === openTxId);
@@ -287,7 +300,9 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
   };
 
   // Add bal item into list
-  const handleAddBalItem = () => {
+  const sedangMembukaKupon = useRef(false);
+  const handleAddBalItem = async () => {
+    if (sedangMembukaKupon.current) return;
     if (!selectedGrade) {
       document.getElementById('grade-input')?.focus();
       setScanFeedback({ text: 'Silakan pilih Mutu Barang terlebih dahulu.', isError: false });
@@ -315,6 +330,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
     }
 
     // Kupon baru dibuka bersamaan dengan bal pertama
+    let daftarKuponTerkini = transaksiList;
     if (!openTx) {
       if (!selectedPetaniId || !currentPetani) {
         setScanFeedback({ text: 'Pilih petani penyetor terlebih dahulu sebelum menambah bal.', isError: true });
@@ -323,6 +339,32 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
       if (isKuponExists) {
         setScanFeedback({ text: `Nomor kupon "${noKupon}" sudah digunakan transaksi lain. Gunakan nomor kupon yang berbeda.`, isError: true });
         return;
+      }
+      // Sekali cek ke server sebelum membuka kupon baru (bukan penyegaran berkala): nomor kupon yang baru saja
+      // dipakai di komputer lain langsung ketahuan. Bila server lambat, lanjut memakai daftar di perangkat ini.
+      if (onRefreshTransaksiList) {
+        sedangMembukaKupon.current = true;
+        try {
+          const segar = await Promise.race([
+            onRefreshTransaksiList().catch(() => undefined),
+            new Promise<undefined>((selesai) => setTimeout(() => selesai(undefined), 2500)),
+          ]);
+          const clean = noKupon.trim().toLowerCase();
+          const dipakai = segar?.find((tx) => (tx.no_kupon || '').trim().toLowerCase() === clean);
+          if (dipakai) {
+            setScanFeedback({
+              text:
+                dipakai.petani_id === selectedPetaniId
+                  ? `Kupon "${noKupon}" untuk ${dipakai.nama_petani} baru saja dibuka di komputer lain. Lanjutkan kupon itu dari daftar kupon yang belum selesai.`
+                  : `Nomor kupon "${noKupon}" baru saja dipakai di komputer lain (${dipakai.nama_petani}). Gunakan nomor kupon yang berbeda.`,
+              isError: true,
+            });
+            return;
+          }
+          if (segar) daftarKuponTerkini = segar;
+        } finally {
+          sedangMembukaKupon.current = false;
+        }
       }
     }
 
@@ -359,6 +401,8 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
       kode_grade: selectedGrade,
       harga_per_kg: hargaSatuan,
       ganti_tikar: isGantiTikar,
+      // Pilihan GT saat bal dibuat adalah perubahan disengaja: diberi cap waktu agar salinan basi tidak menimpanya
+      gt_diubah_pada: Date.now(),
       berat_bruto_kg: 0,
       potongan_tara_kg: tara,
       berat_kg: 0, // Berat awal 0 kg (akan diisi di Proses 2 Meja Timbang)
@@ -376,7 +420,8 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
     if (openTx) {
       kuponDasar = openTx;
     } else {
-      const txId = generateTransaksiId(tanggal, transaksiList);
+      // Akhiran acak: dua PC Sortir yang membuka kupon bersamaan tidak menghasilkan ID kupon yang sama
+      const txId = `${generateTransaksiId(tanggal, daftarKuponTerkini)}-${akhiranUnik()}`;
       const seqPart = txId.split('-')[2] || '001';
       kuponDasar = {
         transaksi_id: txId,
@@ -411,6 +456,8 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
       };
     }
 
+    // No Bal yang pernah dihapus dari kupon ini lalu ditambahkan lagi tidak boleh tersaring penanda hapusnya
+    batalkanBalDihapus(kuponDasar.transaksi_id, cleanedBalCode);
     const itemBaru = { ...newItem, barang_id: nextBarangId(kuponDasar.transaksi_id, kuponDasar.items || []) };
     const updatedTx = hitungUlangKupon(kuponDasar, [...(kuponDasar.items || []), itemBaru]);
     onSaveTransaksi(
@@ -579,6 +626,8 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
       });
       return;
     }
+    // Penanda hapus: bal ini tidak boleh terbawa balik dari versi server saat kupon disimpan/disegarkan
+    catatBalDihapus(openTx.transaksi_id, item.no_bal);
     const updatedTx = hitungUlangKupon(openTx, balItems.filter((it) => it.item_id !== itemId));
     onSaveTransaksi(updatedTx, [], {
       timpaPenuh: true,

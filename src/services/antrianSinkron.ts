@@ -1,5 +1,6 @@
 import type { TransaksiPembelian } from '../types';
 import { mergeKuponParalel } from '../utils/kuponSortir';
+import { balDihapusDariKupon, isIdBalServer } from '../utils/balDihapus';
 
 /**
  * Antrean sinkronisasi kupon ke server.
@@ -100,21 +101,32 @@ const sama = (a?: number, b?: number, toleransi = 0.05) => Math.abs((a || 0) - (
 export function verifikasiHasil(server: TransaksiPembelian, terkirim: TransaksiPembelian): string[] {
   const selisih: string[] = [];
   const peta = new Map((server.items || []).map((it) => [String(it.no_bal).toUpperCase(), it] as const));
+  const dihapus = balDihapusDariKupon(terkirim.transaksi_id);
   for (const it of terkirim.items || []) {
-    const di = peta.get(String(it.no_bal).toUpperCase());
+    const no = String(it.no_bal).toUpperCase();
+    if (dihapus.has(no)) continue;
+    const di = peta.get(no);
     if (!di) {
-      selisih.push(`${it.no_bal}: bal belum ada di server`);
+      // Bal ber-ID server yang tidak ada lagi di server sudah dihapus di perangkat lain, bukan gagal simpan
+      if (!isIdBalServer(it.item_id)) selisih.push(`${it.no_bal}: bal belum ada di server`);
       continue;
     }
-    const gtKirim = Boolean(it.ganti_tikar) || (it.potongan_tikar || 0) > 0;
-    const gtServer = Boolean(di.ganti_tikar) || (di.potongan_tikar || 0) > 0;
-    if (gtKirim !== gtServer) {
-      selisih.push(`${it.no_bal}: ganti tikar ${gtKirim ? 'aktif' : 'mati'} di layar tetapi ${gtServer ? 'aktif' : 'mati'} di server`);
+    // GT & berat hanya dicocokkan bila perangkat ini memang mengubahnya dan perubahannya tidak lebih lama dari
+    // yang tersimpan di server. Server sengaja mempertahankan nilainya untuk kiriman yang basi / tanpa perubahan.
+    const capGtKirim = it.gt_diubah_pada || 0;
+    if (capGtKirim > 0 && capGtKirim >= (di.gt_diubah_pada || 0)) {
+      const gtKirim = Boolean(it.ganti_tikar) || (it.potongan_tikar || 0) > 0;
+      const gtServer = Boolean(di.ganti_tikar) || (di.potongan_tikar || 0) > 0;
+      if (gtKirim !== gtServer) {
+        selisih.push(`${it.no_bal}: ganti tikar ${gtKirim ? 'aktif' : 'mati'} di layar tetapi ${gtServer ? 'aktif' : 'mati'} di server`);
+      }
     }
-    if ((it.berat_kg || 0) > 0 && !sama(it.berat_kg, di.berat_kg)) {
+    const capBeratKirim = it.diubah_lokal_pada || 0;
+    const cekBerat = capBeratKirim > 0 && capBeratKirim >= (di.diubah_lokal_pada || 0);
+    if (cekBerat && (it.berat_kg || 0) > 0 && !sama(it.berat_kg, di.berat_kg)) {
       selisih.push(`${it.no_bal}: netto ${it.berat_kg} kg di layar tetapi ${di.berat_kg || 0} kg di server`);
     }
-    if ((it.berat_kg || 0) > 0 && (it.berat_bruto_kg || 0) > 0 && !sama(it.berat_bruto_kg, di.berat_bruto_kg)) {
+    if (cekBerat && (it.berat_kg || 0) > 0 && (it.berat_bruto_kg || 0) > 0 && !sama(it.berat_bruto_kg, di.berat_bruto_kg)) {
       selisih.push(`${it.no_bal}: bruto ${it.berat_bruto_kg} kg di layar tetapi ${di.berat_bruto_kg || 0} kg di server`);
     }
     if (it.kode_grade && di.kode_grade && String(it.kode_grade) !== String(di.kode_grade)) {
@@ -132,6 +144,7 @@ const antrian = new Map<string, Tugas>();
 const berjalan = new Map<string, Promise<HasilJalan>>();
 const barusSelesai = new Map<string, { tx: TransaksiPembelian; pada: number }>();
 const pendengar = new Set<() => void>();
+const pendengarDihapus = new Set<(id: string, tx: TransaksiPembelian, pesan: string) => void>();
 let pengirim: FungsiKirim | null = null;
 let jedaKustom: ((percobaan: number) => number) | null = null;
 let pewaktu: ReturnType<typeof setInterval> | null = null;
@@ -250,6 +263,22 @@ function jalankan(id: string): Promise<HasilJalan> {
         beritahu();
         return { ...terakhir, ditunda: true };
       } catch (err) {
+        if (statusGalat(err) === 410) {
+          // Kupon sudah dihapus di server (dari perangkat lain): simpanan ini tidak boleh membuatnya ulang
+          antrian.delete(id);
+          barusSelesai.delete(id);
+          simpan();
+          beritahu();
+          const pesan = err instanceof Error ? err.message : String(err);
+          pendengarDihapus.forEach((fn) => {
+            try {
+              fn(id, terkirim, pesan);
+            } catch (e) {
+              console.warn('[Antrian sinkron] Pendengar hapus galat:', e);
+            }
+          });
+          return { ...terakhir, ditunda: false, selisih: [] };
+        }
         t.percobaan += 1;
         t.galat = err instanceof Error ? err.message : String(err);
         const status = statusGalat(err);
@@ -357,6 +386,12 @@ export const antrianSinkron = {
   berlangganan(fn: () => void): () => void {
     pendengar.add(fn);
     return () => pendengar.delete(fn);
+  },
+
+  /** Dipanggil bila server menjawab kupon sudah dihapus (410): simpanannya dibuang, layar harus membuangnya juga. */
+  saatDihapusServer(fn: (id: string, tx: TransaksiPembelian, pesan: string) => void): () => void {
+    pendengarDihapus.add(fn);
+    return () => pendengarDihapus.delete(fn);
   },
 
   kirimUlangSekarang,

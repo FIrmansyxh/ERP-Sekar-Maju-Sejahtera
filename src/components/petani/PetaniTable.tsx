@@ -17,6 +17,7 @@ import { Petani, UserRole, TransaksiPembelian } from '../../types';
 import { canUserPerform } from '../../utils/rbac';
 import { Pagination } from '../common/Pagination';
 import { SortIcon } from '../common/SortIcon';
+import { hariIniLokal } from '../../utils/rentangTanggal';
 
 interface PetaniTableProps {
   data: Petani[];
@@ -420,7 +421,7 @@ export const PetaniTable: React.FC<PetaniTableProps> = ({
                         <td className="py-3 px-4 font-medium text-slate-900">
                           <div className="flex items-center gap-2">
                             <span>{petani.nama_petani}</span>
-                            {petani.tanggal_daftar === new Date().toISOString().split('T')[0] && (
+                            {petani.tanggal_daftar === hariIniLokal() && (
                               <span className="px-1.5 py-0.5 text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-sm">
                                 Baru
                               </span>

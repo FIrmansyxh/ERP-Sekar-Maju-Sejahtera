@@ -30,12 +30,22 @@ export function alasanBatchBelumFinal(
 export const statusKeServer = (status: StatusBatchSample, serverTerimaDraft = true): StatusBatchSample =>
   status === 'draft' && !serverTerimaDraft ? 'sample' : status;
 
+/** null = belum diketahui. Server versi baru menyimpan Draft; server lama menolaknya dan membalas 'sample'. */
+let serverKenalDraft: boolean | null = null;
+export const tandaiServerKenalDraft = (kenal: boolean | null): void => {
+  serverKenalDraft = kenal;
+};
+export const apakahServerKenalDraft = (): boolean | null => serverKenalDraft;
+
 /**
- * Status batch setelah digabung dengan data server. Server tidak mengenal Draft dan membalas 'sample',
- * jadi Draft lokal dipertahankan selama server belum menunjukkan tahap yang lebih lanjut.
+ * Status batch setelah digabung dengan data server. Server yang menyimpan Draft adalah acuan (batch yang
+ * difinalkan di komputer lain harus terlihat final di sini). Hanya untuk server lama yang tidak mengenal Draft
+ * (membalas 'sample'), Draft lokal dipertahankan selama server belum menunjukkan tahap yang lebih lanjut.
+ * Perubahan status di perangkat ini yang belum terkirim dijaga terpisah oleh antrean (overlay).
  */
 export function statusSetelahSinkron(lokal: StatusBatchSample | undefined, server: StatusBatchSample | undefined): StatusBatchSample {
-  if (lokal === 'draft' && (!server || server === 'sample' || server === 'draft')) return 'draft';
+  if (server === 'draft') return 'draft';
+  if (lokal === 'draft' && serverKenalDraft !== true && (!server || server === 'sample')) return 'draft';
   return server || lokal || 'sample';
 }
 

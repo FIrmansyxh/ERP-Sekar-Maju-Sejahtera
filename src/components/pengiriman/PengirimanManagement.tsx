@@ -35,6 +35,7 @@ import {
 import { loadCurrentUser } from '../../utils/storage';
 import { SuratJalanPrintModal } from './SuratJalanPrintModal';
 import { ConfirmModal } from '../common/ConfirmModal';
+import { akhiranUnik } from '../../utils/idUnik';
 import { formatNumber, formatRupiah, normalizeKg } from '../../utils/formatters';
 import { cekNomorDokumen, normalisasiNomor, pesanNomorKembar } from '../../utils/nomorDokumen';
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
@@ -44,6 +45,7 @@ import { beratBrutoBal, beratBrutoItemSample } from '../../utils/beratKirim';
 import { AturanNettoBaris, NettoJualHasil, barisAturanBaru, bacaAturanNetto, hitungNettoJual } from '../../utils/aturanNetto';
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
 import { isBalTerkirim, isSuratJalanTerkunci } from '../../utils/kunciHapus';
+import { hariIniLokal } from '../../utils/rentangTanggal';
 
 /** Penanda bal yang belum punya harga jual (pengganti "Rp 0" / angka karangan). */
 const BelumAdaHarga: React.FC = () => (
@@ -71,6 +73,9 @@ interface PengirimanManagementProps {
   editPengirimanId?: string | null;
   /** Dipanggil saat mode edit berakhir (disimpan atau dibatalkan). */
   onSelesaiEdit?: () => void;
+  /** Tarik ulang Surat Jalan/batch sample/bal dari server; dipakai polling ringan agar bal yang baru dipakai
+   * Surat Jalan lain di perangkat lain tidak bisa "dipesan dobel" di sini karena daftar di layar sudah basi. */
+  onRefreshPengirimanData?: () => Promise<void>;
 }
 
 export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
@@ -89,8 +94,25 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   onNavigateToStatusBatch,
   editPengirimanId = null,
   onSelesaiEdit,
+  onRefreshPengirimanData,
 }) => {
   const activeHargaJualList = hargaJualList;
+
+  // Poll ringan: bal yang baru dipakai Surat Jalan/batch lain di perangkat lain langsung terlihat di sini,
+  // supaya bal yang sama tidak bisa dipesan dobel karena daftar di layar sudah basi. Berhenti saat tab tidak
+  // terlihat (tidak membebani server) dan langsung menyegarkan begitu tab dibuka lagi.
+  useEffect(() => {
+    if (!onRefreshPengirimanData) return;
+    const segarkan = () => {
+      if (document.visibilityState === 'visible') onRefreshPengirimanData().catch(() => undefined);
+    };
+    const id = window.setInterval(segarkan, 8000);
+    document.addEventListener('visibilitychange', segarkan);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', segarkan);
+    };
+  }, [onRefreshPengirimanData]);
 
   const [editingPengirimanId, setEditingPengirimanId] = useState<string | null>(null);
   // Surat Jalan yang menunggu konfirmasi karena draf Surat Jalan baru akan tergantikan
@@ -149,7 +171,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   const [selectedBatchSampleId, setSelectedBatchSampleId] = useSessionDraft<string>('kirim_batch_sample_id', undefined, '');
   
   const [noSuratJalan, setNoSuratJalan] = useState('');
-  const [tanggalKirim, setTanggalKirim] = useState(new Date().toISOString().split('T')[0]);
+  const [tanggalKirim, setTanggalKirim] = useState(hariIniLokal());
   const [tujuanBuyer, setTujuanBuyer] = useSessionDraft<string>('kirim_tujuan_buyer', undefined, '');
   const [driverNama, setDriverNama] = useState('');
   const [platNomor, setPlatNomor] = useState('');
@@ -1080,7 +1102,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
 
   const handleResetForm = () => {
     setNoSuratJalan('');
-    setTanggalKirim(new Date().toISOString().split('T')[0]);
+    setTanggalKirim(hariIniLokal());
     setTujuanBuyer('');
     setDriverNama('');
     setPlatNomor('');
@@ -1137,7 +1159,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     setSelectedBatchSampleId('');
     setScanBatchId('');
     setNoSuratJalan(p.no_surat_jalan || '');
-    setTanggalKirim(p.tanggal_kirim || new Date().toISOString().split('T')[0]);
+    setTanggalKirim(p.tanggal_kirim || hariIniLokal());
     setTujuanBuyer(p.tujuan || '');
     setDriverNama(p.driver_nama || '');
     setPlatNomor(p.plat_nomor || '');
@@ -1323,19 +1345,13 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     });
 
 
-    const nextShipmentSeq = pengirimanList.length > 0
-      ? Math.max(...pengirimanList.map(p => {
-          const n = parseInt(p.pengiriman_id, 10);
-          return isNaN(n) ? 0 : n;
-        })) + 1
-      : 1;
-
     const existingPengiriman = editingPengirimanId ? pengirimanList.find(p => p.pengiriman_id === editingPengirimanId) : null;
 
     const newPengiriman: PengirimanBarang = {
       // Saat edit, data lain milik Surat Jalan (status, petugas penerbit, rujukan batch, dll.) dipertahankan
       ...(existingPengiriman || {}),
-      pengiriman_id: editingPengirimanId || String(nextShipmentSeq),
+      // ID internal unik antar perangkat (nomor urut per perangkat bisa kembar dengan Surat Jalan dari komputer lain)
+      pengiriman_id: editingPengirimanId || `SJ-${akhiranUnik(8)}`,
       no_surat_jalan: normalisasiNomor(noSuratJalan),
       tanggal_kirim: tanggalKirim,
       tujuan: finalTujuan,

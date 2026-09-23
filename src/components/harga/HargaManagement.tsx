@@ -12,6 +12,7 @@ import { CheckCircle2, XCircle, ChevronDown, ChevronUp,
 import { TabelHarga, UserRole } from '../../types';
 import { formatRupiah } from '../../utils/formatters';
 import { Pagination } from '../common/Pagination';
+import { hariIniLokal } from '../../utils/rentangTanggal';
 
 interface HargaManagementProps {
   hargaList: TabelHarga[];
@@ -80,7 +81,7 @@ export const HargaManagement: React.FC<HargaManagementProps> = ({
     setEditingItem(null);
     setFormKode('');
     setFormHarga('');
-    setFormTanggalBerlaku(new Date().toISOString().split('T')[0]);
+    setFormTanggalBerlaku(hariIniLokal());
     setFormStatusAktif(true);
     setErrorMessage('');
     setIsModalOpen(true);
@@ -90,7 +91,7 @@ export const HargaManagement: React.FC<HargaManagementProps> = ({
     setEditingItem(item);
     setFormKode(item.kode_grade);
     setFormHarga(item.harga_per_kg);
-    setFormTanggalBerlaku(item.tanggal_berlaku || new Date().toISOString().split('T')[0]);
+    setFormTanggalBerlaku(item.tanggal_berlaku || hariIniLokal());
     setFormStatusAktif(item.status === 'aktif');
     setErrorMessage('');
     setIsModalOpen(true);

@@ -22,6 +22,7 @@ import {
 } from '../../types';
 import { ConfirmModal } from '../common/ConfirmModal';
 
+import { akhiranUnik } from '../../utils/idUnik';
 import { generateBatchSampleId, generateSampleId, formatRupiah, formatNumber } from '../../utils/formatters';
 import { cekNomorDokumen, normalisasiNomor, pesanNomorKembar } from '../../utils/nomorDokumen';
 import { beratBrutoBal, beratBrutoItemSample } from '../../utils/beratKirim';
@@ -29,6 +30,7 @@ import { isBatchDraft } from '../../utils/statusBatchSample';
 
 import { useSessionDraft } from '../../hooks/useSessionDraft';
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
+import { hariIniLokal } from '../../utils/rentangTanggal';
 
 interface SampleManagementProps {
   batchSampleList?: BatchPengirimanSample[];
@@ -47,6 +49,9 @@ interface SampleManagementProps {
   editBatchId?: string | null;
   /** Dipanggil saat mode edit berakhir (disimpan atau dibatalkan). */
   onSelesaiEdit?: () => void;
+  /** Tarik ulang batch sample/bal dari server; dipakai polling ringan agar bal yang baru dipakai batch lain
+   * di perangkat lain tidak bisa "dipesan dobel" di sini karena daftar di layar sudah basi. */
+  onRefreshPengirimanData?: () => Promise<void>;
 }
 
 export const SampleManagement: React.FC<SampleManagementProps> = ({
@@ -63,7 +68,24 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
   onNavigateToStatusBatch,
   editBatchId = null,
   onSelesaiEdit,
+  onRefreshPengirimanData,
 }) => {
+  // Poll ringan: batch/bal yang baru dipakai di perangkat lain langsung terlihat di sini, supaya bal yang
+  // sama tidak bisa dipesan dobel ke batch lain karena daftar di layar sudah basi. Berhenti saat tab tidak
+  // terlihat (tidak membebani server) dan langsung menyegarkan begitu tab dibuka lagi.
+  useEffect(() => {
+    if (!onRefreshPengirimanData) return;
+    const segarkan = () => {
+      if (document.visibilityState === 'visible') onRefreshPengirimanData().catch(() => undefined);
+    };
+    const id = window.setInterval(segarkan, 8000);
+    document.addEventListener('visibilitychange', segarkan);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', segarkan);
+    };
+  }, [onRefreshPengirimanData]);
+
   const activeHargaJualList = hargaJualList;
   const activeHargaList = hargaList;
   const activeTransaksiList = transaksiList;
@@ -351,7 +373,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
   const [tujuanBuyer, setTujuanBuyer] = useSessionDraft<string>('sample_tujuan_buyer', undefined, '');
   const [permintaanBuyer, setPermintaanBuyer] = useState('');
   const [sumberGudang, setSumberGudang] = useState('Gudang Utama Pamekasan');
-  const [tanggalKirim, setTanggalKirim] = useState(new Date().toISOString().split('T')[0]);
+  const [tanggalKirim, setTanggalKirim] = useState(hariIniLokal());
   const [dikirimOleh, setDikirimOleh] = useState('');
   const [catatanBatchForm, setCatatanBatchForm] = useState('');
 
@@ -580,7 +602,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
     setNoSuratSample('');
     setPermintaanBuyer('');
     setSumberGudang('Gudang Utama Pamekasan');
-    setTanggalKirim(new Date().toISOString().split('T')[0]);
+    setTanggalKirim(hariIniLokal());
     setDikirimOleh('');
     setCatatanBatchForm('');
     setErrorMessage('');
@@ -700,7 +722,8 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
     while (!editingBatchId && activeBatchSampleList.some((b) => b.batch_id === generateBatchSampleId(nextSeq))) {
       nextSeq += 1;
     }
-    const nextBatchId = editingBatchId || generateBatchSampleId(nextSeq);
+    // Akhiran acak: batch yang dibuat bersamaan di komputer lain tidak mendapat ID yang sama
+    const nextBatchId = editingBatchId || `${generateBatchSampleId(nextSeq)}-${akhiranUnik()}`;
     const kodeBatch = normalisasiNomor(noSuratSample);
     const existingBatch = activeBatchSampleList.find(b => b.batch_id === editingBatchId);
     
