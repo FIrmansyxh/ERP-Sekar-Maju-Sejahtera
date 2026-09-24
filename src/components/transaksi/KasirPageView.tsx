@@ -41,7 +41,7 @@ interface KasirPageViewProps {
     newTx: TransaksiPembelian,
     generatedBarang: Barang | Barang[],
     meta?: SaveTransaksiMeta
-  ) => void;
+  ) => Promise<boolean>;
   onDeleteTransaksi?: (transaksiId: string, alasan?: string) => void;
   onNavigateToSortir: () => void;
   onNavigateToTimbangan: (kuponNo?: string, txId?: string) => void;
@@ -136,7 +136,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
       ? `Sortir Kupon ${tx.no_kupon} belum ditutup (masih Proses Sortir${status.unweighedCount > 0 ? `, ${status.unweighedCount} bal belum ditimbang` : ''}). Tunggu petugas Sortir menekan "Selesai Sortir".`
       : `Kupon ${tx.no_kupon} masih memiliki ${status.unweighedCount} bal yang belum ditimbang (${status.unweighedBalList.join(', ')}).`;
 
-  const handleConfirmCashPayment = (
+  const handleConfirmCashPayment = async (
     txId: string,
     details: {
       metode: 'cash';
@@ -144,9 +144,9 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
       nominalCash: number;
     },
     directPrintAfter?: boolean
-  ) => {
+  ): Promise<boolean> => {
     const tx = transaksiList.find((t) => t.transaksi_id === txId);
-    if (!tx) return;
+    if (!tx) return false;
 
     // Strict validation: Kupon MUST have all bales weighed before payment can be confirmed!
     const weighStatus = getKuponWeighStatus(tx);
@@ -154,7 +154,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
       tampilkanInfo(
         alasanBelumSiapBayar(tx, weighStatus)
       );
-      return;
+      return false;
     }
 
     const updatedTx: TransaksiPembelian = {
@@ -167,7 +167,9 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     };
 
     const relatedBarang = barangList.filter((b) => tx.barang_ids?.includes(b.barang_id));
-    onSaveTransaksi(updatedTx, relatedBarang);
+    const success = await onSaveTransaksi(updatedTx, relatedBarang);
+
+    if (!success) return false;
 
     if (selectedTxForDetail && selectedTxForDetail.transaksi_id === txId) {
       setSelectedTxForDetail(updatedTx);
@@ -176,6 +178,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     if (directPrintAfter) {
       openPrintDocument('nota', txId);
     }
+    return true;
   };
 
   // Edit kupon (tambah, ubah, hapus bal) hanya untuk kupon belum lunas dan hanya superadmin / admin kasir

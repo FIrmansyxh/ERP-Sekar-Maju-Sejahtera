@@ -44,12 +44,12 @@ interface StatusBatchPengirimanManagementProps {
   barangList: Barang[];
   hargaJualList: MasterHargaJual[];
   onUpdateBatchSample: (updatedBatch: BatchPengirimanSample, updatedBarangs?: Barang[]) => void;
-  onUpdatePengirimanStatus: (pengirimanId: string, newStatus: StatusPengiriman) => void;
+  onUpdatePengirimanStatus: (pengirimanId: string, newStatus: StatusPengiriman) => Promise<void>;
   onNavigateToPengirimanWithBatch: (batchId: string) => void;
   /** Membuka batch sample di halaman Pengiriman Sample untuk diedit. */
   onEditBatchSample?: (batchId: string) => void;
   onDeleteBatchSample?: (batchId: string, revertedBarangs?: Barang[]) => void;
-  onDeletePengiriman?: (pengirimanId: string) => void;
+  onDeletePengiriman?: (pengirimanId: string) => Promise<void>;
   /** Membuka Surat Jalan yang belum Selesai di halaman Pengiriman untuk diedit. */
   onEditPengiriman?: (pengirimanId: string) => void;
   /** Tarik ulang batch sample/Surat Jalan/bal dari server; dipakai polling ringan agar perubahan dari
@@ -92,7 +92,9 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
   const [highlightedBatchIndex, setHighlightedBatchIndex] = useState(0);
   const [itemToRemove, setItemToRemove] = useState<string | null>(null);
   const [pengirimanToDelete, setPengirimanToDelete] = useState<string | null>(null);
+  const [isDeletingPengiriman, setIsDeletingPengiriman] = useState(false);
   const [pengirimanToFinish, setPengirimanToFinish] = useState<string | null>(null);
+  const [isFinishingPengiriman, setIsFinishingPengiriman] = useState(false);
   const [scanBatchId, setScanBatchId] = useState('');
   const batchDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -1884,12 +1886,16 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
         confirmText="Ya, Batalkan"
         cancelText="Kembali"
         variant="danger"
-        onConfirm={() => {
+        onConfirm={async () => {
           if (pengirimanToDelete && onDeletePengiriman) {
-            onDeletePengiriman(pengirimanToDelete);
+            setIsDeletingPengiriman(true);
+            // Wait for backend deletion before closing modal
+            await onDeletePengiriman(pengirimanToDelete);
+            setIsDeletingPengiriman(false);
           }
           setPengirimanToDelete(null);
         }}
+        isLoading={isDeletingPengiriman}
         onClose={() => setPengirimanToDelete(null)}
         onCancel={() => setPengirimanToDelete(null)}
       />
@@ -1969,10 +1975,15 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
         confirmText="Ya, Selesai"
         cancelText="Belum"
         variant="warning"
-        onConfirm={() => {
-          if (pengirimanToFinish) onUpdatePengirimanStatus(pengirimanToFinish, 'selesai');
+        onConfirm={async () => {
+          if (pengirimanToFinish) {
+            setIsFinishingPengiriman(true);
+            await onUpdatePengirimanStatus(pengirimanToFinish, 'selesai');
+            setIsFinishingPengiriman(false);
+          }
           setPengirimanToFinish(null);
         }}
+        isLoading={isFinishingPengiriman}
         onClose={() => setPengirimanToFinish(null)}
         onCancel={() => setPengirimanToFinish(null)}
       />

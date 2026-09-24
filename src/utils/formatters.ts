@@ -125,10 +125,11 @@ export function generateNextUniqueNoBal(
   return candidate;
 }
 
-// Generate Sample ID (Urutan sederhana: 1 hingga 9999)
+// Generate Sample ID yang unik agar tidak bentrok di database
 export function generateSampleId(_grade?: string, _date?: Date | string | null, sequenceNumber: number = 1): string {
   const num = Math.max(1, Math.min(9999, Math.floor(sequenceNumber)));
-  return String(num);
+  const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
+  return `SMP-${Date.now().toString().slice(-4)}${randomStr}-${num}`;
 }
 
 // Generate Batch Sample ID (Urutan sederhana: 1 hingga 9999)

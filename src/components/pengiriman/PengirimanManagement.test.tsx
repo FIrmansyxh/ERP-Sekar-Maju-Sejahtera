@@ -13,7 +13,7 @@ const buatProps = (extra: Partial<React.ComponentProps<typeof PengirimanManageme
   ],
   userRole: 'superadmin' as const,
   onSaveNewPengiriman: vi.fn(),
-  onUpdatePengiriman: vi.fn(() => true),
+  onUpdatePengiriman: vi.fn().mockResolvedValue(true),
   onSelesaiEdit: vi.fn(),
   editPengirimanId: '1',
   ...extra,

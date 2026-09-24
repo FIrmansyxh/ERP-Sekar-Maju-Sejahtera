@@ -34,7 +34,7 @@ interface SortirPageViewProps {
   barangList?: Barang[];
   userRole: UserRole;
   currentUser?: UserType | null;
-  onSaveTransaksi: (newTx: TransaksiPembelian, generatedBarang: Barang | Barang[], meta?: SaveTransaksiMeta) => void;
+  onSaveTransaksi: (newTx: TransaksiPembelian, generatedBarang: Barang | Barang[], meta?: SaveTransaksiMeta) => Promise<boolean>;
   onDeleteTransaksi?: (transaksiId: string, alasan?: string) => void;
   onNavigateToTimbangan: (kuponNo?: string, txId?: string, balNo?: string) => void;
   onAddPetani?: () => void;
@@ -61,6 +61,8 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
   initialTxId,
   onInitialTxHandled,
 }) => {
+  const [isSaving, setIsSaving] = useState(false);
+  
   // Form Header State
   const draftUserId = currentUser?.user_id;
   const [noKupon, setNoKupon] = useSessionDraft<string>('sortir_no_kupon', draftUserId, () => {
@@ -460,7 +462,8 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
     batalkanBalDihapus(kuponDasar.transaksi_id, cleanedBalCode);
     const itemBaru = { ...newItem, barang_id: nextBarangId(kuponDasar.transaksi_id, kuponDasar.items || []) };
     const updatedTx = hitungUlangKupon(kuponDasar, [...(kuponDasar.items || []), itemBaru]);
-    onSaveTransaksi(
+    setIsSaving(true);
+    const success = await onSaveTransaksi(
       updatedTx,
       [buildBarangDariItem(updatedTx, itemBaru)],
       isSusulan
@@ -479,6 +482,10 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
             },
           }
     );
+    setIsSaving(false);
+
+    if (!success) return; // Stop if saving failed
+    
     if (!openTx) setOpenTxId(updatedTx.transaksi_id);
     setScanFeedback({
       text: `Bal "${cleanedBalCode}" (Grade ${selectedGrade}) tersimpan di Kupon ${updatedTx.no_kupon}.`,
@@ -514,7 +521,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
     setEditGrade('');
   };
 
-  const handleSaveEdit = (item: TransaksiItemBal) => {
+  const handleSaveEdit = async (item: TransaksiItemBal) => {
     if (!openTx) return;
 
     const cleanedNoBal = editNoBal.trim().replace(/-/g, '').toUpperCase();
@@ -573,7 +580,8 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
     const nextItems = balItems.map((b) => (b.item_id === item.item_id ? updatedItem : b));
     const updatedTx = hitungUlangKupon(openTx, nextItems);
 
-    onSaveTransaksi(
+    setIsSaving(true);
+    const success = await onSaveTransaksi(
       updatedTx,
       [buildBarangDariItem(updatedTx, updatedItem, barangList.find((b) => b.barang_id === updatedItem.barang_id))],
       {
@@ -584,6 +592,9 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
         },
       }
     );
+    setIsSaving(false);
+    
+    if (!success) return;
 
     setEditingItemId(null);
     setEditNoBal('');
@@ -629,13 +640,17 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
     // Penanda hapus: bal ini tidak boleh terbawa balik dari versi server saat kupon disimpan/disegarkan
     catatBalDihapus(openTx.transaksi_id, item.no_bal);
     const updatedTx = hitungUlangKupon(openTx, balItems.filter((it) => it.item_id !== itemId));
-    onSaveTransaksi(updatedTx, [], {
+    setIsSaving(true);
+    const success = await onSaveTransaksi(updatedTx, [], {
       timpaPenuh: true,
       audit: {
         aksi: 'SORTIR_HAPUS_BAL',
         deskripsi: `Bal ${item.no_bal} (Grade ${item.kode_grade}${isBalDitimbang(item) ? `, ${item.berat_kg} kg` : ''}) dihapus dari Kupon ${openTx.no_kupon} ${isSusulan ? 'saat edit kupon' : 'saat sortir'}`,
       },
     });
+    setIsSaving(false);
+    if (!success) return;
+    
     setScanFeedback({ text: `Bal "${item.no_bal}" dihapus dari Kupon ${openTx.no_kupon}.`, isError: false });
   };
 
@@ -655,7 +670,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
   };
 
   // Menutup kupon: tidak ada bal baru lagi dan kupon bisa dibayar setelah semua bal ditimbang
-  const handleSelesaiSortir = () => {
+  const handleSelesaiSortir = async () => {
     if (!openTx) return;
     if (balItems.length === 0) {
       tampilkanInfo('Tambahkan minimal 1 bal tembakau sebelum menyelesaikan sortir.');
@@ -667,12 +682,16 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
       { ...openTx, status_tahap: 'menunggu_timbang', catatan_qc: `Sortir ${balItems.length} bal tembakau selesai.` },
       balItems
     );
-    onSaveTransaksi(updatedTx, [], {
+    setIsSaving(true);
+    const success = await onSaveTransaksi(updatedTx, [], {
       audit: {
         aksi: 'SELESAI_SORTIR',
         deskripsi: `Sortir Kupon ${openTx.no_kupon} selesai: ${balItems.length} bal (${belumDitimbang} belum ditimbang)`,
       },
     });
+    setIsSaving(false);
+    if (!success) return;
+    
     setSaveSuccessMsg(
       belumDitimbang > 0
         ? `Sortir Kupon ${openTx.no_kupon} selesai (${balItems.length} bal). ${belumDitimbang} bal masih menunggu timbang.`
@@ -1033,8 +1052,9 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                 <button
                   type="button"
                   id="btn-tambah-bal"
+                  disabled={isSaving}
                   onClick={handleAddBalItem}
-                  className="w-full py-2 bg-[#b81d24] hover:bg-[#b81d24] text-white font-medium text-xs rounded-sm transition flex items-center justify-center space-x-1.5 cursor-pointer shadow-2xs"
+                  className="w-full py-2 bg-[#b81d24] hover:bg-[#b81d24] text-white font-medium text-xs rounded-sm transition flex items-center justify-center space-x-1.5 cursor-pointer shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Tambah Bal</span>
@@ -1204,7 +1224,8 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                               <button
                                 type="button"
                                 onClick={() => handleSaveEdit(item)}
-                                className="p-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded transition-colors cursor-pointer"
+                                disabled={isSaving}
+                                className="p-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                 title="Simpan Perubahan (Enter)"
                               >
                                 <Check className="w-4 h-4" />
@@ -1231,7 +1252,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                               <button
                                 type="button"
                                 onClick={() => handleRemoveItem(item.item_id)}
-                                disabled={ditimbang && !isSusulan}
+                                disabled={isSaving || (ditimbang && !isSusulan)}
                                 className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-400"
                                 title={ditimbang && !isSusulan ? 'Bal sudah ditimbang, tidak bisa dihapus dari Sortir' : 'Hapus bal ini dari kupon'}
                               >
@@ -1265,7 +1286,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                 <button
                   type="button"
                   onClick={handleBatalkanKupon}
-                  disabled={!openTx || balItems.some(isBalDitimbang)}
+                  disabled={isSaving || !openTx || balItems.some(isBalDitimbang)}
                   title={balItems.some(isBalDitimbang) ? 'Kupon yang sudah ada bal tertimbang tidak bisa dibatalkan' : 'Hapus kupon ini beserta seluruh balnya'}
                   className="px-3 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 font-medium text-xs rounded-sm transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -1276,7 +1297,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
               <button
                 type="button"
                 onClick={isSusulan ? handleSelesaiSusulan : handleSelesaiSortir}
-                disabled={!openTx || balItems.length === 0}
+                disabled={isSaving || !openTx || balItems.length === 0}
                 title={isSusulan
                   ? 'Tutup mode edit kupon. Bal baru ditimbang di Timbangan, lalu kupon dibayar di Kasir.'
                   : 'Tutup kupon. Kupon bisa dibayar di Kasir setelah semua bal ditimbang.'}

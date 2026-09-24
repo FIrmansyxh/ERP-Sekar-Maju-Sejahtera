@@ -35,9 +35,7 @@ import {
   STORAGE_KEY_TRANSAKSI,
   STORAGE_KEY_PETANI
 } from './utils/storage';
-import { mergeKuponParalel, normalizeStatusBal, pilihGantiTikar, resolveStatusStok } from './utils/kuponSortir';
-import { balDihapusDariKupon, pindahkanBalDihapus } from './utils/balDihapus';
-import { catatAliasKupon } from './utils/aliasKupon';
+import { mergeKuponParalel, normalizeStatusBal, resolveStatusStok } from './utils/kuponSortir';
 import { filterBarangLunas } from './utils/statusBayar';
 import { barisSampleDariBatch } from './utils/statusBatchSample';
 import { balTerkirimDariTransaksi, isSuratJalanTerkunci, pesanSuratJalanTerkunci, pesanTransaksiTerkunci } from './utils/kunciHapus';
@@ -551,11 +549,11 @@ export default function App() {
   const [highlightPetaniId, setHighlightPetaniId] = useState<string | null>(null);
 
   // Toast Notification
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 'info' dipakai untuk pemberitahuan, penolakan, dan kegagalan; tampil dengan ikon peringatan, bukan centang
-  const showToast = (message: string, type: 'success' | 'info' = 'success') => {
+  const showToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ message, type });
     toastTimerRef.current = setTimeout(() => setToast(null), type === 'info' ? 6000 : 3500);
@@ -1010,10 +1008,10 @@ export default function App() {
     newTx: TransaksiPembelian,
     generatedBarang: Barang | Barang[],
     meta: SaveTransaksiMeta = {}
-  ) => {
+  ): Promise<boolean> => {
     if (currentUser?.status_aktif === false) {
       showToast('Akun Anda dinonaktifkan. Aksi tidak dapat dilakukan.', 'info');
-      return;
+      return false;
     }
 
     const oldTxRaw = transaksiList.find((t) => t.transaksi_id === newTx.transaksi_id);
@@ -1073,14 +1071,29 @@ export default function App() {
       });
     };
 
-    // 1) Optimistic: segera masuk localStorage + state (bisa dipanggil Timbangan)
-    commitLocalTx(newTx, true, Boolean(meta.timpaPenuh));
+    // Direct-to-Backend: Kirim ke BE terlebih dahulu
+    let syncResult: { syncedTx: TransaksiPembelian; fromBackend: boolean };
+    try {
+      syncResult = await ErpApiService.syncTransaksi(newTx, oldTx, { tanpaCekKesehatan: true });
+      if (!syncResult.fromBackend) {
+        showToast('Gagal terhubung ke server. Pastikan internet lancar.', 'info');
+        return false;
+      }
+    } catch (err: any) {
+      showToast(`Gagal menyimpan kupon: ${err?.message || 'Server menolak data'}.`, 'info');
+      return false;
+    }
 
-    const balCount = newTx.total_bal || (newTx.items ? newTx.items.length : 1);
+    const syncedTx = syncResult.syncedTx;
+    
+    // Jika berhasil, baru update UI lokal
+    commitLocalTx(syncedTx, true, Boolean(meta.timpaPenuh));
+
+    const balCount = syncedTx.total_bal || (syncedTx.items ? syncedTx.items.length : 1);
 
     const updatedPetaniList = petaniList.map((p) => {
       // Pindah statistik bila petani diganti saat koreksi
-      if (exists && oldTx && oldTx.petani_id !== newTx.petani_id) {
+      if (exists && oldTx && oldTx.petani_id !== syncedTx.petani_id) {
         if (p.petani_id === oldTx.petani_id) {
           const oldBalCount = oldTx.total_bal || (oldTx.items ? oldTx.items.length : 1);
           return {
@@ -1092,24 +1105,24 @@ export default function App() {
             },
           };
         }
-        if (p.petani_id === newTx.petani_id) {
+        if (p.petani_id === syncedTx.petani_id) {
           return {
             ...p,
             statistik: {
               ...p.statistik,
               total_setoran_bal: Math.max(0, (p.statistik?.total_setoran_bal || 0) + balCount),
-              total_berat_kg: Math.max(0, (p.statistik?.total_berat_kg || 0) + (newTx.berat_kg || 0)),
-              kunjungan_terakhir: (newTx.tanggal_transaksi ? newTx.tanggal_transaksi.split(' ')[0] : '') || hariIniLokal(),
-              grade_dominan: `Grade ${newTx.kode_grade}`,
+              total_berat_kg: Math.max(0, (p.statistik?.total_berat_kg || 0) + (syncedTx.berat_kg || 0)),
+              kunjungan_terakhir: (syncedTx.tanggal_transaksi ? syncedTx.tanggal_transaksi.split(' ')[0] : '') || hariIniLokal(),
+              grade_dominan: `Grade ${syncedTx.kode_grade}`,
             },
           };
         }
         return p;
       }
 
-      if (p.petani_id === newTx.petani_id) {
+      if (p.petani_id === syncedTx.petani_id) {
         let totalBalDelta = balCount;
-        let totalKgDelta = newTx.berat_kg || 0;
+        let totalKgDelta = syncedTx.berat_kg || 0;
 
         if (exists && oldTx) {
           const oldBalCount = oldTx.total_bal || (oldTx.items ? oldTx.items.length : 1);
@@ -1126,8 +1139,8 @@ export default function App() {
             ...p.statistik,
             total_setoran_bal: totalBal,
             total_berat_kg: totalKg,
-            kunjungan_terakhir: (newTx.tanggal_transaksi ? newTx.tanggal_transaksi.split(' ')[0] : '') || hariIniLokal(),
-            grade_dominan: `Grade ${newTx.kode_grade}`,
+            kunjungan_terakhir: (syncedTx.tanggal_transaksi ? syncedTx.tanggal_transaksi.split(' ')[0] : '') || hariIniLokal(),
+            grade_dominan: `Grade ${syncedTx.kode_grade}`,
           },
         };
       }
@@ -1142,7 +1155,7 @@ export default function App() {
         user_role: currentRole,
         modul: 'Transaksi Pembelian',
         aksi: meta.audit.aksi,
-        target_id: newTx.no_kupon,
+        target_id: syncedTx.no_kupon,
         deskripsi: meta.audit.deskripsi,
         rincian_perubahan: meta.audit.rincian_perubahan,
       });
@@ -1150,26 +1163,26 @@ export default function App() {
       // Pemanggil sudah mencatat audit sendiri
     } else if (exists && oldTx) {
       const isRecentlyLoggedByModal = Boolean(
-        newTx.terakhir_diubah_pada &&
-        Math.abs(new Date().getTime() - new Date(newTx.terakhir_diubah_pada).getTime()) < 5000
+        syncedTx.terakhir_diubah_pada &&
+        Math.abs(new Date().getTime() - new Date(syncedTx.terakhir_diubah_pada).getTime()) < 5000
       );
 
       if (!isRecentlyLoggedByModal) {
         const diffSummary: string[] = [];
-        if (oldTx.nama_petani !== newTx.nama_petani) {
-          diffSummary.push(`Petani: "${oldTx.nama_petani}" -> "${newTx.nama_petani}"`);
+        if (oldTx.nama_petani !== syncedTx.nama_petani) {
+          diffSummary.push(`Petani: "${oldTx.nama_petani}" -> "${syncedTx.nama_petani}"`);
         }
-        if (oldTx.kode_grade !== newTx.kode_grade) {
-          diffSummary.push(`Grade: ${oldTx.kode_grade} -> ${newTx.kode_grade}`);
+        if (oldTx.kode_grade !== syncedTx.kode_grade) {
+          diffSummary.push(`Grade: ${oldTx.kode_grade} -> ${syncedTx.kode_grade}`);
         }
-        if (oldTx.berat_kg !== newTx.berat_kg) {
-          diffSummary.push(`Netto: ${oldTx.berat_kg} Kg -> ${newTx.berat_kg} Kg (Δ ${normalizeKg(newTx.berat_kg - oldTx.berat_kg)} Kg)`);
+        if (oldTx.berat_kg !== syncedTx.berat_kg) {
+          diffSummary.push(`Netto: ${oldTx.berat_kg} Kg -> ${syncedTx.berat_kg} Kg (Δ ${normalizeKg(syncedTx.berat_kg - oldTx.berat_kg)} Kg)`);
         }
-        if ((oldTx.harga_final || oldTx.total_harga_beli) !== (newTx.harga_final || newTx.total_harga_beli)) {
-          diffSummary.push(`Nilai: Rp ${(oldTx.harga_final || oldTx.total_harga_beli).toLocaleString('id-ID')} -> Rp ${(newTx.harga_final || newTx.total_harga_beli).toLocaleString('id-ID')}`);
+        if ((oldTx.harga_final || oldTx.total_harga_beli) !== (syncedTx.harga_final || syncedTx.total_harga_beli)) {
+          diffSummary.push(`Nilai: Rp ${(oldTx.harga_final || oldTx.total_harga_beli).toLocaleString('id-ID')} -> Rp ${(syncedTx.harga_final || syncedTx.total_harga_beli).toLocaleString('id-ID')}`);
         }
-        if (oldTx.status_pembayaran !== newTx.status_pembayaran) {
-          diffSummary.push(`Status bayar: ${oldTx.status_pembayaran} -> ${newTx.status_pembayaran}`);
+        if (oldTx.status_pembayaran !== syncedTx.status_pembayaran) {
+          diffSummary.push(`Status bayar: ${oldTx.status_pembayaran} -> ${syncedTx.status_pembayaran}`);
         }
 
         recordAuditLog({
@@ -1177,8 +1190,8 @@ export default function App() {
           user_role: currentRole,
           modul: 'Transaksi Pembelian',
           aksi: 'UBAH_TRANSAKSI',
-          target_id: newTx.no_kupon,
-          deskripsi: `Koreksi data kupon ${newTx.no_kupon} (${newTx.nama_petani})`,
+          target_id: syncedTx.no_kupon,
+          deskripsi: `Koreksi data kupon ${syncedTx.no_kupon} (${syncedTx.nama_petani})`,
           rincian_perubahan: diffSummary.length > 0 ? diffSummary : ['Pembaruan rincian timbang/status'],
         });
       }
@@ -1188,95 +1201,26 @@ export default function App() {
         user_role: currentRole,
         modul: 'Transaksi Pembelian',
         aksi: 'TAMBAH_TRANSAKSI',
-        target_id: newTx.no_kupon,
-        deskripsi: `Pencatatan kupon baru ${newTx.no_kupon} (Petani: ${newTx.nama_petani}, ${balCount} Bal)`,
+        target_id: syncedTx.no_kupon,
+        deskripsi: `Pencatatan kupon baru ${syncedTx.no_kupon} (Petani: ${syncedTx.nama_petani}, ${balCount} Bal)`,
       });
     }
 
     if (!meta.silent) {
-      showToast(`Kupon ${newTx.no_kupon} (${balCount} Bal, ${newTx.berat_kg} Kg) berhasil disimpan!`);
+      showToast(`Kupon ${syncedTx.no_kupon} (${balCount} Bal, ${syncedTx.berat_kg} Kg) berhasil disimpan!`);
     }
 
-    // 2) Sync ke BE lewat antrean: satu permintaan per kupon, dicoba ulang otomatis bila gagal, dan hasilnya
-    //    diverifikasi. Merge hasil tanpa menghapus bal paralel. Simpanan yang tergantikan simpanan lebih baru
-    //    tidak perlu digabung ke layar karena hasil simpanan terbarulah yang membawa keadaan akhir.
-    try {
-      const hasilAntrian = await antrianSinkron.masukkan(newTx, oldTx);
-      const syncResult =
-        hasilAntrian.terbaru && hasilAntrian.hasil ? hasilAntrian.hasil : { syncedTx: newTx, fromBackend: false };
-      if (syncResult.fromBackend && syncResult.syncedTx) {
-        const feItems = newTx.items || [];
-        const beItems = syncResult.syncedTx.items || [];
-        const mergedItems = feItems.length
-          ? feItems.map((fe) => {
-              const be = beItems.find((b) => String(b.no_bal) === String(fe.no_bal));
-              if (!be) return fe;
-              const feW = fe.berat_kg || 0;
-              // Berat dari perangkat ini menang, termasuk perubahan disengaja (buka kunci = 0)
-              const feMenang = feW > 0 || Boolean(fe.diubah_lokal_pada);
-              const base = feMenang
-                ? { ...be, ...fe, item_id: be.item_id || fe.item_id }
-                : { ...fe, ...be, item_id: be.item_id || fe.item_id };
-              // Ganti tikar diputuskan oleh cap waktu GT-nya sendiri; jawaban server sudah memuat keputusan server
-              // (GT dari perangkat ini hanya dipakai server bila lebih baru), jadi server menjadi acuan
-              return pilihGantiTikar(base, fe, be, { incomingDariServer: true });
-            })
-          : [...beItems];
-
-        // Kupon ternyata tersimpan di server dengan ID lain (kupon yang sama sudah dibuka dari komputer lain,
-        // atau ID lokal sudah dipakai kupon lain): pindahkan salinan lokal ke ID server agar tidak tampil dobel
-        const idServer = syncResult.syncedTx.transaksi_id;
-        if (idServer && idServer !== newTx.transaksi_id) {
-          const idLama = newTx.transaksi_id;
-          pindahkanBalDihapus(idLama, idServer);
-          catatAliasKupon(idLama, idServer);
-          setTransaksiList((prev) => {
-            const next = prev.filter((t) => t.transaksi_id !== idLama);
-            saveTransaksiData(next);
-            return next;
-          });
-          setBarangList((prev) => {
-            const next = prev.map((b) => (b.transaksi_pembelian_id === idLama ? { ...b, transaksi_pembelian_id: idServer } : b));
-            saveBarangData(next);
-            return next;
-          });
-        }
-
-        // Bal yang hanya ada di server ikut dimasukkan, kecuali simpanan versi utuh (form Edit) dan bal yang baru
-        // dihapus di perangkat ini
-        const feNos = new Set(mergedItems.map((i) => String(i.no_bal).toUpperCase()));
-        const dihapus = balDihapusDariKupon(idServer || newTx.transaksi_id);
-        for (const be of beItems) {
-          const no = String(be.no_bal).toUpperCase();
-          if (!meta.timpaPenuh && !feNos.has(no) && !dihapus.has(no)) mergedItems.push(be);
-        }
-
-        const syncedTx: TransaksiPembelian = {
-          ...newTx,
-          ...syncResult.syncedTx,
-          status_tahap: newTx.status_tahap || syncResult.syncedTx.status_tahap,
-          petani_id: newTx.petani_id || syncResult.syncedTx.petani_id,
-          nama_petani: newTx.nama_petani || syncResult.syncedTx.nama_petani,
-          alasan_perubahan_terakhir: newTx.alasan_perubahan_terakhir,
-          items: mergedItems,
-        };
-
-        commitLocalTx(syncedTx, false, Boolean(meta.timpaPenuh));
-
-        // Setelah dibayar server menerbitkan stok bal; daftar bal diambil ulang dari server
-        if (syncedTx.status_pembayaran === 'lunas') {
-          try {
-            const barangRes = await ErpApiService.getBarangList();
-            if (barangRes.fromBackend) setBarangList(normalizeStatusBal(barangRes.data));
-          } catch (err) {
-            console.warn('Gagal memuat ulang bal setelah pembayaran:', err);
-          }
-        }
+    // Setelah dibayar server menerbitkan stok bal; daftar bal diambil ulang dari server
+    if (syncedTx.status_pembayaran === 'lunas') {
+      try {
+        const barangRes = await ErpApiService.getBarangList();
+        if (barangRes.fromBackend) setBarangList(normalizeStatusBal(barangRes.data));
+      } catch (err) {
+        console.warn('Gagal memuat ulang bal setelah pembayaran:', err);
       }
-    } catch (err) {
-      // Simpanan tetap di antrean dan dicoba ulang otomatis; statusnya tampil di Header
-      console.warn('Kupon belum terkirim ke server, dicoba ulang otomatis:', err);
     }
+
+    return true;
   };
 
   /**
@@ -1454,7 +1398,7 @@ export default function App() {
     };
   }, [activeModuleId, currentUser]);
 
-  const handleDeleteTransaksi = (transaksiId: string, alasanHapus?: string) => {
+  const handleDeleteTransaksi = async (transaksiId: string, alasanHapus?: string) => {
     if (currentUser?.status_aktif === false) {
       showToast('Akun Anda dinonaktifkan. Aksi tidak dapat dilakukan.', 'info');
       return;
@@ -1482,14 +1426,19 @@ export default function App() {
 
     // Kupon yang dihapus tidak perlu lagi dikirim ke server lewat antrean; penghapusannya sendiri harus sampai ke server
     antrianSinkron.batalkan(transaksiId);
-    void catatMutasi({
-      entitas: 'transaksi',
-      id: transaksiId,
-      idAlt: txToDelete.no_kupon,
-      aksi: 'hapus',
-      tambahan: { alasan: alasanHapus },
-      label: `Hapus kupon ${txToDelete.no_kupon}`,
-    });
+    // Direct-to-backend request
+    try {
+      const isOnline = await ErpApiService.isBackendOnline();
+      if (!isOnline) {
+        showToast('Gagal menghapus transaksi: Koneksi ke server terputus.', 'error');
+        return false;
+      }
+      const { hapusTransaksiServer } = await import('./services/kirimMutasi');
+      await hapusTransaksiServer(transaksiId, alasanHapus);
+    } catch (err: any) {
+      showToast(`Gagal menghapus transaksi: ${err.message}`, 'error');
+      return false;
+    }
 
     // 1. Remove from transaksiList
     const updatedTxList = transaksiList.filter((t) => t.transaksi_id !== transaksiId);
@@ -1534,69 +1483,78 @@ export default function App() {
     
 
     
+    
     showToast(`Transaksi ${transaksiId} dan data bal terkait berhasil dihapus.`);
+    return true;
   };
 
   // --- PRD 6.1: Pengiriman Barang (DO) Handlers ---
-  const handleSaveNewPengiriman = async (newPengiriman: PengirimanBarang, updatedBarangIds: string[]) => {
-    if (currentUser?.status_aktif === false) return showToast('Akun Anda dinonaktifkan.', 'info');
+  const handleSaveNewPengiriman = async (newPengiriman: PengirimanBarang, updatedBarangIds: string[]): Promise<boolean> => {
+    if (currentUser?.status_aktif === false) {
+      showToast('Akun Anda dinonaktifkan.', 'info');
+      return false;
+    }
 
     const updatedSet = new Set(updatedBarangIds);
 
-    // 1) Langsung tampil: surat jalan baru dan tanda DO pada batch sample. Bal TIDAK langsung berstatus
-    // keluar di sini: bal baru benar-benar keluar gudang saat Surat Jalan ini berstatus Selesai
-    // (lihat handleUpdatePengirimanStatus). Selama belum Selesai, bal tetap tampil "Di Gudang".
-    setPengirimanList((prev) => {
-      const next = [newPengiriman, ...prev.filter((p) => p.pengiriman_id !== newPengiriman.pengiriman_id)];
-      savePengirimanData(next);
-      return next;
-    });
-    setBarangList((prev) => {
-      const next = prev.map((b) =>
-        updatedSet.has(b.barang_id) ? { ...b, pengiriman_id: newPengiriman.pengiriman_id } : b
-      );
-      saveBarangData(next);
-      return next;
-    });
+    try {
+      const isOnline = await ErpApiService.isBackendOnline();
+      if (!isOnline) {
+        showToast('Gagal memproses Surat Jalan: Koneksi ke server terputus.', 'error');
+        return false;
+      }
 
-    let batchTerkait: BatchPengirimanSample | undefined;
-    if (newPengiriman.batch_sample_id_ref) {
-      const targetBatchId = newPengiriman.batch_sample_id_ref;
-      const updatedBatches = batchSampleList.map((batch) => {
-        if (batch.batch_id === targetBatchId || batch.kode_batch === targetBatchId) {
-          const updatedItems = (batch.items || []).map((it) =>
+      const { kirimPengiriman, kirimBatchSample } = await import('./services/kirimMutasi');
+      const serverPengiriman = await kirimPengiriman(newPengiriman, true);
+
+      let batchTerkait: BatchPengirimanSample | undefined;
+      let batchResponse: BatchPengirimanSample | undefined;
+      if (newPengiriman.batch_sample_id_ref) {
+        const targetBatchId = newPengiriman.batch_sample_id_ref;
+        const targetBatch = batchSampleList.find((b) => b.batch_id === targetBatchId || b.kode_batch === targetBatchId);
+        if (targetBatch) {
+          const updatedItems = (targetBatch.items || []).map((it) =>
             updatedSet.has(it.barang_id) ? { ...it, sudah_dikirim_do: true } : it
           );
           const allSent = updatedItems.length > 0 && updatedItems.every((it) => it.sudah_dikirim_do || it.status_item === 'ditolak') && updatedItems.some(it => it.sudah_dikirim_do);
-          return {
-            ...batch,
+          batchTerkait = {
+            ...targetBatch,
             items: updatedItems,
-            status: allSent ? ('selesai' as const) : batch.status,
+            status: allSent ? 'selesai' : targetBatch.status,
           };
+          const res = await kirimBatchSample(batchTerkait, false);
+          batchResponse = res.gabungan;
         }
-        return batch;
+      }
+
+      setPengirimanList((prev) => {
+        const next = [serverPengiriman, ...prev.filter((p) => p.pengiriman_id !== newPengiriman.pengiriman_id)];
+        savePengirimanData(next);
+        return next;
       });
-      setBatchSampleList(updatedBatches);
-      saveBatchSampleData(updatedBatches);
-      batchTerkait = updatedBatches.find((b) => b.batch_id === targetBatchId || b.kode_batch === targetBatchId);
-    }
+      setBarangList((prev) => {
+        const next = prev.map((b) =>
+          updatedSet.has(b.barang_id) ? { ...b, pengiriman_id: serverPengiriman.pengiriman_id } : b
+        );
+        saveBarangData(next);
+        return next;
+      });
 
-    showToast(`Surat Jalan ${newPengiriman.no_surat_jalan} diterbitkan (${newPengiriman.total_bal || updatedBarangIds.length} bal dimuat)!`);
+      if (batchResponse) {
+        setBatchSampleList((prev) => {
+          const next = prev.map((batch) => 
+            (batch.batch_id === batchResponse!.batch_id || batch.kode_batch === batchResponse!.kode_batch) ? batchResponse! : batch
+          );
+          saveBatchSampleData(next);
+          return next;
+        });
+      }
 
-    // 2) Sinkron ke server lewat antrean (dicoba ulang sampai berhasil); ID dari server digabung saat selesai
-    void catatMutasi({
-      entitas: 'pengiriman',
-      id: newPengiriman.pengiriman_id,
-      idAlt: newPengiriman.no_surat_jalan,
-      aksi: 'simpan',
-      data: newPengiriman,
-      tambahan: { baru: true },
-      label: `Surat Jalan ${newPengiriman.no_surat_jalan}`,
-    });
-
-    // Tanda DO pada batch sample asal juga harus sampai ke server
-    if (batchTerkait) {
-      void catatMutasi({ entitas: 'batch_sample', id: batchTerkait.batch_id, idAlt: batchTerkait.kode_batch, aksi: 'simpan', data: batchTerkait, label: `Batch sample ${batchTerkait.kode_batch}` });
+      showToast(`Surat Jalan ${serverPengiriman.no_surat_jalan} diterbitkan (${serverPengiriman.total_bal || updatedBarangIds.length} bal dimuat)!`);
+      return true;
+    } catch (err: any) {
+      showToast(`Gagal menerbitkan Surat Jalan: ${err.message || 'Kesalahan server'}`, 'error');
+      return false;
     }
   };
 
@@ -1622,97 +1580,106 @@ export default function App() {
   const handleSaveBatchSample = async (newBatch: BatchPengirimanSample, updatedBarangs: Barang[]) => {
     if (currentUser?.status_aktif === false) return showToast('Akun Anda dinonaktifkan.', 'info');
 
-    // 1) Langsung tampil
-    setBatchSampleList((prev) => {
-      const next = [newBatch, ...prev.filter((b) => b.batch_id !== newBatch.batch_id)];
-      saveBatchSampleData(next);
-      return next;
-    });
-    if (updatedBarangs && updatedBarangs.length > 0) {
-      const updatedBarangMap = new Map(updatedBarangs.map((b) => [b.barang_id, b]));
-      setBarangList((prev) => {
-        const next = prev.map((b) => updatedBarangMap.get(b.barang_id) || b);
-        saveBarangData(next);
+    try {
+      const isOnline = await ErpApiService.isBackendOnline();
+      if (!isOnline) {
+        showToast('Gagal menyimpan Batch Sample: Koneksi ke server terputus.', 'error');
+        return;
+      }
+
+      const { kirimBatchSample } = await import('./services/kirimMutasi');
+      const res = await kirimBatchSample(newBatch, true);
+      const serverBatch = res.gabungan;
+
+      // 1) Update UI
+      setBatchSampleList((prev) => {
+        const next = [serverBatch, ...prev.filter((b) => b.batch_id !== newBatch.batch_id)];
+        saveBatchSampleData(next);
         return next;
       });
+      if (updatedBarangs && updatedBarangs.length > 0) {
+        const updatedBarangMap = new Map(updatedBarangs.map((b) => [b.barang_id, b]));
+        setBarangList((prev) => {
+          const next = prev.map((b) => updatedBarangMap.get(b.barang_id) || b);
+          saveBarangData(next);
+          return next;
+        });
+      }
+      showToast(
+        serverBatch.status === 'draft'
+          ? `Batch Sample ${serverBatch.kode_batch} disimpan sebagai Draft. Finalkan di Status & Detail Batch bila sudah siap dipakai.`
+          : `Batch Sample ${serverBatch.kode_batch} berhasil dikirim ke ${serverBatch.tujuan_buyer}!`
+      );
+    } catch (err: any) {
+      showToast(`Gagal menyimpan Batch Sample: ${err.message}`, 'error');
     }
-    showToast(
-      newBatch.status === 'draft'
-        ? `Batch Sample ${newBatch.kode_batch} disimpan sebagai Draft. Finalkan di Status & Detail Batch bila sudah siap dipakai.`
-        : `Batch Sample ${newBatch.kode_batch} berhasil dikirim ke ${newBatch.tujuan_buyer}!`
-    );
-
-    // 2) Sinkron ke server lewat antrean (No. Surat Sample manual tetap dipakai); dicoba ulang sampai berhasil
-    void catatMutasi({
-      entitas: 'batch_sample',
-      id: newBatch.batch_id,
-      idAlt: newBatch.kode_batch,
-      aksi: 'simpan',
-      data: newBatch,
-      tambahan: { baru: true },
-      label: `Batch sample ${newBatch.kode_batch}`,
-    });
   };
 
 
-  const handleDeleteBatchSample = (batchId: string, revertedBarangs?: Barang[]) => {
+  const handleDeleteBatchSample = async (batchId: string, revertedBarangs?: Barang[]) => {
     if (currentUser?.status_aktif === false) return showToast('Akun Anda dinonaktifkan.', 'info');
     const batchTarget = batchSampleList.find((b) => b.batch_id === batchId);
-    const kodeBatch = batchTarget?.kode_batch || '';
-    const list = batchSampleList.filter(b => b.batch_id !== batchId);
-    setBatchSampleList(list);
-    saveBatchSampleData(list);
+    if (!batchTarget) return;
+    const kodeBatch = batchTarget.kode_batch || '';
     
-    if (revertedBarangs && revertedBarangs.length > 0) {
-      const updatedBarangMap = new Map(revertedBarangs.map((b) => [b.barang_id, b]));
-      const newBarangList = barangList.map((b) => updatedBarangMap.get(b.barang_id) || b);
-      setBarangList(newBarangList);
-      saveBarangData(newBarangList);
-      // Bal kembali ke stok gudang juga di server
-      catatStatusBal(revertedBarangs, barangList);
-    }
+    try {
+      const isOnline = await ErpApiService.isBackendOnline();
+      if (!isOnline) {
+        showToast('Gagal menghapus Batch Sample: Koneksi ke server terputus.', 'error');
+        return;
+      }
 
-    // Penghapusan harus sampai ke server; kalau tidak, batch muncul lagi saat data dimuat ulang
-    void catatMutasi({
-      entitas: 'batch_sample',
-      id: batchId,
-      idAlt: kodeBatch || undefined,
-      aksi: 'hapus',
-      tambahan: { batch: batchTarget },
-      label: `Hapus batch sample ${kodeBatch}`,
-    });
-    
-    showToast(`Batch ${kodeBatch} berhasil dihapus.`);
+      const { hapusBatchSample } = await import('./services/kirimMutasi');
+      await hapusBatchSample(batchTarget);
+
+      const list = batchSampleList.filter(b => b.batch_id !== batchId);
+      setBatchSampleList(list);
+      saveBatchSampleData(list);
+      
+      if (revertedBarangs && revertedBarangs.length > 0) {
+        const updatedBarangMap = new Map(revertedBarangs.map((b) => [b.barang_id, b]));
+        const newBarangList = barangList.map((b) => updatedBarangMap.get(b.barang_id) || b);
+        setBarangList(newBarangList);
+        saveBarangData(newBarangList);
+        catatStatusBal(revertedBarangs, barangList);
+      }
+      
+      showToast(`Batch ${kodeBatch} berhasil dihapus.`);
+    } catch (err: any) {
+      showToast(`Gagal menghapus Batch Sample: ${err.message}`, 'error');
+    }
   };
 
   const handleUpdateBatchSample = async (updatedBatch: BatchPengirimanSample, updatedBarangs?: Barang[]) => {
-    // 1) Langsung tampil
-    setBatchSampleList((prev) => {
-      const next = prev.map((b) => (b.batch_id === updatedBatch.batch_id ? updatedBatch : b));
-      saveBatchSampleData(next);
-      return next;
-    });
-    if (updatedBarangs && updatedBarangs.length > 0) {
-      const updatedBarangMap = new Map(updatedBarangs.map((b) => [b.barang_id, b]));
-      setBarangList((prev) => {
-        const next = prev.map((b) => updatedBarangMap.get(b.barang_id) || b);
-        saveBarangData(next);
+    try {
+      const isOnline = await ErpApiService.isBackendOnline();
+      if (!isOnline) {
+        showToast('Gagal memperbarui Batch Sample: Koneksi ke server terputus.', 'error');
+        return;
+      }
+
+      const { kirimBatchSample } = await import('./services/kirimMutasi');
+      const res = await kirimBatchSample(updatedBatch, false);
+      const serverBatch = res.gabungan;
+
+      setBatchSampleList((prev) => {
+        const next = prev.map((b) => (b.batch_id === serverBatch.batch_id ? serverBatch : b));
+        saveBatchSampleData(next);
         return next;
       });
+      if (updatedBarangs && updatedBarangs.length > 0) {
+        const updatedBarangMap = new Map(updatedBarangs.map((b) => [b.barang_id, b]));
+        setBarangList((prev) => {
+          const next = prev.map((b) => updatedBarangMap.get(b.barang_id) || b);
+          saveBarangData(next);
+          return next;
+        });
+        catatStatusBal(updatedBarangs, barangList);
+      }
+      showToast(`Batch ${serverBatch.kode_batch} berhasil diperbarui.`);
+    } catch (err: any) {
+      showToast(`Gagal memperbarui Batch Sample: ${err.message}`, 'error');
     }
-    showToast(`Batch ${updatedBatch.kode_batch} berhasil diperbarui.`);
-
-    // 2) Sinkron ke server lewat antrean: daftar bal lengkap dan harga ikut terkirim, dicoba ulang sampai berhasil
-    void catatMutasi({
-      entitas: 'batch_sample',
-      id: updatedBatch.batch_id,
-      idAlt: updatedBatch.kode_batch,
-      aksi: 'simpan',
-      data: updatedBatch,
-      label: `Batch sample ${updatedBatch.kode_batch}`,
-    });
-    // Bal yang masuk atau keluar batch berubah statusnya juga di server
-    catatStatusBal(updatedBarangs, barangList);
   };
 
   /**
@@ -1720,7 +1687,7 @@ export default function App() {
    * Bal baru menjadi keluar, bal yang dikeluarkan kembali ke gudang, dan tanda "sudah dikirim DO" pada batch sample
    * disesuaikan. Mengembalikan false bila ditolak.
    */
-  const handleUpdatePengiriman = (updatedPengiriman: PengirimanBarang, balDitambah: string[] = [], balDikeluarkan: string[] = []): boolean => {
+  const handleUpdatePengiriman = async (updatedPengiriman: PengirimanBarang, balDitambah: string[] = [], balDikeluarkan: string[] = []): Promise<boolean> => {
     const lama = pengirimanList.find((p) => p.pengiriman_id === updatedPengiriman.pengiriman_id);
     if (!lama) {
       showToast('Surat Jalan yang diedit tidak ditemukan.', 'info');
@@ -1745,53 +1712,62 @@ export default function App() {
 
     // Status tidak berubah lewat edit; status diatur lewat halaman Status Pengiriman
     const baru: PengirimanBarang = { ...updatedPengiriman, status: lama.status };
-    setPengirimanList((prev) => {
-      const next = prev.map((p) => (p.pengiriman_id === baru.pengiriman_id ? baru : p));
-      savePengirimanData(next);
-      return next;
-    });
-    // Bal baru masuk muatan TIDAK langsung berstatus keluar (baru keluar sungguhan saat Selesai);
-    // bal yang dikeluarkan dari muatan hanya dibalik ke gudang bila kebetulan sudah keluar (data lama).
-    const barangSetelahEdit = masukkanBalKeMuatan(kembalikanBalKeGudang(barangList, keluar), tambah, baru.pengiriman_id);
-    setBarangList(barangSetelahEdit);
-    saveBarangData(barangSetelahEdit);
-    // Bal yang statusnya benar-benar berubah (jarang di sini, hanya kasus data lama) disinkronkan ke server
-    const idBalBerubah = new Set<string>([...tambah, ...keluar]);
-    catatStatusBal(barangSetelahEdit.filter((b) => idBalBerubah.has(b.barang_id)), barangList);
+    try {
+      const isOnline = await ErpApiService.isBackendOnline();
+      if (!isOnline) {
+        showToast('Gagal memperbarui Surat Jalan: Koneksi ke server terputus.', 'error');
+        return false;
+      }
 
-    const sesuaiBatch = sesuaikanBatchSetelahPerubahanDO(batchSampleList, lama.batch_sample_id_ref, tambah, keluar);
-    const batchTerkait = sesuaiBatch.batchTerkait;
-    if (batchTerkait) {
-      setBatchSampleList(sesuaiBatch.batchList);
-      saveBatchSampleData(sesuaiBatch.batchList);
+      const { kirimPengiriman, kirimBatchSample } = await import('./services/kirimMutasi');
+      const serverPengiriman = await kirimPengiriman(baru, false);
+      let batchResponse: BatchPengirimanSample | undefined;
+
+      const sesuaiBatch = sesuaikanBatchSetelahPerubahanDO(batchSampleList, lama.batch_sample_id_ref, tambah, keluar);
+      const batchTerkait = sesuaiBatch.batchTerkait;
+      if (batchTerkait) {
+        const res = await kirimBatchSample(batchTerkait, false);
+        batchResponse = res.gabungan;
+      }
+
+      // Update UI if success
+      setPengirimanList((prev) => {
+        const next = prev.map((p) => (p.pengiriman_id === serverPengiriman.pengiriman_id ? serverPengiriman : p));
+        savePengirimanData(next);
+        return next;
+      });
+
+      const barangSetelahEdit = masukkanBalKeMuatan(kembalikanBalKeGudang(barangList, keluar), tambah, serverPengiriman.pengiriman_id);
+      setBarangList(barangSetelahEdit);
+      saveBarangData(barangSetelahEdit);
+
+      if (batchResponse) {
+        setBatchSampleList((prev) => {
+          const next = prev.map((batch) => 
+            (batch.batch_id === batchResponse!.batch_id || batch.kode_batch === batchResponse!.kode_batch) ? batchResponse! : batch
+          );
+          saveBatchSampleData(next);
+          return next;
+        });
+      }
+
+      const perubahanBal = [
+        tambah.size > 0 ? `${tambah.size} bal ditambah` : '',
+        keluar.size > 0 ? `${keluar.size} bal dikeluarkan` : '',
+      ].filter(Boolean).join(', ');
+      showToast(`Surat Jalan ${serverPengiriman.no_surat_jalan} diperbarui${perubahanBal ? ` (${perubahanBal})` : ''}.`);
+      return true;
+    } catch (err: any) {
+      showToast(`Gagal memperbarui Surat Jalan: ${err.message || 'Kesalahan server'}`, 'error');
+      return false;
     }
-
-    const perubahanBal = [
-      tambah.size > 0 ? `${tambah.size} bal ditambah` : '',
-      keluar.size > 0 ? `${keluar.size} bal dikeluarkan` : '',
-    ].filter(Boolean).join(', ');
-    showToast(`Surat Jalan ${baru.no_surat_jalan} diperbarui${perubahanBal ? ` (${perubahanBal})` : ''}.`);
-
-    // Sinkron ke server lewat antrean (dicoba ulang sampai berhasil); bal dimuat ulang dari server saat selesai
-    void catatMutasi({
-      entitas: 'pengiriman',
-      id: baru.pengiriman_id,
-      idAlt: baru.no_surat_jalan,
-      aksi: 'simpan',
-      data: baru,
-      label: `Surat Jalan ${baru.no_surat_jalan}`,
-    });
-    if (batchTerkait) {
-      void catatMutasi({ entitas: 'batch_sample', id: batchTerkait.batch_id, idAlt: batchTerkait.kode_batch, aksi: 'simpan', data: batchTerkait, label: `Batch sample ${batchTerkait.kode_batch}` });
-    }
-    return true;
   };
 
   /**
    * Membatalkan Surat Jalan yang belum Selesai: bal kembali ke gudang dan, bila berasal dari
    * batch sample, tanda "sudah dikirim DO" pada bal-bal itu dicabut agar bisa dibuatkan Surat Jalan lagi.
    */
-  const handleDeletePengiriman = (pengirimanId: string) => {
+  const handleDeletePengiriman = async (pengirimanId: string) => {
     const target = pengirimanList.find((p) => p.pengiriman_id === pengirimanId);
     if (!target) return;
     if (isSuratJalanTerkunci(target)) {
@@ -1800,43 +1776,48 @@ export default function App() {
     }
     if (currentUser?.status_aktif === false) return showToast('Akun Anda dinonaktifkan.', 'info');
 
-    setPengirimanList((prev) => {
-      const next = prev.filter((p) => p.pengiriman_id !== pengirimanId);
-      savePengirimanData(next);
-      return next;
-    });
+    try {
+      const isOnline = await ErpApiService.isBackendOnline();
+      if (!isOnline) {
+        showToast('Gagal membatalkan Surat Jalan: Koneksi ke server terputus.', 'error');
+        return;
+      }
 
-    const idBal = new Set(target.barang_ids || []);
-    const barangSetelahBatal = kembalikanBalKeGudang(barangList, idBal);
-    setBarangList(barangSetelahBatal);
-    saveBarangData(barangSetelahBatal);
-    // Bal kembali ke stok gudang juga di server (kalau tidak, statusnya balik "keluar" lagi saat data dimuat ulang)
-    catatStatusBal(barangSetelahBatal.filter((b) => idBal.has(b.barang_id)), barangList);
+      const { hapusPengirimanServer, kirimBatchSample } = await import('./services/kirimMutasi');
+      await hapusPengirimanServer(pengirimanId);
 
-    // Batch sample asal ditutup otomatis saat semua bal punya DO; dengan DO dibatalkan ia terbuka lagi
-    const sesuaiBatch = sesuaikanBatchSetelahPerubahanDO(batchSampleList, target.batch_sample_id_ref, new Set(), idBal);
-    const batchTerkait = sesuaiBatch.batchTerkait;
-    if (batchTerkait) {
-      setBatchSampleList(sesuaiBatch.batchList);
-      saveBatchSampleData(sesuaiBatch.batchList);
-    }
+      // Batch sample asal ditutup otomatis saat semua bal punya DO; dengan DO dibatalkan ia terbuka lagi
+      const idBal = new Set(target.barang_ids || []);
+      const sesuaiBatch = sesuaikanBatchSetelahPerubahanDO(batchSampleList, target.batch_sample_id_ref, new Set(), idBal);
+      const batchTerkait = sesuaiBatch.batchTerkait;
+      if (batchTerkait) {
+        await kirimBatchSample(batchTerkait, false);
+      }
 
-    showToast(`Surat Jalan ${target.no_surat_jalan} dibatalkan; ${idBal.size} bal kembali ke gudang.`);
+      // Update UI after successful server response
+      setPengirimanList((prev) => {
+        const next = prev.filter((p) => p.pengiriman_id !== pengirimanId);
+        savePengirimanData(next);
+        return next;
+      });
 
-    // Pembatalan harus sampai ke server; kalau tidak, Surat Jalan muncul lagi saat data dimuat ulang
-    void catatMutasi({
-      entitas: 'pengiriman',
-      id: pengirimanId,
-      idAlt: target.no_surat_jalan,
-      aksi: 'hapus',
-      label: `Batalkan Surat Jalan ${target.no_surat_jalan}`,
-    });
-    if (batchTerkait) {
-      void catatMutasi({ entitas: 'batch_sample', id: batchTerkait.batch_id, idAlt: batchTerkait.kode_batch, aksi: 'simpan', data: batchTerkait, label: `Batch sample ${batchTerkait.kode_batch}` });
+      const barangSetelahBatal = kembalikanBalKeGudang(barangList, idBal);
+      setBarangList(barangSetelahBatal);
+      saveBarangData(barangSetelahBatal);
+      catatStatusBal(barangSetelahBatal.filter((b) => idBal.has(b.barang_id)), barangList);
+
+      if (batchTerkait) {
+        setBatchSampleList(sesuaiBatch.batchList);
+        saveBatchSampleData(sesuaiBatch.batchList);
+      }
+
+      showToast(`Surat Jalan ${target.no_surat_jalan} dibatalkan; ${idBal.size} bal kembali ke gudang.`);
+    } catch (err: any) {
+      showToast(`Gagal membatalkan Surat Jalan: ${err.message}`, 'error');
     }
   };
 
-  const handleUpdatePengirimanStatus = (pengirimanId: string, newStatus: string) => {
+  const handleUpdatePengirimanStatus = async (pengirimanId: string, newStatus: string) => {
     const target = pengirimanList.find((p) => p.pengiriman_id === pengirimanId);
     if (!target || target.status === newStatus) return;
     // Selesai bersifat final: nilai penjualan sudah masuk laporan
@@ -1845,35 +1826,37 @@ export default function App() {
       return;
     }
 
-    const updated = pengirimanList.map((p) => (p.pengiriman_id === pengirimanId ? { ...p, status: newStatus as PengirimanBarang['status'] } : p));
-    setPengirimanList(updated);
-    savePengirimanData(updated);
+    try {
+      const isOnline = await ErpApiService.isBackendOnline();
+      if (!isOnline) {
+        showToast('Gagal mengubah status Surat Jalan: Koneksi terputus.', 'error');
+        return;
+      }
 
-    // Bal baru benar-benar "keluar" gudang tepat saat Surat Jalan ini Selesai; sebelum itu masih "Di Gudang"
-    if (newStatus === 'selesai') {
-      const idBal = new Set(target.barang_ids || []);
-      const barangSetelahSelesai = keluarkanBal(barangList, idBal, pengirimanId);
-      setBarangList(barangSetelahSelesai);
-      saveBarangData(barangSetelahSelesai);
-      catatStatusBal(barangSetelahSelesai.filter((b) => idBal.has(b.barang_id)), barangList);
-    }
+      const barisBaru = { ...target, status: newStatus as PengirimanBarang['status'] };
+      const { kirimStatusPengiriman } = await import('./services/kirimMutasi');
+      await kirimStatusPengiriman(barisBaru);
 
-    showToast(
-      newStatus === 'selesai'
-        ? `Surat Jalan ${target.no_surat_jalan} Selesai; ${target.barang_ids?.length || 0} bal keluar gudang dan nilai penjualannya kini masuk laporan.`
-        : `Status Surat Jalan ${target.no_surat_jalan} menjadi ${LABEL_STATUS_PENGIRIMAN[newStatus] || newStatus}.`
-    );
+      const updated = pengirimanList.map((p) => (p.pengiriman_id === pengirimanId ? barisBaru : p));
+      setPengirimanList(updated);
+      savePengirimanData(updated);
 
-    const barisBaru = updated.find((p) => p.pengiriman_id === pengirimanId);
-    if (barisBaru) {
-      void catatMutasi({
-        entitas: 'pengiriman',
-        id: pengirimanId,
-        idAlt: barisBaru.no_surat_jalan,
-        aksi: 'status',
-        data: barisBaru,
-        label: `Status Surat Jalan ${barisBaru.no_surat_jalan}`,
-      });
+      // Bal baru benar-benar "keluar" gudang tepat saat Surat Jalan ini Selesai; sebelum itu masih "Di Gudang"
+      if (newStatus === 'selesai') {
+        const idBal = new Set(target.barang_ids || []);
+        const barangSetelahSelesai = keluarkanBal(barangList, idBal, pengirimanId);
+        setBarangList(barangSetelahSelesai);
+        saveBarangData(barangSetelahSelesai);
+        catatStatusBal(barangSetelahSelesai.filter((b) => idBal.has(b.barang_id)), barangList);
+      }
+
+      showToast(
+        newStatus === 'selesai'
+          ? `Surat Jalan ${target.no_surat_jalan} Selesai; ${target.barang_ids?.length || 0} bal keluar gudang dan nilai penjualannya kini masuk laporan.`
+          : `Status Surat Jalan ${target.no_surat_jalan} menjadi ${LABEL_STATUS_PENGIRIMAN[newStatus] || newStatus}.`
+      );
+    } catch (err: any) {
+      showToast(`Gagal mengubah status: ${err.message}`, 'error');
     }
   };
 
@@ -2164,9 +2147,10 @@ export default function App() {
                 initialKuponNo={targetKuponNo}
                 initialTxId={targetTxId}
                 initialBalNo={targetBalNo}
-                onSaveTransaksi={(newTx, newBarangs, meta) => {
-                  handleSaveTransaksi(newTx, newBarangs, { ...meta, silent: true });
-                  showToast(`Data timbangan kupon ${newTx.no_kupon} diperbarui!`);
+                onSaveTransaksi={async (newTx, newBarangs, meta) => {
+                  const success = await handleSaveTransaksi(newTx, newBarangs, { ...meta, silent: true });
+                  if (success && !meta?.silent) showToast(`Data timbangan kupon ${newTx.no_kupon} diperbarui!`);
+                  return success;
                 }}
                 onRefreshTransaksiList={handleRefreshTransaksiList}
                 onNavigateToKasir={(kuponNo, txId) => {

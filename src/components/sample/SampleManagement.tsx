@@ -717,7 +717,6 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
       return;
     }
 
-
     let nextSeq = activeBatchSampleList.length + 1;
     while (!editingBatchId && activeBatchSampleList.some((b) => b.batch_id === generateBatchSampleId(nextSeq))) {
       nextSeq += 1;

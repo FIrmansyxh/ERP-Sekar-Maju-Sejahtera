@@ -25,7 +25,7 @@ interface PembayaranKasirModalProps {
       nominalCash: number;
     },
     directPrintAfter?: boolean
-  ) => void;
+  ) => Promise<boolean>;
 }
 
 export const PembayaranKasirModal: React.FC<PembayaranKasirModalProps> = ({
@@ -39,6 +39,7 @@ export const PembayaranKasirModal: React.FC<PembayaranKasirModalProps> = ({
   const [inputCash, setInputCash] = useState('');
   const [isTiketFisikDiserahkan, setIsTiketFisikDiserahkan] = useState(true);
   const [cetakNotaLangsung, setCetakNotaLangsung] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (transaksi) {
@@ -61,7 +62,7 @@ export const PembayaranKasirModal: React.FC<PembayaranKasirModalProps> = ({
   const numericCash = parseInt(inputCash.replace(/\D/g, ''), 10) || 0;
   const isCashMatched = numericCash === totalBersih;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (hasUnweighedBal) {
@@ -81,7 +82,8 @@ export const PembayaranKasirModal: React.FC<PembayaranKasirModalProps> = ({
       return;
     }
 
-    onConfirmPembayaran(
+    setIsSaving(true);
+    const success = await onConfirmPembayaran(
       transaksi.transaksi_id,
       {
         metode: 'cash',
@@ -90,7 +92,10 @@ export const PembayaranKasirModal: React.FC<PembayaranKasirModalProps> = ({
       },
       cetakNotaLangsung
     );
-    onClose();
+    setIsSaving(false);
+    if (success) {
+      onClose();
+    }
   };
 
   return (
@@ -322,7 +327,7 @@ export const PembayaranKasirModal: React.FC<PembayaranKasirModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={hasUnweighedBal || !isCashMatched || !isTiketFisikDiserahkan}
+              disabled={isSaving || hasUnweighedBal || !isCashMatched || !isTiketFisikDiserahkan}
               className={`px-4 py-1.5 text-xs font-bold rounded-sm transition flex items-center space-x-1.5 shadow-xs ${
                 !hasUnweighedBal && isCashMatched && isTiketFisikDiserahkan
                   ? 'bg-[#b81d24] hover:bg-[#a0181e] text-white cursor-pointer'
