@@ -131,6 +131,17 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     };
   };
 
+  // Helper super cepat untuk memantau status timbang dalam loop useMemo, tanpa alokasi memori untuk map/filter
+  const checkIsAllWeighed = (tx: TransaksiPembelian) => {
+    if (isKuponProsesSortir(tx)) return false;
+    const items = tx.items || [];
+    if (items.length === 0) return (tx.berat_kg || 0) > 0;
+    for (let i = 0; i < items.length; i++) {
+      if ((items[i].berat_kg || 0) <= 0) return false;
+    }
+    return true;
+  };
+
   const alasanBelumSiapBayar = (tx: TransaksiPembelian, status: ReturnType<typeof getKuponWeighStatus>) =>
     status.isSortirOpen
       ? `Sortir Kupon ${tx.no_kupon} belum ditutup (masih Proses Sortir${status.unweighedCount > 0 ? `, ${status.unweighedCount} bal belum ditimbang` : ''}). Tunggu petugas Sortir menekan "Selesai Sortir".`
@@ -254,12 +265,12 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
       }
       // Status Kas (Cash vs Kredit) & Kesiapan Timbang
       const isLunas = isTransaksiLunas(tx);
-      const weighStatus = getKuponWeighStatus(tx);
+      const isAllWeighed = checkIsAllWeighed(tx);
 
       if (filterStatusBayar === 'cash' && !isLunas) return false;
       if (filterStatusBayar === 'kredit' && isLunas) return false;
-      if (filterStatusBayar === 'siap_bayar' && (!weighStatus.isAllWeighed || isLunas)) return false;
-      if (filterStatusBayar === 'belum_lengkap' && weighStatus.isAllWeighed) return false;
+      if (filterStatusBayar === 'siap_bayar' && (!isAllWeighed || isLunas)) return false;
+      if (filterStatusBayar === 'belum_lengkap' && isAllWeighed) return false;
 
       return true;
     });
@@ -281,7 +292,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     transaksiList.forEach((t) => {
       const nilai = t.harga_final || 0;
       const isLunas = isTransaksiLunas(t);
-      const isAllWeighed = getKuponWeighStatus(t).isAllWeighed;
+      const isAllWeighed = checkIsAllWeighed(t);
       tambah(semua, nilai);
       if (isLunas) {
         tambah(lunas, nilai);
@@ -365,33 +376,45 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
 
   // Overall stats for the filtered list
   const stats = useMemo(() => {
-    const totalTx = filteredList.length;
-    const totalBal = filteredList.reduce((acc, t) => acc + (t.total_bal || (t.items ? t.items.length : 1)), 0);
-    const totalNetto = normalizeKg(filteredList.reduce((acc, t) => acc + (t.berat_kg || 0), 0));
-    const totalKotor = filteredList.reduce((acc, t) => acc + (t.total_kotor || t.total_harga_beli || 0), 0);
-    const totalPajak = filteredList.reduce((acc, t) => acc + (t.pajak || 0), 0);
-    const totalPotongan = filteredList.reduce((acc, t) => acc + (t.total_potongan || 0), 0);
-    const totalBayar = filteredList.reduce((acc, t) => acc + (t.harga_final || 0), 0);
+    let totalBal = 0, totalNetto = 0, totalKotor = 0, totalPajak = 0, totalPotongan = 0, totalBayar = 0;
+    let lunasCount = 0, belumLunasCount = 0, lunasNominal = 0, belumLunasNominal = 0;
+    let unweighedPendingCount = 0, siapBayarCount = 0;
+
+    for (let i = 0; i < filteredList.length; i++) {
+      const t = filteredList[i];
+      totalBal += t.total_bal || (t.items ? t.items.length : 1);
+      totalNetto += t.berat_kg || 0;
+      const kotor = t.total_kotor || t.total_harga_beli || 0;
+      totalKotor += kotor;
+      totalPajak += t.pajak || 0;
+      totalPotongan += t.total_potongan || 0;
+      const final = t.harga_final || 0;
+      totalBayar += final;
+
+      const isLunas = isTransaksiLunas(t);
+      const isAllWeighed = checkIsAllWeighed(t);
+
+      if (isLunas) {
+        lunasCount++;
+        lunasNominal += final;
+      } else {
+        belumLunasCount++;
+        belumLunasNominal += final;
+        if (isAllWeighed) {
+          siapBayarCount++;
+        }
+      }
+
+      if (!isAllWeighed) {
+        unweighedPendingCount++;
+      }
+    }
+
+    totalNetto = normalizeKg(totalNetto);
     const avgHarga = totalNetto > 0 ? Math.round(totalKotor / totalNetto) : 0;
 
-    const lunasList = filteredList.filter(
-      (t) => isTransaksiLunas(t)
-    );
-    const belumLunasList = filteredList.filter(
-      (t) => !isTransaksiLunas(t)
-    );
-
-    const lunasNominal = lunasList.reduce((acc, t) => acc + (t.harga_final || 0), 0);
-    const belumLunasNominal = belumLunasList.reduce((acc, t) => acc + (t.harga_final || 0), 0);
-
-    const unweighedPendingList = filteredList.filter((t) => !getKuponWeighStatus(t).isAllWeighed);
-    const siapBayarList = filteredList.filter((t) => {
-      const isLunas = isTransaksiLunas(t);
-      return !isLunas && getKuponWeighStatus(t).isAllWeighed;
-    });
-
     return {
-      totalTx,
+      totalTx: filteredList.length,
       totalBal,
       totalNetto,
       totalKotor,
@@ -401,10 +424,10 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
       avgHarga,
       lunasNominal,
       belumLunasNominal,
-      lunasCount: lunasList.length,
-      belumLunasCount: belumLunasList.length,
-      unweighedPendingCount: unweighedPendingList.length,
-      siapBayarCount: siapBayarList.length,
+      lunasCount,
+      belumLunasCount,
+      unweighedPendingCount,
+      siapBayarCount,
     };
   }, [filteredList]);
 
