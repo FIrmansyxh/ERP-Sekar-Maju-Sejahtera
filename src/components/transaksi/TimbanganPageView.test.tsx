@@ -47,7 +47,10 @@ function Induk({
       userRole="superadmin"
       initialBalNo={initialBalNo}
       initialKuponNo={initialKuponNo}
-      onSaveTransaksi={(tx) => setDaftar((prev) => prev.map((t) => (t.transaksi_id === tx.transaksi_id ? tx : t)))}
+      onSaveTransaksi={async (tx) => {
+        setDaftar((prev) => prev.map((t) => (t.transaksi_id === tx.transaksi_id ? tx : t)));
+        return true;
+      }}
       onNavigateToKasir={vi.fn()}
       onNavigateToSortir={vi.fn()}
     />

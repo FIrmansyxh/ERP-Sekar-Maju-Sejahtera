@@ -64,10 +64,10 @@ interface PengirimanManagementProps {
   tabelHarga?: TabelHarga[];
   transaksiList?: TransaksiPembelian[];
   userRole: UserRole;
-  onSaveNewPengiriman: (pengiriman: PengirimanBarang, updatedBarangIds: string[]) => void;
+  onSaveNewPengiriman: (pengiriman: PengirimanBarang, updatedBarangIds: string[]) => Promise<boolean>;
   /** Menyimpan perubahan Surat Jalan yang belum Selesai; mengembalikan false bila ditolak (mis. bal dipakai Surat Jalan lain). */
-  onUpdatePengiriman?: (pengiriman: PengirimanBarang, balDitambah: string[], balDikeluarkan: string[]) => boolean;
-  onDeletePengiriman?: (pengirimanId: string) => void;
+  onUpdatePengiriman?: (pengiriman: PengirimanBarang, balDitambah: string[], balDikeluarkan: string[]) => Promise<boolean>;
+  onDeletePengiriman?: (pengirimanId: string) => Promise<void>;
   onNavigateToStatusBatch?: () => void;
   /** Surat Jalan yang sedang diedit (dipilih dari halaman Status Pengiriman). */
   editPengirimanId?: string | null;
@@ -203,6 +203,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   const aturanNetto = useMemo(() => bacaAturanNetto(aturanNettoBaris), [aturanNettoBaris]);
 
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
   useUnsavedChangesWarning(selectedBalIds.length > 0 || regulerManifestBalIds.length > 0);
@@ -1312,7 +1313,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     setIsConfirmOpen(true);
   };
 
-  const handleConfirmSave = () => {
+  const handleConfirmSave = async () => {
     const finalTujuan = tujuanBuyer.trim();
     if (!finalTujuan) return;
 
@@ -1377,19 +1378,31 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     };
 
     const sedangEdit = Boolean(existingPengiriman);
+    setIsSaving(true);
+    let berhasil = true;
     if (existingPengiriman) {
-      if (!onUpdatePengiriman) return;
+      if (!onUpdatePengiriman) {
+        setIsSaving(false);
+        return;
+      }
       const idLama = existingPengiriman.barang_ids || [];
       const balDitambah = selectedBalIds.filter((id) => !idLama.includes(id));
       const balDikeluarkan = idLama.filter((id) => !selectedBalIds.includes(id));
-      const berhasil = onUpdatePengiriman(newPengiriman, balDitambah, balDikeluarkan);
+      berhasil = await onUpdatePengiriman(newPengiriman, balDitambah, balDikeluarkan);
       if (!berhasil) {
+        setIsSaving(false);
         setIsConfirmOpen(false);
         return;
       }
     } else {
-      onSaveNewPengiriman(newPengiriman, selectedBalIds);
+      berhasil = await onSaveNewPengiriman(newPengiriman, selectedBalIds);
+      if (!berhasil) {
+        setIsSaving(false);
+        setIsConfirmOpen(false);
+        return;
+      }
     }
+    setIsSaving(false);
 
     setEditingPengirimanId(null);
     setIsConfirmOpen(false);
@@ -2609,6 +2622,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
       {/* Confirm Save Modal */}
       <ConfirmModal
         isOpen={isConfirmOpen}
+        isLoading={isSaving}
         title={editingPengirimanId ? 'Konfirmasi Perubahan Surat Jalan DO' : 'Konfirmasi Penerbitan Surat Jalan DO'}
         message={`Apakah Anda yakin ingin ${editingPengirimanId ? 'menyimpan perubahan' : 'menerbitkan'} Surat Jalan ${noSuratJalan} untuk pengiriman ${totalSelectedBal} bal tembakau (${formatNumber(totalSelectedBerat, 1)} Kg bruto${totalPotongan > 0 ? `, netto jual ${formatNumber(totalNettoJual, 1)} Kg` : ''}${
           totalSelisihBerat !== 0

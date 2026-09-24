@@ -33,7 +33,7 @@ interface TimbanganPageViewProps {
   initialKuponNo?: string;
   initialTxId?: string;
   initialBalNo?: string;
-  onSaveTransaksi: (newTx: TransaksiPembelian, generatedBarang: Barang | Barang[], meta?: SaveTransaksiMeta) => void;
+  onSaveTransaksi: (newTx: TransaksiPembelian, generatedBarang: Barang | Barang[], meta?: SaveTransaksiMeta) => Promise<boolean>;
   /** Tarik ulang kupon dari server (Sortir di PC lain) lalu kembalikan list terbaru */
   onRefreshTransaksiList?: () => Promise<TransaksiPembelian[]>;
   onNavigateToKasir: (kuponNo?: string, txId?: string) => void;
@@ -93,6 +93,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     return transaksiList.find((t) => t.transaksi_id === selectedTxId);
   }, [transaksiList, selectedTxId]);
 
+  const [isSaving, setIsSaving] = useState(false);
   // Working copy of items for current selected transaction
   const [workingItems, setWorkingItems] = useState<TransaksiItemBal[]>([]);
   // Versi kupon sebelumnya, untuk membedakan perubahan dari Sortir dengan perubahan bal aktif
@@ -210,25 +211,29 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     if (currentTx && currentTx.items && currentTx.items.length > 0) {
       const aktifId = activeItemIdRef.current;
       const itemsTerbaru = currentTx.items;
+
+      const existingActive = itemsTerbaru.find((it) => it.item_id === aktifId);
+      const lokalActive = workingItems.find((p) => p.item_id === aktifId);
+      const isLokalNewer = Boolean(
+        existingActive &&
+        lokalActive &&
+        (lokalActive.diubah_lokal_pada || 0) > (existingActive.diubah_lokal_pada || 0)
+      );
+
       setWorkingItems((prevItems) =>
         itemsTerbaru.map((it) => {
-          // Centang Ganti Tikar pada bal aktif yang baru diubah di sini dan belum ikut di data terbaru, jangan
-          // ditimpa. Dulu GT lokal SELALU dipertahankan bila berbeda, sehingga GT yang diubah dari perangkat lain
-          // tertahan di layar ini, lalu ikut tersimpan balik saat bal ditimbang (GT "kembali tidak tercentang").
-          if (it.item_id !== aktifId || (it.berat_kg || 0) > 0) return it;
+          if (it.item_id !== aktifId) return it;
           const lokal = prevItems.find((p) => p.item_id === it.item_id);
-          return lokal &&
-            Boolean(lokal.ganti_tikar) !== Boolean(it.ganti_tikar) &&
-            (lokal.gt_diubah_pada || 0) > (it.gt_diubah_pada || 0)
-            ? { ...it, ganti_tikar: lokal.ganti_tikar, potongan_tikar: lokal.potongan_tikar, gt_diubah_pada: lokal.gt_diubah_pada }
-            : it;
+          if (lokal && (lokal.diubah_lokal_pada || 0) > (it.diubah_lokal_pada || 0)) {
+            return { ...it, ...lokal };
+          }
+          return it;
         })
       );
 
       // 1. If activeItemId is already a valid item of this currentTx, keep it.
       // Kupon bisa berubah dari Sortir saat operator sedang mengetik berat, jadi isian
       // bal yang belum ditimbang tidak ditimpa.
-      const existingActive = currentTx.items.find((it) => it.item_id === aktifId);
       if (existingActive) {
         const prevActive = prevTx?.transaksi_id === currentTx.transaksi_id
           ? (prevTx.items || []).find((it) => it.item_id === existingActive.item_id)
@@ -243,10 +248,14 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
           setBeratNettoInput(existingActive.berat_kg && existingActive.berat_kg > 0 ? existingActive.berat_kg : '');
           setIsNettoManual(existingActive.is_netto_manual || false);
         }
-        // Selalu sinkronkan tampilan ganti tikar dari data tersimpan
-        const hasGanti =
-          Boolean(existingActive.ganti_tikar) || (existingActive.potongan_tikar || 0) > 0;
-        setPotTikarInput(hasGanti ? (existingActive.potongan_tikar || POTONGAN_GANTI_TIKAR) : '');
+        
+        // Selalu sinkronkan tampilan ganti tikar dari data tersimpan,
+        // KECUALI jika ada perubahan lokal yang belum tersimpan (agar isian tidak hilang).
+        if (!isLokalNewer) {
+          const hasGanti =
+            Boolean(existingActive.ganti_tikar) || (existingActive.potongan_tikar || 0) > 0;
+          setPotTikarInput(hasGanti ? (existingActive.potongan_tikar || POTONGAN_GANTI_TIKAR) : '');
+        }
         return;
       }
 
@@ -456,7 +465,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
   // Switch active bal item — tanpa auto-fokus; muat ulang status ganti tikar
   
   // Toggle Ganti Tikar — simpan segera ke state + BE (bukan hanya UI lokal)
-  const handleToggleGantiTikar = (itemId: string) => {
+  const handleToggleGantiTikar = async (itemId: string) => {
     if (!currentTx) return;
     if (alasanKuponTerkunciBayar(currentTx)) return;
     const target = workingItems.find((it) => it.item_id === itemId);
@@ -490,8 +499,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
       setPotTikarInput(nextGanti ? POTONGAN_GANTI_TIKAR : '');
     }
 
-    const updatedTx = hitungUlangKupon(currentTx, nextItems);
-    onSaveTransaksi(updatedTx, [], { skipAudit: true });
+
     setScanFeedback({
       text: nextGanti
         ? `Ganti tikar aktif untuk bal ini (potongan ${POTONGAN_GANTI_TIKAR.toLocaleString('id-ID')}).`
@@ -716,7 +724,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
   };
 
   // Save weighing for active bal
-  const handleApplyWeightForActiveBal = () => {
+  const handleApplyWeightForActiveBal = async () => {
     if (!activeBalItem || !currentTx) return;
 
     if (alasanKuponTerkunciBayar(currentTx)) {
@@ -789,11 +797,15 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     const totalBrutoKg = updatedTx.berat_terukur_kg;
     const weighedItem = updatedItems.find((it) => it.item_id === activeBalItem.item_id)!;
 
-    onSaveTransaksi(
+    setIsSaving(true);
+    const success = await onSaveTransaksi(
       updatedTx,
       [buildBarangDariItem(updatedTx, weighedItem, barangList.find((b) => b.barang_id === weighedItem.barang_id))],
       { skipAudit: true }
     );
+    setIsSaving(false);
+    
+    if (!success) return;
 
     // Catat ID bal ke urutan teratas bal yang terakhir ditimbang di sesi berjalan
     setLocalWeighedIds((prev) => [activeBalItem.item_id, ...prev.filter((id) => id !== activeBalItem.item_id)]);
@@ -920,7 +932,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
   // Intercept Paste pada input berat agar barcode tidak bisa di-paste secara liar
   
   // Buka kunci bal yang sudah ditimbang jika operator perlu timbang ulang / edit
-  const handleUnlockActiveBal = (itemId: string) => {
+  const handleUnlockActiveBal = async (itemId: string) => {
     const alasanTerkunci = alasanKuponTerkunciBayar(currentTx);
     if (alasanTerkunci) {
       setScanFeedback({ text: `${alasanTerkunci} Kunci timbang tidak bisa dibuka.`, isError: true });
@@ -948,21 +960,8 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
       if (!updatedTx) return;
       const unlockedItem = (updatedTx.items || []).find((it) => it.item_id === itemId)!;
       setWorkingItems(updatedTx.items || []);
-      onSaveTransaksi(
-        updatedTx,
-        unlockedItem.barang_id
-          ? [buildBarangDariItem(updatedTx, unlockedItem, barangList.find((b) => b.barang_id === unlockedItem.barang_id))]
-          : [],
-        { skipAudit: true }
-      );
-      recordAuditLog({
-        user_nama: currentUser?.nama_lengkap || 'Operator Timbang Digital',
-        user_role: userRole,
-        modul: 'Timbangan Bal',
-        aksi: 'BUKA_KUNCI_TIMBANG',
-        target_id: item.no_bal,
-        deskripsi: `Kunci timbang bal ${item.no_bal} (Kupon: ${currentTx.no_kupon}) dibuka untuk timbang ulang. Netto sebelumnya: ${item.berat_kg || 0} Kg`,
-      });
+
+
     }
     setScanFeedback({
       text: `Kunci bal "${item.no_bal}" berhasil dibuka. Bobot bruto ${existingBruto > 0 ? `(${existingBruto} kg) ` : ''}siap diedit atau diperbarui pada form.`,
@@ -1449,7 +1448,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                           step="0.1"
                           min="0"
                           value={beratBrutoInput}
-                          disabled={isBalTerkunci}
+                          disabled={isSaving || isBalTerkunci}
                           onChange={(e) => setBeratBrutoInput(e.target.value)}
                           onFocus={() => { fokusTerakhirRef.current = 'berat'; }}
                           onKeyDown={handleKeyDownWeight}
@@ -1487,7 +1486,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                           step="0.1"
                           min="0"
                           value={isNettoManual ? beratNettoInput : liveNetto}
-                          disabled={isBalTerkunci}
+                          disabled={isSaving || isBalTerkunci}
                           onChange={(e) => {
                             setIsNettoManual(true);
                             setBeratNettoInput(e.target.value);
@@ -1519,7 +1518,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                         type="checkbox"
                         checked={Boolean(activeBalItem.ganti_tikar) || (activeBalItem.potongan_tikar || 0) > 0}
                         onChange={() => handleToggleGantiTikar(activeBalItem.item_id)}
-                        disabled={isBalTerkunci}
+                        disabled={isSaving || isBalTerkunci}
                         className="w-4 h-4 rounded-xs border-gray-300 text-[#b81d24] focus:ring-[#b81d24] disabled:opacity-50 cursor-pointer"
                       />
                       <span className="text-xs font-semibold text-gray-700 group-hover:text-gray-900 transition">
@@ -1544,7 +1543,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                               }
                             }
                           }}
-                          disabled={isBalTerkunci}
+                          disabled={isSaving || isBalTerkunci}
                           className="w-full bg-white border border-gray-300 rounded-xs py-1.5 px-2.5 text-xs font-semibold text-gray-900 focus:outline-none focus:border-[#b81d24] focus:ring-1 focus:ring-[#b81d24] disabled:bg-gray-100 disabled:text-slate-400"
                         />
                       </div>
@@ -1572,7 +1571,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
                 <div className="flex space-x-2">
                   <button
                     type="button"
-                    disabled={isBalTerkunci || !liveBruto || liveBruto <= 0 || isOverCapacitySB}
+                    disabled={isSaving || isBalTerkunci || !liveBruto || liveBruto <= 0 || isOverCapacitySB}
                     onClick={handleApplyWeightForActiveBal}
                     className={`px-5 py-2 rounded-xs text-xs font-semibold shadow-2xs flex items-center transition ${
                       isOverCapacitySB 
