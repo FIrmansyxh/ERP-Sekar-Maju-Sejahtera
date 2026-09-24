@@ -1,0 +1,326 @@
+import React, { useState, useEffect } from 'react';
+import { X, UserPlus, UserCheck, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { SearchableSelect } from '../common/SearchableSelect';
+import { User, UserRole } from '../../types';
+import { ALL_ROLES, ROLE_DEFINITIONS } from '../../utils/rbac';
+
+interface UserFormModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  /** false = server menolak / tidak terjangkau: form tetap terbuka */
+  onSave: (user: User) => void | boolean | Promise<void | boolean>;
+  editingUser?: User | null;
+  existingUsers: User[];
+}
+
+// Nomor pengguna melanjutkan urutan yang sudah terdaftar: Super Admin memakai
+// USR-001, sehingga akun berikutnya menjadi USR-002, USR-003, dan seterusnya.
+function generateNextUserId(existingUsers: User[]): string {
+  let maxSeq = 0;
+
+  existingUsers.forEach((u) => {
+    const match = (u.user_id || '').match(/^USR-([0-9]+)$/i);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (!isNaN(num) && num > maxSeq) maxSeq = num;
+    }
+  });
+
+  const isTaken = (val: string) =>
+    existingUsers.some((u) => (u.user_id || '').toUpperCase().trim() === val);
+
+  let nextSeq = maxSeq + 1;
+  let candidate = `USR-${String(nextSeq).padStart(3, '0')}`;
+  while (isTaken(candidate)) {
+    nextSeq++;
+    candidate = `USR-${String(nextSeq).padStart(3, '0')}`;
+  }
+
+  return candidate;
+}
+
+export const UserFormModal: React.FC<UserFormModalProps> = ({
+  isOpen,
+  onClose,
+  onSave,
+  editingUser,
+  existingUsers,
+}) => {
+  const isEdit = Boolean(editingUser);
+
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [namaLengkap, setNamaLengkap] = useState('');
+  const [role, setRole] = useState<UserRole>('admin_sortir');
+  const [email, setEmail] = useState('');
+  const [noHp, setNoHp] = useState('');
+  const [statusAktif, setStatusAktif] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (editingUser) {
+      setUsername(editingUser.username);
+      setPassword('');
+      setNamaLengkap(editingUser.nama_lengkap);
+      setRole(editingUser.role);
+      setEmail(editingUser.email || '');
+      setNoHp(editingUser.no_hp || '');
+      setStatusAktif(editingUser.status_aktif);
+      setError(null);
+    } else {
+      // Akun baru dimulai kosong: username & kata sandi diisi sendiri oleh admin
+      setUsername('');
+      setPassword('');
+      setNamaLengkap('');
+      setRole('admin_sortir');
+      setEmail('');
+      setNoHp('');
+      setStatusAktif(true);
+      setError(null);
+    }
+  }, [editingUser, isOpen, existingUsers]);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Username disimpan persis seperti diketik (login tidak membedakan huruf besar/kecil)
+    const cleanUsername = username.trim();
+    if (!cleanUsername) {
+      setError('Username wajib diisi.');
+      return;
+    }
+    if (/\s/.test(cleanUsername)) {
+      setError('Username tidak boleh mengandung spasi.');
+      return;
+    }
+
+    // Check username uniqueness
+    const duplicate = existingUsers.find(
+      (u) => u.username.toLowerCase() === cleanUsername.toLowerCase() && u.user_id !== editingUser?.user_id
+    );
+    if (duplicate) {
+      setError(`Username "${cleanUsername}" sudah digunakan oleh pengguna lain.`);
+      return;
+    }
+
+    const finalPassword = password.trim();
+    if (!isEdit && !finalPassword) {
+      setError('Kata sandi wajib diisi untuk akun baru.');
+      return;
+    }
+    if (finalPassword && finalPassword.length < 6) {
+      setError(isEdit ? 'Kata sandi baru minimal 6 karakter.' : 'Kata sandi minimal 6 karakter.');
+      return;
+    }
+
+    const userData: User = {
+      user_id: editingUser ? editingUser.user_id : generateNextUserId(existingUsers),
+      username: cleanUsername,
+      // Kata sandi hanya dikirim bila diisi; saat edit dikosongkan = tidak berubah
+      ...(finalPassword ? { password: finalPassword } : {}),
+      // Nama tampilan opsional: bila kosong memakai username
+      nama_lengkap: namaLengkap.trim() || cleanUsername,
+      role,
+      email: email.trim() || undefined,
+      no_hp: noHp.trim() || undefined,
+      unit_penugasan: editingUser?.unit_penugasan || '',
+      status_aktif: statusAktif,
+      dibuat_pada: editingUser?.dibuat_pada || new Date().toISOString(),
+      terakhir_login: editingUser?.terakhir_login,
+    };
+
+    const tersimpan = await onSave(userData);
+    if (tersimpan === false) return;
+    onClose();
+  };
+
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="bg-white rounded-md shadow-2xl border border-gray-200 w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        
+        {/* Header */}
+        <div className="px-5 py-4 border-b border-gray-200 bg-white flex items-center justify-between gap-3">
+          <div className="flex items-center space-x-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-sm bg-red-50 border border-red-100 flex items-center justify-center shrink-0">
+              {isEdit ? <UserCheck className="w-4 h-4 text-[#b81d24]" /> : <UserPlus className="w-4 h-4 text-[#b81d24]" />}
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-sm font-bold text-gray-900 tracking-tight truncate">
+                {isEdit ? 'Edit Pengguna' : 'Tambah Pengguna'}
+              </h2>
+              {isEdit && <p className="text-[11px] text-gray-500 font-medium">@{editingUser?.username}</p>}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-sm transition cursor-pointer shrink-0"
+            title="Tutup"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Form Body */}
+        <form onSubmit={handleSubmit} className="p-5 overflow-y-auto space-y-4 text-xs text-gray-800 flex-1">
+          
+          {error && (
+            <div className="p-2.5 bg-red-50 border border-red-200 text-red-700 rounded-xs flex items-center space-x-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span className="font-semibold">{error}</span>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            
+            {/* Username */}
+            <div>
+              <label className="block font-semibold text-gray-700 mb-1">
+                Username Login <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => {
+                  setUsername(e.target.value);
+                  setError(null);
+                }}
+                placeholder="username"
+                className="w-full px-3 py-2 border border-gray-300 rounded-sm focus:ring-1 focus:ring-red-500 focus:border-red-500 text-xs font-mono"
+                required
+                autoComplete="off"
+              />
+            </div>
+
+            {/* Password */}
+            <div>
+              <label className="block font-semibold text-gray-700 mb-1">
+                {isEdit ? 'Kata Sandi Baru (Opsional)' : <>Kata Sandi <span className="text-red-500">*</span></>}
+              </label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setError(null);
+                  }}
+                  placeholder={isEdit ? 'Kosongkan jika tidak diubah' : 'Minimal 6 karakter'}
+                  className="w-full px-3 py-2 pr-9 border border-gray-300 rounded-sm focus:ring-1 focus:ring-red-500 focus:border-red-500 text-xs"
+                  required={!isEdit}
+                  autoComplete="new-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-2.5 top-2 text-gray-400 hover:text-gray-700"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Nama Lengkap */}
+            <div className="sm:col-span-2">
+              <label className="block font-semibold text-gray-700 mb-1">
+                Nama Lengkap (Opsional)
+              </label>
+              <input
+                type="text"
+                value={namaLengkap}
+                onChange={(e) => {
+                  setNamaLengkap(e.target.value);
+                  setError(null);
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-sm focus:ring-1 focus:ring-red-500 focus:border-red-500 text-xs"
+              />
+            </div>
+
+            {/* Role RBAC Selector */}
+            <div className="sm:col-span-2">
+              <label className="block font-semibold text-gray-700 mb-1">
+                Role <span className="text-[#b81d24]">*</span>
+              </label>
+              <SearchableSelect
+                value={role}
+                onChange={(val) => setRole(val as UserRole)}
+                options={ALL_ROLES.map(r => ({ value: r, label: ROLE_DEFINITIONS[r].label }))}
+                placeholder="Pilih Role..."
+              />
+
+            </div>
+
+            {/* Email */}
+            <div>
+              <label className="block font-semibold text-gray-700 mb-1">
+                Email (Opsional)
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Email"
+                className="w-full px-3 py-2 border border-gray-300 rounded-sm focus:ring-1 focus:ring-red-500 focus:border-red-500 text-xs"
+              />
+            </div>
+
+            {/* No HP */}
+            <div>
+              <label className="block font-semibold text-gray-700 mb-1">
+                No. HP (Opsional)
+              </label>
+              <input
+                type="tel"
+                value={noHp}
+                onChange={(e) => setNoHp(e.target.value)}
+                placeholder="No. HP"
+                className="w-full px-3 py-2 border border-gray-300 rounded-sm focus:ring-1 focus:ring-red-500 focus:border-red-500 text-xs"
+              />
+            </div>
+
+            {/* Status Aktif Switch */}
+            <div className="sm:col-span-2 pt-2 border-t border-gray-100 flex items-center justify-between">
+              <div>
+                <span className="font-semibold text-gray-900 block">Status Aktif</span>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={statusAktif}
+                  onChange={(e) => setStatusAktif(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+              </label>
+            </div>
+
+          </div>
+
+          {/* Footer Actions */}
+          <div className="pt-4 border-t border-gray-200 flex justify-end space-x-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-sm transition cursor-pointer"
+            >
+              Batal
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-1.5 bg-[#b81d24] hover:bg-[#a0181e] text-white font-bold rounded-sm shadow-xs transition flex items-center space-x-1.5 cursor-pointer"
+            >
+              <UserCheck className="w-3.5 h-3.5" />
+              <span>{isEdit ? 'Simpan Perubahan' : 'Daftarkan Pengguna'}</span>
+            </button>
+          </div>
+
+        </form>
+
+      </div>
+    </div>
+  );
+};

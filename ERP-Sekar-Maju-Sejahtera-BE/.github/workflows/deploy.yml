@@ -1,0 +1,98 @@
+name: Auto Deploy Backend to VPS
+
+on:
+  workflow_dispatch: # Auto-deploy dinonaktifkan sementara
+  # push:
+  #   branches:
+  #     - main
+  #     - staging
+
+# Cegah deploy ganda bertumpuk jika ada beberapa push berurutan
+concurrency:
+  group: deploy-backend-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  # ============================================================
+  # JOB 1: Deploy ke STAGING (branch: staging)
+  # ============================================================
+  deploy-staging:
+    name: Deploy Laravel Backend → Staging
+    runs-on: ubuntu-latest
+    if: github.ref_name == 'staging'
+    environment: staging
+
+    steps:
+    - name: SSH ke Staging VPS dan Deploy
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.STAGING_VPS_HOST }}
+        username: ${{ secrets.STAGING_VPS_USER }}
+        key: ${{ secrets.STAGING_VPS_SSH_KEY }}
+        port: ${{ secrets.STAGING_VPS_PORT || 22 }}
+        script: |
+          echo "=== 1. Masuk ke folder backend staging ==="
+          cd /var/www/erp-be-staging
+
+          echo "=== 2. Tarik update terbaru dari branch staging ==="
+          git pull origin staging
+
+          echo "=== 3. Install & Optimize Composer Dependencies ==="
+          composer install --no-dev --optimize-autoloader
+
+          echo "=== 3b. Perbarui skema database (aman diulang: kolom, trigger, tabel sinkron) ==="
+          php artisan erp:perbarui-skema
+
+          echo "=== 4. Bersihkan Cache Lama & Optimasi Laravel ==="
+          php artisan route:clear
+          php artisan config:clear
+          php artisan cache:clear
+          php artisan view:clear
+          php artisan optimize
+
+          echo "=== 5. Reload PHP-FPM ==="
+          sudo systemctl reload php8.2-fpm || sudo systemctl reload php-fpm || true
+
+          echo "=== DEPLOY BACKEND STAGING SUKSES! ==="
+
+  # ============================================================
+  # JOB 2: Deploy ke PRODUCTION (branch: main)
+  # ============================================================
+  deploy-production:
+    name: Deploy Laravel Backend → Production
+    runs-on: ubuntu-latest
+    if: github.ref_name == 'main'
+    environment: production
+
+    steps:
+    - name: SSH ke Production VPS dan Deploy
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USER }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        port: ${{ secrets.VPS_PORT || 22 }}
+        script: |
+          echo "=== 1. Masuk ke folder backend ==="
+          cd /var/www/erp-be
+
+          echo "=== 2. Tarik update terbaru dari GitHub ==="
+          git pull origin main
+
+          echo "=== 3. Install & Optimize Composer Dependencies ==="
+          composer install --no-dev --optimize-autoloader
+
+          echo "=== 3b. Perbarui skema database (aman diulang: kolom, trigger, tabel sinkron) ==="
+          php artisan erp:perbarui-skema
+
+          echo "=== 4. Bersihkan Cache Lama & Optimasi Laravel ==="
+          php artisan route:clear
+          php artisan config:clear
+          php artisan cache:clear
+          php artisan view:clear
+          php artisan optimize
+
+          echo "=== 5. Reload PHP-FPM ==="
+          sudo systemctl reload php8.2-fpm || sudo systemctl reload php-fpm || true
+
+          echo "=== DEPLOY BACKEND PRODUCTION SUKSES! ==="

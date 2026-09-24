@@ -1,0 +1,1409 @@
+import React, { useState, useMemo } from 'react';
+import {
+  Search,
+  Scale,
+  CheckCircle2,
+  Clock,
+  Trash2,
+  Receipt,
+  RefreshCw,
+  Filter,
+  Eye,
+  Edit3,
+  X,
+  AlertTriangle,
+  Lock,
+  Banknote
+} from 'lucide-react';
+import { TransaksiPembelian, Petani, TabelHarga, Barang, UserRole, User as UserType, SaveTransaksiMeta } from '../../types';
+import { isTransaksiLunas, labelStatusBayar } from '../../utils/statusBayar';
+import { formatRupiah, formatAccounting, formatDateIndo, formatNoKupon, normalizeKg } from '../../utils/formatters';
+import { TransaksiDetailModal } from './TransaksiDetailModal';
+import { PembayaranKasirModal } from './PembayaranKasirModal';
+import { ConfirmModal } from '../common/ConfirmModal';
+import { Pagination } from '../common/Pagination';
+import { SortIcon } from '../common/SortIcon';
+import { tampilkanInfo } from '../../utils/dialog';
+import { openPrintDocument } from '../../utils/openDedicatedPrint';
+import { alasanBalSusulanDitolak, isKuponProsesSortir } from '../../utils/kuponSortir';
+import { balTerkirimDariTransaksi, pesanTransaksiTerkunci } from '../../utils/kunciHapus';
+
+interface KasirPageViewProps {
+  transaksiList: TransaksiPembelian[];
+  petaniList: Petani[];
+  hargaList: TabelHarga[];
+  barangList: Barang[];
+  userRole: UserRole;
+  currentUser?: UserType | null;
+  initialKuponNo?: string;
+  initialTxId?: string;
+  onSaveTransaksi: (
+    newTx: TransaksiPembelian,
+    generatedBarang: Barang | Barang[],
+    meta?: SaveTransaksiMeta
+  ) => void;
+  onDeleteTransaksi?: (transaksiId: string, alasan?: string) => void;
+  onNavigateToSortir: () => void;
+  onNavigateToTimbangan: (kuponNo?: string, txId?: string) => void;
+  /** Membuka kupon di halaman Sortir untuk menambah, mengubah, atau menghapus bal (kupon belum lunas). */
+  onEditKupon?: (tx: TransaksiPembelian) => void;
+}
+
+export const KasirPageView: React.FC<KasirPageViewProps> = ({
+  transaksiList = [],
+  petaniList = [],
+  hargaList = [],
+  barangList = [],
+  userRole,
+  currentUser,
+  initialKuponNo,
+  initialTxId,
+  onSaveTransaksi,
+  onDeleteTransaksi,
+  onNavigateToSortir,
+  onNavigateToTimbangan,
+  onEditKupon,
+}) => {
+  // Filter States
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [filterKupon, setFilterKupon] = useState(initialKuponNo || '');
+  const [filterPetaniId, setFilterPetaniId] = useState('');
+  const [filterStatusBayar, setFilterStatusBayar] = useState<'all' | 'cash' | 'kredit' | 'siap_bayar' | 'belum_lengkap'>('all');
+
+  // Quick Table Search & Sort (DataTables style)
+  const [tableSearch, setTableSearch] = useState('');
+  const [sortField, setSortField] = useState<string>('kupon');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+
+  // Modals & Selection
+  const [selectedTxForDetail, setSelectedTxForDetail] = useState<TransaksiPembelian | null>(null);
+  const [selectedTxForBayar, setSelectedTxForBayar] = useState<TransaksiPembelian | null>(null);
+  const [txToDelete, setTxToDelete] = useState<TransaksiPembelian | null>(null);
+  const [alasanHapus, setAlasanHapus] = useState('');
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+
+  // Confirm Modal state to avoid blocking browser locker errors
+  const [confirmConfig, setConfirmConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    confirmText: 'Ya, Lanjutkan',
+    cancelText: 'Batal',
+    onConfirm: () => {},
+  });
+
+  // Helper to strictly evaluate weighing completion across all bales in a kupon
+  const getKuponWeighStatus = (tx: TransaksiPembelian) => {
+    const items = tx.items || [];
+    if (items.length === 0) {
+      const isWeighed = (tx.berat_kg || 0) > 0;
+      return {
+        isAllWeighed: isWeighed && !isKuponProsesSortir(tx),
+        isSortirOpen: isKuponProsesSortir(tx),
+        unweighedCount: isWeighed ? 0 : 1,
+        totalBal: 1,
+        weighedCount: isWeighed ? 1 : 0,
+        unweighedBalList: isWeighed ? [] : [tx.no_bal || 'Bal 1'],
+      };
+    }
+    const unweighed = items.filter((it) => (it.berat_kg || 0) <= 0);
+    // Kupon yang sortirnya belum ditutup masih bisa bertambah bal, jadi belum boleh dibayar
+    const isSortirOpen = isKuponProsesSortir(tx);
+    return {
+      isAllWeighed: unweighed.length === 0 && !isSortirOpen,
+      isSortirOpen,
+      unweighedCount: unweighed.length,
+      totalBal: items.length,
+      weighedCount: items.length - unweighed.length,
+      unweighedBalList: unweighed.map((it) => it.no_bal),
+    };
+  };
+
+  const alasanBelumSiapBayar = (tx: TransaksiPembelian, status: ReturnType<typeof getKuponWeighStatus>) =>
+    status.isSortirOpen
+      ? `Sortir Kupon ${tx.no_kupon} belum ditutup (masih Proses Sortir${status.unweighedCount > 0 ? `, ${status.unweighedCount} bal belum ditimbang` : ''}). Tunggu petugas Sortir menekan "Selesai Sortir".`
+      : `Kupon ${tx.no_kupon} masih memiliki ${status.unweighedCount} bal yang belum ditimbang (${status.unweighedBalList.join(', ')}).`;
+
+  const handleConfirmCashPayment = (
+    txId: string,
+    details: {
+      metode: 'cash';
+      dibayarOleh: string;
+      nominalCash: number;
+    },
+    directPrintAfter?: boolean
+  ) => {
+    const tx = transaksiList.find((t) => t.transaksi_id === txId);
+    if (!tx) return;
+
+    // Strict validation: Kupon MUST have all bales weighed before payment can be confirmed!
+    const weighStatus = getKuponWeighStatus(tx);
+    if (!weighStatus.isAllWeighed) {
+      tampilkanInfo(
+        alasanBelumSiapBayar(tx, weighStatus)
+      );
+      return;
+    }
+
+    const updatedTx: TransaksiPembelian = {
+      ...tx,
+      status_pembayaran: 'lunas',
+      metode_pembayaran: 'cash',
+      dibayar_oleh: details.dibayarOleh,
+      status_nota: 'sudah_cetak',
+      dibayar_pada: new Date().toISOString(),
+    };
+
+    const relatedBarang = barangList.filter((b) => tx.barang_ids?.includes(b.barang_id));
+    // Yang dikirim hanya pelunasannya; server memeriksa ulang semua bal sudah ditimbang lalu menerbitkan stok bal
+    onSaveTransaksi(updatedTx, relatedBarang, { operasi: [{ jenis: 'bayar', metode: 'cash', dibayar_oleh: details.dibayarOleh }] });
+
+    if (selectedTxForDetail && selectedTxForDetail.transaksi_id === txId) {
+      setSelectedTxForDetail(updatedTx);
+    }
+
+    if (directPrintAfter) {
+      openPrintDocument('nota', txId);
+    }
+  };
+
+  // Edit kupon (tambah, ubah, hapus bal) hanya untuk kupon belum lunas dan hanya superadmin / admin kasir
+  const canEditKupon = Boolean(onEditKupon) && (userRole === 'superadmin' || userRole === 'admin_kasir');
+
+  const handleEditKupon = (tx: TransaksiPembelian) => {
+    if (!onEditKupon || !canEditKupon) return;
+    // Pakai data terbaru, bukan salinan lama dari modal Detail
+    const latest = transaksiList.find((t) => t.transaksi_id === tx.transaksi_id) || tx;
+    const alasan = alasanBalSusulanDitolak(latest);
+    if (alasan) {
+      setConfirmConfig({
+        isOpen: true,
+        title: 'Kupon Tidak Bisa Diedit',
+        message: alasan,
+        confirmText: 'Mengerti',
+        cancelText: 'Tutup',
+        onConfirm: () => setConfirmConfig((prev) => ({ ...prev, isOpen: false })),
+      });
+      return;
+    }
+    setSelectedTxForDetail(null);
+    onEditKupon(latest);
+  };
+
+  const handleMarkAsLunas = (txId: string) => {
+    const tx = transaksiList.find((t) => t.transaksi_id === txId);
+    if (!tx) return;
+
+    const weighStatus = getKuponWeighStatus(tx);
+    if (!weighStatus.isAllWeighed) {
+      setConfirmConfig({
+        isOpen: true,
+        title: 'Tidak Dapat Melakukan Pembayaran',
+        message: `${alasanBelumSiapBayar(tx, weighStatus)}\n\nBuka kupon ${tx.no_kupon} di Timbangan?`,
+        confirmText: 'Buka Timbangan',
+        cancelText: 'Tutup',
+        onConfirm: () => {
+          setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+          onNavigateToTimbangan(tx.no_kupon, tx.transaksi_id);
+        }
+      });
+      return;
+    }
+
+    setSelectedTxForBayar(tx);
+  };
+
+  // Main Filter logic
+  const filteredList = useMemo(() => {
+    return transaksiList.filter((tx) => {
+      // Tanggal Mulai
+      if (startDate) {
+        const txDate = (tx.tanggal_transaksi || '').split(' ')[0];
+        if (txDate < startDate) return false;
+      }
+      // Tanggal Akhir
+      if (endDate) {
+        const txDate = (tx.tanggal_transaksi || '').split(' ')[0];
+        if (txDate > endDate) return false;
+      }
+      // Kupon / ID / Bal
+      if (filterKupon.trim()) {
+        const q = filterKupon.trim().toLowerCase();
+        const matchKupon = (tx.no_kupon || '').toLowerCase().includes(q);
+        const matchId = (tx.transaksi_id || '').toLowerCase().includes(q);
+        const matchBal = (tx.no_bal || '').toLowerCase().includes(q);
+        if (!matchKupon && !matchId && !matchBal) return false;
+      }
+      // Petani
+      if (filterPetaniId && tx.petani_id !== filterPetaniId) {
+        return false;
+      }
+      // Status Kas (Cash vs Kredit) & Kesiapan Timbang
+      const isLunas = isTransaksiLunas(tx);
+      const weighStatus = getKuponWeighStatus(tx);
+
+      if (filterStatusBayar === 'cash' && !isLunas) return false;
+      if (filterStatusBayar === 'kredit' && isLunas) return false;
+      if (filterStatusBayar === 'siap_bayar' && (!weighStatus.isAllWeighed || isLunas)) return false;
+      if (filterStatusBayar === 'belum_lengkap' && weighStatus.isAllWeighed) return false;
+
+      return true;
+    });
+  }, [transaksiList, startDate, endDate, filterKupon, filterPetaniId, filterStatusBayar]);
+
+  // Jumlah dan nilai kupon per status untuk kartu filter status
+  const statusCounts = useMemo(() => {
+    const kosong = () => ({ jumlah: 0, nilai: 0 });
+    const semua = kosong();
+    const siapBayar = kosong();
+    const belumLengkap = kosong();
+    const lunas = kosong();
+    const belumLunas = kosong();
+    const tambah = (grup: { jumlah: number; nilai: number }, nilai: number) => {
+      grup.jumlah += 1;
+      grup.nilai += nilai;
+    };
+
+    transaksiList.forEach((t) => {
+      const nilai = t.harga_final || 0;
+      const isLunas = isTransaksiLunas(t);
+      const isAllWeighed = getKuponWeighStatus(t).isAllWeighed;
+      tambah(semua, nilai);
+      if (isLunas) {
+        tambah(lunas, nilai);
+      } else {
+        tambah(belumLunas, nilai);
+        if (isAllWeighed) {
+          tambah(siapBayar, nilai);
+        }
+      }
+      if (!isAllWeighed) {
+        tambah(belumLengkap, nilai);
+      }
+    });
+
+    return { semua, siapBayar, belumLengkap, lunas, belumLunas };
+  }, [transaksiList]);
+
+  // Kartu filter status pembayaran: satu klik langsung menyaring tabel
+  const kartuStatus = [
+    {
+      nilai: 'all' as const,
+      judul: 'Semua Status',
+      satuan: 'Kupon',
+      data: statusCounts.semua,
+      Ikon: Receipt,
+      teks: 'text-slate-800',
+      ikon: 'text-slate-600',
+      aktif: 'bg-slate-50 border-slate-500 ring-1 ring-slate-500',
+      biasa: 'bg-white border-slate-300 hover:bg-slate-50',
+      garis: 'border-slate-200',
+    },
+    {
+      nilai: 'siap_bayar' as const,
+      judul: 'Siap Bayar',
+      satuan: 'Kupon',
+      data: statusCounts.siapBayar,
+      Ikon: Banknote,
+      teks: 'text-red-800',
+      ikon: 'text-[#b81d24]',
+      aktif: 'bg-red-50 border-red-400 ring-1 ring-red-400',
+      biasa: 'bg-white border-red-200 hover:bg-red-50/50',
+      garis: 'border-red-100',
+    },
+    {
+      nilai: 'belum_lengkap' as const,
+      judul: 'Belum Lengkap Timbang',
+      satuan: 'Kupon',
+      data: statusCounts.belumLengkap,
+      Ikon: Scale,
+      teks: 'text-slate-800',
+      ikon: 'text-slate-500',
+      aktif: 'bg-slate-50 border-slate-500 ring-1 ring-slate-500',
+      biasa: 'bg-white border-slate-300 hover:bg-slate-50',
+      garis: 'border-slate-200',
+    },
+    {
+      nilai: 'cash' as const,
+      judul: 'Lunas',
+      satuan: 'Nota',
+      data: statusCounts.lunas,
+      Ikon: CheckCircle2,
+      teks: 'text-emerald-800',
+      ikon: 'text-emerald-600',
+      aktif: 'bg-emerald-50 border-emerald-400 ring-1 ring-emerald-400',
+      biasa: 'bg-white border-emerald-200 hover:bg-emerald-50/50',
+      garis: 'border-emerald-100',
+    },
+    {
+      nilai: 'kredit' as const,
+      judul: 'Belum Lunas',
+      satuan: 'Nota',
+      data: statusCounts.belumLunas,
+      Ikon: Clock,
+      teks: 'text-amber-800',
+      ikon: 'text-amber-600',
+      aktif: 'bg-amber-50 border-amber-400 ring-1 ring-amber-400',
+      biasa: 'bg-white border-amber-200 hover:bg-amber-50/50',
+      garis: 'border-amber-100',
+    },
+  ];
+
+  // Overall stats for the filtered list
+  const stats = useMemo(() => {
+    const totalTx = filteredList.length;
+    const totalBal = filteredList.reduce((acc, t) => acc + (t.total_bal || (t.items ? t.items.length : 1)), 0);
+    const totalNetto = normalizeKg(filteredList.reduce((acc, t) => acc + (t.berat_kg || 0), 0));
+    const totalKotor = filteredList.reduce((acc, t) => acc + (t.total_kotor || t.total_harga_beli || 0), 0);
+    const totalPajak = filteredList.reduce((acc, t) => acc + (t.pajak || 0), 0);
+    const totalPotongan = filteredList.reduce((acc, t) => acc + (t.total_potongan || 0), 0);
+    const totalBayar = filteredList.reduce((acc, t) => acc + (t.harga_final || 0), 0);
+    const avgHarga = totalNetto > 0 ? Math.round(totalKotor / totalNetto) : 0;
+
+    const lunasList = filteredList.filter(
+      (t) => isTransaksiLunas(t)
+    );
+    const belumLunasList = filteredList.filter(
+      (t) => !isTransaksiLunas(t)
+    );
+
+    const lunasNominal = lunasList.reduce((acc, t) => acc + (t.harga_final || 0), 0);
+    const belumLunasNominal = belumLunasList.reduce((acc, t) => acc + (t.harga_final || 0), 0);
+
+    const unweighedPendingList = filteredList.filter((t) => !getKuponWeighStatus(t).isAllWeighed);
+    const siapBayarList = filteredList.filter((t) => {
+      const isLunas = isTransaksiLunas(t);
+      return !isLunas && getKuponWeighStatus(t).isAllWeighed;
+    });
+
+    return {
+      totalTx,
+      totalBal,
+      totalNetto,
+      totalKotor,
+      totalPajak,
+      totalPotongan,
+      totalBayar,
+      avgHarga,
+      lunasNominal,
+      belumLunasNominal,
+      lunasCount: lunasList.length,
+      belumLunasCount: belumLunasList.length,
+      unweighedPendingCount: unweighedPendingList.length,
+      siapBayarCount: siapBayarList.length,
+    };
+  }, [filteredList]);
+
+  // Table Quick Search filtering & sorting
+  const searchedAndSortedList = useMemo(() => {
+    let result = [...filteredList];
+
+    // Quick text search across all columns
+    if (tableSearch.trim()) {
+      const q = tableSearch.trim().toLowerCase();
+      result = result.filter((tx) => {
+        const kupon = (tx.no_kupon || '').toLowerCase();
+        const tgl = formatDateIndo(tx.tanggal_transaksi).toLowerCase();
+        const petani = (tx.nama_petani || '').toLowerCase();
+        const id = (tx.transaksi_id || '').toLowerCase();
+        const bal = String(tx.total_bal || tx.items?.length || 1);
+        const netto = String(tx.berat_kg || 0);
+        return kupon.includes(q) || tgl.includes(q) || petani.includes(q) || id.includes(q) || bal.includes(q) || netto.includes(q);
+      });
+    }
+
+    // Dynamic sorting
+    result.sort((a, b) => {
+      let valA: any = 0;
+      let valB: any = 0;
+
+      switch (sortField) {
+        case 'kupon': {
+          const matchA = a.no_kupon.match(/\d+/);
+          const matchB = b.no_kupon.match(/\d+/);
+          valA = matchA ? parseInt(matchA[0], 10) : a.no_kupon;
+          valB = matchB ? parseInt(matchB[0], 10) : b.no_kupon;
+          break;
+        }
+        case 'tanggal':
+          valA = a.tanggal_transaksi || '';
+          valB = b.tanggal_transaksi || '';
+          break;
+        case 'petani':
+          valA = a.nama_petani.toLowerCase();
+          valB = b.nama_petani.toLowerCase();
+          break;
+        case 'jumlah':
+          valA = a.total_bal || a.items?.length || 1;
+          valB = b.total_bal || b.items?.length || 1;
+          break;
+        case 'netto':
+          valA = a.berat_kg || 0;
+          valB = b.berat_kg || 0;
+          break;
+        case 'total_kotor':
+          valA = a.total_kotor || a.total_harga_beli || 0;
+          valB = b.total_kotor || b.total_harga_beli || 0;
+          break;
+        case 'pajak':
+          valA = a.pajak || 0;
+          valB = b.pajak || 0;
+          break;
+        case 'potongan':
+          valA = a.total_potongan || 0;
+          valB = b.total_potongan || 0;
+          break;
+        case 'jumlah_bayar':
+          valA = a.harga_final || 0;
+          valB = b.harga_final || 0;
+          break;
+        case 'cash': {
+          const isLunasA = isTransaksiLunas(a);
+          const isLunasB = isTransaksiLunas(b);
+          valA = isLunasA ? a.harga_final : 0;
+          valB = isLunasB ? b.harga_final : 0;
+          break;
+        }
+        case 'kredit': {
+          const isLunasA = isTransaksiLunas(a);
+          const isLunasB = isTransaksiLunas(b);
+          valA = !isLunasA ? a.harga_final : 0;
+          valB = !isLunasB ? b.harga_final : 0;
+          break;
+        }
+        case 'avg': {
+          valA = a.berat_kg > 0 ? (a.total_kotor || a.total_harga_beli) / a.berat_kg : 0;
+          valB = b.berat_kg > 0 ? (b.total_kotor || b.total_harga_beli) / b.berat_kg : 0;
+          break;
+        }
+        default:
+          valA = a.no_kupon;
+          valB = b.no_kupon;
+      }
+
+      if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+      if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return result;
+  }, [filteredList, tableSearch, sortField, sortDirection]);
+
+  // Pagination calculation
+  const totalPages = Math.ceil(searchedAndSortedList.length / itemsPerPage) || 1;
+  const paginatedList = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return searchedAndSortedList.slice(start, start + itemsPerPage);
+  }, [searchedAndSortedList, currentPage, itemsPerPage]);
+
+  const handleHeaderSort = (field: string) => {
+    if (sortField === field) {
+      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const handleResetFilter = () => {
+    setStartDate('');
+    setEndDate('');
+    setFilterKupon('');
+    setFilterPetaniId('');
+    setFilterStatusBayar('all');
+    setTableSearch('');
+    setSortField('kupon');
+    setSortDirection('desc');
+    setCurrentPage(1);
+  };
+
+  return (
+    <div className="space-y-4 font-sans pb-10 text-slate-800">
+      
+      {/* Header Banner */}
+      <div className="bg-white border border-slate-200 p-4 shadow-2xs rounded-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex items-center space-x-2">
+          <span className="w-2 h-2 rounded-full bg-[#b81d24]"></span>
+          <h2 className="text-sm font-semibold text-slate-900 tracking-tight">Data Pembelian & Pembayaran</h2>
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <button
+            type="button"
+            onClick={() => onNavigateToSortir()}
+            className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-medium text-xs rounded-sm transition cursor-pointer shadow-2xs"
+          >
+            Sortir
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigateToTimbangan()}
+            className="px-3 py-1.5 bg-[#b81d24] hover:bg-[#a0181e] text-white font-medium text-xs rounded-sm transition cursor-pointer shadow-2xs"
+          >
+            Timbangan
+          </button>
+        </div>
+      </div>
+
+      {/* Filter Section */}
+      <div className="bg-white border border-slate-200 p-4 shadow-2xs rounded-sm space-y-3">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+          <div className="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-slate-800">
+            <Filter className="w-3.5 h-3.5 text-slate-600" />
+            <span>Filter</span>
+          </div>
+          <span className="text-[11px] text-slate-500">
+            Ditemukan <strong className="text-slate-800">{filteredList.length}</strong> dari {transaksiList.length} transaksi
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 md:grid-cols-3 gap-3 items-end">
+          
+          {/* Tanggal Mulai */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Tanggal Mulai
+            </label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full bg-white border border-slate-300 rounded-sm px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800"
+            />
+          </div>
+
+          {/* Tanggal Akhir */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Tanggal Akhir
+            </label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => {
+                setEndDate(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full bg-white border border-slate-300 rounded-sm px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800"
+            />
+          </div>
+
+          {/* Kupon */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Kupon / ID
+            </label>
+            <input
+              type="text"
+              value={filterKupon}
+              onChange={(e) => {
+                setFilterKupon(formatNoKupon(e.target.value));
+                setCurrentPage(1);
+              }}
+              placeholder="Masukkan kupon..."
+              className="w-full bg-white border border-slate-300 rounded-sm px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800 font-mono"
+            />
+          </div>
+
+          {/* Petani */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Petani
+            </label>
+            <select
+              value={filterPetaniId}
+              onChange={(e) => {
+                setFilterPetaniId(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full bg-white border border-slate-300 rounded-sm px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800"
+            >
+              <option value="">Semua Petani</option>
+              {petaniList.map((p) => (
+                <option key={p.petani_id} value={p.petani_id}>
+                  {p.nama_petani} ({p.petani_id})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Urutan Kupon */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Urutan Kupon
+            </label>
+            <select
+              value={sortDirection}
+              onChange={(e) => {
+                setSortField('kupon');
+                setSortDirection(e.target.value as 'desc' | 'asc');
+              }}
+              className="w-full bg-white border border-slate-300 rounded-sm px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800 font-medium"
+            >
+              <option value="desc">Kupon: Terbesar ke Terkecil</option>
+              <option value="asc">Kupon: Terkecil ke Terbesar</option>
+            </select>
+          </div>
+
+          {/* Buttons: Cari Data */}
+          <div className="flex items-center space-x-2">
+            <button
+              type="button"
+              onClick={() => setCurrentPage(1)}
+              className="flex-1 py-1.5 bg-[#b81d24] hover:bg-[#a0181e] text-white font-medium text-xs rounded-sm transition flex items-center justify-center space-x-1.5 cursor-pointer shadow-2xs"
+            >
+              <Search className="w-3.5 h-3.5" />
+              <span>Cari</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleResetFilter}
+              className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-xs rounded-sm transition cursor-pointer"
+              title="Reset Filter"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+        </div>
+      </div>
+
+      {/* Kartu Status Pembayaran: klik untuk menyaring tabel */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        {kartuStatus.map((k) => {
+          const terpilih = filterStatusBayar === k.nilai;
+          return (
+            <button
+              key={k.nilai}
+              type="button"
+              aria-pressed={terpilih}
+              onClick={() => {
+                setFilterStatusBayar(k.nilai);
+                setCurrentPage(1);
+              }}
+              className={`p-3.5 border rounded-sm shadow-2xs text-left cursor-pointer transition ${terpilih ? k.aktif : k.biasa}`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className={`text-[11px] font-semibold ${k.teks}`}>{k.judul}</span>
+                <k.Ikon className={`w-4 h-4 shrink-0 ${k.ikon}`} />
+              </div>
+              <div className="mt-2 flex items-baseline justify-between">
+                <span className={`text-xl font-bold ${k.teks}`}>{k.data.jumlah}</span>
+                <span className={`text-[11px] font-medium ${k.ikon}`}>{k.satuan}</span>
+              </div>
+              <div className={`mt-2 pt-2 border-t ${k.garis} flex items-center justify-between text-[11px]`}>
+                <span className={`font-medium ${k.teks}`}>Nilai Pembelian:</span>
+                <span className="font-mono font-bold text-slate-900">{formatRupiah(k.data.nilai)}</span>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Total sesuai filter; jumlah nota lunas dan kredit ada di kartu status di atas */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="bg-white border border-slate-200 p-3 rounded-sm shadow-2xs">
+          <span className="text-[10px] uppercase font-semibold text-slate-500 block tracking-wider">Total Bal</span>
+          <p className="text-base font-semibold text-slate-900 mt-0.5">{stats.totalBal} Bal</p>
+          <span className="text-[10px] text-slate-500 font-normal">{stats.totalTx} Kupon</span>
+        </div>
+
+        <div className="bg-white border border-slate-200 p-3 rounded-sm shadow-2xs">
+          <span className="text-[10px] uppercase font-semibold text-slate-500 block tracking-wider">Total Tonase Netto</span>
+          <p className="text-base font-semibold text-slate-900 mt-0.5 font-mono">{stats.totalNetto.toLocaleString('id-ID')} Kg</p>
+          <span className="text-[10px] text-slate-500 font-normal">{(stats.totalNetto / 1000).toFixed(2)} Ton</span>
+        </div>
+
+        <div className="bg-white border border-slate-200 p-3 rounded-sm shadow-2xs">
+          <span className="text-[10px] uppercase font-semibold text-slate-500 block tracking-wider">Total Pembelian</span>
+          <p className="text-base font-semibold text-slate-900 mt-0.5 font-mono">{formatRupiah(stats.totalBayar)}</p>
+          <span className="text-[10px] text-slate-500 font-normal">Potongan {formatRupiah(stats.totalPotongan)}</span>
+        </div>
+
+      </div>
+
+      {/* Informational Alert if any Kupon is blocked due to unweighed items */}
+      {stats.unweighedPendingCount > 0 && (
+        <div className="bg-amber-50/90 border border-amber-300 text-amber-950 px-4 py-2.5 rounded-sm flex flex-col sm:flex-row items-start sm:items-center justify-between text-xs shadow-2xs gap-2">
+          <div className="flex items-center space-x-2.5">
+            <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+            <span className="leading-tight">
+              <strong>{stats.unweighedPendingCount} kupon</strong> masih memiliki bal yang belum ditimbang.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setFilterStatusBayar('belum_lengkap');
+              setCurrentPage(1);
+            }}
+            className="text-[11px] font-bold text-amber-800 hover:text-amber-950 underline shrink-0 cursor-pointer"
+          >
+            Tampilkan
+          </button>
+        </div>
+      )}
+
+      {/* Main Table Box */}
+      <div className="bg-white border border-slate-200 shadow-2xs rounded-sm overflow-hidden">
+        
+        {/* Table Title Bar */}
+        <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Receipt className="w-4 h-4 text-slate-700" />
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-800">Data Pembelian</h3>
+          </div>
+        </div>
+
+        {/* Controls di atas tabel (Tampil X Data & Kolom Pencarian Utama Transaksi) */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 bg-white border-b border-slate-200 text-xs">
+          <div className="flex flex-wrap items-center gap-2 text-slate-700">
+            <div className="flex items-center space-x-1.5">
+              <span>Tampil</span>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="bg-white border border-slate-300 rounded-xs px-2 py-1 text-xs font-medium text-slate-900 focus:outline-none focus:border-slate-800 cursor-pointer"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+              <span>per hal.</span>
+            </div>
+            {tableSearch.trim() && (
+              <span className="text-[11px] text-slate-500 font-medium">
+                Ditemukan: <strong className="text-slate-900">{searchedAndSortedList.length}</strong> data
+              </span>
+            )}
+          </div>
+
+          {/* Kolom Pencarian (Search Bar) Utama Transaksi */}
+          <div className="w-full sm:w-80 md:w-96">
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
+                <Search className="w-4 h-4" />
+              </div>
+              <input
+                id="search-transaksi-input"
+                type="text"
+                value={tableSearch}
+                onChange={(e) => {
+                  setTableSearch(e.target.value);
+                  setCurrentPage(1);
+                }}
+                placeholder="Cari kupon, petani, tanggal..."
+                className="w-full bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 rounded-sm pl-8 pr-8 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#b81d24] focus:ring-1 focus:ring-[#b81d24] transition shadow-2xs"
+              />
+              {tableSearch && (
+                <button
+                  type="button"
+                  id="btn-clear-search-transaksi"
+                  onClick={() => {
+                    setTableSearch('');
+                    setCurrentPage(1);
+                  }}
+                  className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                  title="Hapus pencarian"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* The Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse min-w-[1000px]">
+            <thead>
+              <tr className="bg-slate-50/90 text-slate-600 font-semibold text-xs border-b border-slate-200 select-none">
+                <th 
+                  onClick={() => handleHeaderSort('kupon')}
+                  className="py-3 px-3.5 w-10 text-center cursor-pointer hover:bg-slate-100/80 transition-colors"
+                >
+                  <div className="flex items-center justify-center">
+                    <span>#</span>
+                  </div>
+                </th>
+                <th 
+                  onClick={() => handleHeaderSort('kupon')}
+                  className="py-3 px-3.5 cursor-pointer hover:bg-slate-100/80 transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <span>Kupon</span>
+                    <SortIcon aktif={sortField === 'kupon'} arah={sortDirection} />
+                  </div>
+                </th>
+                <th 
+                  onClick={() => handleHeaderSort('tanggal')}
+                  className="py-3 px-3.5 cursor-pointer hover:bg-slate-100/80 transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <span>Tanggal</span>
+                    <SortIcon aktif={sortField === 'tanggal'} arah={sortDirection} />
+                  </div>
+                </th>
+                <th 
+                  onClick={() => handleHeaderSort('petani')}
+                  className="py-3 px-3.5 cursor-pointer hover:bg-slate-100/80 transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <span>Petani</span>
+                    <SortIcon aktif={sortField === 'petani'} arah={sortDirection} />
+                  </div>
+                </th>
+                <th 
+                  onClick={() => handleHeaderSort('jumlah')}
+                  className="py-3 px-3.5 text-center cursor-pointer hover:bg-slate-100/80 transition-colors"
+                >
+                  <div className="flex items-center justify-center space-x-1">
+                    <span>Jumlah</span>
+                    <SortIcon aktif={sortField === 'jumlah'} arah={sortDirection} />
+                  </div>
+                </th>
+                <th 
+                  onClick={() => handleHeaderSort('netto')}
+                  className="py-3 px-3.5 text-right cursor-pointer hover:bg-slate-100/80 transition-colors"
+                >
+                  <div className="flex items-center justify-end space-x-1">
+                    <span>Netto</span>
+                    <SortIcon aktif={sortField === 'netto'} arah={sortDirection} />
+                  </div>
+                </th>
+                <th 
+                  onClick={() => handleHeaderSort('total_kotor')}
+                  className="py-3 px-3.5 text-right cursor-pointer hover:bg-slate-100/80 transition-colors"
+                >
+                  <div className="flex items-center justify-end space-x-1">
+                    <span>Total Harga Beli</span>
+                    <SortIcon aktif={sortField === 'total_kotor'} arah={sortDirection} />
+                  </div>
+                </th>
+                <th 
+                  onClick={() => handleHeaderSort('pajak')}
+                  className="py-3 px-3.5 text-right cursor-pointer hover:bg-slate-100/80 transition-colors"
+                >
+                  <div className="flex items-center justify-end space-x-1">
+                    <span>Pajak</span>
+                    <SortIcon aktif={sortField === 'pajak'} arah={sortDirection} />
+                  </div>
+                </th>
+                <th 
+                  onClick={() => handleHeaderSort('potongan')}
+                  className="py-3 px-3.5 text-right cursor-pointer hover:bg-slate-100/80 transition-colors"
+                >
+                  <div className="flex items-center justify-end space-x-1">
+                    <span>Potongan</span>
+                    <SortIcon aktif={sortField === 'potongan'} arah={sortDirection} />
+                  </div>
+                </th>
+                <th 
+                  onClick={() => handleHeaderSort('jumlah_bayar')}
+                  className="py-3 px-3.5 text-right cursor-pointer hover:bg-slate-100/80 transition-colors"
+                >
+                  <div className="flex items-center justify-end space-x-1">
+                    <span>Jumlah Bayar</span>
+                    <SortIcon aktif={sortField === 'jumlah_bayar'} arah={sortDirection} />
+                  </div>
+                </th>
+                <th 
+                  onClick={() => handleHeaderSort('cash')}
+                  className="py-3 px-3.5 text-right cursor-pointer hover:bg-slate-100/80 transition-colors"
+                >
+                  <div className="flex items-center justify-end space-x-1">
+                    <span>Cash</span>
+                    <SortIcon aktif={sortField === 'cash'} arah={sortDirection} />
+                  </div>
+                </th>
+                <th 
+                  onClick={() => handleHeaderSort('kredit')}
+                  className="py-3 px-3.5 text-right cursor-pointer hover:bg-slate-100/80 transition-colors"
+                >
+                  <div className="flex items-center justify-end space-x-1">
+                    <span>Kredit</span>
+                    <SortIcon aktif={sortField === 'kredit'} arah={sortDirection} />
+                  </div>
+                </th>
+                <th 
+                  onClick={() => handleHeaderSort('avg')}
+                  className="py-3 px-3.5 text-right cursor-pointer hover:bg-slate-100/80 transition-colors"
+                >
+                  <div className="flex items-center justify-end space-x-1">
+                    <span>AVG</span>
+                    <SortIcon aktif={sortField === 'avg'} arah={sortDirection} />
+                  </div>
+                </th>
+                <th className="py-3 px-3.5 text-center w-36">
+                  <span>Opsi</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-slate-700">
+              {paginatedList.length === 0 ? (
+                <tr>
+                  <td colSpan={14} className="py-12 text-center text-slate-400 bg-white">
+                    <Receipt className="w-10 h-10 mx-auto text-slate-300 mb-2" />
+                    <p className="font-semibold text-slate-700 text-xs">Tidak ada data pembelian</p>
+                  </td>
+                </tr>
+              ) : (
+                paginatedList.map((tx, index) => {
+                  const seq = (currentPage - 1) * itemsPerPage + index + 1;
+                  const { isAllWeighed, isSortirOpen, unweighedCount, totalBal: balCount, weighedCount, unweighedBalList } = getKuponWeighStatus(tx);
+                  const isLunas = isTransaksiLunas(tx);
+                  const totalKotorVal = tx.total_kotor || tx.total_harga_beli || 0;
+                  const pajakVal = tx.pajak || 0;
+                  const potonganVal = tx.total_potongan || 0;
+                  const jumlahBayarVal = tx.harga_final || 0;
+
+                  // Cash vs Kredit Logic requested by user:
+                  // JIKA BELUM LUNAS: Cash = 0 dan Kredit = senilai Jumlah Bayar
+                  // JIKA SUDAH LUNAS: Cash = senilai Jumlah Bayar dan Kredit = 0
+                  const cashVal = isLunas ? jumlahBayarVal : 0;
+                  const kreditVal = isLunas ? 0 : jumlahBayarVal;
+
+                  // AVG Calculation requested by user:
+                  // Rata-rata per kg = Total Harga Beli / Netto (0 jika belum ditimbang)
+                  const avgPrice = tx.berat_kg > 0 ? Math.round(totalKotorVal / tx.berat_kg) : 0;
+
+                  return (
+                    <tr 
+                      key={tx.transaksi_id} 
+                      className={`hover:bg-slate-50/80 transition-colors text-slate-700 ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/40'}`}
+                    >
+                      {/* # */}
+                      <td className="py-2.5 px-3.5 text-center font-mono text-slate-500">
+                        {seq}
+                      </td>
+
+                      {/* Kupon */}
+                      <td className="py-2.5 px-3.5">
+                        <div className="flex flex-col">
+                          <span className="font-mono font-semibold text-slate-900 text-xs">
+                            {tx.no_kupon || '-'}
+                          </span>
+                          {!isLunas && !isAllWeighed && (
+                            <span
+                              className="inline-flex items-center space-x-0.5 text-[9px] font-medium text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded mt-0.5 w-fit"
+                              title={isSortirOpen
+                                ? `Sortir kupon ini belum ditutup${unweighedCount > 0 ? ` dan ${unweighedCount} bal belum ditimbang` : ''}. Tidak bisa bayar sampai sortir selesai.`
+                                : `Masih ada ${unweighedCount} bal belum ditimbang (${unweighedBalList.join(', ')}). Tidak bisa bayar sampai semua ditimbang.`}
+                            >
+                              <AlertTriangle className="w-2.5 h-2.5 text-amber-600 shrink-0 mr-0.5" />
+                              <span>{isSortirOpen ? 'Sortir berjalan' : `${unweighedCount} blm timbang`}</span>
+                            </span>
+                          )}
+                          {!isLunas && isAllWeighed && (
+                            <span className="inline-flex items-center text-[9px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded mt-0.5 w-fit">
+                              Siap Bayar
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Tanggal: e.g. 08 September 2026 */}
+                      <td className="py-2.5 px-3.5 text-slate-600 text-xs whitespace-nowrap">
+                        {formatDateIndo(tx.tanggal_transaksi)}
+                      </td>
+
+                      {/* Petani */}
+                      <td className="py-2.5 px-3.5">
+                        <div className="font-medium text-slate-900 text-xs">{tx.nama_petani}</div>
+                      </td>
+
+                      {/* Jumlah */}
+                      <td className="py-2.5 px-3.5 text-center font-mono text-slate-700">
+                        {balCount}
+                      </td>
+
+                      {/* Netto */}
+                      <td className="py-2.5 px-3.5 text-right font-mono text-slate-800">
+                        <div>
+                          <span>{tx.berat_kg ? tx.berat_kg.toLocaleString('id-ID') : 0}</span>
+                          {!isAllWeighed && (
+                            <span 
+                              className="block text-[9px] font-sans text-amber-700 font-medium"
+                              title={`Netto sementara (${weighedCount}/${balCount} bal ditimbang)`}
+                            >
+                              (Belum Lengkap)
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Total Harga Beli */}
+                      <td className="py-2.5 px-3.5 text-right font-mono text-slate-800">
+                        {formatAccounting(totalKotorVal)}
+                      </td>
+
+                      {/* Pajak */}
+                      <td className="py-2.5 px-3.5 text-right font-mono text-slate-600">
+                        {formatAccounting(pajakVal)}
+                      </td>
+
+                      {/* Potongan */}
+                      <td className="py-2.5 px-3.5 text-right font-mono text-slate-600">
+                        {formatAccounting(potonganVal)}
+                      </td>
+
+                      {/* Jumlah Bayar */}
+                      <td className="py-2.5 px-3.5 text-right font-mono font-semibold text-slate-900">
+                        {formatAccounting(jumlahBayarVal)}
+                      </td>
+
+                      {/* Cash */}
+                      <td className={`py-2.5 px-3.5 text-right font-mono ${isLunas ? 'font-semibold text-emerald-700' : 'text-slate-600'}`}>
+                        {formatAccounting(cashVal)}
+                      </td>
+
+                      {/* Kredit */}
+                      <td className={`py-2.5 px-3.5 text-right font-mono ${!isLunas ? 'font-semibold text-amber-700' : 'text-slate-600'}`}>
+                        {formatAccounting(kreditVal)}
+                      </td>
+
+                      {/* AVG */}
+                      <td className="py-2.5 px-3.5 text-right font-mono text-slate-700">
+                        {formatAccounting(avgPrice)}
+                      </td>
+
+                      {/* Opsi Buttons */}
+                      <td className="py-2.5 px-3.5 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center space-x-1.5">
+                          
+                          {/* Tombol Detail */}
+                          <button
+                            type="button"
+                            onClick={() => setSelectedTxForDetail(tx)}
+                            className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-[11px] rounded transition-colors cursor-pointer border border-slate-200 inline-flex items-center space-x-1"
+                            title="Lihat Detail Transaksi & Tiket"
+                          >
+                            <Eye className="w-3 h-3 text-slate-500" />
+                            <span>Detail</span>
+                          </button>
+
+                          {/* Tombol Bayar (Jika belum lunas) */}
+                          {!isLunas && (
+                            isAllWeighed ? (
+                              <button
+                                type="button"
+                                onClick={() => handleMarkAsLunas(tx.transaksi_id)}
+                                className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-medium text-[11px] rounded transition-colors cursor-pointer inline-flex items-center space-x-1"
+                                title="Proses Pembayaran Tunai (Cash) Loket Kasir"
+                              >
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span>Bayar</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setConfirmConfig({
+                                    isOpen: true,
+                                    title: 'Tidak Bisa Bayar',
+                                    message: `Kupon ${tx.no_kupon}: ${unweighedCount} dari ${balCount} bal belum ditimbang\n[${unweighedBalList.join(', ')}]\n\nBuka kupon ini di Timbangan?`,
+                                    confirmText: 'Buka Timbangan',
+                                    cancelText: 'Tutup',
+                                    onConfirm: () => {
+                                      setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+                                      onNavigateToTimbangan(tx.no_kupon, tx.transaksi_id);
+                                    }
+                                  });
+                                }}
+                                className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 font-medium text-[11px] rounded transition-colors cursor-pointer inline-flex items-center space-x-1"
+                                title={`Terkunci: Masih ada ${unweighedCount} bal belum ditimbang (${unweighedBalList.join(', ')}). Seluruh bal harus ditimbang terlebih dahulu.`}
+                              >
+                                <Lock className="w-3 h-3 text-amber-700 shrink-0" />
+                                <span>Timbang ({weighedCount}/{balCount})</span>
+                              </button>
+                            )
+                          )}
+
+                          {/* Tombol Edit Kupon: tambah, ubah, hapus bal (hanya kupon belum lunas) */}
+                          {canEditKupon && (
+                            isLunas ? (
+                              <span
+                                className="p-1 text-slate-300 cursor-not-allowed inline-flex"
+                                title="Kupon sudah lunas sehingga tidak bisa diedit"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleEditKupon(tx)}
+                                className="p-1 text-slate-400 hover:text-[#b81d24] transition-colors cursor-pointer"
+                                title={isSortirOpen ? 'Lanjutkan sortir kupon ini' : 'Edit kupon: tambah, ubah, atau hapus bal'}
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                            )
+                          )}
+
+                          {/* Tombol Hapus khusus superadmin; terkunci bila bal sudah dikirim */}
+                          {(userRole === 'superadmin') && balTerkirimDariTransaksi(tx, barangList).length > 0 && (
+                            <span
+                              className="p-1 text-slate-300 cursor-not-allowed inline-flex"
+                              title={pesanTransaksiTerkunci(tx, balTerkirimDariTransaksi(tx, barangList))}
+                            >
+                              <Lock className="w-3.5 h-3.5" />
+                            </span>
+                          )}
+                          {(userRole === 'superadmin') && balTerkirimDariTransaksi(tx, barangList).length === 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAlasanHapus('');
+                                setTxToDelete(tx);
+                              }}
+                              className="p-1 text-slate-400 hover:text-red-600 transition-colors cursor-pointer"
+                              title="Batalkan Transaksi (Void) - Memerlukan Alasan Audit"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+
+            {/* Total Summary Row */}
+            <tfoot>
+              <tr className="bg-slate-100/90 font-semibold text-slate-800 border-t border-slate-300 text-xs">
+                <td colSpan={4} className="py-3 px-3.5 text-right uppercase tracking-wider font-semibold text-slate-700">
+                  Total:
+                </td>
+                <td className="py-3 px-3.5 text-center font-mono font-semibold text-slate-900">
+                  {stats.totalBal}
+                </td>
+                <td className="py-3 px-3.5 text-right font-mono font-semibold text-slate-900">
+                  {stats.totalNetto.toLocaleString('id-ID')}
+                </td>
+                <td className="py-3 px-3.5 text-right font-mono font-semibold text-slate-900">
+                  {formatAccounting(stats.totalKotor)}
+                </td>
+                <td className="py-3 px-3.5 text-right font-mono font-semibold text-slate-700">
+                  {formatAccounting(stats.totalPajak)}
+                </td>
+                <td className="py-3 px-3.5 text-right font-mono font-semibold text-slate-700">
+                  {formatAccounting(stats.totalPotongan)}
+                </td>
+                <td className="py-3 px-3.5 text-right font-mono font-semibold text-slate-900">
+                  {formatAccounting(stats.totalBayar)}
+                </td>
+                <td className="py-3 px-3.5 text-right font-mono font-semibold text-emerald-800">
+                  {formatAccounting(stats.lunasNominal)}
+                </td>
+                <td className="py-3 px-3.5 text-right font-mono font-semibold text-amber-800">
+                  {formatAccounting(stats.belumLunasNominal)}
+                </td>
+                <td className="py-3 px-3.5 text-right font-mono font-semibold text-slate-900">
+                  {formatAccounting(stats.avgHarga)}
+                </td>
+                <td className="py-3 px-3.5 text-center text-slate-400">
+                  -
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        {/* DataTables Bottom Controls (Showing X of Y & Pagination) */}
+        <div className="p-3 bg-white border-t border-slate-200">
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={searchedAndSortedList.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+            showQuickJumper={true}
+            showFirstLast={true}
+          />
+        </div>
+      </div>
+
+      {/* Transaksi Detail & PDF Print Modal */}
+      <TransaksiDetailModal
+        isOpen={Boolean(selectedTxForDetail)}
+        onClose={() => setSelectedTxForDetail(null)}
+        transaksi={selectedTxForDetail}
+        onMarkAsLunas={handleMarkAsLunas}
+        onOpenBayarModal={(tx) => setSelectedTxForBayar(tx)}
+        onEditKupon={canEditKupon ? handleEditKupon : undefined}
+        alasanHapusTerkunci={(() => {
+          if (!selectedTxForDetail) return undefined;
+          const noBalTerkirim = balTerkirimDariTransaksi(selectedTxForDetail, barangList);
+          return noBalTerkirim.length > 0 ? pesanTransaksiTerkunci(selectedTxForDetail, noBalTerkirim) : undefined;
+        })()}
+        onDeleteTransaksi={(txId, alasan) => {
+          if (onDeleteTransaksi) onDeleteTransaksi(txId, alasan);
+          setSelectedTxForDetail(null);
+        }}
+      />
+
+      {/* Pembayaran Kasir Cash Modal */}
+      <PembayaranKasirModal
+        isOpen={Boolean(selectedTxForBayar)}
+        onClose={() => setSelectedTxForBayar(null)}
+        transaksi={selectedTxForBayar}
+        currentKasirName={currentUser?.nama_lengkap || currentUser?.username || 'Petugas Kasir'}
+        onConfirmPembayaran={handleConfirmCashPayment}
+      />
+
+      {/* Delete Confirmation Modal */}
+      {txToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white border border-gray-200 rounded-sm shadow-2xl max-w-lg w-full p-5 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-200">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 rounded-sm bg-red-50 flex items-center justify-center shrink-0 border border-red-100">
+                  <Trash2 className="w-4 h-4 text-[#b81d24]" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">Hapus Kupon</h3>
+                  <p className="text-xs text-gray-600 font-mono font-semibold">{txToDelete.no_kupon}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setTxToDelete(null);
+                  setAlasanHapus('');
+                }}
+                className="text-gray-400 hover:text-gray-600 p-1 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Rincian Transaksi */}
+            <div className="p-3 bg-gray-50 border border-gray-200 rounded-none text-xs text-gray-800 space-y-2">
+              <div className="flex justify-between items-center border-b border-gray-200 pb-1.5">
+                <span className="text-gray-500 font-medium">Petani Penyetor:</span>
+                <span className="font-bold text-gray-900">{txToDelete.nama_petani} <span className="text-[10px] text-gray-500">({txToDelete.petani_id})</span></span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[11px]">
+                <div>
+                  <span className="text-gray-500">Tanggal:</span> <strong className="text-gray-800">{formatDateIndo(txToDelete.tanggal_transaksi)}</strong>
+                </div>
+                <div>
+                  <span className="text-gray-500">Status Bayar:</span> <span className="font-bold text-slate-800">{labelStatusBayar(txToDelete)}</span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Jumlah Bal:</span> <strong className="text-gray-800">{txToDelete.total_bal || (txToDelete.items ? txToDelete.items.length : 1)} Bal</strong>
+                </div>
+                <div>
+                  <span className="text-gray-500">Berat Netto:</span> <strong className="text-gray-800">{txToDelete.berat_kg} Kg</strong>
+                </div>
+              </div>
+              <div className="flex justify-between items-center pt-1 border-t border-gray-200 text-xs font-bold text-gray-900">
+                <span>Total Nilai Transaksi:</span>
+                <span className="text-[#b81d24] text-sm">{formatRupiah(txToDelete.harga_final || txToDelete.total_harga_beli)}</span>
+              </div>
+            </div>
+
+            <div className="p-2.5 bg-red-50 border border-red-200 text-xs text-red-900 flex items-center space-x-2">
+              <AlertTriangle className="w-4 h-4 text-[#b81d24] shrink-0" />
+              <span className="font-semibold">Seluruh bal pada kupon ini ikut terhapus.</span>
+            </div>
+
+            {/* Form Input Alasan */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-gray-700">
+                Alasan Penghapusan <span className="text-[#b81d24]">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={alasanHapus}
+                onChange={(e) => setAlasanHapus(e.target.value)}
+                placeholder="Alasan penghapusan"
+                className="w-full bg-white border border-gray-300 rounded-none px-2.5 py-1.5 text-xs text-gray-900 focus:outline-none focus:border-[#b81d24] focus:ring-1 focus:ring-[#b81d24]"
+              />
+              <div className="flex flex-wrap gap-1 pt-1">
+                {[
+                  'Salah input nomor kupon',
+                  'Duplikasi transaksi timbangan',
+                  'Dibatalkan oleh petani penyetor',
+                  'Koreksi administratif kasir',
+                ].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setAlasanHapus(preset)}
+                    className="text-[10px] px-2 py-0.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-none border border-gray-200 transition cursor-pointer"
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end space-x-2 pt-3 border-t border-gray-200">
+              <button
+                type="button"
+                onClick={() => {
+                  setTxToDelete(null);
+                  setAlasanHapus('');
+                }}
+                className="px-3.5 py-1.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 font-semibold text-xs rounded-none transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={!alasanHapus.trim()}
+                onClick={() => {
+                  if (onDeleteTransaksi && txToDelete) {
+                    onDeleteTransaksi(txToDelete.transaksi_id, alasanHapus.trim());
+                  }
+                  setTxToDelete(null);
+                  setAlasanHapus('');
+                }}
+                className="px-4 py-1.5 bg-[#b81d24] hover:bg-[#a0181e] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs rounded-sm transition cursor-pointer shadow-xs flex items-center space-x-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Hapus Kupon</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Konfirmasi Kasir */}
+      <ConfirmModal
+        isOpen={confirmConfig.isOpen}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        confirmText={confirmConfig.confirmText}
+        cancelText={confirmConfig.cancelText}
+        onConfirm={confirmConfig.onConfirm}
+        onClose={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
+      />
+
+    </div>
+  );
+};
