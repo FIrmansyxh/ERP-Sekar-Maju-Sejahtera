@@ -19,7 +19,7 @@ import {
 import { TransaksiPembelian, Petani, TabelHarga, Barang, TransaksiItemBal, UserRole, User as UserType, SaveTransaksiMeta } from '../../types';
 import { hitungPotonganTaraKg, normalizeKg, getInfoAturanTara } from '../../utils/formatters';
 import { recordAuditLog } from '../../utils/storage';
-import { buildBarangDariItem, hitungUlangKupon, isKuponProsesSortir, terapkanHasilTimbang } from '../../utils/kuponSortir';
+import { buildBarangDariItem, isKuponProsesSortir, terapkanHasilTimbang } from '../../utils/kuponSortir';
 import { alasanKuponTerkunciBayar } from '../../utils/statusBayar';
 import { POTONGAN_GANTI_TIKAR, POTONGAN_KULI_PER_BAL, POTONGAN_TALI_PER_BAL } from '../../config/aturanTimbang';
 
@@ -958,7 +958,6 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
         diubah_lokal_pada: Date.now(),
       });
       if (!updatedTx) return;
-      const unlockedItem = (updatedTx.items || []).find((it) => it.item_id === itemId)!;
       setWorkingItems(updatedTx.items || []);
 
 
