@@ -129,7 +129,8 @@ export function verifikasiHasil(server: TransaksiPembelian, terkirim: TransaksiP
     if (cekBerat && (it.berat_kg || 0) > 0 && (it.berat_bruto_kg || 0) > 0 && !sama(it.berat_bruto_kg, di.berat_bruto_kg)) {
       selisih.push(`${it.no_bal}: bruto ${it.berat_bruto_kg} kg di layar tetapi ${di.berat_bruto_kg || 0} kg di server`);
     }
-    if (it.kode_grade && di.kode_grade && String(it.kode_grade) !== String(di.kode_grade)) {
+    // Grade hanya dicocokkan bila perangkat ini sengaja menggantinya; grade bal lain sengaja mengikuti server
+    if ((it.grade_diubah_pada || 0) > 0 && it.kode_grade && di.kode_grade && String(it.kode_grade) !== String(di.kode_grade)) {
       selisih.push(`${it.no_bal}: kode ${it.kode_grade} di layar tetapi ${di.kode_grade} di server`);
     }
   }

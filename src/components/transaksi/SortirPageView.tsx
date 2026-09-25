@@ -569,6 +569,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
       no_bal: cleanedNoBal,
       barcode: (!item.barcode || item.barcode === item.no_bal) ? cleanedNoBal : item.barcode,
       kode_grade: trimmedGrade,
+      grade_diubah_pada: trimmedGrade !== item.kode_grade ? Date.now() : item.grade_diubah_pada,
       harga_per_kg: newHarga,
       potongan_tara_kg: newTara,
       berat_kg: newNetto,

@@ -3,6 +3,7 @@ import * as apiClient from './apiClient';
 import { ErpApiService } from './erpApi';
 import { buatKupon } from '../test/fixtures';
 import { balDihapusDariKupon, catatBalDihapus } from '../utils/balDihapus';
+import { verifikasiHasil } from './antrianSinkron';
 import type { TransaksiItemBal } from '../types';
 
 /**
@@ -155,6 +156,39 @@ describe('syncTransaksi: menyegarkan kupon dari server sebelum kirim (bukan lewa
 
     expect(timbang.items?.find((it) => it.no_bal === '1')?.berat_kg).toBe(40);
     expect(timbang.items?.find((it) => it.no_bal === '2')?.berat_kg).toBe(50);
+  });
+
+  it('grade yang baru diedit di Sortir terkirim; grade bal saudara yang basi tetap mengikuti server', async () => {
+    // Regresi 2026-09-25: "SB3093: kode 61 di layar tetapi 58 di server". Penggabungan sebelum kirim selalu
+    // memakai grade server, jadi edit grade tidak pernah sampai ke server.
+    const kuponLayar = buatKupon('TRX-6', {
+      items: [
+        item({ item_id: 'TRX-6-BAL-01', no_bal: 'SB3093', kode_grade: '61', harga_per_kg: 45000, diubah_lokal_pada: Date.now(), grade_diubah_pada: Date.now() }),
+        item({ item_id: 'TRX-6-BAL-02', no_bal: 'SB3094', kode_grade: '61', harga_per_kg: 45000 }),
+      ],
+    });
+    const serverItems = [
+      rawServerItem({ item_id: 'TRX-6-BAL-01', no_bal: 'SB3093', kode_grade: '58', harga_per_kg: 40000, ganti_tikar: false, potongan_tikar: 0 }),
+      rawServerItem({ item_id: 'TRX-6-BAL-02', no_bal: 'SB3094', kode_grade: '58', harga_per_kg: 40000, ganti_tikar: false, potongan_tikar: 0 }),
+    ];
+    vi.spyOn(apiClient.api, 'get').mockResolvedValue({ status: 'success', data: { transaksi_id: 'TRX-6', no_kupon: 'KUPTRX-6', items: serverItems } });
+    const dikirim: { items?: any[] } = {};
+    vi.spyOn(apiClient.api, 'put').mockImplementation(async (url: string, body?: unknown) => {
+      if (url.includes('/sortir-items')) {
+        dikirim.items = (body as { items?: any[] })?.items;
+        // Server menyimpan grade & harga yang dikirim
+        const items = serverItems.map((s) => ({ ...s, ...dikirim.items?.find((d) => d.no_bal === s.no_bal) }));
+        return { status: 'success', data: { transaksi_id: 'TRX-6', no_kupon: 'KUPTRX-6', items } };
+      }
+      throw new Error(`URL tak terduga dalam tes: ${url}`);
+    });
+
+    const { syncedTx } = await ErpApiService.syncTransaksi(kuponLayar, { status_pembayaran: 'belum_lunas' }, { tanpaCekKesehatan: true });
+
+    expect(dikirim.items?.find((it) => it.no_bal === 'SB3093')).toMatchObject({ kode_grade: '61', harga_per_kg: 45000 });
+    expect(dikirim.items?.find((it) => it.no_bal === 'SB3094')).toMatchObject({ kode_grade: '58', harga_per_kg: 40000 });
+    // Bal saudara yang grade-nya mengikuti server bukan "gagal simpan"
+    expect(verifikasiHasil(syncedTx, kuponLayar)).toEqual([]);
   });
 
   it('tetap mengirim data layar apa adanya bila kupon gagal disegarkan dari server (offline sesaat)', async () => {

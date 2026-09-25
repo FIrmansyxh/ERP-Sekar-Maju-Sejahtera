@@ -154,6 +154,11 @@ export interface TransaksiItemBal {
    * di Timbangan). Disimpan juga di server; perubahan GT yang lebih lama dari ini tidak pernah menimpa GT.
    */
   gt_diubah_pada?: number;
+  /**
+   * Waktu (ms) grade bal sengaja diganti di Sortir (edit bal). Hanya di perangkat ini, tidak disimpan server;
+   * selama masih baru, grade & harga ini tidak ditimpa grade lama saat digabung dengan versi server.
+   */
+  grade_diubah_pada?: number;
   lokasi_simpan?: string;
   sample_label_code?: string; // Kode barcode sample identik
   sample_label_printed?: boolean;
