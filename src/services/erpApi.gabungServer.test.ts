@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ErpApiService } from './erpApi';
-import { buatBatch, buatSuratJalan } from '../test/fixtures';
+import { buatBatch, buatItemSample, buatSuratJalan } from '../test/fixtures';
 import { hariIniLokal } from '../utils/rentangTanggal';
 import { akhiranUnik } from '../utils/idUnik';
 
@@ -71,6 +71,56 @@ describe('gabung data server lintas perangkat', () => {
     const lokal = buatBatch('SPL1', 'sample', { kode_batch: 'SS-001/IX/2026' });
     const server = ErpApiService.mapBackendBatchSample({ batch_id: 'SPL1', kode_batch: 'BATCH-20260923-e7c0', status: 'sample', items: [] });
     expect(ErpApiService.gabungBatchServer(lokal, server).kode_batch).toBe('SS-001/IX/2026');
+  });
+
+  it('Batch sample: tanda sudah DO, hasil sortir, dan catatan yang dicabut/dikosongkan di perangkat lain ikut di sini', () => {
+    // Regresi 2026-09-25: salinan lokal dulu menang bila nilai server kosong, sehingga Surat Jalan yang dibatalkan
+    // di komputer lain membuat bal tetap "sudah DO" di sini, dan simpanan batch berikutnya menulisnya balik ke server
+    const lokal = buatBatch('SPL3', 'diproses', {
+      catatan: 'catatan lama',
+      petugas_qc_pabrik: 'QC Lama',
+      items: [
+        buatItemSample('B1', { sudah_dikirim_do: true, status_item: 'ditolak', alasan_tolak: 'basah', harga_deal_kg: 47000, catatan_nego: 'nego lama' }),
+      ],
+    });
+    const server = ErpApiService.mapBackendBatchSample({
+      batch_id: 'SPL3',
+      kode_batch: 'SAMPLE-SPL3',
+      status: 'diproses',
+      tujuan_buyer: 'Buyer A',
+      tanggal_kirim: '2026-09-10',
+      catatan: null,
+      petugas_qc_pabrik: null,
+      items: [{ sample_item_id: 'SI-B1', barang_id: 'B1', status_item: 'disetujui', harga_tawaran_kg: 45000, harga_deal_kg: null, alasan_tolak: null, catatan_nego: null, sudah_dikirim_do: false }],
+    });
+
+    const hasil = ErpApiService.gabungBatchServer(lokal, server);
+    expect(hasil.catatan).toBeUndefined();
+    expect(hasil.petugas_qc_pabrik).toBeUndefined();
+    expect(hasil.items[0]).toMatchObject({ sudah_dikirim_do: false, status_item: 'disetujui' });
+    expect(hasil.items[0].alasan_tolak).toBeUndefined();
+    expect(hasil.items[0].harga_deal_kg).toBeUndefined();
+    expect(hasil.items[0].catatan_nego).toBeUndefined();
+    // Rincian bal yang tidak dikirim server tetap dari salinan lokal
+    expect(hasil.items[0]).toMatchObject({ no_bal: 'B1', kode_grade: '57', berat_bal_kg: 40 });
+  });
+
+  it('Surat Jalan: catatan dan nomor kontrak yang dikosongkan di perangkat lain (null di server) ikut kosong di sini', () => {
+    const lokal = buatSuratJalan('SJ2', 'dimuat', { catatan: 'muat pagi', nomor_kontrak: 'K-01' });
+    const server = ErpApiService.mapBackendPengiriman({
+      pengiriman_id: 'SJ2',
+      no_surat_jalan: 'SJ-SJ2',
+      status: 'dimuat',
+      tujuan: 'Pabrik A',
+      tanggal_kirim: '2026-09-17',
+      catatan: null,
+      nomor_kontrak: null,
+      items: [{ barang_id: 'B1', harga_deal_per_kg: 45000, berat_kirim_kg: 44 }],
+    });
+
+    const hasil = ErpApiService.gabungPengirimanServer(lokal, server);
+    expect(hasil.catatan).toBeNull();
+    expect(hasil.nomor_kontrak).toBeNull();
   });
 
   it('Batch sample: ID akun pembuat di server tidak ditampilkan sebagai nama pengirim', () => {

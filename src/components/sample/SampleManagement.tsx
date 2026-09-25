@@ -40,8 +40,9 @@ interface SampleManagementProps {
   hargaList?: TabelHarga[];
   transaksiList?: TransaksiPembelian[];
   userRole: UserRole;
-  onSaveBatchSample: (newBatch: BatchPengirimanSample, updatedBarangs: Barang[]) => void;
-  onUpdateBatchSample: (updatedBatch: BatchPengirimanSample, updatedBarangs?: Barang[]) => void;
+  /** true bila server menerima; formulir baru dikosongkan setelah itu. */
+  onSaveBatchSample: (newBatch: BatchPengirimanSample, updatedBarangs: Barang[]) => Promise<boolean>;
+  onUpdateBatchSample: (updatedBatch: BatchPengirimanSample, updatedBarangs?: Barang[]) => Promise<boolean>;
   onNavigateToPengiriman?: (batchId?: string) => void;
   /** Membuka halaman Status & Detail Batch (daftar batch, status, hasil sortir, cetak, batal). */
   onNavigateToStatusBatch?: () => void;
@@ -679,7 +680,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
 
   // Submit Create Batch Form
   // sebagai 'draft': simpan sebagai Draft (belum final, surat belum bisa dicetak); 'final': siap pakai
-  const handleSaveBatchForm = (sebagai: 'draft' | 'final' = 'final') => {
+  const handleSaveBatchForm = async (sebagai: 'draft' | 'final' = 'final') => {
     const tolak = (pesan: string) => {
       setErrorMessage(pesan);
       setIsConfirmCreateOpen(false);
@@ -784,12 +785,10 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
     const updatedBarangs: Barang[] = [];
 
     const sedangEdit = Boolean(editingBatchId);
-    if (sedangEdit) {
-      onUpdateBatchSample(newBatch, updatedBarangs);
-    } else {
-      onSaveBatchSample(newBatch, updatedBarangs);
-    }
+    const tersimpan = await (sedangEdit ? onUpdateBatchSample(newBatch, updatedBarangs) : onSaveBatchSample(newBatch, updatedBarangs));
     setIsConfirmCreateOpen(false);
+    // Server menolak / tidak terjangkau (galat sudah tampil): isian tetap di formulir supaya bisa disimpan ulang
+    if (!tersimpan) return;
     setSuccessNotification({
       kodeBatch: kodeBatch,
       totalBal: items.length,

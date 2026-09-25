@@ -43,7 +43,8 @@ interface StatusBatchPengirimanManagementProps {
   pengirimanList: PengirimanBarang[];
   barangList: Barang[];
   hargaJualList: MasterHargaJual[];
-  onUpdateBatchSample: (updatedBatch: BatchPengirimanSample, updatedBarangs?: Barang[]) => void;
+  /** true bila server menerima; "berhasil" dan status tersimpan baru ditampilkan setelah itu. */
+  onUpdateBatchSample: (updatedBatch: BatchPengirimanSample, updatedBarangs?: Barang[]) => Promise<boolean>;
   onUpdatePengirimanStatus: (pengirimanId: string, newStatus: StatusPengiriman) => Promise<void>;
   onNavigateToPengirimanWithBatch: (batchId: string) => void;
   /** Membuka batch sample di halaman Pengiriman Sample untuk diedit. */
@@ -166,10 +167,10 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
   };
 
   // Finalkan Draft: batch siap pakai dan surat sudah bisa dicetak. Bal tidak diubah: Reclass hanya harga ulang.
-  const finalkanBatch = (batch: BatchPengirimanSample) => {
+  const finalkanBatch = async (batch: BatchPengirimanSample) => {
     if (!isBatchDraft(batch)) return;
-    onUpdateBatchSample({ ...batch, status: 'sample' });
     setBatchToFinalize(null);
+    if (!(await onUpdateBatchSample({ ...batch, status: 'sample' }))) return;
     setSuccessToast(`Batch ${batch.kode_batch} sudah final dan siap dipakai. Surat pengiriman sample sekarang bisa dicetak.`);
     setTimeout(() => setSuccessToast(''), 4000);
   };
@@ -441,7 +442,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
     setIsAccAllConfirmOpen(false);
   };
 
-  const handleSaveSortirChanges = () => {
+  const handleSaveSortirChanges = async () => {
     if (!activeBatch || isBatchDraft(activeBatch)) return;
 
     const countAcc = batchItems.filter((i) => i.status_item === 'disetujui').length;
@@ -467,14 +468,15 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
       tanggal_respon: hariIniLokal(),
     };
 
-    onUpdateBatchSample(updatedBatch);
+    // Gagal: tanda "belum disimpan" tetap ada supaya bisa dicoba lagi
+    if (!(await onUpdateBatchSample(updatedBatch))) return;
     setHasUnsavedSortir(false);
     setSuccessToast(`Hasil sortir buyer untuk batch ${activeBatch.kode_batch} berhasil disimpan!`);
     setTimeout(() => setSuccessToast(''), 3500);
   };
 
   // Hasil Reclass langsung boleh dijadikan Surat Jalan (DO), termasuk dari Draft dan tanpa menunggu hasil sortir pembeli
-  const handleBuatDOReguler = () => {
+  const handleBuatDOReguler = async () => {
     if (!activeBatch) return;
 
     // Filter items to keep only those not rejected
@@ -499,7 +501,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
       tanggal_respon: hariIniLokal(),
     };
 
-    onUpdateBatchSample(updatedBatch);
+    if (!(await onUpdateBatchSample(updatedBatch))) return;
     setHasUnsavedSortir(false);
     onNavigateToPengirimanWithBatch(activeBatch.batch_id);
   };

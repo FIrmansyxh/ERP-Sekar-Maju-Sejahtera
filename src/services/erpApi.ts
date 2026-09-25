@@ -987,9 +987,9 @@ export class ErpApiService {
   }
 
   /**
-   * Gabungkan data DO dari server ke data lokal. Server menjadi acuan untuk semua nilai yang dikirimnya;
-   * rincian yang tidak disimpan server (petugas, rincian grade) tetap memakai data lokal. Nilai kosong / 0
-   * dari server diabaikan.
+   * Gabungkan data DO dari server ke data lokal. Server menjadi acuan untuk semua nilai yang dikirimnya, termasuk
+   * null (dikosongkan di perangkat lain); rincian yang tidak disimpan server (petugas, rincian grade) tetap memakai
+   * data lokal. Hanya string kosong, 0, dan daftar kosong dari server yang diabaikan.
    */
   public static gabungPengirimanServer(
     lokal: PengirimanBarang | undefined,
@@ -1000,7 +1000,7 @@ export class ErpApiService {
     (Object.keys(server) as (keyof PengirimanBarang)[]).forEach((k) => {
       const v = server[k];
       const kosong =
-        v === undefined || v === null || v === '' ||
+        v === undefined || v === '' ||
         (typeof v === 'number' && v === 0) ||
         (Array.isArray(v) && v.length === 0);
       if (!kosong) (hasil as any)[k] = v;
@@ -1022,8 +1022,10 @@ export class ErpApiService {
   }
 
   /**
-   * Gabungkan batch sample dari server ke data lokal. Server menjadi acuan untuk ID dan hasil
-   * evaluasi pabrik; No. Surat Sample yang diketik manual serta rincian bal tetap dari data lokal.
+   * Gabungkan batch sample dari server ke data lokal. Semua kolom yang disimpan server menjadi acuan, termasuk yang
+   * dikosongkan atau dicabut di perangkat lain (tanda sudah DO, alasan tolak, harga deal, catatan); dulu salinan
+   * lokal menang bila nilai server kosong, sehingga tiap komputer menampilkan isinya sendiri dan simpanan berikutnya
+   * menulis nilai basi itu balik ke server. Dari salinan lokal hanya rincian bal yang tidak dikirim server.
    */
   public static gabungBatchServer(
     lokal: BatchPengirimanSample | undefined,
@@ -1040,20 +1042,17 @@ export class ErpApiService {
       return {
         ...lk,
         sample_item_id: sv.sample_item_id || lk.sample_item_id,
-        status_item: sv.status_item || lk.status_item,
-        harga_tawaran_kg: sv.harga_tawaran_kg || lk.harga_tawaran_kg,
-        harga_deal_kg: sv.harga_deal_kg ?? lk.harga_deal_kg,
-        kode_harga_jual: sv.kode_harga_jual || lk.kode_harga_jual,
-        alasan_tolak: sv.alasan_tolak ?? lk.alasan_tolak,
-        catatan_nego: sv.catatan_nego ?? lk.catatan_nego,
-        tanggal_evaluasi: sv.tanggal_evaluasi ?? lk.tanggal_evaluasi,
-        sudah_dikirim_do: Boolean(sv.sudah_dikirim_do || lk.sudah_dikirim_do),
+        status_item: sv.status_item,
+        harga_tawaran_kg: sv.harga_tawaran_kg,
+        harga_deal_kg: sv.harga_deal_kg,
+        kode_harga_jual: sv.kode_harga_jual,
+        alasan_tolak: sv.alasan_tolak,
+        catatan_nego: sv.catatan_nego,
+        tanggal_evaluasi: sv.tanggal_evaluasi,
+        sudah_dikirim_do: sv.sudah_dikirim_do,
       };
     });
     const disetujui = items.filter((it) => it.status_item === 'disetujui');
-    // Data batch yang disimpan server menjadi acuan, supaya perubahan dari komputer lain (tujuan, No. Surat,
-    // status Draft/final, dll.) terlihat di sini. Perubahan di perangkat ini yang belum terkirim dijaga
-    // terpisah oleh antrean (overlayBatchSample), jadi tidak tertimpa.
     return {
       ...lokal,
       batch_id: server.batch_id || lokal.batch_id,
@@ -1063,13 +1062,13 @@ export class ErpApiService {
         ? lokal.kode_batch
         : server.kode_batch || lokal.kode_batch,
       tujuan_buyer: server.tujuan_buyer || lokal.tujuan_buyer,
-      permintaan_buyer: server.permintaan_buyer ?? lokal.permintaan_buyer,
+      permintaan_buyer: server.permintaan_buyer,
       tanggal_kirim: server.tanggal_kirim || lokal.tanggal_kirim,
       dikirim_oleh: server.dikirim_oleh || lokal.dikirim_oleh,
       status: statusSetelahSinkron(lokal.status, server.status),
-      tanggal_respon: server.tanggal_respon || lokal.tanggal_respon,
-      petugas_qc_pabrik: server.petugas_qc_pabrik || lokal.petugas_qc_pabrik,
-      catatan: server.catatan || lokal.catatan,
+      tanggal_respon: server.tanggal_respon,
+      petugas_qc_pabrik: server.petugas_qc_pabrik,
+      catatan: server.catatan,
       items,
       total_sample_bal: items.length,
       total_bal_disetujui: disetujui.length,

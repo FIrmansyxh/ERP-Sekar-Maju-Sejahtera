@@ -17,7 +17,8 @@ import { hariIniLokal } from '../../utils/rentangTanggal';
 interface HargaManagementProps {
   hargaList: TabelHarga[];
   userRole: UserRole;
-  onSaveNewPrice: (newPrice: TabelHarga, oldPriceIdToArchive?: string) => void;
+  /** true bila server menerima; bila tidak, formulir tetap terbuka. */
+  onSaveNewPrice: (newPrice: TabelHarga, oldPriceIdToArchive?: string) => Promise<boolean>;
   onDeleteHarga?: (hargaId: string) => void;
 }
 
@@ -97,7 +98,7 @@ export const HargaManagement: React.FC<HargaManagementProps> = ({
     setIsModalOpen(true);
   };
 
-  const handleSaveForm = (e: React.FormEvent) => {
+  const handleSaveForm = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formKode.trim()) {
       setErrorMessage('Kode harga beli wajib diisi.');
@@ -138,7 +139,7 @@ export const HargaManagement: React.FC<HargaManagementProps> = ({
       dibuat_oleh: editingItem?.dibuat_oleh || existingActiveGrade?.dibuat_oleh || 'System',
     };
 
-    onSaveNewPrice(newItem, existingActiveGrade ? existingActiveGrade.harga_id : (editingItem ? editingItem.harga_id : undefined));
+    if (!(await onSaveNewPrice(newItem, existingActiveGrade ? existingActiveGrade.harga_id : (editingItem ? editingItem.harga_id : undefined)))) return;
     
     setSuccessToast(editingItem || existingActiveGrade ? 'Data Master Harga Beli berhasil diperbarui' : 'Master Harga Beli baru berhasil ditambahkan');
     setTimeout(() => setSuccessToast(''), 3000);
