@@ -31,11 +31,22 @@ describe('sinkron ke server', () => {
     expect(statusKeServer('diproses', false)).toBe('diproses');
   });
 
-  it('Draft lokal bertahan bila server membalas sample, tetapi tunduk pada tahap yang lebih lanjut', () => {
-    expect(statusSetelahSinkron('draft', 'sample')).toBe('draft');
+  it('server lama yang menolak Draft: Draft lokal bertahan bila server membalas sample, tetapi tunduk pada tahap yang lebih lanjut', () => {
+    tandaiServerKenalDraft(false);
+    try {
+      expect(statusSetelahSinkron('draft', 'sample')).toBe('draft');
+      expect(statusSetelahSinkron('draft', undefined)).toBe('draft');
+      expect(statusSetelahSinkron('draft', 'diproses')).toBe('diproses');
+      expect(statusSetelahSinkron('draft', 'dibatalkan')).toBe('dibatalkan');
+    } finally {
+      tandaiServerKenalDraft(null);
+    }
+  });
+
+  it('dukungan Draft belum diketahui (tidak ada Draft di server): batch yang difinalkan di komputer lain tetap terlihat final', () => {
+    // Regresi 2026-09-25: Draft lokal dulu bertahan, lalu simpanan berikutnya dari sini mengembalikannya ke Draft
+    expect(statusSetelahSinkron('draft', 'sample')).toBe('sample');
     expect(statusSetelahSinkron('draft', undefined)).toBe('draft');
-    expect(statusSetelahSinkron('draft', 'diproses')).toBe('diproses');
-    expect(statusSetelahSinkron('draft', 'dibatalkan')).toBe('dibatalkan');
   });
 
   it('server yang menyimpan Draft menjadi acuan: batch yang difinalkan di komputer lain terlihat final di sini', () => {

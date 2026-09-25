@@ -48,7 +48,7 @@ import {
   saveCurrentUser,
   authenticateUser as authenticateLocalUser
 } from '../utils/storage';
-import { lengkapiBalDariKupon, mergeKuponParalel, pulihkanStatusSampleLama, sortTransaksiItemsByInputOrder } from '../utils/kuponSortir';
+import { hitungUlangKupon, lengkapiBalDariKupon, mergeKuponParalel, pulihkanStatusSampleLama, sortTransaksiItemsByInputOrder } from '../utils/kuponSortir';
 import { balDihapusDariKupon, konfirmasiBalDihapus } from '../utils/balDihapus';
 import { generatePetaniId } from '../utils/formatters';
 import { POTONGAN_GANTI_TIKAR, POTONGAN_KULI_PER_BAL, POTONGAN_TALI_PER_BAL } from '../config/aturanTimbang';
@@ -555,13 +555,13 @@ export class ErpApiService {
    * Mengirim keadaan terakhir sebuah kupon ke server. Dipanggil oleh antrean sinkron
    * (antrianSinkron.ts), yang menjamin hanya satu permintaan per kupon berjalan dan mengulang bila gagal.
    *
-   * Urutan pasti: (buat baru | ubah daftar bal + hasil timbang) lalu pelunasan bila baru dibayar.
+   * Urutan pasti: (buat baru | ubah daftar bal + hasil timbang | hasil timbang saja) lalu pelunasan bila baru dibayar.
    * Melempar galat bila gagal; fromBackend=false hanya bila server memang tidak terjangkau.
    */
   public static async syncTransaksi(
     newTx: TransaksiPembelian,
     oldTx?: { status_pembayaran?: TransaksiPembelian['status_pembayaran'] },
-    options?: { tanpaCekKesehatan?: boolean }
+    options?: { tanpaCekKesehatan?: boolean; hanyaTimbang?: string[] }
   ): Promise<{ syncedTx: TransaksiPembelian; fromBackend: boolean }> {
     // Antrean mencoba permintaan sungguhan; cek kesehatan yang sekali gagal tidak boleh memblokir simpanan
     if (!options?.tanpaCekKesehatan) {
@@ -624,6 +624,21 @@ export class ErpApiService {
       }
     };
 
+    // Hasil timbang saja (Timbangan): bal yang ditimbang diterapkan ke versi server terbaru lalu dikirim lewat PUT
+    // timbang. Daftar bal (sortir-items) tidak dikirim ulang dari salinan layar Timbangan; dulu bal yang baru
+    // ditambah Sortir di komputer lain di antara GET dan PUT ikut terhapus di server.
+    const timbangSaja = async (noBal: string[]): Promise<TransaksiPembelian> => {
+      const segar = await this.getTransaksiSatu(newTx.transaksi_id);
+      if (!segar) return perbarui(true);
+      const kunci = (it: TransaksiItemBal) => String(it.no_bal).toUpperCase();
+      const target = new Set(noBal.map((n) => n.toUpperCase()));
+      const hilang = [...target].filter((k) => !(segar.items || []).some((it) => kunci(it) === k));
+      if (hilang.length > 0) throw new Error(`Bal ${hilang.join(', ')} sudah dihapus atau diganti nomornya di Sortir (Kupon ${newTx.no_kupon}); berat tidak disimpan`);
+      const dariLayar = new Map((mergeKuponParalel(newTx, segar, { incomingDariServer: true }).items || []).map((it) => [kunci(it), it]));
+      const items = (segar.items || []).map((it) => (target.has(kunci(it)) ? { ...(dariLayar.get(kunci(it)) ?? it), item_id: it.item_id } : it));
+      return this.updateTimbangTransaksi(hitungUlangKupon(segar, items));
+    };
+
     let terakhir: TransaksiPembelian;
     if (!oldTx) {
       terakhir = await buatBaru(true);
@@ -636,6 +651,8 @@ export class ErpApiService {
         console.warn('Daftar bal belum terkirim sebelum pelunasan, dilanjutkan ke pelunasan:', err);
         terakhir = newTx;
       }
+    } else if (options?.hanyaTimbang?.length) {
+      terakhir = await timbangSaja(options.hanyaTimbang);
     } else {
       terakhir = await perbarui(true);
     }
@@ -987,9 +1004,9 @@ export class ErpApiService {
   }
 
   /**
-   * Gabungkan data DO dari server ke data lokal. Server menjadi acuan untuk semua nilai yang dikirimnya;
-   * rincian yang tidak disimpan server (petugas, rincian grade) tetap memakai data lokal. Nilai kosong / 0
-   * dari server diabaikan.
+   * Gabungkan data DO dari server ke data lokal. Server menjadi acuan untuk semua nilai yang dikirimnya, termasuk
+   * null (dikosongkan di perangkat lain); rincian yang tidak disimpan server (petugas, rincian grade) tetap memakai
+   * data lokal. Hanya string kosong, 0, dan daftar kosong dari server yang diabaikan.
    */
   public static gabungPengirimanServer(
     lokal: PengirimanBarang | undefined,
@@ -1000,7 +1017,7 @@ export class ErpApiService {
     (Object.keys(server) as (keyof PengirimanBarang)[]).forEach((k) => {
       const v = server[k];
       const kosong =
-        v === undefined || v === null || v === '' ||
+        v === undefined || v === '' ||
         (typeof v === 'number' && v === 0) ||
         (Array.isArray(v) && v.length === 0);
       if (!kosong) (hasil as any)[k] = v;
@@ -1022,8 +1039,10 @@ export class ErpApiService {
   }
 
   /**
-   * Gabungkan batch sample dari server ke data lokal. Server menjadi acuan untuk ID dan hasil
-   * evaluasi pabrik; No. Surat Sample yang diketik manual serta rincian bal tetap dari data lokal.
+   * Gabungkan batch sample dari server ke data lokal. Semua kolom yang disimpan server menjadi acuan, termasuk yang
+   * dikosongkan atau dicabut di perangkat lain (tanda sudah DO, alasan tolak, harga deal, catatan); dulu salinan
+   * lokal menang bila nilai server kosong, sehingga tiap komputer menampilkan isinya sendiri dan simpanan berikutnya
+   * menulis nilai basi itu balik ke server. Dari salinan lokal hanya rincian bal yang tidak dikirim server.
    */
   public static gabungBatchServer(
     lokal: BatchPengirimanSample | undefined,
@@ -1040,20 +1059,17 @@ export class ErpApiService {
       return {
         ...lk,
         sample_item_id: sv.sample_item_id || lk.sample_item_id,
-        status_item: sv.status_item || lk.status_item,
-        harga_tawaran_kg: sv.harga_tawaran_kg || lk.harga_tawaran_kg,
-        harga_deal_kg: sv.harga_deal_kg ?? lk.harga_deal_kg,
-        kode_harga_jual: sv.kode_harga_jual || lk.kode_harga_jual,
-        alasan_tolak: sv.alasan_tolak ?? lk.alasan_tolak,
-        catatan_nego: sv.catatan_nego ?? lk.catatan_nego,
-        tanggal_evaluasi: sv.tanggal_evaluasi ?? lk.tanggal_evaluasi,
-        sudah_dikirim_do: Boolean(sv.sudah_dikirim_do || lk.sudah_dikirim_do),
+        status_item: sv.status_item,
+        harga_tawaran_kg: sv.harga_tawaran_kg,
+        harga_deal_kg: sv.harga_deal_kg,
+        kode_harga_jual: sv.kode_harga_jual,
+        alasan_tolak: sv.alasan_tolak,
+        catatan_nego: sv.catatan_nego,
+        tanggal_evaluasi: sv.tanggal_evaluasi,
+        sudah_dikirim_do: sv.sudah_dikirim_do,
       };
     });
     const disetujui = items.filter((it) => it.status_item === 'disetujui');
-    // Data batch yang disimpan server menjadi acuan, supaya perubahan dari komputer lain (tujuan, No. Surat,
-    // status Draft/final, dll.) terlihat di sini. Perubahan di perangkat ini yang belum terkirim dijaga
-    // terpisah oleh antrean (overlayBatchSample), jadi tidak tertimpa.
     return {
       ...lokal,
       batch_id: server.batch_id || lokal.batch_id,
@@ -1063,13 +1079,13 @@ export class ErpApiService {
         ? lokal.kode_batch
         : server.kode_batch || lokal.kode_batch,
       tujuan_buyer: server.tujuan_buyer || lokal.tujuan_buyer,
-      permintaan_buyer: server.permintaan_buyer ?? lokal.permintaan_buyer,
+      permintaan_buyer: server.permintaan_buyer,
       tanggal_kirim: server.tanggal_kirim || lokal.tanggal_kirim,
       dikirim_oleh: server.dikirim_oleh || lokal.dikirim_oleh,
       status: statusSetelahSinkron(lokal.status, server.status),
-      tanggal_respon: server.tanggal_respon || lokal.tanggal_respon,
-      petugas_qc_pabrik: server.petugas_qc_pabrik || lokal.petugas_qc_pabrik,
-      catatan: server.catatan || lokal.catatan,
+      tanggal_respon: server.tanggal_respon,
+      petugas_qc_pabrik: server.petugas_qc_pabrik,
+      catatan: server.catatan,
       items,
       total_sample_bal: items.length,
       total_bal_disetujui: disetujui.length,

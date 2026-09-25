@@ -305,6 +305,18 @@ export function pilihGantiTikar(
     gt_diubah_pada: cap > 0 ? cap : undefined,
   };
 }
+/**
+ * Grade & harga bal mengikuti `incoming` (lihat gabungBeratBal), kecuali grade yang sengaja diganti di Sortir
+ * (`grade_diubah_pada`): yang lebih baru menang. Tanpa ini, penggabungan dengan versi server sesaat sebelum kirim
+ * (erpApi.syncTransaksi) mengembalikan grade yang baru diedit ke grade lama server.
+ */
+function pilihGrade(hasil: TransaksiItemBal, lama: TransaksiItemBal, baru: TransaksiItemBal): TransaksiItemBal {
+  const pemenang = pemenangCapWaktu(lama.grade_diubah_pada || 0, baru.grade_diubah_pada || 0);
+  if (!pemenang) return hasil;
+  const { kode_grade, harga_per_kg, grade_diubah_pada } = pemenang === 'baru' ? baru : lama;
+  return { ...hasil, kode_grade, harga_per_kg, grade_diubah_pada };
+}
+
 export function mergeKuponParalel(
   prev: TransaksiPembelian | undefined,
   incoming: TransaksiPembelian,
@@ -361,7 +373,7 @@ export function mergeKuponParalel(
       byNoBal.set(key, it);
       continue;
     }
-    byNoBal.set(key, pilihGantiTikar(gabungBeratBal(old, it), old, it, opsi));
+    byNoBal.set(key, pilihGrade(pilihGantiTikar(gabungBeratBal(old, it), old, it, opsi), old, it));
   }
 
   const rank: Record<string, number> = { proses_sortir: 1, menunggu_timbang: 2, lengkap: 3 };

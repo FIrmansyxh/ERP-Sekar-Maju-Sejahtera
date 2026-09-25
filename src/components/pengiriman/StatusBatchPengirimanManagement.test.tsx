@@ -9,7 +9,7 @@ const buatProps = (extra: Partial<React.ComponentProps<typeof StatusBatchPengiri
   pengirimanList: [],
   barangList: [buatBal('B1', { status_stok: 'keluar' }), buatBal('B2', { status_stok: 'keluar' })],
   hargaJualList: [],
-  onUpdateBatchSample: vi.fn(),
+  onUpdateBatchSample: vi.fn().mockResolvedValue(true),
   onUpdatePengirimanStatus: vi.fn(),
   onNavigateToPengirimanWithBatch: vi.fn(),
   onEditBatchSample: vi.fn(),
@@ -129,6 +129,21 @@ describe('Status & Detail Batch: tab Batch Sample & Reclass menampilkan semua da
     const [batchTersimpan] = (props.onUpdateBatchSample as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(batchTersimpan.items.map((it: { status_item: string }) => it.status_item)).toEqual(['disetujui', 'disetujui']);
     expect(batchTersimpan.status).toBe('diproses');
+  });
+
+  it('hasil sortir yang ditolak server tidak dinyatakan tersimpan dan tetap bisa disimpan ulang', async () => {
+    // Regresi 2026-09-25: dulu "berhasil disimpan" tampil sebelum server menjawab, jadi hasil sortir yang gagal
+    // terkirim hanya ada di layar komputer ini
+    const props = await bukaTabDetail(buatProps({ batchSampleList: batchList, onUpdateBatchSample: vi.fn().mockResolvedValue(false) }));
+    await userEvent.click(within(screen.getByText('SAMPLE-1').closest('tr') as HTMLElement).getByRole('button', { name: /Detail/ }));
+
+    await userEvent.click(screen.getByRole('button', { name: /ACC Semua/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Ya, ACC Semua' }));
+    await userEvent.click(screen.getByRole('button', { name: /Simpan Hasil Sortir Buyer/ }));
+
+    expect(props.onUpdateBatchSample).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/berhasil disimpan/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Simpan Hasil Sortir Buyer/ })).toBeInTheDocument();
   });
 
   it('Detail membuka satu batch dan dapat kembali ke daftar', async () => {

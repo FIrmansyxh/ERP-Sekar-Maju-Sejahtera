@@ -39,13 +39,13 @@ export const apakahServerKenalDraft = (): boolean | null => serverKenalDraft;
 
 /**
  * Status batch setelah digabung dengan data server. Server yang menyimpan Draft adalah acuan (batch yang
- * difinalkan di komputer lain harus terlihat final di sini). Hanya untuk server lama yang tidak mengenal Draft
- * (membalas 'sample'), Draft lokal dipertahankan selama server belum menunjukkan tahap yang lebih lanjut.
+ * difinalkan di komputer lain harus terlihat final di sini). Hanya bila server sudah terbukti menolak Draft (server
+ * lama, membalas 'sample'), Draft lokal dipertahankan selama server belum menunjukkan tahap yang lebih lanjut.
  * Perubahan status di perangkat ini yang belum terkirim dijaga terpisah oleh antrean (overlay).
  */
 export function statusSetelahSinkron(lokal: StatusBatchSample | undefined, server: StatusBatchSample | undefined): StatusBatchSample {
   if (server === 'draft') return 'draft';
-  if (lokal === 'draft' && serverKenalDraft !== true && (!server || server === 'sample')) return 'draft';
+  if (lokal === 'draft' && serverKenalDraft === false && (!server || server === 'sample')) return 'draft';
   return server || lokal || 'sample';
 }
 

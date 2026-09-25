@@ -154,6 +154,11 @@ export interface TransaksiItemBal {
    * di Timbangan). Disimpan juga di server; perubahan GT yang lebih lama dari ini tidak pernah menimpa GT.
    */
   gt_diubah_pada?: number;
+  /**
+   * Waktu (ms) grade bal sengaja diganti di Sortir (edit bal). Hanya di perangkat ini, tidak disimpan server;
+   * selama masih baru, grade & harga ini tidak ditimpa grade lama saat digabung dengan versi server.
+   */
+  grade_diubah_pada?: number;
   lokasi_simpan?: string;
   sample_label_code?: string; // Kode barcode sample identik
   sample_label_printed?: boolean;
@@ -227,6 +232,11 @@ export interface SaveTransaksiMeta {
    * termasuk bal yang dihapus atau diganti nomornya, tanpa digabung dengan versi sebelumnya.
    */
   timpaPenuh?: boolean;
+  /**
+   * No Bal yang hasil timbangnya saja yang disimpan (Timbangan): dikirim lewat PUT timbang di atas versi server
+   * terbaru, tanpa mengirim ulang daftar bal, supaya bal yang baru ditambah Sortir di komputer lain tidak terhapus.
+   */
+  hanyaTimbang?: string[];
 }
 
 export type StatusSample ='sample' | 'dikirim' | 'diterima' | 'disetujui' | 'ditolak' | 'nego';

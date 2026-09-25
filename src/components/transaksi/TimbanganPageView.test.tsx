@@ -4,7 +4,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TimbanganPageView } from './TimbanganPageView';
 import { buatKupon } from '../../test/fixtures';
-import { TransaksiItemBal, TransaksiPembelian } from '../../types';
+import { SaveTransaksiMeta, TransaksiItemBal, TransaksiPembelian } from '../../types';
 
 const itemBal = (no: string, extra: Partial<TransaksiItemBal> = {}) =>
   ({
@@ -32,10 +32,15 @@ function Induk({
   initialBalNo,
   initialKuponNo,
   awal,
+  hasilSimpan = true,
+  onSimpan,
 }: {
   initialBalNo?: string;
   initialKuponNo?: string;
   awal?: Partial<TransaksiPembelian>;
+  /** Jawaban server tiruan: false = simpanan ditolak */
+  hasilSimpan?: boolean;
+  onSimpan?: (tx: TransaksiPembelian, meta?: SaveTransaksiMeta) => void;
 }) {
   const [daftar, setDaftar] = useState<TransaksiPembelian[]>([{ ...kupon(), ...awal }]);
   return (
@@ -47,7 +52,9 @@ function Induk({
       userRole="superadmin"
       initialBalNo={initialBalNo}
       initialKuponNo={initialKuponNo}
-      onSaveTransaksi={async (tx) => {
+      onSaveTransaksi={async (tx, _bal, meta) => {
+        onSimpan?.(tx, meta);
+        if (!hasilSimpan) return false;
         setDaftar((prev) => prev.map((t) => (t.transaksi_id === tx.transaksi_id ? tx : t)));
         return true;
       }}
@@ -80,6 +87,41 @@ describe('Timbangan: panel Penimbangan Bal tidak pernah terisi otomatis', () => 
     await waitFor(() => expect(screen.getByText('Tidak ada bal dipilih')).toBeInTheDocument());
     expect(screen.queryByText(/Penimbangan Bal:/)).not.toBeInTheDocument();
     expect(screen.queryByText('Siap Ditimbang')).not.toBeInTheDocument();
+  });
+});
+
+describe('Timbangan: perubahan langsung tersimpan ke server', () => {
+  // Regresi 2026-09-25: centang Ganti Tikar dulu hanya ada di layar sampai bal ditimbang
+  it('centang Ganti Tikar langsung disimpan, tidak menunggu bal ditimbang', async () => {
+    const onSimpan = vi.fn();
+    render(<Induk initialBalNo="TS113" onSimpan={onSimpan} />);
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /Ada Ganti Tikar/ }));
+
+    await waitFor(() => expect(onSimpan).toHaveBeenCalledTimes(1));
+    const [tx] = onSimpan.mock.calls[0] as [TransaksiPembelian];
+    expect(tx.items?.find((it) => it.no_bal === 'TS113')?.ganti_tikar).toBe(true);
+  });
+
+  it('centang Ganti Tikar yang ditolak server dikembalikan, tidak tinggal di layar saja', async () => {
+    render(<Induk initialBalNo="TS113" hasilSimpan={false} />);
+    const centang = screen.getByRole('checkbox', { name: /Ada Ganti Tikar/ });
+
+    await userEvent.click(centang);
+
+    await waitFor(() => expect(centang).not.toBeChecked());
+    expect(screen.getByText(/belum tersimpan ke server/)).toBeInTheDocument();
+  });
+
+  it('simpan berat hanya mengirim hasil timbang bal itu (daftar bal tidak dikirim ulang)', async () => {
+    const onSimpan = vi.fn();
+    render(<Induk initialBalNo="TS113" onSimpan={onSimpan} />);
+
+    await userEvent.type(screen.getAllByPlaceholderText('0.0')[0], '34');
+    await userEvent.click(screen.getByRole('button', { name: /Simpan Timbangan/ }));
+
+    await waitFor(() => expect(onSimpan).toHaveBeenCalledTimes(1));
+    expect(onSimpan.mock.calls[0][1]).toMatchObject({ hanyaTimbang: ['TS113'] });
   });
 });
 

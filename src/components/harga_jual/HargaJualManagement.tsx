@@ -20,7 +20,8 @@ import { hariIniLokal } from '../../utils/rentangTanggal';
 
 interface HargaJualManagementProps {
   hargaJualList: MasterHargaJual[];
-  onSaveHargaJual: (item: MasterHargaJual) => void;
+  /** true bila server menerima; bila tidak, formulir tetap terbuka. */
+  onSaveHargaJual: (item: MasterHargaJual) => Promise<boolean>;
   onDeleteHargaJual?: (id: string) => void;
 }
 
@@ -92,7 +93,7 @@ export const HargaJualManagement: React.FC<HargaJualManagementProps> = ({
   };
 
   // Save Item
-  const handleSaveForm = (e: React.FormEvent) => {
+  const handleSaveForm = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formKode.trim()) {
       setErrorMessage('Kode harga jual wajib diisi!');
@@ -125,7 +126,7 @@ export const HargaJualManagement: React.FC<HargaJualManagementProps> = ({
       status_aktif: formStatusAktif,
     };
 
-    onSaveHargaJual(payload);
+    if (!(await onSaveHargaJual(payload))) return;
     setIsModalOpen(false);
     setSuccessToast(editingItem ? 'Data Master Harga Jual berhasil diperbarui' : 'Master Harga Jual baru berhasil ditambahkan');
     setTimeout(() => setSuccessToast(''), 3500);
