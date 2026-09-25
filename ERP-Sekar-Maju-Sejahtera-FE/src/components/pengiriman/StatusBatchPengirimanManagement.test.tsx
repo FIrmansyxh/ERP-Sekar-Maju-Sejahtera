@@ -131,6 +131,21 @@ describe('Status & Detail Batch: tab Batch Sample & Reclass menampilkan semua da
     expect(batchTersimpan.status).toBe('diproses');
   });
 
+  it('hasil sortir yang ditolak server tidak dinyatakan tersimpan dan tetap bisa disimpan ulang', async () => {
+    // Regresi: dulu "berhasil disimpan" tampil sebelum server menjawab, jadi hasil sortir yang gagal terkirim hanya
+    // ada di layar komputer ini
+    const props = await bukaTabDetail(buatProps({ batchSampleList: batchList, onUpdateBatchSample: vi.fn().mockResolvedValue(false) }));
+    await userEvent.click(within(screen.getByText('SAMPLE-1').closest('tr') as HTMLElement).getByRole('button', { name: /Detail/ }));
+
+    await userEvent.click(screen.getByRole('button', { name: /ACC Semua/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Ya, ACC Semua' }));
+    await userEvent.click(screen.getByRole('button', { name: /Simpan Hasil Sortir Buyer/ }));
+
+    expect(props.onUpdateBatchSample).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/berhasil disimpan/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Simpan Hasil Sortir Buyer/ })).toBeInTheDocument();
+  });
+
   it('Detail membuka satu batch dan dapat kembali ke daftar', async () => {
     await bukaTabDetail();
     await userEvent.click(within(screen.getByText('SAMPLE-1').closest('tr') as HTMLElement).getByRole('button', { name: /Detail/ }));
