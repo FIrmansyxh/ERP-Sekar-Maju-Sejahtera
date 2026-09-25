@@ -1106,7 +1106,7 @@ export default function App() {
     // Direct-to-Backend: Kirim ke BE terlebih dahulu
     let syncResult: { syncedTx: TransaksiPembelian; fromBackend: boolean };
     try {
-      syncResult = await ErpApiService.syncTransaksi(newTx, oldTx, { tanpaCekKesehatan: true });
+      syncResult = await ErpApiService.syncTransaksi(newTx, oldTx, { tanpaCekKesehatan: true, hanyaTimbang: meta.hanyaTimbang });
       if (!syncResult.fromBackend) {
         showToast('Gagal terhubung ke server. Pastikan internet lancar.', 'info');
         return false;
@@ -1411,13 +1411,13 @@ export default function App() {
   const segarkanDataModulRef = useRef(segarkanDataModul);
   segarkanDataModulRef.current = segarkanDataModul;
 
-  // Data dari perangkat lain: disegarkan setiap kali menu dibuka, lalu berkala selama tab terlihat. Sortir tidak
-  // disegarkan berkala (keputusan pemilik): di sana kupon disegarkan saat menyimpan (lihat syncTransaksi) dan saat
-  // menu dibuka. Timbangan dan menu Pengiriman sudah punya penyegaran berkalanya sendiri.
+  // Data dari perangkat lain: disegarkan setiap kali menu dibuka, lalu berkala selama tab terlihat, termasuk Sortir
+  // (dulu tidak, sehingga bal yang baru ditimbang atau ditambah di komputer lain tidak terlihat di Sortir dan bal
+  // yang sudah ditimbang masih bisa dihapus). Timbangan dan menu Pengiriman punya penyegaran berkalanya sendiri.
   useEffect(() => {
     if (!currentUser) return;
     void segarkanDataModulRef.current(activeModuleId);
-    const tanpaBerkala = new Set(['modul-0-sortir', 'modul-0-timbangan', 'modul-4-sample', 'modul-status-batch', 'modul-5-pengiriman']);
+    const tanpaBerkala = new Set(['modul-0-timbangan', 'modul-4-sample', 'modul-status-batch', 'modul-5-pengiriman']);
     if (tanpaBerkala.has(activeModuleId) || activeModuleId.startsWith('modul-6-')) return;
     const segarkan = () => {
       if (document.visibilityState === 'visible') void segarkanDataModulRef.current(activeModuleId);

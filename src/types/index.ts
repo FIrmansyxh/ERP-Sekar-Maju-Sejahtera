@@ -232,6 +232,11 @@ export interface SaveTransaksiMeta {
    * termasuk bal yang dihapus atau diganti nomornya, tanpa digabung dengan versi sebelumnya.
    */
   timpaPenuh?: boolean;
+  /**
+   * No Bal yang hasil timbangnya saja yang disimpan (Timbangan): dikirim lewat PUT timbang di atas versi server
+   * terbaru, tanpa mengirim ulang daftar bal, supaya bal yang baru ditambah Sortir di komputer lain tidak terhapus.
+   */
+  hanyaTimbang?: string[];
 }
 
 export type StatusSample ='sample' | 'dikirim' | 'diterima' | 'disetujui' | 'ditolak' | 'nego';

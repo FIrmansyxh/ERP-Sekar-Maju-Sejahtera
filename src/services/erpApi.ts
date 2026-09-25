@@ -48,7 +48,7 @@ import {
   saveCurrentUser,
   authenticateUser as authenticateLocalUser
 } from '../utils/storage';
-import { lengkapiBalDariKupon, mergeKuponParalel, pulihkanStatusSampleLama, sortTransaksiItemsByInputOrder } from '../utils/kuponSortir';
+import { hitungUlangKupon, lengkapiBalDariKupon, mergeKuponParalel, pulihkanStatusSampleLama, sortTransaksiItemsByInputOrder } from '../utils/kuponSortir';
 import { balDihapusDariKupon, konfirmasiBalDihapus } from '../utils/balDihapus';
 import { generatePetaniId } from '../utils/formatters';
 import { POTONGAN_GANTI_TIKAR, POTONGAN_KULI_PER_BAL, POTONGAN_TALI_PER_BAL } from '../config/aturanTimbang';
@@ -555,13 +555,13 @@ export class ErpApiService {
    * Mengirim keadaan terakhir sebuah kupon ke server. Dipanggil oleh antrean sinkron
    * (antrianSinkron.ts), yang menjamin hanya satu permintaan per kupon berjalan dan mengulang bila gagal.
    *
-   * Urutan pasti: (buat baru | ubah daftar bal + hasil timbang) lalu pelunasan bila baru dibayar.
+   * Urutan pasti: (buat baru | ubah daftar bal + hasil timbang | hasil timbang saja) lalu pelunasan bila baru dibayar.
    * Melempar galat bila gagal; fromBackend=false hanya bila server memang tidak terjangkau.
    */
   public static async syncTransaksi(
     newTx: TransaksiPembelian,
     oldTx?: { status_pembayaran?: TransaksiPembelian['status_pembayaran'] },
-    options?: { tanpaCekKesehatan?: boolean }
+    options?: { tanpaCekKesehatan?: boolean; hanyaTimbang?: string[] }
   ): Promise<{ syncedTx: TransaksiPembelian; fromBackend: boolean }> {
     // Antrean mencoba permintaan sungguhan; cek kesehatan yang sekali gagal tidak boleh memblokir simpanan
     if (!options?.tanpaCekKesehatan) {
@@ -624,6 +624,21 @@ export class ErpApiService {
       }
     };
 
+    // Hasil timbang saja (Timbangan): bal yang ditimbang diterapkan ke versi server terbaru lalu dikirim lewat PUT
+    // timbang. Daftar bal (sortir-items) tidak dikirim ulang dari salinan layar Timbangan; dulu bal yang baru
+    // ditambah Sortir di komputer lain di antara GET dan PUT ikut terhapus di server.
+    const timbangSaja = async (noBal: string[]): Promise<TransaksiPembelian> => {
+      const segar = await this.getTransaksiSatu(newTx.transaksi_id);
+      if (!segar) return perbarui(true);
+      const kunci = (it: TransaksiItemBal) => String(it.no_bal).toUpperCase();
+      const target = new Set(noBal.map((n) => n.toUpperCase()));
+      const hilang = [...target].filter((k) => !(segar.items || []).some((it) => kunci(it) === k));
+      if (hilang.length > 0) throw new Error(`Bal ${hilang.join(', ')} sudah dihapus atau diganti nomornya di Sortir (Kupon ${newTx.no_kupon}); berat tidak disimpan`);
+      const dariLayar = new Map((mergeKuponParalel(newTx, segar, { incomingDariServer: true }).items || []).map((it) => [kunci(it), it]));
+      const items = (segar.items || []).map((it) => (target.has(kunci(it)) ? { ...(dariLayar.get(kunci(it)) ?? it), item_id: it.item_id } : it));
+      return this.updateTimbangTransaksi(hitungUlangKupon(segar, items));
+    };
+
     let terakhir: TransaksiPembelian;
     if (!oldTx) {
       terakhir = await buatBaru(true);
@@ -636,6 +651,8 @@ export class ErpApiService {
         console.warn('Daftar bal belum terkirim sebelum pelunasan, dilanjutkan ke pelunasan:', err);
         terakhir = newTx;
       }
+    } else if (options?.hanyaTimbang?.length) {
+      terakhir = await timbangSaja(options.hanyaTimbang);
     } else {
       terakhir = await perbarui(true);
     }

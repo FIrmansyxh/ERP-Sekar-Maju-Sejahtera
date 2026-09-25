@@ -305,6 +305,12 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
   const sedangMembukaKupon = useRef(false);
   const handleAddBalItem = async () => {
     if (sedangMembukaKupon.current) return;
+    // Enter di kolom Mutu tidak ikut terkunci seperti tombol Tambah: simpanan kedua yang berjalan bersamaan disusun
+    // dari daftar bal yang belum memuat bal sebelumnya, sehingga bal itu bisa hilang di server
+    if (isSaving) {
+      setScanFeedback({ text: 'Bal sebelumnya masih disimpan ke server. Tunggu sebentar lalu tekan Enter lagi.', isError: false });
+      return;
+    }
     if (!selectedGrade) {
       document.getElementById('grade-input')?.focus();
       setScanFeedback({ text: 'Silakan pilih Mutu Barang terlebih dahulu.', isError: false });
@@ -608,8 +614,11 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
 
   const handleRemoveItem = async (itemId: string) => {
     if (!openTx) return;
-    const item = balItems.find((it) => it.item_id === itemId);
-    if (!item) return;
+    const lokal = balItems.find((it) => it.item_id === itemId);
+    if (!lokal) return;
+    // Status timbang dicek ulang ke server: bal bisa saja baru ditimbang di komputer lain sejak layar ini disegarkan
+    const segar = await onRefreshTransaksiList?.().catch(() => undefined);
+    const item = segar?.find((t) => t.transaksi_id === openTx.transaksi_id)?.items?.find((it) => it.item_id === itemId) ?? lokal;
     // Bal yang sudah dikirim lewat Surat Jalan tidak boleh hilang dari kupon
     const balGudang = barangList.find((b) => (item.barang_id && b.barang_id === item.barang_id) || b.no_bal === item.no_bal);
     if (balGudang && isBalTerkirim(balGudang)) {

@@ -191,6 +191,50 @@ describe('syncTransaksi: menyegarkan kupon dari server sebelum kirim (bukan lewa
     expect(verifikasiHasil(syncedTx, kuponLayar)).toEqual([]);
   });
 
+  it('hasil timbang saja: hanya PUT timbang di atas versi server terbaru, bal baru dari Sortir tidak ikut terhapus', async () => {
+    // Regresi 2026-09-25: Timbangan dulu mengirim ulang seluruh daftar bal (sortir-items) dari salinan layarnya;
+    // bal yang ditambah Sortir di komputer lain di antara GET dan PUT ikut terhapus di server
+    const kuponLayar = buatKupon('TRX-7', {
+      status_tahap: 'menunggu_timbang',
+      items: [item({ item_id: 'TRX-7-BAL-01', no_bal: '1', berat_kg: 40, berat_bruto_kg: 42, potongan_tara_kg: 2, status_timbang: 'selesai_timbang', diubah_lokal_pada: Date.now() })],
+    });
+    const serverItems = [
+      rawServerItem({ item_id: 'TRX-7-BAL-01', no_bal: '1', ganti_tikar: false, potongan_tikar: 0 }),
+      rawServerItem({ item_id: 'TRX-7-BAL-02', no_bal: '2', ganti_tikar: false, potongan_tikar: 0 }),
+    ];
+    vi.spyOn(apiClient.api, 'get').mockResolvedValue({
+      status: 'success',
+      data: { transaksi_id: 'TRX-7', no_kupon: 'KUPTRX-7', status_tahap: 'menunggu_timbang', items: serverItems },
+    });
+    const put = vi.spyOn(apiClient.api, 'put').mockImplementation(async (url: string, body?: unknown) => {
+      if (url.includes('/timbang')) return { status: 'success', data: { transaksi_id: 'TRX-7', no_kupon: 'KUPTRX-7', items: (body as { items: unknown[] }).items } };
+      throw new Error(`URL tak terduga dalam tes: ${url}`);
+    });
+
+    await ErpApiService.syncTransaksi(kuponLayar, { status_pembayaran: 'belum_lunas' }, { tanpaCekKesehatan: true, hanyaTimbang: ['1'] });
+
+    expect(put).toHaveBeenCalledTimes(1);
+    const [url, body] = put.mock.calls[0] as [string, { status_tahap: string; items: any[] }];
+    expect(url).toContain('/timbang');
+    expect(body.items.find((it) => it.no_bal === '1')).toMatchObject({ berat_kg: 40, berat_bruto_kg: 42 });
+    expect(body.items.find((it) => it.no_bal === '2')).toMatchObject({ berat_kg: 0 });
+    expect(body.status_tahap).toBe('menunggu_timbang');
+  });
+
+  it('hasil timbang saja: bal yang sudah dihapus Sortir tidak dikirim dan alasannya jelas', async () => {
+    const kuponLayar = buatKupon('TRX-8', { items: [item({ item_id: 'TRX-8-BAL-01', no_bal: '1', berat_kg: 40, diubah_lokal_pada: Date.now() })] });
+    vi.spyOn(apiClient.api, 'get').mockResolvedValue({
+      status: 'success',
+      data: { transaksi_id: 'TRX-8', no_kupon: 'KUPTRX-8', items: [rawServerItem({ item_id: 'TRX-8-BAL-02', no_bal: '2' })] },
+    });
+    const put = vi.spyOn(apiClient.api, 'put');
+
+    await expect(
+      ErpApiService.syncTransaksi(kuponLayar, { status_pembayaran: 'belum_lunas' }, { tanpaCekKesehatan: true, hanyaTimbang: ['1'] })
+    ).rejects.toThrow(/dihapus/);
+    expect(put).not.toHaveBeenCalled();
+  });
+
   it('tetap mengirim data layar apa adanya bila kupon gagal disegarkan dari server (offline sesaat)', async () => {
     const bal = item({ ganti_tikar: true, potongan_tikar: 50000 });
     const kuponLayar = buatKupon('TRX-2', { items: [bal] });

@@ -19,7 +19,7 @@ import {
 import { TransaksiPembelian, Petani, TabelHarga, Barang, TransaksiItemBal, UserRole, User as UserType, SaveTransaksiMeta } from '../../types';
 import { hitungPotonganTaraKg, normalizeKg, getInfoAturanTara } from '../../utils/formatters';
 import { recordAuditLog } from '../../utils/storage';
-import { buildBarangDariItem, isKuponProsesSortir, terapkanHasilTimbang } from '../../utils/kuponSortir';
+import { buildBarangDariItem, hitungUlangKupon, isKuponProsesSortir, terapkanHasilTimbang } from '../../utils/kuponSortir';
 import { alasanKuponTerkunciBayar } from '../../utils/statusBayar';
 import { POTONGAN_GANTI_TIKAR, POTONGAN_KULI_PER_BAL, POTONGAN_TALI_PER_BAL } from '../../config/aturanTimbang';
 
@@ -466,7 +466,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
   
   // Toggle Ganti Tikar — simpan segera ke state + BE (bukan hanya UI lokal)
   const handleToggleGantiTikar = async (itemId: string) => {
-    if (!currentTx) return;
+    if (!currentTx || isSaving) return;
     if (alasanKuponTerkunciBayar(currentTx)) return;
     const target = workingItems.find((it) => it.item_id === itemId);
     if (!target || (target.berat_kg || 0) > 0) return;
@@ -499,6 +499,17 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
       setPotTikarInput(nextGanti ? POTONGAN_GANTI_TIKAR : '');
     }
 
+    // Langsung disimpan ke server. Dulu centang ini hanya ada di layar sampai bal ditimbang: perangkat lain tidak
+    // melihatnya, dan centang hilang tertimpa penyegaran bila operator pindah ke bal lain sebelum menimbang.
+    setIsSaving(true);
+    const tersimpan = await onSaveTransaksi(hitungUlangKupon(currentTx, nextItems), [], { skipAudit: true, silent: true });
+    setIsSaving(false);
+    if (!tersimpan) {
+      setWorkingItems(workingItems);
+      if (itemId === activeItemId) setPotTikarInput(nextGanti ? '' : target.potongan_tikar || POTONGAN_GANTI_TIKAR);
+      setScanFeedback({ text: 'Ganti tikar belum tersimpan ke server, centang dikembalikan. Coba lagi.', isError: true });
+      return;
+    }
 
     setScanFeedback({
       text: nextGanti
@@ -801,7 +812,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     const success = await onSaveTransaksi(
       updatedTx,
       [buildBarangDariItem(updatedTx, weighedItem, barangList.find((b) => b.barang_id === weighedItem.barang_id))],
-      { skipAudit: true }
+      { skipAudit: true, hanyaTimbang: [activeBalItem.no_bal] }
     );
     setIsSaving(false);
     
