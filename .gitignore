@@ -1,0 +1,4 @@
+# Artefak yang tidak boleh masuk repositori. Folder FE dan BE punya .gitignore sendiri.
+/node_modules/
+/dist/
+/dummy-data/
