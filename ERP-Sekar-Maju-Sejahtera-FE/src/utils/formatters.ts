@@ -191,7 +191,7 @@ export function deteksiKodeAturanTara(noBal?: string, kodeGrade?: string): KodeA
 /**
  * Hitung potongan tara (bruto ke netto) dalam satuan kg:
  * - SB 2KG RATA (semua bobot)
- * - HF: 49 kg ke bawah = 3 kg, 50 ke atas = 5 kg, 60 ke atas = 6 kg
+ * - HF: 49 kg ke bawah = 3 kg, 50-59 kg = 4 kg, 60 ke atas = 5 kg
  * - TS: 30-49 kg = 4 kg, 50-60 kg = 5 kg, 60 kg ke atas = 6 kg
  * - T : SAMA DENGAN TS (<50 kg = 4 kg, 50-60 kg = 5 kg, >60 kg = 6 kg)
  * - Default: Mengikuti aturan umum (sama dengan HF)
@@ -224,11 +224,11 @@ export function hitungPotonganTaraKg(
     }
   }
 
-  // Kode bal HF dan kode lainnya (default): <= 49 kg = 3 kg, 50 ke atas (50-59.9 kg) = 5 kg, >= 60 kg = 6 kg
+  // Kode bal HF dan kode lainnya (default): <= 49 kg = 3 kg, 50-59.9 kg = 4 kg, >= 60 kg = 5 kg
   if (beratBruto >= 60) {
-    return 6.0;
-  } else if (beratBruto >= 50) {
     return 5.0;
+  } else if (beratBruto >= 50) {
+    return 4.0;
   } else {
     // 49 kg ke bawah
     return 3.0;
@@ -260,8 +260,8 @@ export function getInfoAturanTara(
       else if ((beratBruto || 0) >= 50) keterangan = 'Bobot 50–59.9 kg → Potongan 5.0 kg';
       else keterangan = 'Bobot <50 kg (30–49 kg) → Potongan 4.0 kg';
     } else {
-      if ((beratBruto || 0) >= 60) keterangan = 'Bobot ≥60 kg → Potongan 6.0 kg';
-      else if ((beratBruto || 0) >= 50) keterangan = 'Bobot 50–59.9 kg → Potongan 5.0 kg';
+      if ((beratBruto || 0) >= 60) keterangan = 'Bobot ≥60 kg → Potongan 5.0 kg';
+      else if ((beratBruto || 0) >= 50) keterangan = 'Bobot 50–59.9 kg → Potongan 4.0 kg';
       else keterangan = 'Bobot ≤49 kg → Potongan 3.0 kg';
     }
   }

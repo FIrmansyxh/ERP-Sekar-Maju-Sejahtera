@@ -137,10 +137,10 @@ pergantian akun tanpa kata sandi.
 |---|---|---|---|
 | SB | 2 kg | 2 kg | 2 kg |
 | TS dan T (batas atas 60,0 kg termasuk) | 4 kg | 5 kg | 6 kg |
-| HF dan kode lain (batas atas di bawah 60 kg) | 3 kg | 5 kg | 6 kg |
+| HF dan kode lain (batas atas di bawah 60 kg) | 3 kg | 4 kg | 5 kg |
 
-Artinya bal TS/T seberat tepat 60,0 kg kena tara 5 kg, sedangkan HF 60,0 kg kena 6 kg. Perbedaan ini
-masih menunggu konfirmasi pemilik (ada `it.todo` di `src/utils/potonganTara.test.ts`).
+Batas TS/T tepat di 60,0 kg (kode memberi 5 kg, teks "60 kg ke atas" menyebut 6 kg) masih menunggu
+konfirmasi pemilik (ada `it.todo` di `src/utils/potonganTara.test.ts`).
 
 **Potongan biaya per bal.** Kuli Rp 7.000, tali Rp 3.000, dan ganti tikar Rp 75.000 bila
 dipilih pada transaksi. Tarif ini didefinisikan satu kali di `src/config/aturanTimbang.ts`.

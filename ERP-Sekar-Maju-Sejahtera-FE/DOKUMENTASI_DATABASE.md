@@ -155,7 +155,7 @@ Model layar: `TransaksiPembelian` dan `TransaksiItemBal` (`src/types/index.ts`).
 Aturan hitung (sumber tunggal di FE, harus sama di server):
 
 ```
-tara       : SB = 2 kg; HF/lainnya bruto <50 = 3, 50-59 = 5, >=60 = 6; TS/T <50 = 4, 50-59 = 5, >=60 = 6
+tara       : SB = 2 kg; HF/lainnya bruto <50 = 3, 50-59 = 4, >=60 = 5; TS/T <50 = 4, 50-59 = 5, >=60 = 6
 netto      = bruto - tara            (kecuali is_netto_manual = true)
 total_kotor per bal = netto x harga_beli_per_kg
 potongan per bal    = kuli (7.000) + tali (3.000) + tikar (75.000 bila ganti tikar)

@@ -32,10 +32,14 @@ describe('hitungPotonganTaraKg', () => {
     expect(hitungPotonganTaraKg(61, false, 'TS113')).toBe(6);
   });
 
-  it('HF dan kode lain: 49 ke bawah = 3, 50-59 = 5, 60 ke atas = 6', () => {
+  it('HF dan kode lain: 49 ke bawah = 3, 50-59 = 4, 60 ke atas = 5', () => {
     expect(hitungPotonganTaraKg(40, false, 'HF1')).toBe(3);
-    expect(hitungPotonganTaraKg(50, false, 'HF1')).toBe(5);
-    expect(hitungPotonganTaraKg(60, false, 'HF1')).toBe(6);
+    expect(hitungPotonganTaraKg(49.9, false, 'HF1')).toBe(3);
+    expect(hitungPotonganTaraKg(50, false, 'HF1')).toBe(4);
+    expect(hitungPotonganTaraKg(59.9, false, 'HF1')).toBe(4);
+    expect(hitungPotonganTaraKg(60, false, 'HF1')).toBe(5);
+    expect(hitungPotonganTaraKg(75, false, 'HF1')).toBe(5);
+    expect(hitungPotonganTaraKg(55, false, 'A0001')).toBe(4);
   });
 
   it('bal belum ditimbang tidak dipotong (kecuali SB)', () => {

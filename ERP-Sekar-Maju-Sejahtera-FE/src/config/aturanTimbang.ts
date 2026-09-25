@@ -9,7 +9,7 @@ export const POTONGAN_GANTI_TIKAR = 75000;
 /**
  * Ketentuan Potongan Tara (Bruto ke Netto) per Kode Bal / Mutu:
  * - SB: 2 kg rata
- * - HF: 49 kg ke bawah = 3 kg, 50 ke atas = 5 kg, 60 ke atas = 6 kg
+ * - HF: 49 kg ke bawah = 3 kg, 50–59 kg = 4 kg, 60 ke atas = 5 kg
  * - TS: 30–49 kg = 4 kg, 50–59 kg = 5 kg, 60 kg ke atas = 6 kg
  * - T : Sama dengan TS
  * - Standar / Kode lain: Sama dengan HF
@@ -31,7 +31,7 @@ export const DAFTAR_ATURAN_TARA: Record<KodeAturanTara, AturanTaraDetail> = {
   HF: {
     kode: 'HF',
     label: 'Kode HF',
-    deskripsi: '49 kg ke bawah: 3 kg | 50 ke atas: 5 kg | 60 ke atas: 6 kg',
+    deskripsi: '49 kg ke bawah: 3 kg | 50–59 kg: 4 kg | 60 ke atas: 5 kg',
   },
   TS: {
     kode: 'TS',
@@ -46,6 +46,6 @@ export const DAFTAR_ATURAN_TARA: Record<KodeAturanTara, AturanTaraDetail> = {
   DEFAULT: {
     kode: 'DEFAULT',
     label: 'Standar / Lainnya',
-    deskripsi: '49 kg ke bawah: 3 kg | 50 ke atas: 5 kg | 60 ke atas: 6 kg',
+    deskripsi: '49 kg ke bawah: 3 kg | 50–59 kg: 4 kg | 60 ke atas: 5 kg',
   },
 };
