@@ -189,8 +189,8 @@ Semua di bawah `/api/v1`, JSON, `Authorization: Bearer <token Sanctum>`. Batas w
 | `PUT /transaksi/{id}/timbang` | (lama) hasil timbang semua bal | Tidak dipakai FE lagi sejak 2026-09-24 (diganti `PATCH .../bal/{no_bal}`) |
 | `PUT /transaksi/{id}/bayar` | pelunasan Kasir | `metode_pembayaran`, `catatan_kasir`; sudah lunas = 200 tanpa perubahan; sortir belum ditutup / ada bal belum ditimbang = 422 |
 | `GET /barang`, `PUT /barang/{id}/status` | stok bal | |
-| `GET/POST /sample-batch`, `PUT /sample-batch/{id}`, `DELETE /sample-batch/{id}` | pengiriman sample; juga sumber angka sample di Dashboard dan Laporan Pengiriman | Server menyimpan `draft`, `batch_id` dan `kode_batch` (No. Surat Sample) dari FE, serta nama pengirim (`dikirim_oleh` dari FE disimpan di `dikirim_oleh_nama`). `items[]` menggantikan seluruh isi batch (bal baru masuk, yang hilang keluar); ID item dibuat server `{batch_id}-001`. Kirim ulang = perbarui. Bal di batch lain, kode harga jual yang belum ada, bal yang belum lunas, atau No. Surat kembar = 422 dengan pesan jelas. DELETE menghapus batch (bal tidak berubah). Server lama yang menolak Draft tetap ditangani FE (dikirim sebagai `sample`, Draft dijaga di aplikasi) |
-| `GET/POST /pengiriman` | Surat Jalan (DO) | Server memakai `pengiriman_id` dan `status` awal dari FE; kirim ulang = perbarui; No. SJ kembar atau bal di SJ lain = 422 |
+| `GET/POST /sample-batch`, `PUT /sample-batch/{id}`, `DELETE /sample-batch/{id}` | pengiriman sample; juga sumber angka sample di Dashboard dan Laporan Pengiriman | Server menyimpan `draft`, `batch_id` dan `kode_batch` (No. Surat Sample) dari FE, serta nama pengirim (`dikirim_oleh` dari FE disimpan di `dikirim_oleh_nama`). `items[]` menggantikan seluruh isi batch (bal baru masuk, yang hilang keluar); ID item dibuat server `{batch_id}-001`. Kirim ulang = perbarui. Bal di batch lain, kode harga jual yang belum ada, bal yang belum lunas, atau No. Surat kembar = 422 dengan pesan jelas. DELETE menghapus batch (bal tidak berubah). Server lama yang menolak Draft tetap ditangani FE (dikirim sebagai `sample`, Draft dijaga di aplikasi). Kolom `versi` naik tiap perubahan (juga isi batch); `PUT` yang membawa `versi` lama = 409. FE belum mengirim `versi` batch |
+| `GET/POST /pengiriman` | Surat Jalan (DO) | Server memakai `pengiriman_id` dan `status` awal dari FE; kirim ulang = perbarui; No. SJ kembar atau bal di SJ lain = 422. `PUT /pengiriman/{id}` dari formulir edit membawa `versi` saat formulir dibuka; bila Surat Jalan sudah diubah komputer lain = 409 |
 | `PUT /pengiriman/{id}` | edit Surat Jalan yang **belum Selesai** | Body sama dengan `POST /pengiriman`; server mengganti seluruh isi DO, bal yang dikeluarkan kembali `di_gudang`; 422 bila `selesai` atau bal dipakai DO lain |
 | `DELETE /pengiriman/{id}` | batalkan Surat Jalan yang **belum Selesai** | Hapus DO beserta itemnya, bal kembali `di_gudang`; 422 bila `selesai` |
 | `PUT /pengiriman/{id}/status` | ubah status Surat Jalan | Body `{ status }`; `selesai` final dan membuat bal `keluar`; kirim ulang `selesai` = 200 |
@@ -396,8 +396,8 @@ mengirim ulang dan memverifikasi, tetapi server harus mendukungnya.
 5. **Kode status yang jelas:** `404` kupon belum ada, `409/422` kupon sudah ada atau nomor kembar,
    `401/403` sesi habis, `5xx` galat server. FE membedakan keempatnya.
 6. **Penguncian penulisan per kupon** (`SELECT … FOR UPDATE` pada baris `sortir`) supaya dua permintaan
-   yang bersamaan diproses berurutan. Tambahkan `versi` (naik tiap perubahan) untuk deteksi tabrakan
-   antar komputer.
+   yang bersamaan diproses berurutan. Kolom `versi` (naik tiap perubahan, lewat trigger) sudah ada untuk batch
+   sample dan Surat Jalan: simpanan dari versi lama dijawab 409.
 7. **Bayar** dalam satu transaksi: kunci baris `sortir`, pastikan semua bal berat > 0, buat `kasir` +
    `kasir_detail` (salinan harga dan potongan), tandai lunas. Tolak bila sudah lunas.
 8. **Tambah/ubah/hapus bal ditolak** bila kupon sudah lunas atau bal sudah dikirim DO. FE sudah menutupnya di

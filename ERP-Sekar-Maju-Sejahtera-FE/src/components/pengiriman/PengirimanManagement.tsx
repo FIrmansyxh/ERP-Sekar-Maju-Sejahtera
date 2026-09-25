@@ -119,6 +119,8 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   // Surat Jalan yang menunggu konfirmasi karena draf Surat Jalan baru akan tergantikan
   const [editMenunggu, setEditMenunggu] = useState<PengirimanBarang | null>(null);
   const editDimuatRef = useRef<string | null>(null);
+  /** Versi Surat Jalan saat formulir edit dibuka: bila sudah diubah di komputer lain sejak itu, server menolak (409) */
+  const versiEditRef = useRef<number | undefined>(undefined);
   // Harga jual bawaan Surat Jalan yang diedit (snapshot saat diterbitkan), dipakai selama kode harga tidak dipilih ulang
   const [hargaBawaanMap, setHargaBawaanMap] = useState<Record<string, number>>({});
   const suratJalanDiedit = useMemo(
@@ -1155,6 +1157,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
 
     const teks = (n: number) => String(n).replace('.', ',');
     editDimuatRef.current = p.pengiriman_id;
+    versiEditRef.current = p.versi;
     setEditingPengirimanId(p.pengiriman_id);
     setSourceMode('gudang_reguler');
     setSelectedBatchSampleId('');
@@ -1353,6 +1356,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     const newPengiriman: PengirimanBarang = {
       // Saat edit, data lain milik Surat Jalan (status, petugas penerbit, rujukan batch, dll.) dipertahankan
       ...(existingPengiriman || {}),
+      versi: editingPengirimanId ? versiEditRef.current : undefined,
       // ID internal unik antar perangkat (nomor urut per perangkat bisa kembar dengan Surat Jalan dari komputer lain)
       pengiriman_id: editingPengirimanId || `SJ-${akhiranUnik(8)}`,
       no_surat_jalan: normalisasiNomor(noSuratJalan),

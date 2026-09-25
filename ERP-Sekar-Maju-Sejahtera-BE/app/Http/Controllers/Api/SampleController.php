@@ -34,6 +34,7 @@ class SampleController extends Controller
     {
         return [
             'batch_id' => 'nullable|string|max:20',
+            'versi' => 'nullable|integer|min:1',
             'kode_batch' => ($baru ? 'nullable' : 'sometimes') . '|string|max:40',
             'status' => 'sometimes|in:' . self::STATUS_BATCH,
             'tujuan_buyer' => ($baru ? 'required' : 'sometimes') . '|string|max:120',
@@ -267,6 +268,16 @@ class SampleController extends Controller
 
     private function simpanPerubahan(Request $request, SampleBatch $batch, int $kode, string $pesan)
     {
+        // Simpanan dari versi lama (batch sudah diubah di komputer lain sejak dibuka) ditolak supaya tidak menimpa
+        // perubahan itu. Tanpa `versi` (kirim ulang pembuatan / klien lama) tidak diperiksa.
+        $versi = SampleBatch::where('batch_id', $batch->batch_id)->lockForUpdate()->value('versi');
+        if ($request->filled('versi') && (int) $request->versi !== (int) $versi) {
+            return response()->json([
+                'status' => 'error',
+                'message' => "Batch {$batch->kode_batch} sudah diubah di komputer lain sejak dibuka di sini. Buka lagi batch ini untuk memuat data terbaru, lalu ulangi perubahan",
+            ], 409);
+        }
+
         $field = $this->fieldBatch($request);
         if (isset($field['kode_batch']) && $field['kode_batch'] !== $batch->kode_batch
             && SampleBatch::where('kode_batch', $field['kode_batch'])->where('batch_id', '<>', $batch->batch_id)->exists()) {

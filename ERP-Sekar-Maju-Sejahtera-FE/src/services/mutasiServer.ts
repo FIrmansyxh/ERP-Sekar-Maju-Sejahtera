@@ -191,6 +191,7 @@ function payloadPengiriman(p: PengirimanBarang) {
     nomor_kontrak: p.nomor_kontrak,
     catatan: p.catatan,
     aturan_netto: p.aturan_netto,
+    versi: p.versi,
     items: (p.barang_ids || []).map((bId) => ({
       barang_id: bId,
       kode_harga_jual: p.kode_harga_jual_map?.[bId],

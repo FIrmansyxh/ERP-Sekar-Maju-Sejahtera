@@ -662,6 +662,23 @@ DROP TRIGGER IF EXISTS trg_pengiriman_item_sentuh_induk ON pengiriman_barang_ite
 CREATE TRIGGER trg_pengiriman_item_sentuh_induk AFTER INSERT OR UPDATE OR DELETE ON pengiriman_barang_item
   FOR EACH ROW EXECUTE FUNCTION sentuh_induk_pengiriman_item();
 
+-- Deteksi tabrakan antar komputer untuk batch sample dan Surat Jalan (disimpan sebagai isi penuh): versi naik setiap
+-- barisnya berubah, termasuk saat isinya berubah (lewat trigger sentuh_induk_* di atas). Simpanan yang dibuat dari
+-- versi lama dijawab 409 (simpanPerubahan di SampleController / PengirimanController), jadi tidak menimpa perubahan
+-- dari komputer lain.
+ALTER TABLE sample_batch      ADD COLUMN IF NOT EXISTS versi INT NOT NULL DEFAULT 1;
+ALTER TABLE pengiriman_barang ADD COLUMN IF NOT EXISTS versi INT NOT NULL DEFAULT 1;
+CREATE OR REPLACE FUNCTION naikkan_versi() RETURNS TRIGGER AS $$
+BEGIN
+  NEW.versi := OLD.versi + 1;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS trg_sample_batch_versi ON sample_batch;
+CREATE TRIGGER trg_sample_batch_versi BEFORE UPDATE ON sample_batch FOR EACH ROW EXECUTE FUNCTION naikkan_versi();
+DROP TRIGGER IF EXISTS trg_pengiriman_versi ON pengiriman_barang;
+CREATE TRIGGER trg_pengiriman_versi BEFORE UPDATE ON pengiriman_barang FOR EACH ROW EXECUTE FUNCTION naikkan_versi();
+
 -- Catatan baris yang dihapus: komputer lain membuangnya dari layar pada sinkron berikutnya
 CREATE TABLE IF NOT EXISTS sync_hapus (
   entitas       VARCHAR(40) NOT NULL,

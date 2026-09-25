@@ -28,6 +28,7 @@ class PengirimanController extends Controller
     {
         return [
             'pengiriman_id' => 'nullable|string|max:20',
+            'versi' => 'nullable|integer|min:1',
             'no_surat_jalan' => 'required|string|max:30',
             'tujuan' => 'required|string',
             'driver_nama' => 'required|string',
@@ -190,7 +191,8 @@ class PengirimanController extends Controller
             return response()->json([
                 'status' => 'success',
                 'message' => 'Surat jalan berhasil dibuat',
-                'data' => $pengiriman->load(['items.barang.item'])
+                // fresh(): kolom yang diisi database (versi, updated_at) ikut terkirim
+                'data' => $pengiriman->fresh()->load(['items.barang.item'])
             ], 201);
         });
     }
@@ -243,6 +245,16 @@ class PengirimanController extends Controller
 
     private function simpanPerubahan(Request $request, PengirimanBarang $pengiriman, string $pesan)
     {
+        // Simpanan dari versi lama (Surat Jalan sudah diubah di komputer lain sejak dibuka) ditolak supaya tidak
+        // menimpa perubahan itu. Tanpa `versi` (kirim ulang pembuatan / klien lama) tidak diperiksa.
+        $versi = PengirimanBarang::where('pengiriman_id', $pengiriman->pengiriman_id)->lockForUpdate()->value('versi');
+        if ($request->filled('versi') && (int) $request->versi !== (int) $versi) {
+            return response()->json([
+                'status' => 'error',
+                'message' => "Surat Jalan {$pengiriman->no_surat_jalan} sudah diubah di komputer lain sejak dibuka di sini. Buka lagi Surat Jalan ini untuk memuat data terbaru, lalu ulangi perubahan",
+            ], 409);
+        }
+
         $noSj = trim($request->no_surat_jalan);
         if ($noSj !== $pengiriman->no_surat_jalan
             && PengirimanBarang::where('no_surat_jalan', $noSj)->where('pengiriman_id', '<>', $pengiriman->pengiriman_id)->exists()) {

@@ -58,6 +58,16 @@ describe('Pengiriman Reguler: mode edit Surat Jalan yang belum Selesai', () => {
     expect(props.onSelesaiEdit).toHaveBeenCalled();
   });
 
+  it('simpanan edit membawa versi saat formulir dibuka, bukan versi terbaru hasil sinkron', async () => {
+    // Surat Jalan diubah di komputer lain selama formulir terbuka: server harus bisa menolak simpanan ini (409)
+    const props = buatProps({ pengirimanList: [buatSuratJalan('1', 'dikirim', { versi: 3 })] });
+    const { rerender } = render(<PengirimanManagement {...props} />);
+    rerender(<PengirimanManagement {...props} pengirimanList={[buatSuratJalan('1', 'dikirim', { versi: 5, catatan: 'dari komputer lain' })]} />);
+    await simpanPerubahan();
+
+    expect((props.onUpdatePengiriman as ReturnType<typeof vi.fn>).mock.calls[0][0].versi).toBe(3);
+  });
+
   it('mengeluarkan satu bal melaporkannya sebagai dikeluarkan', async () => {
     const props = buatProps();
     render(<PengirimanManagement {...props} />);

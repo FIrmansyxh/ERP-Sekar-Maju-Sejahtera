@@ -689,6 +689,7 @@ export class ErpApiService {
       berat_kirim_map: Object.keys(beratKirimMap).length ? beratKirimMap : undefined,
       netto_jual_map: Object.keys(nettoJualMap).length ? nettoJualMap : undefined,
       diperbarui_pada: waktuServer(p),
+      versi: Number(p.versi) || undefined,
     };
   }
 

@@ -304,6 +304,41 @@ class SinkronRelasiTest extends TestCase
         $this->putJson(self::API . '/sample-batch/SPLUJI01', ['tujuan_buyer' => 'x'])->assertStatus(410);
     }
 
+    public function test_simpanan_dari_versi_lama_ditolak_409(): void
+    {
+        $petani = $this->buatPetani();
+        $this->buatKupon($petani, 'TRX-UJI-013-AAAA', 'KUPUJI13', ['UJM1', 'UJM2']);
+        $this->patchJson(self::API . '/transaksi/TRX-UJI-013-AAAA', ['status_tahap' => 'menunggu_timbang'])->assertOk();
+        $this->timbang('TRX-UJI-013-AAAA', 'UJM1', 40, 36, 1000)->assertOk();
+        $this->timbang('TRX-UJI-013-AAAA', 'UJM2', 42, 38, 1000)->assertOk();
+        $this->putJson(self::API . '/transaksi/TRX-UJI-013-AAAA/bayar', ['metode_pembayaran' => 'cash'])->assertOk();
+        $barang = DB::table('barang')->where('transaksi_id', 'TRX-UJI-013-AAAA')->orderBy('barang_id')->pluck('barang_id')->all();
+
+        $versi = $this->postJson(self::API . '/sample-batch', [
+            'batch_id' => 'SPLUJI02', 'kode_batch' => 'SMPUJI02', 'tujuan_buyer' => 'Pabrik Uji', 'tanggal_kirim' => '2026-09-24',
+            'items' => [['barang_id' => $barang[0], 'harga_tawaran_kg' => 50000]],
+        ])->assertStatus(201)->json('data.versi');
+
+        // Komputer B menyimpan lebih dulu (versi naik); komputer A masih memegang versi lama: ditolak, simpanan B utuh
+        $versiB = $this->putJson(self::API . '/sample-batch/SPLUJI02', ['versi' => $versi, 'catatan' => 'dari B'])->assertOk()->json('data.versi');
+        $this->assertGreaterThan($versi, $versiB);
+        $this->putJson(self::API . '/sample-batch/SPLUJI02', ['versi' => $versi, 'catatan' => 'dari A'])->assertStatus(409);
+        $this->assertEquals('dari B', DB::table('sample_batch')->where('batch_id', 'SPLUJI02')->value('catatan'));
+
+        // Surat Jalan dari komputer lain mengubah isi batch (tanda DO): versi batch ikut naik
+        $sj = ['no_surat_jalan' => 'SJ-UJI-02', 'tujuan' => 'Pabrik Uji', 'driver_nama' => 'Sopir', 'plat_nomor' => 'M 1 UJ',
+            'tanggal_kirim' => '2026-09-24', 'items' => [['barang_id' => $barang[0], 'harga_deal_per_kg' => 50000]]];
+        $versiSj = $this->postJson(self::API . '/pengiriman', $sj + ['pengiriman_id' => 'SJUJI02', 'batch_sample_id_ref' => 'SPLUJI02'])
+            ->assertStatus(201)->json('data.versi');
+        $this->putJson(self::API . '/sample-batch/SPLUJI02', ['versi' => $versiB, 'catatan' => 'basi'])->assertStatus(409);
+
+        // Surat Jalan: sama; tanpa versi (klien lama) tetap diterima
+        $this->putJson(self::API . '/pengiriman/SJUJI02', $sj + ['versi' => $versiSj, 'catatan' => 'dari B'])->assertOk();
+        $this->putJson(self::API . '/pengiriman/SJUJI02', $sj + ['versi' => $versiSj, 'catatan' => 'dari A'])->assertStatus(409);
+        $this->assertEquals('dari B', DB::table('pengiriman_barang')->where('pengiriman_id', 'SJUJI02')->value('catatan'));
+        $this->putJson(self::API . '/pengiriman/SJUJI02', $sj + ['catatan' => 'klien lama'])->assertOk();
+    }
+
     public function test_akun_nonaktif_kehilangan_token(): void
     {
         $lain = User::updateOrCreate(['user_id' => 'USR-UJI2'], [

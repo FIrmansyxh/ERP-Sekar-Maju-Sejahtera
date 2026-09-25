@@ -335,6 +335,13 @@ async function main() {
   periksa((await A.kirim('mutasi', { nama: 'statusSJ', args: { id: SJ, status: 'dalam_perjalanan' } })).ok, 'A mengubah status Surat Jalan');
   await B.kirim('sinkron');
   periksa((await B.kirim<any[]>('daftar', { entitas: 'pengiriman' })).find((p) => p.pengiriman_id === SJ)?.status === 'dalam_perjalanan', 'status Surat Jalan terlihat di B');
+  // Dua komputer mengedit Surat Jalan yang sama: yang menyimpan belakangan dari salinan lama ditolak (versi)
+  const sjA = (await A.kirim<any[]>('daftar', { entitas: 'pengiriman' })).find((p) => p.pengiriman_id === SJ);
+  const sjB = (await B.kirim<any[]>('daftar', { entitas: 'pengiriman' })).find((p) => p.pengiriman_id === SJ);
+  periksa((await A.kirim('mutasi', { nama: 'simpanSJ', args: { baru: false, sj: { ...sjA, catatan: 'edit A' } } })).ok, 'A mengedit Surat Jalan');
+  const editBasiSJ = await B.kirim('mutasi', { nama: 'simpanSJ', args: { baru: false, sj: { ...sjB, catatan: 'edit B dari salinan lama' } } });
+  periksa(!editBasiSJ.ok && editBasiSJ.status === 409, 'edit Surat Jalan dari salinan lama B ditolak 409', editBasiSJ);
+  periksa((await server('GET', '/pengiriman')).data.find((p: any) => p.pengiriman_id === SJ)?.catatan === 'edit A', 'edit A tidak tertimpa salinan lama B');
   periksa((await B.kirim('mutasi', { nama: 'hapusSJ', args: { id: SJ } })).ok, 'B membatalkan Surat Jalan');
   for (let i = 0; i < 2; i++) await A.kirim('sinkron');
   periksa(!(await A.kirim<any[]>('daftar', { entitas: 'pengiriman' })).some((p) => p.pengiriman_id === SJ), 'Surat Jalan yang dibatalkan hilang dari A dan tidak muncul lagi');

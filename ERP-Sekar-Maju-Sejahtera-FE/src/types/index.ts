@@ -363,6 +363,8 @@ export interface PengirimanBarang {
   dibuat_oleh?: string;
   rincian_grade?: Record<string, { bal: number; kg: number }>;
   diperbarui_pada?: string;
+  /** Versi di server (naik tiap perubahan); simpanan edit membawa versi saat formulir dibuka, versi lama ditolak 409 */
+  versi?: number;
 }
 
 export interface ModuleNav {
