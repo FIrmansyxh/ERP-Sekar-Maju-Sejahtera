@@ -1237,7 +1237,8 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                     <th className="p-2.5 w-28 border-r border-gray-200">No Jadi</th>
                     <th className="p-2.5 text-right w-32 border-r border-gray-200">Harga Beli (Rp/Kg)</th>
                     <th className="p-2.5 text-right w-24 border-r border-gray-200">Bruto (Kg)</th>
-                    <th className="p-2.5 text-right w-36 border-r border-gray-200">Harga Tawar/Deal (Rp)</th>
+                    <th className="p-2.5 text-center w-24 border-r border-gray-200">Grade</th>
+                    <th className="p-2.5 text-right w-36 border-r border-gray-200">Harga Tawar</th>
                     <th className="p-2.5 text-right w-36 border-r border-gray-200">Est. Subtotal (Rp)</th>
                     <th className="p-2.5 text-center w-14">Aksi</th>
                   </tr>
@@ -1266,6 +1267,9 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                           </td>
                           <td className="p-2.5 text-right font-mono border-r border-gray-200 font-bold text-gray-900">
                             {formatNumber(bruto, 1)} kg
+                          </td>
+                          <td className="p-2.5 text-center font-mono font-bold text-gray-900 border-r border-gray-200">
+                            {item.kodeHargaJual}
                           </td>
                           <td className="p-2.5 text-right font-mono border-r border-gray-200">
                             {formatRupiah(item.hargaTawaranKg)}
@@ -1303,6 +1307,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                           return s + (it.beratBrutoKg || resolveBeratBruto(matchedBal));
                         }, 0), 1)} kg
                       </td>
+                      <td className="p-2.5 text-center border-r border-gray-200"></td>
                       <td className="p-2.5 text-right border-r border-gray-200"></td>
                       <td className="p-2.5 text-right font-mono font-bold text-emerald-800 border-r border-gray-200">
                         {formatRupiah(selectedBalItems.reduce((s, it) => s + (it.beratBrutoKg * it.hargaTawaranKg), 0))}
