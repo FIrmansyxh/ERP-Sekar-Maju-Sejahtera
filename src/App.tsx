@@ -98,6 +98,7 @@ const HargaManagement = lazyNamed(() => import('./components/harga/HargaManageme
 const SortirPageView = lazyNamed(() => import('./components/transaksi/SortirPageView'), 'SortirPageView');
 const TimbanganPageView = lazyNamed(() => import('./components/transaksi/TimbanganPageView'), 'TimbanganPageView');
 const KasirPageView = lazyNamed(() => import('./components/transaksi/KasirPageView'), 'KasirPageView');
+const MasterPotonganManagement = lazyNamed(() => import('./components/master_potongan/MasterPotonganManagement'), 'MasterPotonganManagement');
 const PengirimanManagement = lazyNamed(() => import('./components/pengiriman/PengirimanManagement'), 'PengirimanManagement');
 const SampleManagement = lazyNamed(() => import('./components/sample/SampleManagement'), 'SampleManagement');
 const StatusBatchPengirimanManagement = lazyNamed(() => import('./components/pengiriman/StatusBatchPengirimanManagement'), 'StatusBatchPengirimanManagement');
@@ -2302,6 +2303,11 @@ export default function App() {
                 hargaJualList={hargaJualList}
                 onSaveHargaJual={handleSaveHargaJual}
               />
+            )}
+
+            {/* Master Aturan Potongan Tara */}
+            {activeModuleId === 'modul-master-potongan' && (
+              <MasterPotonganManagement />
             )}
 
             {/* Status & Detail Batch */}

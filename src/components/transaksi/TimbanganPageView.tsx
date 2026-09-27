@@ -16,7 +16,8 @@ import {
   X,
   Info
 } from 'lucide-react';
-import { TransaksiPembelian, Petani, TabelHarga, Barang, TransaksiItemBal, UserRole, User as UserType, SaveTransaksiMeta } from '../../types';
+import { TransaksiPembelian, Petani, TabelHarga, Barang, TransaksiItemBal, UserRole, User as UserType, SaveTransaksiMeta, MasterPotongan } from '../../types';
+import { apiRequest } from '../../services/apiClient';
 import { hitungPotonganTaraKg, normalizeKg, getInfoAturanTara } from '../../utils/formatters';
 import { recordAuditLog } from '../../utils/storage';
 import { buildBarangDariItem, hitungUlangKupon, isKuponProsesSortir, terapkanHasilTimbang } from '../../utils/kuponSortir';
@@ -61,6 +62,22 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
   onNavigateToKasir,
   onNavigateToSortir,
 }) => {
+  const [aturanTaraList, setAturanTaraList] = useState<MasterPotongan[]>([]);
+
+  useEffect(() => {
+    const loadMasterPotongan = async () => {
+      try {
+        const res = await apiRequest('/master/potongan?status=true');
+        if (res.status === 'success' && res.data) {
+          setAturanTaraList(res.data);
+        }
+      } catch (err) {
+        console.warn('Gagal memuat master potongan', err);
+      }
+    };
+    loadMasterPotongan();
+  }, []);
+
   // Initial lookup if initialBalNo is provided
   const initialBalMatch = useMemo(() => {
     if (!initialBalNo) return null;
@@ -700,7 +717,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
   const isGantiTikarActive =
     Boolean(activeBalItem?.ganti_tikar) || (activeBalItem?.potongan_tikar || 0) > 0 || (typeof potTikarInput === 'number' && potTikarInput > 0);
   
-  let liveTara = hitungPotonganTaraKg(liveBruto, isGantiTikarActive, activeBalItem?.no_bal, activeBalItem?.kode_grade);
+  let liveTara = hitungPotonganTaraKg(liveBruto, isGantiTikarActive, activeBalItem?.no_bal, activeBalItem?.kode_grade, aturanTaraList);
   let liveNetto = liveBruto > 0 ? Math.max(0, normalizeKg(liveBruto - liveTara)) : 0;
   
   if (isNettoManual && parsedNettoInput > 0) {
@@ -708,7 +725,7 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
     liveTara = Math.max(0, normalizeKg(liveBruto - liveNetto));
   }
 
-  const infoAturanTara = getInfoAturanTara(activeBalItem?.no_bal, activeBalItem?.kode_grade, liveBruto);
+  const infoAturanTara = getInfoAturanTara(activeBalItem?.no_bal, activeBalItem?.kode_grade, liveBruto, aturanTaraList);
 
   const livePotTikar = isGantiTikarActive ? (typeof potTikarInput === 'number' ? potTikarInput : POTONGAN_GANTI_TIKAR) : 0;
   const livePotKuli = POTONGAN_KULI_PER_BAL;

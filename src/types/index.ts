@@ -99,6 +99,17 @@ export interface MasterHargaJual {
   status_aktif?: boolean;
 }
 
+export interface MasterPotongan {
+  id?: number | string;
+  kode_awalan_bal: string;
+  batas_bawah_kg: number;
+  batas_atas_kg: number | null;
+  potongan_kg: number;
+  status: boolean;
+  deskripsi?: string;
+  dibuat_oleh?: string;
+}
+
 export interface TabelHarga {
   harga_id: string;
   kode_grade: string; // e.g. A, B, C, A1, A+, AB (max 3 chars, 1st is letter)

@@ -201,39 +201,31 @@ export function hitungPotonganTaraKg(
   beratBruto: number,
   gantiTikar?: boolean,
   noBal?: string,
-  kodeGrade?: string
+  kodeGrade?: string,
+  aturanTaraList?: any[] // Boleh diisi array MasterPotongan dari state/API
 ): number {
   const kategori = deteksiKodeAturanTara(noBal, kodeGrade);
 
-  // Kode bal SB = 2 kg rata (berlaku bahkan jika bobot awal 0 saat registrasi bal)
-  if (kategori === 'SB') {
-    return 2.0;
+  // Jika ada data master dinamis, gunakan data tersebut
+  if (aturanTaraList && aturanTaraList.length > 0) {
+    if (beratBruto <= 0) return 0;
+    
+    const aturanCocok = aturanTaraList.find(aturan => {
+      const isKategoriSama = aturan.kode_awalan_bal === kategori || 
+                             (kategori === 'T' && aturan.kode_awalan_bal === 'TS'); // T sama dengan TS
+      const isDiAtasBatasBawah = beratBruto >= aturan.batas_bawah_kg;
+      const isDiBawahBatasAtas = aturan.batas_atas_kg === null || beratBruto <= aturan.batas_atas_kg;
+      
+      return isKategoriSama && isDiAtasBatasBawah && isDiBawahBatasAtas;
+    });
+
+    if (aturanCocok) return aturanCocok.potongan_kg;
+    // Jika tak cocok dengan apapun, fallback ke logika hardcode di bawah
   }
 
-  // Fallback jika belum ditimbang / bruto <= 0
-  if (beratBruto <= 0) return 0;
-
-  // Kode bal TS dan T: 30-49 kg (atau <50 kg) = 4 kg, 50-60 kg = 5 kg, >60 kg = 6 kg
-  if (kategori === 'TS' || kategori === 'T') {
-    if (beratBruto > 60) {
-      return 6.0;
-    } else if (beratBruto >= 50) {
-      return 5.0;
-    } else {
-      // 49 kg ke bawah (30-49 kg)
-      return 4.0;
-    }
-  }
-
-  // Kode bal HF dan kode lainnya (default): <= 49 kg = 3 kg, 50 ke atas (50-59.9 kg) = 5 kg, >= 60 kg = 6 kg
-  if (beratBruto >= 60) {
-    return 6.0;
-  } else if (beratBruto >= 50) {
-    return 5.0;
-  } else {
-    // 49 kg ke bawah
-    return 3.0;
-  }
+  // Aturan default telah dihapus sesuai permintaan.
+  // Jika tidak ada aturan master yang cocok (atau master kosong), potongannya 0.
+  return 0;
 }
 
 /**
@@ -242,7 +234,8 @@ export function hitungPotonganTaraKg(
 export function getInfoAturanTara(
   noBal?: string,
   kodeGrade?: string,
-  beratBruto?: number
+  beratBruto?: number,
+  aturanTaraList?: any[]
 ): {
   kode: KodeAturanTara;
   label: string;
@@ -250,20 +243,14 @@ export function getInfoAturanTara(
   keterangan: string;
 } {
   const kategori = deteksiKodeAturanTara(noBal, kodeGrade);
-  const tara = hitungPotonganTaraKg(beratBruto || 0, false, noBal, kodeGrade);
+  const tara = hitungPotonganTaraKg(beratBruto || 0, false, noBal, kodeGrade, aturanTaraList);
 
-  let keterangan = DAFTAR_ATURAN_TARA[kategori].deskripsi;
+  let keterangan = DAFTAR_ATURAN_TARA[kategori]?.deskripsi || 'Sesuai Master Potongan Tara';
   if ((beratBruto || 0) > 0) {
-    if (kategori === 'SB') {
-      keterangan = 'Tarif rata 2.0 kg';
-    } else if (kategori === 'TS' || kategori === 'T') {
-      if ((beratBruto || 0) >= 60) keterangan = 'Bobot ≥60 kg → Potongan 6.0 kg';
-      else if ((beratBruto || 0) >= 50) keterangan = 'Bobot 50–59.9 kg → Potongan 5.0 kg';
-      else keterangan = 'Bobot <50 kg (30–49 kg) → Potongan 4.0 kg';
+    if (tara === 0) {
+      keterangan = 'Tidak ada aturan master tara (Potongan 0 kg)';
     } else {
-      if ((beratBruto || 0) >= 60) keterangan = 'Bobot ≥60 kg → Potongan 6.0 kg';
-      else if ((beratBruto || 0) >= 50) keterangan = 'Bobot 50–59.9 kg → Potongan 5.0 kg';
-      else keterangan = 'Bobot ≤49 kg → Potongan 3.0 kg';
+      keterangan = `Sesuai Master Potongan Tara (${tara} kg)`;
     }
   }
 

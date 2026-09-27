@@ -1,5 +1,7 @@
 import { SearchableSelect } from '../common/SearchableSelect';
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { MasterPotongan } from '../../types';
+import { apiRequest } from '../../services/apiClient';
 import {
   Plus,
   Check,
@@ -61,6 +63,21 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
   initialTxId,
   onInitialTxHandled,
 }) => {
+  const [aturanTaraList, setAturanTaraList] = useState<MasterPotongan[]>([]);
+
+  useEffect(() => {
+    const loadMasterPotongan = async () => {
+      try {
+        const res = await apiRequest('/master/potongan?status=true');
+        if (res.status === 'success' && res.data) {
+          setAturanTaraList(res.data);
+        }
+      } catch (err) {
+        console.warn('Gagal memuat master potongan', err);
+      }
+    };
+    loadMasterPotongan();
+  }, []);
   const [isSaving, setIsSaving] = useState(false);
   
   // Form Header State
@@ -396,7 +413,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
       return;
     }
 
-    const tara = hitungPotonganTaraKg(0, isGantiTikar, cleanedBalCode, selectedGrade);
+    const tara = hitungPotonganTaraKg(0, isGantiTikar, cleanedBalCode, selectedGrade, aturanTaraList);
     const potTikar = isGantiTikar ? POTONGAN_GANTI_TIKAR : 0;
     const potKuli = POTONGAN_KULI_PER_BAL;
     const potTali = POTONGAN_TALI_PER_BAL;
@@ -563,7 +580,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
     }
 
     const newHarga = foundGrade.harga_per_kg;
-    const newTara = hitungPotonganTaraKg(item.berat_bruto_kg || 0, item.ganti_tikar, cleanedNoBal, trimmedGrade);
+    const newTara = hitungPotonganTaraKg(item.berat_bruto_kg || 0, item.ganti_tikar, cleanedNoBal, trimmedGrade, aturanTaraList);
     const newNetto = (item.berat_kg || 0) > 0
       ? (item.is_netto_manual ? item.berat_kg : Math.max(0, normalizeKg((item.berat_bruto_kg || 0) - newTara)))
       : 0;
