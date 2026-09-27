@@ -21,28 +21,39 @@ describe('deteksiKodeAturanTara', () => {
 });
 
 describe('hitungPotonganTaraKg', () => {
-  it('SB dipotong 2 kg rata', () => {
-    expect(hitungPotonganTaraKg(35, false, 'SB0001')).toBe(2);
+  const mockMaster = [
+    { kode_awalan_bal: 'SB', batas_bawah_kg: 0, batas_atas_kg: null, potongan_kg: 2 },
+    { kode_awalan_bal: 'TS', batas_bawah_kg: 0, batas_atas_kg: 49.9, potongan_kg: 4 },
+    { kode_awalan_bal: 'TS', batas_bawah_kg: 50, batas_atas_kg: 59.9, potongan_kg: 5 },
+    { kode_awalan_bal: 'TS', batas_bawah_kg: 60, batas_atas_kg: null, potongan_kg: 6 },
+    { kode_awalan_bal: 'HF', batas_bawah_kg: 0, batas_atas_kg: 49.9, potongan_kg: 3 },
+    { kode_awalan_bal: 'HF', batas_bawah_kg: 50, batas_atas_kg: 59.9, potongan_kg: 5 },
+    { kode_awalan_bal: 'HF', batas_bawah_kg: 60, batas_atas_kg: null, potongan_kg: 6 },
+  ];
+
+  it('mengembalikan 0 jika tidak ada data master (fallback dihapus)', () => {
+    expect(hitungPotonganTaraKg(35, false, 'SB0001')).toBe(0);
+    expect(hitungPotonganTaraKg(50, false, 'TS113')).toBe(0);
   });
 
-  it('TS: 30-49 kg = 4, 50-59 kg = 5', () => {
-    expect(hitungPotonganTaraKg(34, false, 'TS113')).toBe(4);
-    expect(hitungPotonganTaraKg(49.9, false, 'TS113')).toBe(4);
-    expect(hitungPotonganTaraKg(55, false, 'TS113')).toBe(5);
-    expect(hitungPotonganTaraKg(61, false, 'TS113')).toBe(6);
+  it('SB dipotong 2 kg rata (berdasarkan master)', () => {
+    expect(hitungPotonganTaraKg(35, false, 'SB0001', undefined, mockMaster)).toBe(2);
   });
 
-  it('HF dan kode lain: 49 ke bawah = 3, 50-59 = 5, 60 ke atas = 6', () => {
-    expect(hitungPotonganTaraKg(40, false, 'HF1')).toBe(3);
-    expect(hitungPotonganTaraKg(50, false, 'HF1')).toBe(5);
-    expect(hitungPotonganTaraKg(60, false, 'HF1')).toBe(6);
+  it('TS: 30-49 kg = 4, 50-59 kg = 5 (berdasarkan master)', () => {
+    expect(hitungPotonganTaraKg(34, false, 'TS113', undefined, mockMaster)).toBe(4);
+    expect(hitungPotonganTaraKg(49.9, false, 'TS113', undefined, mockMaster)).toBe(4);
+    expect(hitungPotonganTaraKg(55, false, 'TS113', undefined, mockMaster)).toBe(5);
+    expect(hitungPotonganTaraKg(61, false, 'TS113', undefined, mockMaster)).toBe(6);
   });
 
-  it('bal belum ditimbang tidak dipotong (kecuali SB)', () => {
-    expect(hitungPotonganTaraKg(0, false, 'HF1')).toBe(0);
+  it('HF dan kode lain: 49 ke bawah = 3, 50-59 = 5, 60 ke atas = 6 (berdasarkan master)', () => {
+    expect(hitungPotonganTaraKg(40, false, 'HF1', undefined, mockMaster)).toBe(3);
+    expect(hitungPotonganTaraKg(50, false, 'HF1', undefined, mockMaster)).toBe(5);
+    expect(hitungPotonganTaraKg(60, false, 'HF1', undefined, mockMaster)).toBe(6);
   });
 
-  // Teks di layar dan komentar kode sama-sama menyebut "60 kg ke atas = 6 kg", tetapi TS/T pada tepat 60,0 kg
-  // kini menghasilkan 5 kg (batas memakai ">"), sedangkan HF memakai ">=". Perlu konfirmasi pemilik sebelum diubah.
-  it.todo('TS/T pada tepat 60,0 kg: 5 kg (perilaku sekarang) atau 6 kg (sesuai teks "60 kg ke atas")?');
+  it('bal belum ditimbang tidak dipotong', () => {
+    expect(hitungPotonganTaraKg(0, false, 'HF1', undefined, mockMaster)).toBe(0);
+  });
 });
