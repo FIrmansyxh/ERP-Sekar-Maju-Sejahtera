@@ -80,6 +80,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'modul-1-petani', label: 'Master Petani', jumlah: String(petaniCount) },
         { id: 'modul-3-harga', label: 'Master Harga Beli', jumlah: String(hargaCount) },
         { id: 'modul-3-harga-jual', label: 'Master Harga Jual', jumlah: String(hargaJualCount) },
+        { id: 'modul-master-potongan', label: 'Master Potongan Tara' },
       ],
     },
     {
