@@ -210,9 +210,14 @@ export function hitungPotonganTaraKg(
   if (aturanTaraList && aturanTaraList.length > 0) {
     if (beratBruto <= 0) return 0;
     
+    const actualPrefixNoBal = extractKodeBalPrefix(noBal);
+    const actualPrefixGrade = extractKodeBalPrefix(kodeGrade);
+
     const aturanCocok = aturanTaraList.find(aturan => {
       const isKategoriSama = aturan.kode_awalan_bal === kategori || 
-                             (kategori === 'T' && aturan.kode_awalan_bal === 'TS'); // T sama dengan TS
+                             (kategori === 'T' && aturan.kode_awalan_bal === 'TS') ||
+                             aturan.kode_awalan_bal === actualPrefixNoBal ||
+                             aturan.kode_awalan_bal === actualPrefixGrade;
       const isDiAtasBatasBawah = beratBruto >= aturan.batas_bawah_kg;
       const isDiBawahBatasAtas = aturan.batas_atas_kg === null || beratBruto <= aturan.batas_atas_kg;
       
@@ -237,26 +242,54 @@ export function getInfoAturanTara(
   beratBruto?: number,
   aturanTaraList?: any[]
 ): {
-  kode: KodeAturanTara;
+  kode: KodeAturanTara | string;
   label: string;
   potonganKg: number;
   keterangan: string;
 } {
   const kategori = deteksiKodeAturanTara(noBal, kodeGrade);
+  const actualPrefix = extractKodeBalPrefix(noBal) || extractKodeBalPrefix(kodeGrade) || kategori;
+
+  let aturanCocok: any = null;
+  if (aturanTaraList && aturanTaraList.length > 0 && (beratBruto || 0) > 0) {
+    aturanCocok = aturanTaraList.find((aturan: any) => {
+      const isKategoriSama = aturan.kode_awalan_bal === kategori || 
+                             (kategori === 'T' && aturan.kode_awalan_bal === 'TS') ||
+                             aturan.kode_awalan_bal === actualPrefix;
+      const isDiAtasBatasBawah = (beratBruto || 0) >= aturan.batas_bawah_kg;
+      const isDiBawahBatasAtas = aturan.batas_atas_kg === null || (beratBruto || 0) <= aturan.batas_atas_kg;
+      
+      return isKategoriSama && isDiAtasBatasBawah && isDiBawahBatasAtas;
+    });
+  }
+
   const tara = hitungPotonganTaraKg(beratBruto || 0, false, noBal, kodeGrade, aturanTaraList);
 
-  let keterangan = DAFTAR_ATURAN_TARA[kategori]?.deskripsi || 'Sesuai Master Potongan Tara';
-  if ((beratBruto || 0) > 0) {
-    if (tara === 0) {
-      keterangan = 'Tidak ada aturan master tara (Potongan 0 kg)';
-    } else {
-      keterangan = `Sesuai Master Potongan Tara (${tara} kg)`;
+  let keterangan = 'Sesuai Master Potongan Tara';
+  let label = 'Standar / Lainnya';
+  let kodeToReturn = kategori;
+
+  if (aturanCocok) {
+    label = `Kode ${aturanCocok.kode_awalan_bal}`;
+    kodeToReturn = aturanCocok.kode_awalan_bal;
+    keterangan = `Sesuai Aturan Inputan ${aturanCocok.kode_awalan_bal} (${tara} kg)`;
+  } else {
+    // Fallback if no dynamic rule matched
+    label = DAFTAR_ATURAN_TARA[kategori]?.label || label;
+    keterangan = DAFTAR_ATURAN_TARA[kategori]?.deskripsi || keterangan;
+    
+    if ((beratBruto || 0) > 0) {
+      if (tara === 0) {
+        keterangan = 'Tidak ada aturan master tara (Potongan 0 kg)';
+      } else {
+        keterangan = `Sesuai Master Potongan Tara (${tara} kg)`;
+      }
     }
   }
 
   return {
-    kode: kategori,
-    label: DAFTAR_ATURAN_TARA[kategori].label,
+    kode: kodeToReturn,
+    label,
     potonganKg: tara,
     keterangan,
   };
