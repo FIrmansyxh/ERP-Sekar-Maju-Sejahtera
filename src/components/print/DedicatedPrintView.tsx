@@ -30,6 +30,8 @@ import { unduhSuratSampleExcel } from '../../utils/excelSuratSample';
 import { NotaTimbangContent } from '../transaksi/NotaTimbangContent';
 import { SuratJalanDokumen } from '../pengiriman/SuratJalanDokumen';
 import { SuratSampleDokumen } from '../sample/SuratSampleDokumen';
+import { OpsiCetakSampleBar } from '../sample/OpsiCetakSampleBar';
+import { useOpsiCetakSample } from '../../utils/suratSample';
 import { alasanBatchBelumFinal } from '../../utils/statusBatchSample';
 
 export interface DedicatedPrintViewProps {
@@ -59,6 +61,8 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
   const printAreaRef = useRef<HTMLDivElement>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [zoomScale, setZoomScale] = useState<number>(1);
+  // Isi Surat Sample (nomor asal & jadi / jadi saja, kode / nilai harga jual) sama dengan pilihan di jendela pratinjau
+  const [opsiSample, ubahOpsiSample] = useOpsiCetakSample();
 
   // Load Data with fallback to local storage
   const activeTransaksiList = useMemo(() => {
@@ -165,12 +169,12 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
 
   // Action: Trigger browser print dialog (for connected physical printer)
   
-  // Surat sample diunduh sebagai Excel (kode harga jual, tanpa nilai rupiah)
+  // Surat sample diunduh sebagai Excel dengan kolom sesuai opsi cetak
   const handleDownloadExcelSample = async () => {
     if (!foundBatch) return;
     setIsGeneratingPdf(true);
     try {
-      await unduhSuratSampleExcel(foundBatch);
+      await unduhSuratSampleExcel(foundBatch, opsiSample);
     } catch (err) {
       console.error('Excel download error:', err);
     } finally {
@@ -404,6 +408,11 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
             </button>
           </div>
         </div>
+        {type === 'sample' && (
+          <div className="max-w-6xl mx-auto mt-2.5 pt-2.5 border-t border-gray-100">
+            <OpsiCetakSampleBar opsi={opsiSample} onUbah={ubahOpsiSample} />
+          </div>
+        )}
       </header>
 
       {/* Scrollable Printable Document Canvas */}
@@ -430,7 +439,7 @@ export const DedicatedPrintView: React.FC<DedicatedPrintViewProps> = ({
             />
           )}
 
-          {type === 'sample' && foundBatch && <SuratSampleDokumen batch={foundBatch} />}
+          {type === 'sample' && foundBatch && <SuratSampleDokumen batch={foundBatch} opsi={opsiSample} />}
         </div>
       </main>
 

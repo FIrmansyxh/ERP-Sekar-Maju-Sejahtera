@@ -8,7 +8,7 @@ const bal = [buatBal('B1'), buatBal('B2')];
 
 describe('ResumePengirimanPanel', () => {
   it('tanpa Surat Jalan hanya menampilkan pesan kosong', () => {
-    render(<ResumePengirimanPanel resume={hitungResumePengiriman([], [], [])} />);
+    render(<ResumePengirimanPanel resume={hitungResumePengiriman([], [])} />);
     expect(screen.getByText('Belum ada Surat Jalan pada filter yang dipilih.')).toBeInTheDocument();
     expect(screen.queryByTestId('resume-pengiriman')).not.toBeInTheDocument();
   });
@@ -20,7 +20,6 @@ describe('ResumePengirimanPanel', () => {
         buatSuratJalan('2', 'dikirim', { tujuan: 'Pabrik B', tanggal_kirim: '2026-09-18' }),
       ],
       bal,
-      [],
       new Date('2026-09-21T09:00:00')
     );
     render(<ResumePengirimanPanel resume={resume} />);
@@ -32,11 +31,12 @@ describe('ResumePengirimanPanel', () => {
     expect(within(panel).getByText('Pabrik B')).toBeInTheDocument();
     expect(within(panel).getByText(/1 Surat Jalan belum Selesai/)).toBeInTheDocument();
     expect(within(panel).getByText(/SJ-2 \(3 hari\)/)).toBeInTheDocument();
-    expect(within(panel).getByText('Tidak ada pengiriman sample pada filter ini.')).toBeInTheDocument();
+    // Sample punya laporan sendiri (Laporan Pengiriman Sample)
+    expect(within(panel).queryByText(/sample/i)).not.toBeInTheDocument();
   });
 
   it('semua DO selesai dan lengkap menampilkan penanda aman', () => {
-    const resume = hitungResumePengiriman([buatSuratJalan('1', 'selesai')], bal, []);
+    const resume = hitungResumePengiriman([buatSuratJalan('1', 'selesai')], bal);
     render(<ResumePengirimanPanel resume={resume} />);
     expect(screen.getByText('Semua Surat Jalan pada filter ini sudah Selesai dan lengkap datanya.')).toBeInTheDocument();
   });

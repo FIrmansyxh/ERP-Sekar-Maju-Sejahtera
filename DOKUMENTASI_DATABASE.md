@@ -319,6 +319,98 @@ produksi (aman diulang: menambah nilai enum `draft`, kolom `dikirim_oleh_nama`, 
 `ganti_tikar_diubah_pada` & `timbang_diubah_pada`, serta kolom Atur Netto bila belum ada), lalu
 `php artisan route:clear && php artisan config:clear`. Jangan `php artisan migrate`.
 
+### 5.5 Koreksi No Bal (2026-09-30), BELUM ADA DI BACKEND
+
+Menu **Koreksi No Bal** (Super Admin dan Admin Sortir) mengganti nomor bal dan menyimpan nomor lamanya. Aturan pemilik:
+
+| Kondisi bal | Boleh ganti | Yang berganti |
+|-------------|-------------|---------------|
+| Kupon belum lunas (Sortir / sudah ditimbang) | Ya | `transaksi_item_bal.no_bal` (nota nanti memakai nomor baru), `barang.no_bal` bila ada, salinan di Batch Sample |
+| Kupon lunas, di gudang / Batch Sample / Surat Jalan belum Selesai | Ya | Hanya `barang.no_bal` dan salinan di Batch Sample. **`transaksi_item_bal.no_bal`, berat, dan nilai TIDAK diubah** (nota, Kasir, Laporan Pembelian tetap nomor lama) |
+| Bal di Surat Jalan berstatus `selesai` | Tidak (422) | - |
+
+Sebuah No Bal, baik nomor awal maupun hasil penggantian, **tidak boleh dipakai dua kali**. Rekap per kode bal di FE
+mengikuti awalan nomor terakhir (`barang.no_bal`).
+
+**Tara, netto, dan nilai tidak pernah dihitung ulang**, walau jenis awalan berubah (mis. HF → SB): nilai tembakau
+ditentukan saat pembelian. Saat bal dikirim, bruto ditimbang ulang dan dipotong mengikuti aturan gudang/pabrik tujuan
+(Atur Netto di Pengiriman Reguler/DO, bagian 5.1). Bal yang belum ditimbang mendapat tara dari nomor yang berlaku saat
+ditimbang di Timbangan.
+
+**Tabel baru**
+
+```sql
+CREATE TABLE IF NOT EXISTS riwayat_no_bal (
+  riwayat_id    VARCHAR(40) PRIMARY KEY,           -- dibuat FE: RNB-<ms>-<acak>; kiriman ulang = idempoten
+  transaksi_id  VARCHAR(30) NOT NULL REFERENCES transaksi_pembelian(transaksi_id),
+  item_id       VARCHAR(30) NOT NULL,              -- transaksi_item_bal.item_id (bukan FK: item bisa dihapus kemudian)
+  barang_id     VARCHAR(30),
+  no_bal_lama   VARCHAR(30) NOT NULL,
+  no_bal_baru   VARCHAR(30) NOT NULL,
+  tahap         VARCHAR(20) NOT NULL,              -- sortir | timbang | lunas | surat_jalan
+  ubah_nota     BOOLEAN NOT NULL,                  -- true = kupon belum lunas, No Bal di kupon ikut berganti
+  alasan        TEXT NOT NULL,
+  diganti_oleh  VARCHAR(20) REFERENCES users(user_id),
+  diganti_pada  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_riwayat_no_bal_baru ON riwayat_no_bal(upper(no_bal_baru));
+CREATE UNIQUE INDEX IF NOT EXISTS uq_riwayat_no_bal_lama ON riwayat_no_bal(upper(no_bal_lama));
+CREATE INDEX IF NOT EXISTS ix_riwayat_no_bal_item ON riwayat_no_bal(item_id);
+```
+
+**Endpoint**
+
+| Metode | Rute | Isi | Jawaban |
+|--------|------|-----|---------|
+| `POST` | `/bal/ganti-no-bal` | `riwayat_id, transaksi_id, item_id, barang_id?, no_bal_lama, no_bal_baru, tahap, ubah_nota, alasan, diganti_pada` | `data`: baris riwayat (bentuk sama, plus `diganti_oleh_nama`) |
+| `GET` | `/bal/riwayat-no-bal` | - | `data`: semua riwayat, terbaru dulu (boleh dengan `no_kupon`, `nama_petani`) |
+
+Aturan `POST /bal/ganti-no-bal` (satu transaksi DB, kunci baris `FOR UPDATE`):
+
+1. Hanya peran `superadmin` dan `admin_sortir` (403 selain itu).
+2. `riwayat_id` sudah ada → jawab 200 dengan baris yang tersimpan (kiriman ulang antrean).
+3. Cari bal lewat **`item_id`** (dan `barang_id`), bukan lewat No Bal. Nomor bal sekarang harus sama dengan
+   `no_bal_lama` (untuk kupon lunas: `barang.no_bal`); bila tidak → 409 "No Bal sudah diganti di perangkat lain".
+4. Tolak 422 bila bal ada di Surat Jalan berstatus `selesai`.
+5. Tolak 422 bila `no_bal_baru` (huruf besar, tanpa strip) sudah ada di `transaksi_item_bal.no_bal`, `barang.no_bal`,
+   item Batch Sample, atau di `riwayat_no_bal` (lama maupun baru), milik bal mana pun termasuk bal ini sendiri.
+6. `ubah_nota` ditentukan ulang oleh server dari `status_pembayaran` kupon (jangan percaya kiriman FE). Bila belum
+   lunas: ubah `transaksi_item_bal.no_bal` (+ `barcode` bila sama dengan nomor lama) saja. Bila lunas: jangan sentuh
+   `transaksi_item_bal`. Kolom berat, tara, dan nilai tidak diubah di kedua keadaan.
+7. Ubah `barang.no_bal` (+ `barcode`) dan `no_bal` di item Batch Sample untuk `barang_id` itu. Bila No Jadi item Batch
+   Sample (`kode_bal_pembeli`) sama dengan nomor lama (diisi otomatis saat bal dimasukkan ke sample), ganti juga.
+8. Simpan baris `riwayat_no_bal` dan catat di `audit_log`.
+
+Perilaku FE:
+
+- **Kupon belum lunas:** permintaan dikirim lebih dulu, baru layar diubah. Bila server menjawab rute tidak ada (backend
+  lama), penggantian **ditolak** dengan pesan "Server belum mendukung ganti No Bal untuk kupon yang belum lunas".
+  Selama penggantian masih di antrean (mis. jaringan putus), simpanan kupon itu (`sortir-items`/`timbang`) **menunggu**
+  sampai penggantiannya tersimpan, supaya server tidak membaca nomor baru sebagai bal baru.
+- **Kupon lunas:** layar langsung diubah dan permintaan masuk antrean; bila rute belum ada, dicoba lagi tiap 5 menit
+  (kupon lunas terkunci, jadi tidak ada simpanan kupon yang bisa menimpa).
+- Penolakan 4xx selain 404/405/408/429 (mis. 409/422) membuat FE **membatalkan** penggantian dan memuat ulang data.
+- `GET /bal/riwayat-no-bal` yang dijawab rute tidak ada tidak ditanya lagi selama 10 menit.
+
+**No Jadi di Batch Sample:** FE sekarang mengirim `items[].kode_bal_pembeli` pada `POST/PUT /sample-batch` dan
+membacanya kembali dari `GET /sample-batch`. Server perlu menyimpannya (kolom `kode_bal_pembeli` di item batch) supaya
+No Jadi yang dicetak di Surat Sample sama di semua komputer; tanpa itu hanya komputer pembuat yang mengingatnya.
+
+**Perubahan di endpoint yang sudah ada**
+
+- `PUT /transaksi/{id}/sortir-items` dan `POST /transaksi/sortir`: tolak 422 No Bal yang ada di
+  `riwayat_no_bal.no_bal_lama` ("No Bal X sudah diganti menjadi Y"). Ini mencegah perangkat yang layar Sortir-nya
+  masih memegang nomor lama menghidupkan nomor itu lagi (endpoint ini mencocokkan bal lewat No Bal, sehingga nomor lama
+  terbaca sebagai bal baru).
+- `PUT /transaksi/{id}/bayar`: saat membuat/memperbarui `barang`, jangan menimpa `barang.no_bal` yang sudah diganti
+  (pakai nomor terakhir di `riwayat_no_bal` untuk item itu).
+- `PUT /transaksi/{id}/koreksi` (batal lunas lalu lunas lagi) juga mencocokkan lewat No Bal: pertahankan `barang_id`
+  bal yang nomornya sudah diganti.
+
+FE: `utils/gantiNoBal.ts` (aturan & perhitungan), `utils/noBalPensiun.ts` (nomor lama untuk Sortir dan penggabungan
+kupon), `components/koreksi/KoreksiNoBalView.tsx`, antrean `no_bal:ganti` di `services/kirimMutasi.ts`, overlay
+penggantian yang belum sampai server di `services/overlayDaftar.ts`.
+
 ---
 
 ## 6. Aturan wajib di sisi server
@@ -574,6 +666,9 @@ di server]**:
 | `src/utils/statusBatchSample.ts` | Status Draft batch sample dan baris sample per bal untuk laporan (`barisSampleDariBatch`) |
 | `src/utils/storage.ts` | Penyimpanan lokal berversi (`_v40`), kompresi, pembersihan kunci lama |
 | `src/utils/rekapKodeBal.ts` | Rekap jumlah bal per kode dan per petani (padanan SQL bagian 7.2) |
+| `src/utils/gantiNoBal.ts`, `src/utils/noBalPensiun.ts` | Koreksi No Bal: aturan, pencarian nomor lama, penerapan ke kupon/bal/Batch Sample, nomor yang sudah dipensiunkan (bagian 5.5) |
+| `src/utils/laporanSample.ts` | Laporan Pengiriman Sample: selisih harga tawaran-deal dan jual-beli per bal & per batch |
+| `src/utils/suratSample.ts` | Kolom Surat Sample (No Asal/No Jadi, kode/nilai harga jual) untuk cetak dan Excel, opsi cetak |
 | `src/utils/paginasiNota.ts` | Pembagian halaman nota agar baris tidak terpotong |
 | `src/components/transaksi/*` | Sortir, Timbangan, Kasir, nota |
 | `src/components/laporan/*` | Laporan dan rekap |
@@ -581,5 +676,6 @@ di server]**:
 
 Kunci penyimpanan lokal: data aplikasi `erp_tembakau_*_v40` (dibersihkan otomatis saat versi skema naik);
 preferensi tampilan dan antrean memakai awalan `sms_` agar tidak ikut terhapus pembersihan itu
-(`sms_antrian_sinkron_v1`, `sms_antrian_mutasi_v1`, `sms_laporan_tampilan_*`). Kunci lama
+(`sms_antrian_sinkron_v1`, `sms_antrian_mutasi_v1`, `sms_laporan_tampilan_*`, `sms_opsi_cetak_sample`). Riwayat ganti No Bal
+disimpan di `erp_tembakau_riwayat_no_bal_v40`. Kunci lama
 `erp_tembakau_sample_v40` (daftar sample per bal yang hanya lokal) tidak dipakai lagi dan dibersihkan otomatis.

@@ -9,6 +9,7 @@ import {
   UserRole,
   MasterHargaJual,
   BatchPengirimanSample,
+  RiwayatNoBal,
   SaveTransaksiMeta
 } from './types';
 import { 
@@ -26,17 +27,22 @@ import {
   saveBatchSampleData,
   loadPengirimanData, 
   savePengirimanData,
-  loadUserData, 
+  loadRiwayatNoBalData,
+  saveRiwayatNoBalData,
+  loadUserData,
   saveUserData,
   loadCurrentUser, 
   saveCurrentUser,
   recordAuditLog,
   STORAGE_KEY_BARANG,
   STORAGE_KEY_TRANSAKSI,
-  STORAGE_KEY_PETANI
+  STORAGE_KEY_PETANI,
+  STORAGE_KEY_RIWAYAT_NO_BAL
 } from './utils/storage';
 import { mergeKuponParalel, normalizeStatusBal, resolveStatusStok } from './utils/kuponSortir';
 import { filterBarangLunas } from './utils/statusBayar';
+import { RencanaGantiNoBal, terapkanGantiNoBal } from './utils/gantiNoBal';
+import { aturRiwayatNoBal } from './utils/noBalPensiun';
 import { barisSampleDariBatch } from './utils/statusBatchSample';
 import { balTerkirimDariTransaksi, isSuratJalanTerkunci, pesanSuratJalanTerkunci, pesanTransaksiTerkunci } from './utils/kunciHapus';
 import {
@@ -67,6 +73,7 @@ import {
   overlayHargaJual,
   overlayPengiriman,
   overlayPetani,
+  overlayRiwayatNoBal,
   overlayTransaksi,
   overlayUser,
 } from './services/overlayDaftar';
@@ -93,12 +100,14 @@ const LaporanGradeView = lazyNamed(() => import('./components/laporan/LaporanGra
 const LaporanPembelianBarangView = lazyNamed(() => import('./components/laporan/LaporanPembelianBarangView'), 'LaporanPembelianBarangView');
 const LaporanPetaniView = lazyNamed(() => import('./components/laporan/LaporanPetaniView'), 'LaporanPetaniView');
 const LaporanPengirimanView = lazyNamed(() => import('./components/laporan/LaporanPengirimanView'), 'LaporanPengirimanView');
+const LaporanSampleView = lazyNamed(() => import('./components/laporan/LaporanSampleView'), 'LaporanSampleView');
 const PetaniTable = lazyNamed(() => import('./components/petani/PetaniTable'), 'PetaniTable');
 const HargaManagement = lazyNamed(() => import('./components/harga/HargaManagement'), 'HargaManagement');
 const SortirPageView = lazyNamed(() => import('./components/transaksi/SortirPageView'), 'SortirPageView');
 const TimbanganPageView = lazyNamed(() => import('./components/transaksi/TimbanganPageView'), 'TimbanganPageView');
 const KasirPageView = lazyNamed(() => import('./components/transaksi/KasirPageView'), 'KasirPageView');
 const MasterPotonganManagement = lazyNamed(() => import('./components/master_potongan/MasterPotonganManagement'), 'MasterPotonganManagement');
+const KoreksiNoBalView = lazyNamed(() => import('./components/koreksi/KoreksiNoBalView'), 'KoreksiNoBalView');
 const PengirimanManagement = lazyNamed(() => import('./components/pengiriman/PengirimanManagement'), 'PengirimanManagement');
 const SampleManagement = lazyNamed(() => import('./components/sample/SampleManagement'), 'SampleManagement');
 const StatusBatchPengirimanManagement = lazyNamed(() => import('./components/pengiriman/StatusBatchPengirimanManagement'), 'StatusBatchPengirimanManagement');
@@ -241,6 +250,15 @@ export default function App() {
   const [batchSampleList, setBatchSampleList] = useState<BatchPengirimanSample[]>(() => loadBatchSampleData());
   // Baris sample per bal untuk laporan, diturunkan dari batch sample (tersimpan di server)
   const sampleRows = useMemo(() => barisSampleDariBatch(batchSampleList), [batchSampleList]);
+  // Riwayat Koreksi No Bal; nomor lama juga didaftarkan ke Sortir dan penggabungan kupon (tidak boleh dipakai lagi)
+  const [riwayatNoBalList, setRiwayatNoBalList] = useState<RiwayatNoBal[]>(() => {
+    const data = loadRiwayatNoBalData();
+    aturRiwayatNoBal(data);
+    return data;
+  });
+  useEffect(() => {
+    aturRiwayatNoBal(riwayatNoBalList);
+  }, [riwayatNoBalList]);
   const [selectedBatchIdForShipment, setSelectedBatchIdForShipment] = useState<string>('');
   // Surat Jalan yang sedang diedit di halaman Pengiriman Reguler (dipilih dari Status Pengiriman)
   const [editPengirimanId, setEditPengirimanId] = useState<string | null>(null);
@@ -280,6 +298,7 @@ export default function App() {
       hargaJualRes,
       batchRes,
       pengirimanRes,
+      riwayatNoBalRes,
     ] = await Promise.all([
       ErpApiService.getPetaniList(),
       ErpApiService.getBarangList(),
@@ -289,6 +308,7 @@ export default function App() {
       ErpApiService.getHargaJualList(),
       ErpApiService.getBatchSampleList(),
       ErpApiService.getPengirimanList(),
+      ErpApiService.getRiwayatNoBalList(),
     ]);
 
     // Memuat semua daftar bisa makan beberapa detik. Perubahan yang dibuat operator selama menunggu (centang ganti
@@ -342,6 +362,11 @@ export default function App() {
       setPengirimanList(daftar);
       savePengirimanData(daftar);
       fromBackend = true;
+    }
+    if (riwayatNoBalRes.fromBackend) {
+      const daftar = overlayRiwayatNoBal(riwayatNoBalRes.data);
+      setRiwayatNoBalList(daftar);
+      saveRiwayatNoBalData(daftar);
     }
     return { fromBackend };
   }, [currentUser]);
@@ -404,6 +429,16 @@ export default function App() {
         }
         void muatUlangBal();
       } else if (kunci === 'pengiriman:hapus' || kunci === 'batch_sample:hapus' || kunci === 'transaksi:hapus') {
+        void muatUlangBal();
+      } else if (kunci === 'no_bal:ganti') {
+        const disimpan = hasil as RiwayatNoBal | undefined;
+        if (disimpan?.riwayat_id) {
+          setRiwayatNoBalList((prev) => {
+            const next = prev.map((r) => (r.riwayat_id === disimpan.riwayat_id ? { ...r, ...disimpan } : r));
+            saveRiwayatNoBalData(next);
+            return next;
+          });
+        }
         void muatUlangBal();
       } else if (kunci === 'petani:simpan') {
         const lama = tugas.data as Petani;
@@ -481,6 +516,15 @@ export default function App() {
       void refreshOperationalLists();
     });
     const lepasDitolak = antrianMutasi.saatHapusDitolak((tugas, pesan) => {
+      if (tugas.entitas === 'no_bal') {
+        // Ganti No Bal ditolak server (mis. nomor baru sudah dipakai di perangkat lain): riwayatnya dibuang dan data
+        // kupon/bal dimuat ulang dari server sehingga nomor kembali seperti di server
+        setRiwayatNoBalList((prev) => {
+          const next = prev.filter((r) => r.riwayat_id !== tugas.id);
+          saveRiwayatNoBalData(next);
+          return next;
+        });
+      }
       showToast(`${tugas.label} dibatalkan: ${pesan}`, 'info');
       void refreshOperationalLists();
     });
@@ -570,6 +614,9 @@ export default function App() {
         setBarangList(normalizeStatusBal(loadBarangData()));
       } else if (e.key === STORAGE_KEY_PETANI) {
         setPetaniList(loadPetaniData());
+      } else if (e.key === STORAGE_KEY_RIWAYAT_NO_BAL) {
+        // No Bal diganti di tab lain: nomor lamanya harus ikut dikenal (pencarian Laporan Bal, scan Sortir)
+        setRiwayatNoBalList(loadRiwayatNoBalData());
       }
     };
     window.addEventListener('storage', handleDataChange);
@@ -1329,6 +1376,87 @@ export default function App() {
   };
 
   /**
+   * Koreksi No Bal: nomor diganti di layar (kupon bila belum lunas, bal gudang, Batch Sample), riwayatnya dicatat, lalu
+   * dikirim ke server lewat antrean dalam SATU permintaan (bukan lewat simpan kupon, yang mencocokkan bal lewat No Bal
+   * sehingga ganti nomor terbaca sebagai hapus + tambah bal).
+   *
+   * Kupon belum lunas: permintaan dikirim DULU. Selama penggantian belum tersimpan di server, simpanan kupon itu
+   * menunggu (erpApi.syncTransaksi); karena itu penggantian ditolak bila server belum punya endpoint-nya, supaya
+   * Sortir/Timbangan kupon itu tidak tertahan selamanya.
+   */
+  const handleGantiNoBal = async (rencana: RencanaGantiNoBal): Promise<boolean> => {
+    const r = rencana.riwayat;
+    if (currentUser?.status_aktif === false) {
+      showToast('Akun Anda dinonaktifkan.', 'info');
+      return false;
+    }
+    if (!hasModuleAccess(currentRole, 'modul-koreksi-no-bal')) {
+      showToast('Akses ditolak: hanya Super Admin dan Admin Sortir yang boleh mengganti No Bal.', 'info');
+      return false;
+    }
+    // Simpanan kupon yang masih menunggu membawa No Bal lama dan akan menimpa penggantian ini di server
+    if (r.ubah_nota && antrianSinkron.adaTugas(r.transaksi_id)) {
+      showToast(`Kupon ${r.no_kupon || ''} masih menyimpan ke server. Coba lagi sebentar.`, 'info');
+      return false;
+    }
+
+    const spekMutasi: SpesifikasiMutasi = {
+      entitas: 'no_bal',
+      id: r.riwayat_id,
+      aksi: 'ganti',
+      data: rencana,
+      label: `Ganti No Bal ${r.no_bal_lama} → ${r.no_bal_baru}`,
+    };
+    if (r.ubah_nota && serverAktif()) {
+      await catatMutasi(spekMutasi);
+      const hasil = antrianMutasi.statusTugas('no_bal', r.riwayat_id, 'ganti');
+      // Ditolak server (mis. nomor sudah dipakai di perangkat lain): pesannya sudah ditampilkan pendengar antrean
+      if (hasil.status === 'tidak_ada') return false;
+      if (hasil.endpointTidakAda) {
+        antrianMutasi.batalkan('no_bal', r.riwayat_id);
+        showToast('Server belum mendukung ganti No Bal untuk kupon yang belum lunas. Perbarui server terlebih dahulu.', 'error');
+        return false;
+      }
+    }
+
+    setTransaksiList((prev) => {
+      const next = terapkanGantiNoBal({ transaksiList: prev }, rencana).transaksiList ?? prev;
+      if (next !== prev) saveTransaksiData(next);
+      return next;
+    });
+    setBarangList((prev) => {
+      const next = terapkanGantiNoBal({ barangList: prev }, rencana).barangList ?? prev;
+      if (next !== prev) saveBarangData(next);
+      return next;
+    });
+    setBatchSampleList((prev) => {
+      const next = terapkanGantiNoBal({ batchSampleList: prev }, rencana).batchSampleList ?? prev;
+      if (next !== prev) saveBatchSampleData(next);
+      return next;
+    });
+    setRiwayatNoBalList((prev) => {
+      const next = [r, ...prev.filter((x) => x.riwayat_id !== r.riwayat_id)];
+      saveRiwayatNoBalData(next);
+      return next;
+    });
+
+    // Kupon lunas: kupon terkunci sehingga tidak ada simpanan kupon yang bisa menimpa; dikirim lewat antrean
+    if (!(r.ubah_nota && serverAktif())) void catatMutasi(spekMutasi);
+
+    recordAuditLog({
+      user_nama: currentUser?.nama_lengkap || 'Sistem',
+      user_role: currentRole,
+      modul: 'Koreksi No Bal',
+      aksi: 'GANTI_NO_BAL',
+      target_id: r.item_id,
+      deskripsi: `No Bal ${r.no_bal_lama} diganti menjadi ${r.no_bal_baru} (Kupon ${r.no_kupon || '-'})`,
+      rincian_perubahan: [`Alasan: ${r.alasan}`, r.ubah_nota ? 'No Bal di kupon ikut berganti' : 'Nota tetap memakai No Bal lama'],
+    });
+    showToast(`No Bal ${r.no_bal_lama} diganti menjadi ${r.no_bal_baru}.`);
+    return true;
+  };
+
+  /**
    * Penyegaran data dari server untuk menu yang sedang dibuka, supaya perubahan dari perangkat lain (kupon baru
    * dari Sortir, hasil timbang, pembayaran Kasir, petani/harga baru) terlihat tanpa login ulang. Hanya daftar
    * yang dipasang ke layar, dan hanya bila isinya berubah; isian formulir tidak pernah disentuh. Perubahan di
@@ -1366,6 +1494,11 @@ export default function App() {
     const segarkanKupon = async () => {
       await handleRefreshTransaksiList();
     };
+    // Nomor yang sudah diganti di perangkat lain harus segera dikenal Sortir (tidak boleh discan lagi)
+    const segarkanRiwayatNoBal = async () => {
+      const res = await ErpApiService.getRiwayatNoBalList();
+      if (res.fromBackend) pasangBila(setRiwayatNoBalList, saveRiwayatNoBalData, overlayRiwayatNoBal(res.data));
+    };
 
     const tugas: Array<() => Promise<unknown>> = [];
     switch (modul) {
@@ -1373,7 +1506,10 @@ export default function App() {
         tugas.push(segarkanKupon, segarkanBal);
         break;
       case 'modul-0-sortir':
-        tugas.push(segarkanPetani, segarkanHargaBeli, segarkanKupon, segarkanBal);
+        tugas.push(segarkanPetani, segarkanHargaBeli, segarkanKupon, segarkanBal, segarkanRiwayatNoBal);
+        break;
+      case 'modul-koreksi-no-bal':
+        tugas.push(segarkanKupon, handleRefreshPengirimanData, segarkanRiwayatNoBal);
         break;
       case 'modul-0-timbangan':
         tugas.push(segarkanHargaBeli, segarkanKupon, segarkanBal);
@@ -1913,7 +2049,8 @@ export default function App() {
     'modul-6-laporan-grade': 'Laporan Harga',
     'modul-6-laporan-pembelian': 'Laporan Pembelian',
     'modul-6-laporan-petani': 'Laporan Petani',
-    'modul-6-laporan-pengiriman': 'Laporan Pengiriman',
+    'modul-6-laporan-pengiriman': 'Laporan Pengiriman Reguler (DO)',
+    'modul-6-laporan-sample': 'Laporan Pengiriman Sample',
     'modul-1-petani': 'Master Petani',
     'modul-3-harga': 'Master Harga Beli',
     'modul-3-harga-jual': 'Master Harga Jual',
@@ -1921,6 +2058,8 @@ export default function App() {
     'modul-0-timbangan': 'Timbangan',
     'modul-0-kasir': 'Kasir',
     'modul-0-transaksi': 'Kasir',
+    'modul-koreksi-no-bal': 'Koreksi No Bal',
+    'modul-master-potongan': 'Master Potongan Tara',
     'modul-4-sample': 'Pengiriman Sample',
     'modul-status-batch': 'Status & Detail Batch',
     'modul-5-pengiriman': 'Pengiriman Reguler (DO)',
@@ -2061,6 +2200,7 @@ export default function App() {
                 petaniList={petaniList}
                 transaksiList={transaksiList}
                 hargaList={hargaList}
+                riwayatNoBalList={riwayatNoBalList}
                 userRole={currentRole}
                 onNavigateToTransaksi={() => handleSelectModule('modul-0-transaksi')}
               />
@@ -2106,11 +2246,14 @@ export default function App() {
             {activeModuleId === 'modul-6-laporan-pengiriman' && (
               <LaporanPengirimanView
                 pengirimanList={pengirimanList}
-                sampleList={sampleRows}
                 barangList={barangList}
                 userRole={currentRole}
-                onNavigateToSample={() => handleSelectModule('modul-4-sample')}
               />
+            )}
+
+            {/* Laporan Pengiriman Sample / Reclass: selisih tawaran-deal dan jual-beli */}
+            {activeModuleId === 'modul-6-laporan-sample' && (
+              <LaporanSampleView batchSampleList={batchSampleList} barangList={barangList} userRole={currentRole} />
             )}
 
             {/* PRD 4.1: Master Petani */}
@@ -2308,6 +2451,19 @@ export default function App() {
             {/* Master Aturan Potongan Tara */}
             {activeModuleId === 'modul-master-potongan' && (
               <MasterPotonganManagement />
+            )}
+
+            {/* Koreksi No Bal */}
+            {activeModuleId === 'modul-koreksi-no-bal' && (
+              <KoreksiNoBalView
+                transaksiList={transaksiList}
+                barangList={barangList}
+                pengirimanList={pengirimanList}
+                batchSampleList={batchSampleList}
+                riwayatList={riwayatNoBalList}
+                currentUser={currentUser}
+                onGantiNoBal={handleGantiNoBal}
+              />
             )}
 
             {/* Status & Detail Batch */}

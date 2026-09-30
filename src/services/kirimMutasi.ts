@@ -10,7 +10,8 @@ import {
   TugasMutasi,
 } from './antrianMutasi';
 import { statusKeServer, tandaiServerKenalDraft } from '../utils/statusBatchSample';
-import type { Barang, BatchPengirimanSample, MasterHargaJual, PengirimanBarang, Petani, TabelHarga, User } from '../types';
+import type { Barang, BatchPengirimanSample, MasterHargaJual, PengirimanBarang, Petani, RiwayatNoBal, TabelHarga, User } from '../types';
+import type { RencanaGantiNoBal } from '../utils/gantiNoBal';
 import { hariIniLokal } from '../utils/rentangTanggal';
 
 /**
@@ -172,6 +173,8 @@ function payloadBatchSample(b: BatchPengirimanSample, terimaDraft = serverTerima
       sample_item_id: it.sample_item_id,
       barang_id: it.barang_id,
       no_bal: it.no_bal,
+      // No Jadi (nomor bal untuk pembeli), dicetak di Surat Sample
+      kode_bal_pembeli: it.kode_bal_pembeli,
       kode_harga_jual: it.kode_harga_jual,
       harga_tawaran_kg: it.harga_tawaran_kg,
       harga_deal_kg: it.harga_deal_kg,
@@ -350,6 +353,35 @@ export async function hapusTransaksiServer(transaksiId: string, alasan?: string)
   return {};
 }
 
+// ---------- Koreksi No Bal ----------
+/**
+ * Mengganti No Bal di server (satu permintaan untuk kupon, bal gudang, dan Batch Sample; dicocokkan lewat ID, bukan
+ * No Bal). Kiriman ulang dengan riwayat_id yang sama dijawab dengan riwayat yang sudah tersimpan.
+ */
+export async function kirimGantiNoBal(rencana: RencanaGantiNoBal): Promise<RiwayatNoBal> {
+  const r = rencana.riwayat;
+  const res = await api.post<RiwayatNoBal>('/bal/ganti-no-bal', {
+    riwayat_id: r.riwayat_id,
+    transaksi_id: r.transaksi_id,
+    item_id: r.item_id,
+    barang_id: r.barang_id,
+    no_bal_lama: r.no_bal_lama,
+    no_bal_baru: r.no_bal_baru,
+    tahap: r.tahap,
+    ubah_nota: r.ubah_nota,
+    alasan: r.alasan,
+    diganti_pada: r.diganti_pada,
+  });
+  return { ...r, ...ambilData<RiwayatNoBal>(res, 'Server tidak mengembalikan riwayat ganti No Bal') };
+}
+
+export function verifikasiGantiNoBal(t: TugasMutasi, hasil: unknown): string[] {
+  const kirim = (t.data as RencanaGantiNoBal).riwayat;
+  const server = hasil as RiwayatNoBal | undefined;
+  if (!server) return [];
+  return sama(server.no_bal_baru, kirim.no_bal_baru) ? [] : [`No Bal ${kirim.no_bal_baru} di layar tetapi ${server.no_bal_baru} di server`];
+}
+
 const STATUS_BAL_DIKIRIM = ['di_gudang', 'terkirim_sample', 'keluar'];
 
 /**
@@ -397,4 +429,8 @@ export const handlerMutasi: PetaHandlerMutasi = {
   'pengiriman:hapus': { kirim: async (t) => hapusPengirimanServer(t.id) },
   'pengiriman:status': { kirim: async (t) => kirimStatusPengiriman(t.data as PengirimanBarang) },
   'transaksi:hapus': { kirim: async (t) => hapusTransaksiServer(t.id, t.tambahan?.alasan as string | undefined) },
+  'no_bal:ganti': {
+    kirim: async (t) => ({ hasil: await kirimGantiNoBal(t.data as RencanaGantiNoBal) }),
+    verifikasi: verifikasiGantiNoBal,
+  },
 };

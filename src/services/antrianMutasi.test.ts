@@ -75,6 +75,28 @@ describe('antrianMutasi: pengiriman dan pencatatan', () => {
     expect(antrianMutasi.terapkanKeDaftar('pengiriman', [{ id: 'P1' }], { ambilId: (b: { id: string }) => b.id })).toHaveLength(1);
   });
 
+  it('ganti No Bal yang ditolak server (nomor sudah dipakai) dibatalkan dan dilaporkan; yang menunggu tetap terbaca', async () => {
+    let tolak = true;
+    pasang({
+      'no_bal:ganti': {
+        kirim: async () => {
+          if (tolak) throw galat(422, 'No Bal HF02 sudah dipakai');
+          throw new Error('jaringan putus');
+        },
+      },
+    });
+    const ditolak: string[] = [];
+    const lepas = antrianMutasi.saatHapusDitolak((t, pesan) => ditolak.push(`${t.id}: ${pesan}`));
+    await antrianMutasi.masukkan({ entitas: 'no_bal', id: 'R1', aksi: 'ganti', data: { riwayat: { riwayat_id: 'R1' } } });
+    expect(ditolak).toEqual(['R1: No Bal HF02 sudah dipakai']);
+    expect(antrianMutasi.ringkasan().menunggu).toBe(0);
+
+    tolak = false;
+    await antrianMutasi.masukkan({ entitas: 'no_bal', id: 'R2', aksi: 'ganti', data: { riwayat: { riwayat_id: 'R2' } } });
+    lepas();
+    expect(antrianMutasi.dataTugas('no_bal', 'ganti')).toEqual([{ riwayat: { riwayat_id: 'R2' } }]);
+  });
+
   it('410 (sudah dihapus di perangkat lain): simpanan dibuang, tidak dibuat ulang, dan data disembunyikan', async () => {
     let dikirim = 0;
     pasang({ 'batch_sample:simpan': { kirim: async () => { dikirim += 1; throw galat(410, 'Batch sudah dihapus'); } } });

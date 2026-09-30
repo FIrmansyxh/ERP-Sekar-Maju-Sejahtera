@@ -16,6 +16,7 @@ export const ROLE_DEFINITIONS: Record<UserRole, RolePermissionInfo> = {
       'modul-6-laporan-pembelian',
       'modul-6-laporan-petani',
       'modul-6-laporan-pengiriman',
+      'modul-6-laporan-sample',
       'modul-1-petani',
       'modul-3-harga',
       'modul-3-harga-jual',
@@ -24,6 +25,7 @@ export const ROLE_DEFINITIONS: Record<UserRole, RolePermissionInfo> = {
       'modul-0-timbangan',
       'modul-0-kasir',
       'modul-0-transaksi',
+      'modul-koreksi-no-bal',
       'modul-5-pengiriman',
       'modul-4-sample',
       'modul-status-batch',
@@ -51,6 +53,7 @@ export const ROLE_DEFINITIONS: Record<UserRole, RolePermissionInfo> = {
     allowedModules: [
       'modul-home',
       'modul-0-sortir',
+      'modul-koreksi-no-bal',
       'modul-1-petani',
       'modul-3-harga',
       'modul-3-harga-jual',
@@ -61,6 +64,7 @@ export const ROLE_DEFINITIONS: Record<UserRole, RolePermissionInfo> = {
       'modul-6-laporan-pembelian',
       'modul-6-laporan-petani',
       'modul-6-laporan-pengiriman',
+      'modul-6-laporan-sample',
     ],
     capabilities: {
       canManageUsers: false,
@@ -116,6 +120,7 @@ export const ROLE_DEFINITIONS: Record<UserRole, RolePermissionInfo> = {
       'modul-6-laporan-pembelian',
       'modul-6-laporan-petani',
       'modul-6-laporan-pengiriman',
+      'modul-6-laporan-sample',
     ],
     capabilities: {
       canManageUsers: false,
@@ -143,6 +148,7 @@ export const ROLE_DEFINITIONS: Record<UserRole, RolePermissionInfo> = {
       'modul-status-batch',
       'modul-3-harga-jual',
       'modul-6-laporan-pengiriman',
+      'modul-6-laporan-sample',
     ],
     capabilities: {
       canManageUsers: false,
@@ -172,6 +178,7 @@ export const ROLE_DEFINITIONS: Record<UserRole, RolePermissionInfo> = {
       'modul-6-laporan-pembelian',
       'modul-6-laporan-petani',
       'modul-6-laporan-pengiriman',
+      'modul-6-laporan-sample',
     ],
     capabilities: {
       canManageUsers: false,

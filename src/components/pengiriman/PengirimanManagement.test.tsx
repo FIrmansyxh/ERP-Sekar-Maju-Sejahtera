@@ -119,3 +119,26 @@ describe('Pengiriman Reguler: mode edit Surat Jalan yang belum Selesai', () => {
     expect(props.onUpdatePengiriman).not.toHaveBeenCalled();
   });
 });
+
+describe('Pengiriman Reguler: centang semua bal Surat Jalan', () => {
+  it('kotak di judul kolom Kirim melepas lalu mencentang semua bal; tombol Centang Semua muncul saat belum semua tercentang', async () => {
+    render(<PengirimanManagement {...buatProps()} />);
+    const semua = screen.getByRole('checkbox', { name: 'Centang semua bal' });
+    const centangBal = () => screen.getAllByRole('checkbox').filter((c) => c !== semua) as HTMLInputElement[];
+
+    expect(semua).toBeChecked();
+    expect(centangBal().every((c) => c.checked)).toBe(true);
+
+    await userEvent.click(semua);
+    expect(semua).not.toBeChecked();
+    expect(centangBal().every((c) => !c.checked)).toBe(true);
+
+    await userEvent.click(centangBal()[0]);
+    expect((semua as HTMLInputElement).indeterminate).toBe(true);
+
+    await userEvent.click(screen.getByRole('button', { name: /Centang Semua \(2 Bal\)/ }));
+    expect(semua).toBeChecked();
+    expect(centangBal().every((c) => c.checked)).toBe(true);
+    expect(screen.queryByRole('button', { name: /Centang Semua \(/ })).not.toBeInTheDocument();
+  });
+});

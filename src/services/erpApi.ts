@@ -14,9 +14,12 @@ import {
   overlayHargaJual,
   overlayPengiriman,
   overlayPetani,
+  overlayRiwayatNoBal,
   overlayTransaksi,
   overlayUser,
 } from './overlayDaftar';
+import { antrianMutasi, endpointBelumAda } from './antrianMutasi';
+import type { RencanaGantiNoBal } from '../utils/gantiNoBal';
 import { 
   Petani, 
   Barang, 
@@ -26,7 +29,8 @@ import {
   MasterHargaJual,
   User,
   BatchPengirimanSample,
-  PengirimanBarang
+  PengirimanBarang,
+  RiwayatNoBal
 } from '../types';
 import { 
   loadPetaniData, 
@@ -45,6 +49,8 @@ import {
   saveBatchSampleData,
   loadPengirimanData,
   savePengirimanData,
+  loadRiwayatNoBalData,
+  saveRiwayatNoBalData,
   saveCurrentUser,
   authenticateUser as authenticateLocalUser
 } from '../utils/storage';
@@ -569,6 +575,17 @@ export class ErpApiService {
       if (!isOnline) return { syncedTx: newTx, fromBackend: false };
     }
 
+    // Ganti No Bal di kupon ini belum sampai ke server: tunggu dulu. Endpoint kupon mencocokkan bal lewat No Bal, jadi
+    // nomor baru yang terkirim duluan terbaca sebagai "bal lama dihapus, bal baru ditambah" (ID bal berganti dan
+    // rujukan Batch Sample / Surat Jalan putus). Antrean kupon mencoba lagi sampai penggantiannya selesai.
+    const gantiMenunggu = antrianMutasi
+      .tugasMenunggu<RencanaGantiNoBal>('no_bal', 'ganti')
+      .filter((r) => r.riwayat.ubah_nota && r.riwayat.transaksi_id === newTx.transaksi_id);
+    if (gantiMenunggu.length > 0) {
+      const nomor = gantiMenunggu.map((r) => `${r.riwayat.no_bal_lama} → ${r.riwayat.no_bal_baru}`).join(', ');
+      throw new Error(`Menunggu ganti No Bal ${nomor} tersimpan di server sebelum Kupon ${newTx.no_kupon} dikirim`);
+    }
+
     const lunasBaru = newTx.status_pembayaran === 'lunas' && (!oldTx || oldTx.status_pembayaran !== 'lunas');
 
     // Samakan item_id dengan milik server (dicocokkan lewat No Bal), tetapi berat/tara/tikar tetap dari yang dikirim
@@ -727,6 +744,52 @@ export class ErpApiService {
       console.warn('Gagal mengambil inventaris barang dari API, memakai fallback lokal:', err);
     }
     return { data: loadBarangData(), fromBackend: false };
+  }
+
+  // --- RIWAYAT GANTI NO BAL ---
+  public static mapBackendRiwayatNoBal(r: any): RiwayatNoBal {
+    return {
+      riwayat_id: String(r.riwayat_id || ''),
+      transaksi_id: String(r.transaksi_id || ''),
+      item_id: String(r.item_id || ''),
+      barang_id: r.barang_id ? String(r.barang_id) : undefined,
+      no_kupon: r.no_kupon || r.transaksi?.no_kupon || undefined,
+      petani_id: r.petani_id || r.transaksi?.petani_id || undefined,
+      nama_petani: r.nama_petani || r.transaksi?.petani?.nama_petani || undefined,
+      no_bal_lama: String(r.no_bal_lama || ''),
+      no_bal_baru: String(r.no_bal_baru || ''),
+      tahap: (r.tahap || 'sortir') as RiwayatNoBal['tahap'],
+      ubah_nota: r.ubah_nota === true || r.ubah_nota === 1 || r.ubah_nota === '1' || r.ubah_nota === 't',
+      alasan: String(r.alasan || ''),
+      diganti_oleh: String(r.diganti_oleh_nama || r.diganti_oleh || ''),
+      diganti_pada: String(r.diganti_pada || r.created_at || ''),
+    };
+  }
+
+  /** Server belum punya endpoint riwayat ganti No Bal: jangan ditanya lagi sampai waktu ini (ms), supaya penyegaran berkala tidak menghasilkan 404 terus-menerus. */
+  private static riwayatNoBalTakAdaSampai = 0;
+
+  public static async getRiwayatNoBalList(): Promise<{ data: RiwayatNoBal[]; fromBackend: boolean }> {
+    if (Date.now() < this.riwayatNoBalTakAdaSampai) return { data: loadRiwayatNoBalData(), fromBackend: false };
+    try {
+      const isOnline = await this.isBackendOnline();
+      if (isOnline) {
+        const res = await api.get<any[]>('/bal/riwayat-no-bal');
+        if (res.status === 'success' && Array.isArray(res.data)) {
+          const mapped = overlayRiwayatNoBal(res.data.map((r) => this.mapBackendRiwayatNoBal(r)));
+          saveRiwayatNoBalData(mapped);
+          return { data: mapped, fromBackend: true };
+        }
+      }
+    } catch (err) {
+      if (endpointBelumAda(err)) {
+        // Server lama belum punya endpoint ini: riwayat di perangkat ini tetap dipakai, tanya lagi 10 menit kemudian
+        this.riwayatNoBalTakAdaSampai = Date.now() + 10 * 60_000;
+      } else {
+        console.warn('Gagal mengambil riwayat ganti No Bal dari API, memakai data lokal:', err);
+      }
+    }
+    return { data: loadRiwayatNoBalData(), fromBackend: false };
   }
 
   // --- HARGA BELI & JUAL ---
@@ -897,6 +960,7 @@ export class ErpApiService {
         batch_id: b.batch_id,
         barang_id: it.barang_id,
         no_bal: it.barang?.no_bal || it.no_bal || '',
+        kode_bal_pembeli: it.kode_bal_pembeli || undefined,
         kode_grade: it.barang?.kode_grade || it.kode_grade || '',
         kode_harga_jual: it.kode_harga_jual,
         berat_bal_kg: beratKg,
@@ -1059,6 +1123,8 @@ export class ErpApiService {
       return {
         ...lk,
         sample_item_id: sv.sample_item_id || lk.sample_item_id,
+        // Server lama belum menyimpan No Jadi: yang di perangkat ini tetap dipakai
+        kode_bal_pembeli: sv.kode_bal_pembeli || lk.kode_bal_pembeli,
         status_item: sv.status_item,
         harga_tawaran_kg: sv.harga_tawaran_kg,
         harga_deal_kg: sv.harga_deal_kg,

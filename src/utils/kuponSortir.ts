@@ -4,6 +4,7 @@ import { POTONGAN_GANTI_TIKAR, POTONGAN_KULI_PER_BAL } from '../config/aturanTim
 import { isTransaksiLunas } from './statusBayar';
 import { balDihapusDariKupon, isIdBalServer } from './balDihapus';
 import { hariIniLokal } from './rentangTanggal';
+import { noBalPensiunDiKupon, penggantiNoBal } from './noBalPensiun';
 
 /**
  * Aturan kupon terbuka: Sortir dan Timbangan boleh mengerjakan kupon yang sama
@@ -346,6 +347,12 @@ export function mergeKuponParalel(
     if (!masihAda(it)) continue;
     const matchedIncoming = (it.item_id && incomingItemIds.get(it.item_id))
       || (it.barang_id && incomingBarangIds.get(it.barang_id));
+    // No Bal ini sudah diganti lewat Koreksi No Bal: salinan basi bernomor lama tidak boleh membawanya balik
+    const pengganti = penggantiNoBal(it.no_bal);
+    const incomingSudahGanti =
+      (matchedIncoming && String(matchedIncoming.no_bal).toUpperCase() !== String(it.no_bal).toUpperCase()) ||
+      (pengganti !== null && incomingNoBal.has(pengganti));
+    if (noBalPensiunDiKupon(it.no_bal) && incomingSudahGanti) continue;
     if (matchedIncoming && String(matchedIncoming.no_bal).toUpperCase() !== String(it.no_bal).toUpperCase()) {
       // Bal yang sama dengan No Bal berbeda: ganti nomor yang bertanda waktu lebih baru yang dipakai.
       // Tanpa tanda waktu, nomor dari incoming yang dipakai (perilaku lama).

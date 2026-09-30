@@ -31,6 +31,7 @@ import { formatNumber, formatRupiah } from '../../utils/formatters';
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
 import { SuratJalanPrintModal } from './SuratJalanPrintModal';
 import { ConfirmModal } from '../common/ConfirmModal';
+import { SortIcon } from '../common/SortIcon';
 import { BatchSamplePrintModal } from '../sample/BatchSamplePrintModal';
 import { openPrintDocument } from '../../utils/openDedicatedPrint';
 import { isSuratJalanTerkunci, pesanSuratJalanTerkunci } from '../../utils/kunciHapus';
@@ -129,6 +130,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
   // --- TAB 1 STATE: DETAIL BATCH SAMPLE & SORTIR BUYER ---
   const [selectedBatchId, setSelectedBatchId] = useState<string>('');
   const [batchItems, setBatchItems] = useState<SampleItemDetail[]>([]);
+  const [urutNoBal, setUrutNoBal] = useState<'asc' | 'desc' | null>(null);
   const [filterSortirStatus, setFilterSortirStatus] = useState<string>('all');
   const [scanSortirInput, setScanSortirInput] = useState('');
   const [isAccAllConfirmOpen, setIsAccAllConfirmOpen] = useState(false);
@@ -508,14 +510,23 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
 
   // Filtered Items for Display in Tab 1
   const displayedBatchItems = useMemo(() => {
-    return batchItems.filter((it) => {
+    const hasil = batchItems.filter((it) => {
       if (filterSortirStatus === 'disetujui') return it.status_item === 'disetujui';
       if (filterSortirStatus === 'ditolak') return it.status_item === 'ditolak';
       if (filterSortirStatus === 'nego') return it.status_item === 'nego';
       if (filterSortirStatus === 'dikirim') return it.status_item === 'dikirim' || it.status_item === 'diterima';
       return true;
     });
-  }, [batchItems, filterSortirStatus]);
+    if (!urutNoBal) return hasil;
+    // Urut alfabet lalu angka (SB2 sebelum SB10); tanpa urutan = urutan bal di batch
+    const arah = urutNoBal === 'asc' ? 1 : -1;
+    return [...hasil].sort(
+      (a, b) => arah * (a.no_bal || a.barang_id).localeCompare(b.no_bal || b.barang_id, undefined, { numeric: true, sensitivity: 'base' })
+    );
+  }, [batchItems, filterSortirStatus, urutNoBal]);
+
+  // Klik judul No Bal: terendah → tertinggi → urutan semula
+  const handleUrutNoBal = () => setUrutNoBal((u) => (u === null ? 'asc' : u === 'asc' ? 'desc' : null));
 
   // Tab 1 Metrics
   const countAcc = batchItems.filter((i) => i.status_item === 'disetujui').length;
@@ -1341,7 +1352,16 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                 <thead className="bg-gray-100 border-b border-gray-300 text-gray-700 font-bold">
                   <tr>
                     <th className="p-3 w-10 text-center">No</th>
-                    <th className="p-3 w-36">No Bal</th>
+                    <th
+                      onClick={handleUrutNoBal}
+                      className="p-3 w-36 cursor-pointer select-none hover:bg-gray-200/80 transition"
+                      title="Klik untuk urutkan No Bal: terendah, tertinggi, lalu urutan semula"
+                    >
+                      <div className="flex items-center">
+                        <span>No Bal</span>
+                        <SortIcon aktif={urutNoBal !== null} arah={urutNoBal || 'asc'} />
+                      </div>
+                    </th>
                     <th className="p-3 text-right w-24">Berat Bruto (Kg)</th>
                     <th className="p-3 text-center w-48">Status Sortir Pembeli</th>
                     <th className="p-3 w-56">Kode Master Harga Jual</th>

@@ -102,7 +102,6 @@ export interface ResumePengiriman {
   pabrik: BarisPabrikResume[];
   grade: BarisGradeResume[];
   bulan: BarisBulanResume[];
-  sample: ResumeSample;
   perhatian: {
     belumSelesai: DOPerluPerhatian[];
     selesaiTanpaNilai: string[];
@@ -156,7 +155,6 @@ export function hitungResumeSample(sampleList: PengirimanSample[]): ResumeSample
 export function hitungResumePengiriman(
   pengirimanList: PengirimanBarang[],
   barangList: Barang[] = [],
-  sampleList: PengirimanSample[] = [],
   hariIni: Date = new Date()
 ): ResumePengiriman {
   const barangMap = new Map(barangList.map((b) => [b.barang_id, b]));
@@ -312,7 +310,6 @@ export function hitungResumePengiriman(
     bulan: Array.from(bulan.entries())
       .map(([kunci, v]) => ({ bulan: kunci, ...v, kg: normalizeKg(v.kg) }))
       .sort((a, b) => a.bulan.localeCompare(b.bulan)),
-    sample: hitungResumeSample(sampleList),
     perhatian: { belumSelesai, selesaiTanpaNilai, balTidakDitemukan },
   };
 }
@@ -391,16 +388,6 @@ export function susunBarisExcelResume(r: ResumePengiriman): { rows: string[][]; 
 
   grup('Pengiriman per Bulan');
   r.bulan.forEach((b) => baris(b.bulan, `${formatNumber(b.jumlahDO)} DO`, `${formatNumber(b.bal)} bal • ${formatNumber(b.kg, 1)} kg • ${formatRupiah(b.nilai)}`));
-
-  grup('Sample QC');
-  const s = r.sample;
-  if (s.total === 0) {
-    baris('Tidak ada pengiriman sample pada filter ini', '');
-  } else {
-    baris('Total sample', formatNumber(s.total), `${formatNumber(s.sudahMasukDO)} sudah masuk Surat Jalan`);
-    baris('Disetujui / Nego / Ditolak', `${formatNumber(s.disetujui)} / ${formatNumber(s.nego)} / ${formatNumber(s.ditolak)}`, `Tingkat setuju ${persen(s.persenSetuju)}`);
-    baris('Menunggu jawaban pembeli', formatNumber(s.menunggu));
-  }
 
   grup('Perlu Perhatian');
   const { belumSelesai, selesaiTanpaNilai, balTidakDitemukan } = r.perhatian;

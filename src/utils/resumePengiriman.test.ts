@@ -17,7 +17,7 @@ const balList = [buatBal('B1', { kode_grade: '57' }), buatBal('B2', { kode_grade
 
 describe('hitungResumePengiriman', () => {
   it('daftar kosong menghasilkan resume kosong tanpa galat', () => {
-    const r = hitungResumePengiriman([], [], [], HARI_INI);
+    const r = hitungResumePengiriman([], [], HARI_INI);
     expect(r.jumlahDO).toBe(0);
     expect(r.hargaRataNetto).toBeNull();
     expect(r.persenSelisih).toBeNull();
@@ -27,7 +27,7 @@ describe('hitungResumePengiriman', () => {
   it('nilai penjualan hanya dari DO Selesai, DO lain masuk nilai berjalan', () => {
     const selesai = buatSuratJalan('1', 'selesai');
     const dikirim = buatSuratJalan('2', 'dikirim', { tanggal_kirim: '2026-09-18' });
-    const r = hitungResumePengiriman([selesai, dikirim], balList, [], HARI_INI);
+    const r = hitungResumePengiriman([selesai, dikirim], balList, HARI_INI);
     expect(r.nilaiPenjualan).toBe(selesai.total_nilai_deal);
     expect(r.nilaiBerjalan).toBe(dikirim.total_nilai_deal);
     expect(r.jumlahDO).toBe(2);
@@ -42,7 +42,7 @@ describe('hitungResumePengiriman', () => {
       harga_deal_map: { B1: 50000, B2: 50000 },
       total_nilai_deal: 84 * 50000,
     });
-    const r = hitungResumePengiriman([sj], balList, [], HARI_INI);
+    const r = hitungResumePengiriman([sj], balList, HARI_INI);
     expect(r.nettoJual).toBe(84);
     expect(r.potonganNetto).toBe(4);
     expect(r.hargaRataNetto).toBe(50000);
@@ -50,7 +50,7 @@ describe('hitungResumePengiriman', () => {
 
   it('selisih timbang ulang negatif berarti susut terhadap bruto gudang', () => {
     const sj = buatSuratJalan('1', 'selesai', { berat_kirim_map: { B1: 43, B2: 43.5 } });
-    const r = hitungResumePengiriman([sj], balList, [], HARI_INI);
+    const r = hitungResumePengiriman([sj], balList, HARI_INI);
     expect(r.brutoGudangPembanding).toBe(88);
     expect(r.selisihTimbangUlang).toBe(-1.5);
     expect(r.persenSelisih).toBeCloseTo((-1.5 / 88) * 100, 5);
@@ -58,21 +58,21 @@ describe('hitungResumePengiriman', () => {
 
   it('nilai dihitung dari netto x harga bila total_nilai_deal kosong', () => {
     const sj = buatSuratJalan('1', 'selesai', { total_nilai_deal: 0 });
-    const r = hitungResumePengiriman([sj], balList, [], HARI_INI);
+    const r = hitungResumePengiriman([sj], balList, HARI_INI);
     expect(r.nilaiPenjualan).toBe(44 * 45000 + 44 * 46000);
     expect(r.perhatian.selesaiTanpaNilai).toEqual([]);
   });
 
   it('DO Selesai tanpa harga sama sekali masuk daftar perhatian', () => {
     const sj = buatSuratJalan('1', 'selesai', { total_nilai_deal: 0, harga_deal_map: {} });
-    const r = hitungResumePengiriman([sj], balList, [], HARI_INI);
+    const r = hitungResumePengiriman([sj], balList, HARI_INI);
     expect(r.perhatian.selesaiTanpaNilai).toEqual(['SJ-1']);
   });
 
   it('DO belum Selesai diurutkan dari yang paling lama dan dihitung hari sejak kirim', () => {
     const lama = buatSuratJalan('1', 'dalam_perjalanan', { tanggal_kirim: '2026-09-10' });
     const baru = buatSuratJalan('2', 'dimuat', { tanggal_kirim: '2026-09-20' });
-    const r = hitungResumePengiriman([baru, lama], balList, [], HARI_INI);
+    const r = hitungResumePengiriman([baru, lama], balList, HARI_INI);
     expect(r.perhatian.belumSelesai.map((d) => [d.no_surat_jalan, d.hariSejakKirim])).toEqual([
       ['SJ-1', 11],
       ['SJ-2', 1],
@@ -81,7 +81,7 @@ describe('hitungResumePengiriman', () => {
 
   it('bal yang datanya tidak ada ditandai, dan grade-nya masuk Tanpa Grade', () => {
     const sj = buatSuratJalan('1', 'selesai', { barang_ids: ['B1', 'HILANG'], berat_kirim_map: { B1: 44, HILANG: 40 } });
-    const r = hitungResumePengiriman([sj], balList, [], HARI_INI);
+    const r = hitungResumePengiriman([sj], balList, HARI_INI);
     expect(r.perhatian.balTidakDitemukan).toEqual(['SJ-1']);
     expect(r.grade.map((g) => g.grade).sort()).toEqual(['57', 'Tanpa Grade']);
   });
@@ -90,7 +90,7 @@ describe('hitungResumePengiriman', () => {
     const a1 = buatSuratJalan('1', 'selesai', { tujuan: 'Pabrik A', total_berat_kg: 100, tanggal_kirim: '2026-08-30' });
     const a2 = buatSuratJalan('2', 'selesai', { tujuan: 'Pabrik A', total_berat_kg: 100, tanggal_kirim: '2026-09-02', barang_ids: ['B3'], total_bal: 1 });
     const b1 = buatSuratJalan('3', 'diterima', { tujuan: 'Pabrik B', total_berat_kg: 300, tanggal_kirim: '2026-09-05' });
-    const r = hitungResumePengiriman([a1, a2, b1], balList, [], HARI_INI);
+    const r = hitungResumePengiriman([a1, a2, b1], balList, HARI_INI);
 
     expect(r.jumlahPabrik).toBe(2);
     expect(r.pabrik.map((p) => [p.pabrik, p.jumlahDO, p.kg])).toEqual([
@@ -133,7 +133,7 @@ describe('hitungResumeSample', () => {
 
 describe('susunBarisExcelResume', () => {
   it('rowKinds sejajar dengan rows dan diawali grup Ringkasan', () => {
-    const r = hitungResumePengiriman([buatSuratJalan('1', 'selesai')], balList, [sample('1', 'disetujui')], HARI_INI);
+    const r = hitungResumePengiriman([buatSuratJalan('1', 'selesai')], balList, HARI_INI);
     const { rows, rowKinds } = susunBarisExcelResume(r);
     expect(rowKinds).toHaveLength(rows.length);
     expect(rows[0][0]).toBe('Ringkasan');
@@ -143,7 +143,7 @@ describe('susunBarisExcelResume', () => {
   });
 
   it('tanpa data hanya memuat ringkasan', () => {
-    const { rows } = susunBarisExcelResume(hitungResumePengiriman([], [], [], HARI_INI));
+    const { rows } = susunBarisExcelResume(hitungResumePengiriman([], [], HARI_INI));
     expect(rows).toHaveLength(2);
   });
 });

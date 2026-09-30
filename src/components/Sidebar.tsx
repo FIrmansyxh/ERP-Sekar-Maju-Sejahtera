@@ -69,7 +69,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'modul-6-laporan-grade', label: 'Laporan Harga' },
         { id: 'modul-6-laporan-pembelian', label: 'Laporan Pembelian' },
         { id: 'modul-6-laporan-petani', label: 'Laporan Petani' },
-        { id: 'modul-6-laporan-pengiriman', label: 'Laporan Pengiriman' },
+        { id: 'modul-6-laporan-pengiriman', label: 'Laporan Pengiriman Reguler (DO)' },
+        { id: 'modul-6-laporan-sample', label: 'Laporan Pengiriman Sample' },
       ],
     },
     {
@@ -91,6 +92,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'modul-0-sortir', label: 'Sortir' },
         { id: 'modul-0-timbangan', label: 'Timbangan' },
         { id: 'modul-0-kasir', label: 'Kasir', aliasId: ['modul-0-transaksi'], jumlah: String(transaksiCount) },
+        { id: 'modul-koreksi-no-bal', label: 'Koreksi No Bal' },
       ],
     },
     {

@@ -21,6 +21,7 @@ import {
   StatusBatchSample
 } from '../../types';
 import { ConfirmModal } from '../common/ConfirmModal';
+import { SortIcon } from '../common/SortIcon';
 
 import { akhiranUnik } from '../../utils/idUnik';
 import { generateBatchSampleId, generateSampleId, formatRupiah, formatNumber } from '../../utils/formatters';
@@ -215,6 +216,17 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
   >('sample_bal_items', undefined, []);
 
   useUnsavedChangesWarning(selectedBalItems.length > 0);
+
+  // Urutan tabel bal: bawaan = bal terbaru di atas; klik judul No Bal / No Jadi untuk terendah → tertinggi → semula
+  const [urutTabel, setUrutTabel] = useState<{ kolom: 'noBal' | 'noJadi'; arah: 'asc' | 'desc' } | null>(null);
+  const balItemsTampil = useMemo(() => {
+    if (!urutTabel) return selectedBalItems;
+    const nilai = (it: (typeof selectedBalItems)[number]) => (urutTabel.kolom === 'noBal' ? it.noBal : it.kodeBalPembeli || it.noBal) || '';
+    const arah = urutTabel.arah === 'asc' ? 1 : -1;
+    return [...selectedBalItems].sort((a, b) => arah * nilai(a).localeCompare(nilai(b), undefined, { numeric: true, sensitivity: 'base' }));
+  }, [selectedBalItems, urutTabel]);
+  const handleUrutTabel = (kolom: 'noBal' | 'noJadi') =>
+    setUrutTabel((u) => (u?.kolom !== kolom ? { kolom, arah: 'asc' } : u.arah === 'asc' ? { kolom, arah: 'desc' } : null));
 
   
   // Helper untuk memeriksa status penggunaan nomor bal pada modul sample
@@ -1233,8 +1245,19 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                 <thead className="bg-gray-100 text-gray-700 font-bold border-b border-gray-300">
                   <tr>
                     <th className="p-2.5 w-10 text-center border-r border-gray-200">No</th>
-                    <th className="p-2.5 w-28 border-r border-gray-200">No Bal</th>
-                    <th className="p-2.5 w-28 border-r border-gray-200">No Jadi</th>
+                    {(['noBal', 'noJadi'] as const).map((kolom) => (
+                      <th
+                        key={kolom}
+                        onClick={() => handleUrutTabel(kolom)}
+                        className="p-2.5 w-28 border-r border-gray-200 cursor-pointer select-none hover:bg-gray-200/80 transition"
+                        title="Klik untuk urutkan: terendah, tertinggi, lalu urutan semula"
+                      >
+                        <div className="flex items-center">
+                          <span>{kolom === 'noBal' ? 'No Bal' : 'No Jadi'}</span>
+                          <SortIcon aktif={urutTabel?.kolom === kolom} arah={urutTabel?.kolom === kolom ? urutTabel.arah : 'asc'} />
+                        </div>
+                      </th>
+                    ))}
                     <th className="p-2.5 text-right w-32 border-r border-gray-200">Harga Beli (Rp/Kg)</th>
                     <th className="p-2.5 text-right w-24 border-r border-gray-200">Bruto (Kg)</th>
                     <th className="p-2.5 text-center w-24 border-r border-gray-200">Grade</th>
@@ -1252,7 +1275,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                       </td>
                     </tr>
                   ) : (
-                    selectedBalItems.map((item, idx) => {
+                    balItemsTampil.map((item, idx) => {
                       const matchedBal = barangList.find(b => b.barang_id === item.barangId || b.no_bal === item.noBal);
                       const hrgBeli = item.hargaBeliKg || resolveHargaBeli(matchedBal);
                       const bruto = item.beratBrutoKg || resolveBeratBruto(matchedBal);

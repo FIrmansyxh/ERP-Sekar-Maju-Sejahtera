@@ -10,7 +10,8 @@ import {
   SlidersHorizontal,
   X
 } from 'lucide-react';
-import { Barang, Petani, TransaksiPembelian, TabelHarga, UserRole } from '../../types';
+import { Barang, Petani, RiwayatNoBal, TransaksiPembelian, TabelHarga, UserRole } from '../../types';
+import { rantaiNoBal } from '../../utils/gantiNoBal';
 import { isTransaksiLunas } from '../../utils/statusBayar';
 import { extractKodeBalPrefix } from '../../utils/formatters';
 import { downloadExcelReport, labelStatusStok, periodeInfo, todayStamp } from '../../utils/excelExport';
@@ -29,6 +30,8 @@ interface LaporanBalViewProps {
   petaniList?: Petani[];
   transaksiList?: TransaksiPembelian[];
   hargaList?: TabelHarga[];
+  /** Riwayat Koreksi No Bal: dasar kolom No Bal Awal, pencarian nomor lama, dan filter Pernah Diganti */
+  riwayatNoBalList?: RiwayatNoBal[];
   userRole?: UserRole;
   onNavigateToTransaksi?: () => void;
 }
@@ -36,6 +39,7 @@ interface LaporanBalViewProps {
 type SortField = 
   | 'default'
   | 'no_bal'
+  | 'no_bal_awal'
   | 'tanggal_masuk'
   | 'kode_grade'
   | 'berat_kg'
@@ -51,6 +55,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
   petaniList = [],
   transaksiList = [],
   hargaList = [],
+  riwayatNoBalList = [],
   userRole = 'superadmin',
   onNavigateToTransaksi,
 }) => {
@@ -62,6 +67,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
   const [filterStatusStok, setFilterStatusStok] = useState<string>('ALL');
   const [filterStatusBayar, setFilterStatusBayar] = useState<string>('ALL');
   const [filterGantiTikar, setFilterGantiTikar] = useState<'ALL' | 'ya' | 'tidak'>('ALL');
+  const [filterGantiNoBal, setFilterGantiNoBal] = useState<'ALL' | 'ya' | 'tidak'>('ALL');
   const [filterPetani, setFilterPetani] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [tableSearch, setTableSearch] = useState<string>('');
@@ -79,6 +85,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
     statusStok: 'ALL',
     statusBayar: 'ALL',
     gantiTikar: 'ALL' as 'ALL' | 'ya' | 'tidak',
+    gantiNoBal: 'ALL' as 'ALL' | 'ya' | 'tidak',
     petani: 'ALL',
     search: '',
     minBerat: '',
@@ -177,6 +184,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
       statusStok: filterStatusStok,
       statusBayar: filterStatusBayar,
       gantiTikar: filterGantiTikar,
+      gantiNoBal: filterGantiNoBal,
       petani: filterPetani,
       search: searchQuery.trim(),
       minBerat: filterMinBerat,
@@ -199,6 +207,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
       statusStok: filterStatusStok,
       statusBayar: filterStatusBayar,
       gantiTikar: filterGantiTikar,
+      gantiNoBal: filterGantiNoBal,
       petani: filterPetani,
       search: searchQuery.trim(),
       minBerat: filterMinBerat,
@@ -218,6 +227,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
     setFilterStatusStok('ALL');
     setFilterStatusBayar('ALL');
     setFilterGantiTikar('ALL');
+    setFilterGantiNoBal('ALL');
     setFilterPetani('ALL');
     setSearchQuery('');
     setFilterMinBerat('');
@@ -232,6 +242,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
       statusStok: 'ALL',
       statusBayar: 'ALL',
       gantiTikar: 'ALL',
+      gantiNoBal: 'ALL',
       petani: 'ALL',
       search: '',
       minBerat: '',
@@ -276,6 +287,20 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
       }
     });
   };
+
+  // Semua nomor yang pernah dipakai sebuah bal (awal ... sekarang), dari riwayat Koreksi No Bal
+  const rantaiDari = useMemo(() => {
+    const diRiwayat = new Set<string>();
+    riwayatNoBalList.forEach((r) => {
+      diRiwayat.add(String(r.no_bal_lama).toUpperCase());
+      diRiwayat.add(String(r.no_bal_baru).toUpperCase());
+    });
+    return (noBal?: string): string[] => {
+      const k = String(noBal || '').trim().toUpperCase();
+      if (!k) return [];
+      return diRiwayat.has(k) ? rantaiNoBal(k, riwayatNoBalList) : [k];
+    };
+  }, [riwayatNoBalList]);
 
   // Filtered & Enriched Bal Data
   // Termasuk bal yang baru discan (belum ditimbang): No Bal + harga sudah tampil
@@ -346,14 +371,32 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
       kode_bal_prefix: string;
       ganti_tikar: boolean;
       potongan_tikar?: number;
+      /** Nomor pertama kali disortir; sama dengan no_bal bila tidak pernah diganti */
+      no_bal_awal: string;
+      /** Semua nomor yang pernah dipakai bal ini (untuk pencarian nomor lama) */
+      riwayat_no_bal: string[];
+      /** Nomor yang ikut dicocokkan pencarian: riwayat + nomor di nota */
+      nomor_dicari: string[];
+      pernah_diganti: boolean;
     }> = [];
 
     barangList.forEach((bal, originalIndex) => {
       const key = bal.barang_id || bal.no_bal;
       if (key) seenKeys.add(String(key).toUpperCase());
       if (bal.no_bal) seenKeys.add(String(bal.no_bal).toUpperCase());
+      // Bal kupon lunas yang diganti nomornya: kupon masih memakai nomor lama, jadi dicocokkan juga lewat nomor lama
+      const rantai = rantaiDari(bal.no_bal);
+      rantai.forEach((k) => seenKeys.add(k));
 
-      const txInfo = txItemMap.get(bal.barang_id) || txItemMap.get(bal.no_bal);
+      const txInfo =
+        txItemMap.get(bal.barang_id) ||
+        txItemMap.get(bal.no_bal) ||
+        rantai.map((k) => txItemMap.get(k)).find((info): info is TxInfo => Boolean(info));
+      // Kupon lunas yang bal-nya diganti nomor: kupon/nota tetap memakai nomor lama. Nomor itu ikut bisa dicari walau
+      // riwayat penggantiannya belum termuat di perangkat ini; tanda "pernah diganti" tetap hanya dari riwayat.
+      const noNota = String(txInfo?.no_bal || '').toUpperCase();
+      const nomorDicari = noNota && !rantai.includes(noNota) ? [...rantai, noNota] : rantai;
+      if (noNota) seenKeys.add(noNota);
       const fallbackGradePrice =
         hargaList.find((h) => h.kode_grade?.toUpperCase() === bal.kode_grade?.toUpperCase())?.harga_per_kg || 0;
       const hrgBeli = bal.harga_per_kg || txInfo?.harga_per_kg || fallbackGradePrice;
@@ -393,6 +436,10 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
             : 'belum_lunas',
         has_tx: !!txInfo,
         kode_bal_prefix: extractKodeBalPrefix(bal.no_bal || txInfo?.no_bal),
+        no_bal_awal: rantai[0] || bal.no_bal || txInfo?.no_bal || '',
+        riwayat_no_bal: rantai,
+        nomor_dicari: nomorDicari,
+        pernah_diganti: rantai.length > 1,
       });
     });
 
@@ -412,6 +459,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
         const bruto = it.berat_bruto_kg && it.berat_bruto_kg > 0 ? it.berat_bruto_kg : 0;
         const isTikar = Boolean(it.ganti_tikar) || Number(it.potongan_tikar || 0) > 0;
         const potTikar = Number(it.potongan_tikar || 0) || (isTikar ? 75000 : 0);
+        const rantai = rantaiDari(it.no_bal);
 
         rows.push({
           barang_id: it.barang_id || `TX-ITEM-${it.item_id}`,
@@ -439,12 +487,16 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
           kode_bal_prefix: extractKodeBalPrefix(it.no_bal),
           ganti_tikar: isTikar,
           potongan_tikar: potTikar,
+          no_bal_awal: rantai[0] || it.no_bal,
+          riwayat_no_bal: rantai,
+          nomor_dicari: rantai,
+          pernah_diganti: rantai.length > 1,
         });
       });
     });
 
     return rows;
-  }, [barangList, transaksiList, hargaList]);
+  }, [barangList, transaksiList, hargaList, rantaiDari]);
 
   // Aturan filter satu sumber; abaikanTanggal dipakai untuk rekap "sepanjang masa" (filter lain tetap berlaku)
   const cocokFilter = (item: (typeof enrichedBalList)[number], abaikanTanggal = false): boolean => {
@@ -492,6 +544,10 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
         if (isYa && !item.ganti_tikar) return false;
         if (!isYa && item.ganti_tikar) return false;
       }
+      // Filter bal yang pernah diganti No Bal-nya
+      if (appliedFilters.gantiNoBal !== 'ALL' && item.pernah_diganti !== (appliedFilters.gantiNoBal === 'ya')) {
+        return false;
+      }
       // Min & Max Berat
       if (appliedFilters.minBerat) {
         const min = parseFloat(appliedFilters.minBerat);
@@ -513,7 +569,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
       // Free text search
       if (appliedFilters.search) {
         const q = appliedFilters.search.toLowerCase();
-        const matchNoBal = item.no_bal?.toLowerCase().includes(q);
+        const matchNoBal = item.no_bal?.toLowerCase().includes(q) || item.nomor_dicari.some((n) => n.toLowerCase().includes(q));
         const matchKode = item.kode_bal_pembeli?.toLowerCase().includes(q);
         const matchId = item.barang_id?.toLowerCase().includes(q);
         const matchPetani = item.nama_petani?.toLowerCase().includes(q);
@@ -584,6 +640,10 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
             const balA = a.no_bal || a.barang_id || '';
             const balB = b.no_bal || b.barang_id || '';
             comparison = compareAlphanumeric(balA, balB);
+            break;
+          }
+          case 'no_bal_awal': {
+            comparison = compareAlphanumeric(a.no_bal_awal || a.no_bal || '', b.no_bal_awal || b.no_bal || '');
             break;
           }
           case 'tanggal_masuk': {
@@ -707,7 +767,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
     if (!tableSearch.trim()) return sortedData;
     const q = tableSearch.toLowerCase().trim();
     return sortedData.filter((item) => {
-      const matchNoBal = (item.no_bal || '').toLowerCase().includes(q);
+      const matchNoBal = (item.no_bal || '').toLowerCase().includes(q) || item.nomor_dicari.some((n) => n.toLowerCase().includes(q));
       const matchKodeBal = (item.kode_bal_prefix || '').toLowerCase().includes(q);
       const matchBarangId = (item.barang_id || '').toLowerCase().includes(q);
       const matchGrade = (item.kode_grade || '').toLowerCase().includes(q);
@@ -846,7 +906,8 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
         columns: [
           { header: 'No', type: 'integer', align: 'center' },
           { header: 'Tanggal Masuk', type: 'date' },
-          { header: 'No Bal', align: 'center' },
+          { header: 'No Bal Awal', align: 'center' },
+          { header: 'No Bal Baru', align: 'center' },
           { header: 'Grade', align: 'center' },
           { header: 'Petani' },
           { header: 'Kupon', align: 'center' },
@@ -865,6 +926,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
           return [
             idx + 1,
             b.tanggal_masuk,
+            b.no_bal_awal || b.no_bal || '-',
             b.no_bal || '-',
             b.kode_grade || '-',
             b.nama_petani || '-',
@@ -880,7 +942,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
           ];
         }),
         totalRow: [
-          `TOTAL LUNAS (${totals.totalBalLunas} dari ${totals.totalBal} bal)`, '', '', '', '', '', '',
+          `TOTAL LUNAS (${totals.totalBalLunas} dari ${totals.totalBal} bal)`, '', '', '', '', '', '', '',
           totals.totalBruto,
           totals.totalNetto,
           totals.avgHargaKg,
@@ -1107,6 +1169,23 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
               </select>
             </div>
 
+            {/* Filter 4d: Bal yang No Bal-nya pernah diganti lewat Koreksi No Bal */}
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                Ganti No Bal
+              </label>
+              <select
+                id="filter-ganti-no-bal"
+                value={filterGantiNoBal}
+                onChange={(e) => setFilterGantiNoBal(e.target.value as 'ALL' | 'ya' | 'tidak')}
+                className="w-full px-2 py-1.5 bg-white border border-[#ced4da] rounded-none text-xs focus:outline-none focus:border-slate-800"
+              >
+                <option value="ALL">Semua Bal</option>
+                <option value="ya">Pernah Diganti</option>
+                <option value="tidak">Tidak Pernah Diganti</option>
+              </select>
+            </div>
+
             {/* Filter 5: Search Keyword */}
             <div>
               <label className="block text-[11px] font-semibold text-gray-700 mb-1">
@@ -1301,14 +1380,26 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                   </div>
                 </th>
 
-                {/* 2. No Bal (Alphanumeric Natural Sort) */}
+                {/* 2a. No Bal Awal (nomor saat pertama disortir) */}
+                <th
+                  onClick={() => handleHeaderSort('no_bal_awal')}
+                  className="py-2.5 px-3 border-r border-gray-200 cursor-pointer hover:bg-gray-200/80 transition group select-none whitespace-nowrap"
+                  title="Klik untuk urutkan No Bal Awal dari alfabet lalu angka"
+                >
+                  <div className="flex items-center justify-center space-x-1">
+                    <span>No Bal Awal</span>
+                    {renderSortIndicator('no_bal_awal')}
+                  </div>
+                </th>
+
+                {/* 2b. No Bal Baru (Alphanumeric Natural Sort) */}
                 <th
                   onClick={() => handleHeaderSort('no_bal')}
-                  className="py-2.5 px-3 border-r border-gray-200 cursor-pointer hover:bg-gray-200/80 transition group select-none bg-slate-100/50 w-28 whitespace-nowrap"
+                  className="py-2.5 px-3 border-r border-gray-200 cursor-pointer hover:bg-gray-200/80 transition group select-none whitespace-nowrap"
                   title="Klik untuk urutkan No Bal dari alfabet lalu angka"
                 >
-                  <div className="flex items-center justify-between space-x-1.5">
-                    <span className="text-gray-950 font-black">No. Bal</span>
+                  <div className="flex items-center justify-center space-x-1">
+                    <span>No Bal Baru</span>
                     {renderSortIndicator('no_bal')}
                   </div>
                 </th>
@@ -1429,7 +1520,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
             <tbody className="divide-y divide-gray-200">
               {paginatedData.length === 0 ? (
                 <tr>
-                  <td colSpan={14} className="py-12 text-center text-gray-500 bg-white">
+                  <td colSpan={13} className="py-12 text-center text-gray-500 bg-white">
                     <div className="flex flex-col items-center justify-center space-y-2">
                       <Package className="w-8 h-8 text-gray-300" />
                       <p className="font-semibold text-gray-700">Tidak ada data bal</p>
@@ -1460,8 +1551,18 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
                         {rowNumber}
                       </td>
 
-                      {/* 2. No Bal */}
-                      <td className="py-2 px-3 font-mono font-black text-gray-950 border-r border-gray-100 whitespace-nowrap bg-slate-50/40 w-28">
+                      {/* 2a. No Bal Awal */}
+                      <td className="py-2 px-3 text-center font-mono text-gray-700 border-r border-gray-100 whitespace-nowrap">
+                        {bal.no_bal_awal || bal.no_bal || '-'}
+                      </td>
+
+                      {/* 2b. No Bal Baru (merah bila pernah diganti) */}
+                      <td
+                        className={`py-2 px-3 text-center font-mono border-r border-gray-100 whitespace-nowrap ${
+                          bal.pernah_diganti ? 'text-[#b81d24]' : 'text-gray-700'
+                        }`}
+                        title={bal.pernah_diganti ? bal.riwayat_no_bal.join(' → ') : undefined}
+                      >
                         <span className="hover:underline cursor-pointer">
                           {bal.no_bal || bal.barang_id}
                         </span>
@@ -1558,7 +1659,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
             {sortedData.length > 0 && (
               <tfoot className="bg-slate-200/95 text-gray-950 font-extrabold text-xs border-t-2 border-gray-300">
                 <tr>
-                  <td colSpan={6} className="py-3 px-3 text-right uppercase tracking-wider border-r border-gray-300 bg-gray-200/80">
+                  <td colSpan={7} className="py-3 px-3 text-right uppercase tracking-wider border-r border-gray-300 bg-gray-200/80">
                     TOTAL LUNAS ({totals.totalBalLunas} DARI {totals.totalBal} BAL):
                   </td>
                   <td className="py-3 px-3 text-right font-mono border-r border-gray-300 whitespace-nowrap">

@@ -369,6 +369,32 @@ export interface PengirimanBarang {
   rincian_grade?: Record<string, { bal: number; kg: number }>;
 }
 
+/**
+ * Tahap bal saat No Bal diganti. 'sortir' dan 'timbang' = kupon belum lunas (No Bal di kupon & nota ikut berganti);
+ * 'lunas' dan 'surat_jalan' = kupon sudah dibayar (nota/pembelian tetap memakai nomor lama, hanya bal di gudang yang
+ * berganti nomor). Bal di Surat Jalan belum lunas tetap tercatat 'surat_jalan'; lihat `ubah_nota`.
+ */
+export type TahapGantiNoBal = 'sortir' | 'timbang' | 'lunas' | 'surat_jalan';
+
+/** Satu kali penggantian No Bal. Nomor lama maupun baru tidak boleh dipakai bal lain selamanya. */
+export interface RiwayatNoBal {
+  riwayat_id: string;
+  transaksi_id: string;
+  item_id: string;
+  barang_id?: string;
+  no_kupon?: string;
+  petani_id?: string;
+  nama_petani?: string;
+  no_bal_lama: string;
+  no_bal_baru: string;
+  tahap: TahapGantiNoBal;
+  /** true bila No Bal di kupon/nota ikut berganti (kupon belum lunas) */
+  ubah_nota: boolean;
+  alasan: string;
+  diganti_oleh: string;
+  diganti_pada: string; // ISO
+}
+
 export interface ModuleNav {
   id: string;
   number: number;
