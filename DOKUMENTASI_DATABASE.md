@@ -319,7 +319,12 @@ produksi (aman diulang: menambah nilai enum `draft`, kolom `dikirim_oleh_nama`, 
 `ganti_tikar_diubah_pada` & `timbang_diubah_pada`, serta kolom Atur Netto bila belum ada), lalu
 `php artisan route:clear && php artisan config:clear`. Jangan `php artisan migrate`.
 
-### 5.5 Koreksi No Bal (2026-09-30), BELUM ADA DI BACKEND
+### 5.5 Koreksi No Bal (2026-09-30)
+
+**Status backend:** sudah dibuat di repo backend, cabang `fitur/koreksi-no-bal` (`BalController`, `App\Support\NomorBal`,
+tes `tests/Feature/KoreksiNoBalTest.php`). Belum digabung ke `main` dan belum di-deploy. Sampai itu terjadi, server
+produksi menjawab 404 dan FE menyimpan penggantian di antrean (lihat "Perilaku FE"). Deploy: `php artisan
+erp:perbarui-skema` (menambah tabel `riwayat_no_bal` dan kolom `sample_batch_item.kode_bal_pembeli`).
 
 Menu **Koreksi No Bal** (Super Admin dan Admin Sortir) mengganti nomor bal dan menyimpan nomor lamanya. Aturan pemilik:
 
@@ -348,17 +353,18 @@ ditimbang di Timbangan.
 
 ```sql
 CREATE TABLE IF NOT EXISTS riwayat_no_bal (
-  riwayat_id    VARCHAR(40) PRIMARY KEY,           -- dibuat FE: RNB-<ms>-<acak>; kiriman ulang = idempoten
-  transaksi_id  VARCHAR(30) NOT NULL REFERENCES transaksi_pembelian(transaksi_id),
-  item_id       VARCHAR(30) NOT NULL,              -- transaksi_item_bal.item_id (bukan FK: item bisa dihapus kemudian)
-  barang_id     VARCHAR(30),
-  no_bal_lama   VARCHAR(30) NOT NULL,
-  no_bal_baru   VARCHAR(30) NOT NULL,
-  tahap         VARCHAR(20) NOT NULL,              -- sortir | timbang | lunas | surat_jalan
-  ubah_nota     BOOLEAN NOT NULL DEFAULT false,    -- selalu false: kupon tidak pernah ikut berganti (true hanya data uji lama)
-  alasan        TEXT NOT NULL,
-  diganti_oleh  VARCHAR(20) REFERENCES users(user_id),
-  diganti_pada  TIMESTAMPTZ NOT NULL DEFAULT now()
+  riwayat_id         VARCHAR(40) PRIMARY KEY,      -- dibuat FE: RNB-<ms>-<acak>; kiriman ulang = idempoten
+  transaksi_id       VARCHAR(30) NOT NULL REFERENCES transaksi_pembelian(transaksi_id) ON DELETE CASCADE,
+  item_id            VARCHAR(30) NOT NULL,         -- transaksi_item_bal.item_id (bukan FK: item bisa dihapus kemudian)
+  barang_id          VARCHAR(30),
+  no_bal_lama        VARCHAR(30) NOT NULL,         -- persis nomor yang berlaku saat diganti (huruf besar, strip dipertahankan)
+  no_bal_baru        VARCHAR(30) NOT NULL,         -- huruf besar, tanpa strip
+  tahap              VARCHAR(20) NOT NULL DEFAULT 'sortir', -- sortir | timbang | lunas | surat_jalan
+  ubah_nota          BOOLEAN NOT NULL DEFAULT false, -- selalu false: kupon tidak pernah ikut berganti (true hanya data uji lama)
+  alasan             TEXT NOT NULL,
+  diganti_oleh       VARCHAR(20) REFERENCES users(user_id),
+  diganti_oleh_nama  VARCHAR(120),
+  diganti_pada       TIMESTAMPTZ NOT NULL DEFAULT now()  -- jam server, bukan diganti_pada kiriman FE
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_riwayat_no_bal_baru ON riwayat_no_bal(upper(no_bal_baru));
 CREATE UNIQUE INDEX IF NOT EXISTS uq_riwayat_no_bal_lama ON riwayat_no_bal(upper(no_bal_lama));
@@ -376,14 +382,17 @@ Aturan `POST /bal/ganti-no-bal` (satu transaksi DB, kunci baris `FOR UPDATE`):
 
 1. Hanya peran `superadmin` dan `admin_sortir` (403 selain itu).
 2. `riwayat_id` sudah ada → jawab 200 dengan baris yang tersimpan (kiriman ulang antrean).
-3. Cari bal lewat **`item_id`** (dan `barang_id`), bukan lewat No Bal. Nomor bal sekarang (`barang.no_bal`, atau nomor
-   terakhir di `riwayat_no_bal` bila baris barang belum ada) harus sama dengan `no_bal_lama`; bila tidak → 409.
+3. Cari bal lewat **`item_id`**, bukan lewat No Bal; bal gudang lewat `barang.transaksi_item_id` saja (`barang_id`
+   kiriman tidak dipakai mencari, karena untuk kupon belum dibayar ID itu buatan FE). Nomor bal sekarang (`barang.no_bal`,
+   atau nomor terakhir di `riwayat_no_bal` bila baris barang belum ada) harus sama dengan `no_bal_lama` (dibandingkan
+   huruf besar tanpa strip); bila tidak → 409.
 4. Tolak 422 bila bal ada di Surat Jalan berstatus `selesai`.
-5. Tolak 422 bila `no_bal_baru` (huruf besar, tanpa strip) sudah ada di `transaksi_item_bal.no_bal`, `barang.no_bal`,
-   item Batch Sample, atau di `riwayat_no_bal` (lama maupun baru), milik bal mana pun termasuk bal ini sendiri.
+5. Tolak 422 bila `no_bal_baru` sudah ada di `transaksi_item_bal.no_bal`, `barang.no_bal`, atau di `riwayat_no_bal`
+   (lama maupun baru), milik bal mana pun termasuk bal ini sendiri. Semua dibandingkan huruf besar tanpa strip.
 6. **Jangan pernah mengubah `transaksi_item_bal`** (No Bal, berat, tara, nilai), lunas maupun belum.
-7. Ubah `barang.no_bal` (+ `barcode`) dan `no_bal` di item Batch Sample untuk `barang_id` itu. Bila No Jadi item Batch
-   Sample (`kode_bal_pembeli`) sama dengan nomor lama (diisi otomatis saat bal dimasukkan ke sample), ganti juga.
+7. Ubah `barang.no_bal`. Item Batch Sample dan Surat Jalan membaca No Bal dari `barang`, jadi ikut berganti. Bila No
+   Jadi item Batch Sample (`kode_bal_pembeli`) sama dengan nomor lama (diisi otomatis saat bal dimasukkan ke sample),
+   ganti juga.
 8. Simpan baris `riwayat_no_bal` dan catat di `audit_log`.
 
 Perilaku FE:
@@ -394,19 +403,18 @@ Perilaku FE:
 - Penolakan 4xx selain 404/405/408/429 (mis. 409/422) membuat FE **membatalkan** penggantian dan memuat ulang data.
 - `GET /bal/riwayat-no-bal` yang dijawab rute tidak ada tidak ditanya lagi selama 10 menit.
 
-**No Jadi di Batch Sample:** FE sekarang mengirim `items[].kode_bal_pembeli` pada `POST/PUT /sample-batch` dan
-membacanya kembali dari `GET /sample-batch`. Server perlu menyimpannya (kolom `kode_bal_pembeli` di item batch) supaya
-No Jadi yang dicetak di Surat Sample sama di semua komputer; tanpa itu hanya komputer pembuat yang mengingatnya.
+**No Jadi di Batch Sample:** FE mengirim `items[].kode_bal_pembeli` pada `POST/PUT /sample-batch` dan membacanya
+kembali dari `GET /sample-batch`. Server menyimpannya di kolom `sample_batch_item.kode_bal_pembeli`, jadi No Jadi yang
+dicetak di Surat Sample sama di semua komputer.
 
-**Perubahan di endpoint yang sudah ada**
+**Perubahan di endpoint yang sudah ada** (sudah diterapkan di cabang backend yang sama)
 
-- `PUT /transaksi/{id}/sortir-items` dan `POST /transaksi/sortir`: bal yang **sudah ada** di kupon tetap memakai nomor
-  saat disortir (jangan ditolak walau nomor itu ada di `riwayat_no_bal.no_bal_lama`). Bal **baru** yang memakai nomor di
-  `riwayat_no_bal` (lama maupun baru) atau di `barang.no_bal` ditolak 422 (No Bal tidak boleh dipakai dua kali).
-- `PUT /transaksi/{id}/bayar`: saat membuat/memperbarui `barang`, jangan menimpa `barang.no_bal` yang sudah diganti
-  (pakai nomor terakhir di `riwayat_no_bal` untuk item itu).
-- `PUT /transaksi/{id}/koreksi` (batal lunas lalu lunas lagi) juga mencocokkan lewat No Bal: pertahankan `barang_id`
-  bal yang nomornya sudah diganti.
+- `PUT /transaksi/{id}/sortir-items`, `POST /transaksi/sortir`, `POST /transaksi/{id}/bal`, `PUT /transaksi/{id}/koreksi`:
+  bal yang **sudah ada** di kupon tetap memakai nomor saat disortir (tidak ditolak walau nomor itu ada di
+  `riwayat_no_bal.no_bal_lama`). Bal **baru** yang memakai nomor di `riwayat_no_bal` (lama maupun baru) atau di
+  `barang.no_bal` ditolak 422 (No Bal tidak boleh dipakai dua kali).
+- `PUT /transaksi/{id}/bayar` dan `koreksi`: saat membuat/memperbarui `barang`, `barang.no_bal` diisi nomor terakhir di
+  `riwayat_no_bal` (`NomorBal::terkini`), bukan nomor di kupon.
 
 FE: `utils/gantiNoBal.ts` (aturan & perhitungan), `utils/noBalPensiun.ts` (nomor lama untuk Sortir, nomor terakhir untuk
 bal gudang yang dibentuk dari kupon dan pencarian Timbangan), `components/koreksi/KoreksiNoBalView.tsx`, antrean `no_bal:ganti` di `services/kirimMutasi.ts`, overlay
