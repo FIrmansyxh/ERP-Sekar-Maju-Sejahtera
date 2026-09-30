@@ -4,7 +4,7 @@ import { POTONGAN_GANTI_TIKAR, POTONGAN_KULI_PER_BAL } from '../config/aturanTim
 import { isTransaksiLunas } from './statusBayar';
 import { balDihapusDariKupon, isIdBalServer } from './balDihapus';
 import { hariIniLokal } from './rentangTanggal';
-import { noBalPensiunDiKupon, penggantiNoBal } from './noBalPensiun';
+import { noBalPensiunDiKupon, noBalTerkini, penggantiNoBal } from './noBalPensiun';
 
 /**
  * Aturan kupon terbuka: Sortir dan Timbangan boleh mengerjakan kupon yang sama
@@ -79,7 +79,8 @@ export function lengkapiBalDariKupon(barangList: Barang[], transaksiList: Transa
   const baru: Barang[] = [];
   for (const tx of transaksiList) {
     (tx.items || []).forEach((it, idx) => {
-      const noBal = String(it.no_bal || '').trim().toUpperCase();
+      // Bal yang No Bal-nya pernah diganti: kupon tetap bernomor lama, bal gudang memakai nomor terbaru
+      const noBal = noBalTerkini(String(it.no_bal || '').trim().toUpperCase());
       if (!noBal) return;
       const seq = urutanDariItemId(it.item_id, idx + 1);
       const idBal = it.barang_id || `BAL-${String(tx.transaksi_id || '').replace('TRX-', '')}-${String(seq).padStart(2, '0')}`;
@@ -164,7 +165,8 @@ export function buildBarangDariItem(tx: TransaksiPembelian, item: TransaksiItemB
   return {
     ...prev,
     barang_id: item.barang_id!,
-    no_bal: item.no_bal,
+    // Kupon/nota menyimpan nomor saat disortir; bal gudang memakai nomor terbaru (Koreksi No Bal)
+    no_bal: noBalTerkini(item.no_bal),
     kode_grade: item.kode_grade,
     berat_kg: berat,
     berat_bruto_kg: item.berat_bruto_kg || 0,

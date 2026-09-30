@@ -18,8 +18,7 @@ import {
   overlayTransaksi,
   overlayUser,
 } from './overlayDaftar';
-import { antrianMutasi, endpointBelumAda } from './antrianMutasi';
-import type { RencanaGantiNoBal } from '../utils/gantiNoBal';
+import { endpointBelumAda } from './antrianMutasi';
 import { 
   Petani, 
   Barang, 
@@ -573,17 +572,6 @@ export class ErpApiService {
     if (!options?.tanpaCekKesehatan) {
       const isOnline = await this.isBackendOnline();
       if (!isOnline) return { syncedTx: newTx, fromBackend: false };
-    }
-
-    // Ganti No Bal di kupon ini belum sampai ke server: tunggu dulu. Endpoint kupon mencocokkan bal lewat No Bal, jadi
-    // nomor baru yang terkirim duluan terbaca sebagai "bal lama dihapus, bal baru ditambah" (ID bal berganti dan
-    // rujukan Batch Sample / Surat Jalan putus). Antrean kupon mencoba lagi sampai penggantiannya selesai.
-    const gantiMenunggu = antrianMutasi
-      .tugasMenunggu<RencanaGantiNoBal>('no_bal', 'ganti')
-      .filter((r) => r.riwayat.ubah_nota && r.riwayat.transaksi_id === newTx.transaksi_id);
-    if (gantiMenunggu.length > 0) {
-      const nomor = gantiMenunggu.map((r) => `${r.riwayat.no_bal_lama} → ${r.riwayat.no_bal_baru}`).join(', ');
-      throw new Error(`Menunggu ganti No Bal ${nomor} tersimpan di server sebelum Kupon ${newTx.no_kupon} dikirim`);
     }
 
     const lunasBaru = newTx.status_pembayaran === 'lunas' && (!oldTx || oldTx.status_pembayaran !== 'lunas');

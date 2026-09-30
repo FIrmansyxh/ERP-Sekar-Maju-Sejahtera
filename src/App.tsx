@@ -1376,13 +1376,9 @@ export default function App() {
   };
 
   /**
-   * Koreksi No Bal: nomor diganti di layar (kupon bila belum lunas, bal gudang, Batch Sample), riwayatnya dicatat, lalu
-   * dikirim ke server lewat antrean dalam SATU permintaan (bukan lewat simpan kupon, yang mencocokkan bal lewat No Bal
-   * sehingga ganti nomor terbaca sebagai hapus + tambah bal).
-   *
-   * Kupon belum lunas: permintaan dikirim DULU. Selama penggantian belum tersimpan di server, simpanan kupon itu
-   * menunggu (erpApi.syncTransaksi); karena itu penggantian ditolak bila server belum punya endpoint-nya, supaya
-   * Sortir/Timbangan kupon itu tidak tertahan selamanya.
+   * Koreksi No Bal: nomor diganti pada bal gudang dan Batch Sample di layar, riwayatnya dicatat, lalu dikirim ke server
+   * lewat antrean dalam SATU permintaan. Kupon tidak pernah diubah (nota & pembelian tetap nomor saat disortir), jadi
+   * simpanan kupon dari Sortir/Timbangan/Kasir tidak bisa bertabrakan dengan penggantian ini.
    */
   const handleGantiNoBal = async (rencana: RencanaGantiNoBal): Promise<boolean> => {
     const r = rencana.riwayat;
@@ -1394,36 +1390,12 @@ export default function App() {
       showToast('Akses ditolak: hanya Super Admin dan Admin Sortir yang boleh mengganti No Bal.', 'info');
       return false;
     }
-    // Simpanan kupon yang masih menunggu membawa No Bal lama dan akan menimpa penggantian ini di server
-    if (r.ubah_nota && antrianSinkron.adaTugas(r.transaksi_id)) {
-      showToast(`Kupon ${r.no_kupon || ''} masih menyimpan ke server. Coba lagi sebentar.`, 'info');
-      return false;
-    }
 
-    const spekMutasi: SpesifikasiMutasi = {
-      entitas: 'no_bal',
-      id: r.riwayat_id,
-      aksi: 'ganti',
-      data: rencana,
-      label: `Ganti No Bal ${r.no_bal_lama} → ${r.no_bal_baru}`,
-    };
-    if (r.ubah_nota && serverAktif()) {
-      await catatMutasi(spekMutasi);
-      const hasil = antrianMutasi.statusTugas('no_bal', r.riwayat_id, 'ganti');
-      // Ditolak server (mis. nomor sudah dipakai di perangkat lain): pesannya sudah ditampilkan pendengar antrean
-      if (hasil.status === 'tidak_ada') return false;
-      if (hasil.endpointTidakAda) {
-        antrianMutasi.batalkan('no_bal', r.riwayat_id);
-        showToast('Server belum mendukung ganti No Bal untuk kupon yang belum lunas. Perbarui server terlebih dahulu.', 'error');
-        return false;
-      }
-    }
-
-    setTransaksiList((prev) => {
-      const next = terapkanGantiNoBal({ transaksiList: prev }, rencana).transaksiList ?? prev;
-      if (next !== prev) saveTransaksiData(next);
-      return next;
-    });
+    // Didaftarkan dulu agar bal gudang yang dibentuk ulang dari kupon (buildBarangDariItem) langsung memakai nomor baru
+    const riwayatBaru = [r, ...riwayatNoBalList.filter((x) => x.riwayat_id !== r.riwayat_id)];
+    aturRiwayatNoBal(riwayatBaru);
+    setRiwayatNoBalList(riwayatBaru);
+    saveRiwayatNoBalData(riwayatBaru);
     setBarangList((prev) => {
       const next = terapkanGantiNoBal({ barangList: prev }, rencana).barangList ?? prev;
       if (next !== prev) saveBarangData(next);
@@ -1434,14 +1406,14 @@ export default function App() {
       if (next !== prev) saveBatchSampleData(next);
       return next;
     });
-    setRiwayatNoBalList((prev) => {
-      const next = [r, ...prev.filter((x) => x.riwayat_id !== r.riwayat_id)];
-      saveRiwayatNoBalData(next);
-      return next;
-    });
 
-    // Kupon lunas: kupon terkunci sehingga tidak ada simpanan kupon yang bisa menimpa; dikirim lewat antrean
-    if (!(r.ubah_nota && serverAktif())) void catatMutasi(spekMutasi);
+    void catatMutasi({
+      entitas: 'no_bal',
+      id: r.riwayat_id,
+      aksi: 'ganti',
+      data: rencana,
+      label: `Ganti No Bal ${r.no_bal_lama} → ${r.no_bal_baru}`,
+    });
 
     recordAuditLog({
       user_nama: currentUser?.nama_lengkap || 'Sistem',
@@ -1450,7 +1422,7 @@ export default function App() {
       aksi: 'GANTI_NO_BAL',
       target_id: r.item_id,
       deskripsi: `No Bal ${r.no_bal_lama} diganti menjadi ${r.no_bal_baru} (Kupon ${r.no_kupon || '-'})`,
-      rincian_perubahan: [`Alasan: ${r.alasan}`, r.ubah_nota ? 'No Bal di kupon ikut berganti' : 'Nota tetap memakai No Bal lama'],
+      rincian_perubahan: [`Alasan: ${r.alasan}`, 'Kupon & nota tetap memakai No Bal saat disortir'],
     });
     showToast(`No Bal ${r.no_bal_lama} diganti menjadi ${r.no_bal_baru}.`);
     return true;

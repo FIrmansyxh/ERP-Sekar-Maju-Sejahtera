@@ -7,7 +7,7 @@ import type {
   TransaksiItemBal,
   TransaksiPembelian,
 } from '../types';
-import { hitungUlangKupon, isBalDitimbang } from './kuponSortir';
+import { isBalDitimbang } from './kuponSortir';
 import { isTransaksiLunas } from './statusBayar';
 import { akhiranUnik } from './idUnik';
 
@@ -18,9 +18,9 @@ import { akhiranUnik } from './idUnik';
  *  - Boleh diganti di semua tahap, kecuali bal yang Surat Jalannya sudah Selesai.
  *  - Tara, netto, dan nilai TIDAK dihitung ulang walau jenis awalan berubah (mis. HF -> SB): nilai tembakau ditentukan
  *    saat pembelian. Saat bal dikirim, bruto ditimbang ulang dan dipotong mengikuti aturan tujuan (Atur Netto di DO).
- *  - Kupon belum lunas: No Bal di kupon ikut berganti, jadi nota yang dicetak nanti memakai nomor baru.
- *  - Kupon lunas: nota, Kasir, dan Laporan Pembelian tetap memakai nomor lama; berat dan nilai tidak diubah. Hanya bal
- *    di gudang (stok, Batch Sample, Surat Jalan, Laporan Bal) yang memakai nomor baru.
+ *  - Kupon TIDAK pernah diubah, lunas maupun belum: Sortir, Timbangan, Kasir, nota, dan Laporan Pembelian selalu memakai
+ *    nomor saat disortir. Hanya bal di gudang (stok, Batch Sample, Surat Jalan, Laporan Bal) yang memakai nomor baru
+ *    (lihat noBalTerkini di noBalPensiun.ts untuk bal gudang yang dibentuk dari kupon).
  *  - Rekap per kode bal mengikuti awalan No Bal terakhir.
  *  - Sebuah No Bal, baik dari awal maupun dari penggantian, tidak boleh dipakai dua kali.
  */
@@ -49,7 +49,7 @@ export interface BalKoreksi {
   barang?: Barang;
   /** Nomor yang berlaku sekarang (gudang, sample, Surat Jalan, Laporan Bal) */
   noBalSekarang: string;
-  /** Nomor di kupon/nota (sama dengan nomor sekarang selama kupon belum lunas) */
+  /** Nomor di kupon/nota: nomor saat disortir, tidak pernah berganti */
   noBalNota: string;
   /** Nomor pertama kali bal ini disortir */
   noBalAwal: string;
@@ -171,7 +171,7 @@ export function daftarBalKoreksi(sumber: SumberKoreksi): BalKoreksi[] {
       if (!item.no_bal) continue;
       const nomorTerakhir = ikuti(maju, item.no_bal);
       const barang = cariBarang(tx, item, indeks, nomorTerakhir);
-      const noBalSekarang = lunas ? kunci(barang?.no_bal || nomorTerakhir) : kunci(item.no_bal);
+      const noBalSekarang = kunci(barang?.no_bal || nomorTerakhir);
       const { aktif, selesai } = suratJalanBal(barang, indeks.sjPerBarang);
       const suratJalan = selesai || aktif;
       const tahap: TahapGantiNoBal = suratJalan ? 'surat_jalan' : lunas ? 'lunas' : isBalDitimbang(item) ? 'timbang' : 'sortir';
@@ -241,8 +241,6 @@ export function alasanNoBalBaruDitolak(
 
 export interface RencanaGantiNoBal {
   riwayat: RiwayatNoBal;
-  /** Isi bal di kupon setelah diganti; hanya bila kupon belum lunas (No Bal di kupon ikut berganti) */
-  itemBaru?: TransaksiItemBal;
 }
 
 export function siapkanGantiNoBal(
@@ -253,7 +251,6 @@ export function siapkanGantiNoBal(
   sekarang: Date = new Date()
 ): RencanaGantiNoBal {
   const baru = normalisasiNoBal(noBalBaru);
-  const ubahNota = !bal.lunas;
   const riwayat: RiwayatNoBal = {
     riwayat_id: `RNB-${sekarang.getTime()}-${akhiranUnik()}`,
     transaksi_id: bal.tx.transaksi_id,
@@ -265,60 +262,29 @@ export function siapkanGantiNoBal(
     no_bal_lama: bal.noBalSekarang,
     no_bal_baru: baru,
     tahap: bal.tahap,
-    ubah_nota: ubahNota,
+    // Kupon tidak pernah ikut berganti (keputusan pemilik): nota & pembelian tetap nomor saat disortir
+    ubah_nota: false,
     alasan: alasan.trim(),
     diganti_oleh: digantiOleh,
     diganti_pada: sekarang.toISOString(),
   };
-  if (!ubahNota) return { riwayat };
-
-  // Hanya nomornya yang berganti: tara, netto, dan nilai tetap hasil timbang saat pembelian
-  const it = bal.item;
-  const itemBaru: TransaksiItemBal = {
-    ...it,
-    no_bal: baru,
-    barcode: !it.barcode || kunci(it.barcode) === kunci(it.no_bal) ? baru : it.barcode,
-    diubah_lokal_pada: sekarang.getTime(),
-  };
-  return { riwayat, itemBaru };
+  return { riwayat };
 }
 
 export interface DataGantiNoBal {
-  transaksiList: TransaksiPembelian[];
   barangList: Barang[];
   batchSampleList: BatchPengirimanSample[];
 }
 
 /**
- * Menerapkan penggantian ke daftar di layar. Aman diulang (dipakai juga untuk menimpa data server yang belum memuat
- * penggantian yang masih di antrean): hanya bal yang masih bernomor lama yang diubah.
+ * Menerapkan penggantian ke bal gudang dan Batch Sample di layar (kupon tidak disentuh). Aman diulang (dipakai juga untuk
+ * menimpa data server yang belum memuat penggantian yang masih di antrean): hanya bal yang masih bernomor lama yang diubah.
  */
 export function terapkanGantiNoBal<T extends Partial<DataGantiNoBal>>(data: T, rencana: RencanaGantiNoBal): T {
-  const { riwayat: r, itemBaru } = rencana;
+  const r = rencana.riwayat;
   const lama = kunci(r.no_bal_lama);
   const baru = kunci(r.no_bal_baru);
   const hasil: T = { ...data };
-
-  if (data.transaksiList && r.ubah_nota && itemBaru) {
-    let berubah = false;
-    const next = data.transaksiList.map((tx) => {
-      if (tx.transaksi_id !== r.transaksi_id) return tx;
-      const items = tx.items || [];
-      const idx = items.findIndex((it) => it.item_id === r.item_id && kunci(it.no_bal) === lama);
-      const cadangan = idx >= 0 ? idx : items.findIndex((it) => kunci(it.no_bal) === lama);
-      if (cadangan < 0) return tx;
-      berubah = true;
-      const it = items[cadangan];
-      const diganti: TransaksiItemBal = {
-        ...it,
-        no_bal: itemBaru.no_bal,
-        barcode: itemBaru.barcode,
-        diubah_lokal_pada: Math.max(it.diubah_lokal_pada || 0, itemBaru.diubah_lokal_pada || 0) || undefined,
-      };
-      return hitungUlangKupon(tx, items.map((x, i) => (i === cadangan ? diganti : x)));
-    });
-    if (berubah) hasil.transaksiList = next;
-  }
 
   if (data.barangList) {
     let berubah = false;

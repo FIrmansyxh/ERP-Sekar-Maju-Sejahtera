@@ -5,7 +5,8 @@ import type { RiwayatNoBal } from '../types';
  *
  * Dipakai di tempat yang tidak memegang daftar riwayat sendiri:
  *  - Sortir menolak scan nomor yang pernah dipakai lalu diganti (No Bal tidak boleh dipakai dua kali).
- *  - mergeKuponParalel tidak membawa balik nomor lama dari salinan kupon yang basi di perangkat lain.
+ *  - Bal gudang yang dibentuk dari kupon (buildBarangDariItem) memakai nomor terbarunya, dan Timbangan menemukan bal
+ *    lewat nomor baru walau kupon tetap menyimpan nomor saat disortir.
  */
 
 const kunci = (noBal: string): string => String(noBal || '').trim().toUpperCase();
@@ -35,7 +36,26 @@ export function penggantiNoBal(noBal: string): string | null {
   return penggantiLama.get(kunci(noBal)) ?? null;
 }
 
-/** No Bal ini sudah diganti ketika kuponnya belum lunas, jadi nomor ini tidak boleh ada lagi di kupon mana pun. */
+/**
+ * Nomor yang berlaku sekarang untuk bal yang di kuponnya tercatat `noBal` (mengikuti rantai penggantian). Kupon dan
+ * nota selalu menyimpan nomor saat disortir; bal di gudang, sample, dan Surat Jalan memakai nomor ini.
+ */
+export function noBalTerkini(noBal: string): string {
+  let hasil = kunci(noBal);
+  const dilihat = new Set<string>([hasil]);
+  for (let i = 0; i < 50; i++) {
+    const berikut = penggantiLama.get(hasil);
+    if (!berikut || dilihat.has(berikut)) break;
+    dilihat.add(berikut);
+    hasil = berikut;
+  }
+  return hasil === kunci(noBal) ? noBal : hasil;
+}
+
+/**
+ * No Bal ini diganti pada versi awal Koreksi No Bal yang masih mengubah kupon belum lunas, jadi nomor ini tidak boleh
+ * dibawa balik dari salinan kupon yang basi. Penggantian sekarang tidak pernah mengubah kupon.
+ */
 export function noBalPensiunDiKupon(noBal: string): boolean {
   return lamaDiKupon.has(kunci(noBal));
 }

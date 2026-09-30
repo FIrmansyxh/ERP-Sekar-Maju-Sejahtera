@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { TimbanganPageView } from './TimbanganPageView';
 import { buatKupon } from '../../test/fixtures';
 import { SaveTransaksiMeta, TransaksiItemBal, TransaksiPembelian } from '../../types';
+import { aturRiwayatNoBal } from '../../utils/noBalPensiun';
 
 const itemBal = (no: string, extra: Partial<TransaksiItemBal> = {}) =>
   ({
@@ -150,5 +151,24 @@ describe('Timbangan: kupon yang sudah dibayar di Kasir terkunci', () => {
   it('kupon belum dibayar tetap punya tombol Buka Kunci untuk bal yang sudah ditimbang', () => {
     render(<Induk initialBalNo="TS113" awal={{ items: [itemBal('TS113', { berat_kg: 32, berat_bruto_kg: 34 })], total_bal: 1 }} />);
     expect(screen.getByRole('button', { name: /Buka Kunci/ })).toBeInTheDocument();
+  });
+});
+
+describe('Timbangan: bal yang diganti nomornya lewat Koreksi No Bal', () => {
+  it('ditemukan lewat nomor baru (label fisik), walau kupon tetap bernomor lama', async () => {
+    aturRiwayatNoBal([
+      {
+        riwayat_id: 'R1', transaksi_id: '1', item_id: 'I-TS114', no_bal_lama: 'TS114', no_bal_baru: 'TS900',
+        tahap: 'sortir', ubah_nota: false, alasan: 'label', diganti_oleh: 'A', diganti_pada: '2026-09-30T01:00:00Z',
+      },
+    ]);
+    try {
+      render(<Induk />);
+      await userEvent.type(screen.getByPlaceholderText('No bal / kupon'), 'TS900{Enter}');
+      await waitFor(() => expect(screen.getByText(/Penimbangan Bal:/)).toBeInTheDocument());
+      expect(screen.getByText('TS114', { selector: 'span.font-mono' })).toBeInTheDocument();
+    } finally {
+      aturRiwayatNoBal([]);
+    }
   });
 });

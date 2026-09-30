@@ -80,10 +80,7 @@ export const overlayPengiriman = (daftar: PengirimanBarang[]): PengirimanBarang[
 
 /** Kupon: perubahan bal/timbang dari antrean kupon, lalu kupon yang sedang dihapus. */
 export const overlayTransaksi = (daftar: TransaksiPembelian[]): TransaksiPembelian[] =>
-  terapkanGantiNoBalMenunggu(
-    'transaksiList',
-    antrianMutasi.terapkanKeDaftar('transaksi', antrianSinkron.terapkanKeDaftar(daftar), {
-      ambilId: (t) => t.transaksi_id,
-      ambilIdAlt: (t) => t.no_kupon,
-    })
-  );
+  antrianMutasi.terapkanKeDaftar('transaksi', antrianSinkron.terapkanKeDaftar(daftar), {
+    ambilId: (t) => t.transaksi_id,
+    ambilIdAlt: (t) => t.no_kupon,
+  });

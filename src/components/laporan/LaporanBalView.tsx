@@ -459,11 +459,13 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
         const bruto = it.berat_bruto_kg && it.berat_bruto_kg > 0 ? it.berat_bruto_kg : 0;
         const isTikar = Boolean(it.ganti_tikar) || Number(it.potongan_tikar || 0) > 0;
         const potTikar = Number(it.potongan_tikar || 0) || (isTikar ? 75000 : 0);
+        // Kupon tetap bernomor saat disortir; bal yang pernah diganti tampil dengan nomor terakhirnya
         const rantai = rantaiDari(it.no_bal);
+        const noSekarang = rantai[rantai.length - 1] || it.no_bal;
 
         rows.push({
           barang_id: it.barang_id || `TX-ITEM-${it.item_id}`,
-          no_bal: it.no_bal,
+          no_bal: noSekarang,
           kode_grade: it.kode_grade,
           berat_kg: netto,
           berat_bruto_kg: bruto,
@@ -484,7 +486,7 @@ export const LaporanBalView: React.FC<LaporanBalViewProps> = ({
           status_bayar:
             isTransaksiLunas(tx) ? 'lunas' : 'belum_lunas',
           has_tx: true,
-          kode_bal_prefix: extractKodeBalPrefix(it.no_bal),
+          kode_bal_prefix: extractKodeBalPrefix(noSekarang),
           ganti_tikar: isTikar,
           potongan_tikar: potTikar,
           no_bal_awal: rantai[0] || it.no_bal,

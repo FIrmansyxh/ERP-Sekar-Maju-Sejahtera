@@ -4,7 +4,6 @@ import { ErpApiService } from './erpApi';
 import { buatKupon } from '../test/fixtures';
 import { balDihapusDariKupon, catatBalDihapus } from '../utils/balDihapus';
 import { verifikasiHasil } from './antrianSinkron';
-import { antrianMutasi } from './antrianMutasi';
 import type { TransaksiItemBal } from '../types';
 
 /**
@@ -254,35 +253,5 @@ describe('syncTransaksi: menyegarkan kupon dari server sebelum kirim (bukan lewa
     await ErpApiService.syncTransaksi(kuponLayar, { status_pembayaran: 'belum_lunas' }, { tanpaCekKesehatan: true });
 
     expect((dikirim.items as any[])?.[0]?.ganti_tikar).toBe(true);
-  });
-});
-
-describe('syncTransaksi menunggu ganti No Bal', () => {
-  afterEach(() => {
-    antrianMutasi.reset();
-    vi.restoreAllMocks();
-  });
-
-  it('simpanan kupon ditahan selama ganti No Bal kupon itu belum tersimpan di server', async () => {
-    const kirimServer = vi.spyOn(apiClient.api, 'put');
-    antrianMutasi.aturJeda(() => 60_000);
-    antrianMutasi.pasang({ 'no_bal:ganti': { kirim: async () => { throw new Error('jaringan putus'); } } });
-    await antrianMutasi.masukkan({
-      entitas: 'no_bal',
-      id: 'R1',
-      aksi: 'ganti',
-      data: { riwayat: { riwayat_id: 'R1', transaksi_id: 'TRX-1', ubah_nota: true, no_bal_lama: 'HF01', no_bal_baru: 'HF02' } },
-    });
-
-    const tx = buatKupon('TRX-1', { items: [item({ no_bal: 'HF02' })] });
-    await expect(ErpApiService.syncTransaksi(tx, { status_pembayaran: 'belum_lunas' }, { tanpaCekKesehatan: true })).rejects.toThrow(
-      /Menunggu ganti No Bal HF01 → HF02/
-    );
-    expect(kirimServer).not.toHaveBeenCalled();
-
-    // Kupon lain tidak ikut tertahan
-    const lain = buatKupon('TRX-2', { items: [item({ item_id: 'TRX-2-BAL-01', no_bal: 'T9' })] });
-    vi.spyOn(apiClient.api, 'get').mockRejectedValue(new Error('tidak dipakai'));
-    await expect(ErpApiService.syncTransaksi(lain, { status_pembayaran: 'belum_lunas' }, { tanpaCekKesehatan: true })).rejects.not.toThrow(/Menunggu ganti No Bal/);
   });
 });

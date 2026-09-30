@@ -169,9 +169,7 @@ export const KoreksiNoBalView: React.FC<KoreksiNoBalViewProps> = ({
     const rencana = siapkanGantiNoBal(bal, noBaruBersih, alasan, petugas);
     const baris = [
       `No Bal ${bal.noBalSekarang} diganti menjadi ${noBaruBersih}.`,
-      bal.lunas
-        ? `Nota dan Laporan Pembelian Kupon ${bal.tx.no_kupon} tetap memakai No Bal ${bal.noBalNota}.`
-        : `No Bal di Kupon ${bal.tx.no_kupon} ikut berganti.`,
+      `Kupon ${bal.tx.no_kupon}, nota, dan Laporan Pembelian tetap memakai No Bal ${bal.noBalNota}.`,
     ];
     const lanjut = await mintaKonfirmasi(baris.join('\n'), { judul: 'Ganti No Bal', teksOk: 'Ganti', varian: 'primary' });
     if (!lanjut) return;

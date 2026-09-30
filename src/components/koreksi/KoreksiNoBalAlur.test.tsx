@@ -5,13 +5,14 @@ import App from '../../App';
 import { DialogHost } from '../common/DialogHost';
 import { INITIAL_USER_DATA } from '../../data/initialUserData';
 import {
+  loadBarangData,
+  loadTransaksiData,
   saveBarangData,
   saveCurrentUser,
   saveRiwayatNoBalData,
   saveTransaksiData,
   STORAGE_KEY_BARANG,
   STORAGE_KEY_RIWAYAT_NO_BAL,
-  STORAGE_KEY_TRANSAKSI,
 } from '../../utils/storage';
 import { buatBal, buatKupon } from '../../test/fixtures';
 import type { TransaksiItemBal } from '../../types';
@@ -63,12 +64,17 @@ describe('Koreksi No Bal sampai Laporan Bal', () => {
       await u.click(screen.getByRole('button', { name: /Simpan/ }));
       await u.click(await screen.findByRole('button', { name: 'Ganti' }));
       await screen.findAllByText(/diganti menjadi SB0999/);
+      // Kupon & nota tetap nomor saat disortir
+      expect(loadTransaksiData()[0].items!.map((it) => it.no_bal)).toEqual(['SB0011', 'SB0012']);
 
       await u.click(tombolMenu('Laporan Bal'));
       const cepat = await screen.findByPlaceholderText(/Cari cepat/, {}, { timeout: 8000 });
       await u.type(cepat, 'SB0011');
       expect(screen.queryAllByText('SB0999').length).toBeGreaterThan(0);
       expect(screen.queryAllByText('SB0012')).toHaveLength(0);
+      // Satu baris: No Bal Awal SB0011, No Bal Baru SB0999
+      const baris = screen.getAllByText('SB0999')[0].closest('tr')!;
+      expect(within(baris).getByText('SB0011')).toBeInTheDocument();
       await u.clear(cepat);
 
       await u.type(screen.getByPlaceholderText('No bal, petani, barcode...'), 'SB0011{Enter}');
@@ -77,7 +83,7 @@ describe('Koreksi No Bal sampai Laporan Bal', () => {
     }, 30000);
   }
 
-  it('kupon belum lunas ditolak bila server belum punya endpoint ganti No Bal; nomor tidak berubah', async () => {
+  it('server belum punya endpoint: penggantian tetap berlaku di perangkat ini dan menunggu di antrean; kupon tidak berubah', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn((url: string) =>
@@ -108,9 +114,10 @@ describe('Koreksi No Bal sampai Laporan Bal', () => {
     await u.click(screen.getByRole('button', { name: /Simpan/ }));
     await u.click(await screen.findByRole('button', { name: 'Ganti' }));
 
-    await screen.findByText(/Server belum mendukung ganti No Bal/);
-    expect(screen.queryByText(/diganti menjadi SB0999/)).not.toBeInTheDocument();
-    expect(screen.getAllByText('SB0011').length).toBeGreaterThan(0);
+    await screen.findAllByText(/diganti menjadi SB0999/);
+    expect(loadBarangData().find((b) => b.barang_id === 'BAL-1-01')?.no_bal).toBe('SB0999');
+    expect(loadTransaksiData()[0].items![0].no_bal).toBe('SB0011');
+    await vi.waitFor(() => expect(localStorage.getItem('sms_antrian_mutasi_v1') || '').toContain('no_bal|'));
   }, 30000);
 
   it('No Bal diganti di tab lain: Laporan Bal yang sudah terbuka ikut mengenal nomor lamanya', async () => {
@@ -122,18 +129,16 @@ describe('Koreksi No Bal sampai Laporan Bal', () => {
     await u.click(tombolMenu('Laporan Bal'));
     const cepat = await screen.findByPlaceholderText(/Cari cepat/, {}, { timeout: 8000 });
 
-    // Tab lain mengganti SB0011 menjadi SB0999 lalu menyimpan kupon, bal, dan riwayatnya
-    const baru = buatKupon('TRX-1', { items: [item('SB0999', 1, { barang_id: 'BAL-1-01' })], status_pembayaran: 'belum_lunas' });
-    saveTransaksiData([baru]);
+    // Tab lain mengganti SB0011 menjadi SB0999 lalu menyimpan bal dan riwayatnya (kupon tetap SB0011)
     saveBarangData([buatBal('BAL-1-01', { no_bal: 'SB0999', transaksi_pembelian_id: 'TRX-1', tanggal_masuk: '2026-09-19' })]);
     saveRiwayatNoBalData([
       {
         riwayat_id: 'R1', transaksi_id: 'TRX-1', item_id: 'TRX-1-BAL-01', barang_id: 'BAL-1-01', no_bal_lama: 'SB0011', no_bal_baru: 'SB0999',
-        tahap: 'timbang', ubah_nota: true, alasan: 'x', diganti_oleh: 'A', diganti_pada: '2026-09-30T01:00:00Z',
+        tahap: 'timbang', ubah_nota: false, alasan: 'x', diganti_oleh: 'A', diganti_pada: '2026-09-30T01:00:00Z',
       },
     ]);
     act(() => {
-      [STORAGE_KEY_TRANSAKSI, STORAGE_KEY_BARANG, STORAGE_KEY_RIWAYAT_NO_BAL].forEach((key) => window.dispatchEvent(new StorageEvent('storage', { key })));
+      [STORAGE_KEY_BARANG, STORAGE_KEY_RIWAYAT_NO_BAL].forEach((key) => window.dispatchEvent(new StorageEvent('storage', { key })));
     });
 
     await u.type(cepat, 'SB0011');

@@ -62,12 +62,8 @@ export interface TugasMutasi {
   /** Server menolak (mis. endpoint belum ada atau data ditolak): dicoba lagi pelan-pelan, bukan tiap detik */
   ditolak?: boolean;
   butuhLoginUlang?: boolean;
-  /** Percobaan terakhir gagal karena rute belum ada di server (backend lama) */
-  endpointTidakAda?: boolean;
   selisih?: string[];
 }
-
-export type StatusTugasMutasi = 'menunggu' | 'selesai' | 'tidak_ada';
 
 export interface HasilKirimMutasi {
   /** Jawaban server (dipakai verifikasi dan pemanggil) */
@@ -241,7 +237,6 @@ function jalankan(kunci: string): Promise<void> {
         t.percobaan = 0;
         t.galat = undefined;
         t.ditolak = false;
-        t.endpointTidakAda = false;
         t.butuhLoginUlang = false;
 
         if (t.versi !== versiDikirim) {
@@ -322,7 +317,6 @@ function jalankan(kunci: string): Promise<void> {
         t.percobaan += 1;
         t.galat = pesanGalat(err);
         t.butuhLoginUlang = butuhLogin;
-        t.endpointTidakAda = endpointBelumAda(err);
         // Server menjawab dengan penolakan (bukan gangguan jaringan): jangan menghujani server tiap detik.
         // 429 (terlalu banyak permintaan) dan 408 hanyalah gangguan sesaat: dicoba ulang seperti gangguan jaringan.
         t.ditolak = Boolean(status && status >= 400 && status < 500 && status !== 429 && status !== 408 && !t.butuhLoginUlang);
@@ -521,26 +515,6 @@ export const antrianMutasi = {
     return tugas
       .filter((t) => t.data !== undefined)
       .sort((a, b) => a.dibuatPada - b.dibuatPada)
-      .map((t) => t.data as T);
-  },
-
-  /**
-   * Keadaan satu tugas setelah dikirim: masih menunggu (gagal sementara / ditolak / endpoint belum ada), baru saja
-   * selesai, atau tidak ada lagi (dibatalkan karena ditolak server, atau memang tidak pernah ada).
-   */
-  statusTugas(entitas: EntitasMutasi, id: string, aksi: AksiMutasi): { status: StatusTugasMutasi; endpointTidakAda: boolean } {
-    muatDariPenyimpanan();
-    const kunci = kunciTugas(entitas, id, aksi);
-    const t = antrian.get(kunci);
-    if (t) return { status: 'menunggu', endpointTidakAda: Boolean(t.endpointTidakAda) };
-    return { status: barusSelesai.has(kunci) ? 'selesai' : 'tidak_ada', endpointTidakAda: false };
-  },
-
-  /** Data tugas sebuah entitas yang masih menunggu dikirim (belum berhasil), tanpa yang baru saja selesai. */
-  tugasMenunggu<T>(entitas: EntitasMutasi, aksi: AksiMutasi): T[] {
-    muatDariPenyimpanan();
-    return Array.from(antrian.values())
-      .filter((t) => t.entitas === entitas && t.aksi === aksi && t.data !== undefined)
       .map((t) => t.data as T);
   },
 

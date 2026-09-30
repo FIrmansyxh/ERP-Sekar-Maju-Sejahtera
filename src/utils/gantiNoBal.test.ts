@@ -11,8 +11,8 @@ import {
   SumberKoreksi,
   terapkanGantiNoBal,
 } from './gantiNoBal';
-import { mergeKuponParalel } from './kuponSortir';
-import { aturRiwayatNoBal, penggantiNoBal } from './noBalPensiun';
+import { buildBarangDariItem, lengkapiBalDariKupon, mergeKuponParalel } from './kuponSortir';
+import { aturRiwayatNoBal, noBalTerkini, penggantiNoBal } from './noBalPensiun';
 
 const item = (no: string, extra: Partial<TransaksiItemBal> = {}) =>
   ({
@@ -54,7 +54,7 @@ const riwayat = (lama: string, baru: string, pada: string, extra: Partial<Riwaya
 afterEach(() => aturRiwayatNoBal([]));
 
 describe('Koreksi No Bal: kupon belum lunas', () => {
-  it('No Bal di kupon, bal gudang, dan Batch Sample ikut berganti', () => {
+  it('kupon & nota tetap nomor saat disortir; bal gudang dan Batch Sample memakai nomor baru', () => {
     const tx = buatKupon('TRX-1', { items: [item('HF01')], status_pembayaran: 'belum_lunas' });
     const barang = buatBal('BAL-1-01', { no_bal: 'HF01', transaksi_pembelian_id: 'TRX-1' });
     const batch = buatBatch('BT1', 'sample', { items: [buatItemSample('BAL-1-01', { no_bal: 'HF01', kode_bal_pembeli: 'HF01' })] });
@@ -65,14 +65,11 @@ describe('Koreksi No Bal: kupon belum lunas', () => {
     expect(bal.alasanTerkunci).toBeNull();
 
     const rencana = siapkanGantiNoBal(bal, 'hf02', 'salah tulis', 'Admin');
-    expect(rencana.riwayat).toMatchObject({ no_bal_lama: 'HF01', no_bal_baru: 'HF02', ubah_nota: true, barang_id: 'BAL-1-01' });
+    expect(rencana.riwayat).toMatchObject({ no_bal_lama: 'HF01', no_bal_baru: 'HF02', ubah_nota: false, barang_id: 'BAL-1-01' });
 
-    const hasil = terapkanGantiNoBal({ transaksiList: [tx], barangList: [barang], batchSampleList: [batch] }, rencana);
-    expect(hasil.transaksiList[0].items![0].no_bal).toBe('HF02');
-    expect(hasil.transaksiList[0].no_bal).toBe('HF02');
+    const hasil = terapkanGantiNoBal({ barangList: [barang], batchSampleList: [batch] }, rencana);
     expect(hasil.barangList[0].no_bal).toBe('HF02');
     expect(hasil.batchSampleList[0].items[0].no_bal).toBe('HF02');
-
     // No Jadi yang otomatis sama dengan No Bal ikut berganti; No Jadi khusus pembeli tetap
     expect(hasil.batchSampleList[0].items[0].kode_bal_pembeli).toBe('HF02');
     const batchKhusus = buatBatch('BT2', 'sample', { items: [buatItemSample('BAL-1-01', { no_bal: 'HF01', kode_bal_pembeli: 'JD-7' })] });
@@ -81,26 +78,22 @@ describe('Koreksi No Bal: kupon belum lunas', () => {
 
     // Aman diulang (dipakai untuk menimpa data server yang belum memuat penggantian)
     const lagi = terapkanGantiNoBal(hasil, rencana);
-    expect(lagi.transaksiList).toBe(hasil.transaksiList);
     expect(lagi.barangList).toBe(hasil.barangList);
+
+    // Nomor sekarang, nota, dan awal
+    const setelah = cariBalKoreksi('HF01', sumber([tx], { barangList: hasil.barangList, riwayat: [rencana.riwayat] }))!;
+    expect(setelah).toMatchObject({ noBalSekarang: 'HF02', noBalNota: 'HF01', noBalAwal: 'HF01' });
   });
 
-  it('jenis awalan berubah: tara, netto, dan nilai tetap hasil timbang saat pembelian', () => {
-    const tx = buatKupon('TRX-1', { items: [ditimbang('HF01')], status_pembayaran: 'belum_lunas' });
-    const barang = buatBal('BAL-1-01', { no_bal: 'HF01', transaksi_pembelian_id: 'TRX-1', berat_kg: 50, potongan_tara_kg: 5 });
-    const bal = cariBalKoreksi('HF01', sumber([tx], { barangList: [barang] }))!;
-    expect(bal.tahap).toBe('timbang');
-
-    const rencana = siapkanGantiNoBal(bal, 'SB01', 'jenis salah', 'Admin');
-    const hasil = terapkanGantiNoBal({ transaksiList: [tx], barangList: [barang] }, rencana);
-    expect(hasil.transaksiList[0].items![0]).toMatchObject({
-      no_bal: 'SB01',
-      potongan_tara_kg: 5,
-      berat_kg: 50,
-      total_kotor: 50 * 45000,
-      subtotal_bersih: 50 * 45000 - 10000,
-    });
-    expect(hasil.barangList[0]).toMatchObject({ no_bal: 'SB01', potongan_tara_kg: 5, berat_kg: 50 });
+  it('bal gudang yang dibentuk ulang dari kupon (Timbangan, Kasir, muat ulang) memakai nomor terbaru; tara tetap', () => {
+    const tx = buatKupon('TRX-1', { items: [ditimbang('HF01', { barang_id: 'BAL-1-01' })], status_pembayaran: 'belum_lunas' });
+    aturRiwayatNoBal([riwayat('HF01', 'SB01', '2026-09-30T01:00:00Z', { ubah_nota: false })]);
+    const dariKupon = buildBarangDariItem(tx, tx.items![0]);
+    expect(dariKupon).toMatchObject({ no_bal: 'SB01', potongan_tara_kg: 5, berat_kg: 50 });
+    expect(tx.items![0].no_bal).toBe('HF01');
+    expect(lengkapiBalDariKupon([], [tx]).map((b) => b.no_bal)).toEqual(['SB01']);
+    expect(noBalTerkini('HF01')).toBe('SB01');
+    expect(noBalTerkini('TS9')).toBe('TS9');
   });
 });
 
@@ -112,14 +105,12 @@ describe('Koreksi No Bal: kupon lunas', () => {
     expect(bal.tahap).toBe('lunas');
 
     const rencana = siapkanGantiNoBal(bal, 'HF77', 'label tertukar', 'Admin');
-    expect(rencana.itemBaru).toBeUndefined();
     expect(rencana.riwayat.ubah_nota).toBe(false);
 
-    const hasil = terapkanGantiNoBal({ transaksiList: [tx], barangList: [barang] }, rencana);
-    expect(hasil.transaksiList[0].items![0].no_bal).toBe('SB01');
+    const hasil = terapkanGantiNoBal({ barangList: [barang] }, rencana);
     expect(hasil.barangList[0]).toMatchObject({ no_bal: 'HF77', berat_kg: 50 });
 
-    const setelah = cariBalKoreksi('SB01', sumber(hasil.transaksiList, { barangList: hasil.barangList, riwayat: [rencana.riwayat] }))!;
+    const setelah = cariBalKoreksi('SB01', sumber([tx], { barangList: hasil.barangList, riwayat: [rencana.riwayat] }))!;
     expect(setelah).toMatchObject({ noBalSekarang: 'HF77', noBalNota: 'SB01', noBalAwal: 'SB01' });
   });
 });
