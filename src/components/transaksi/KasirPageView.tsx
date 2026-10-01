@@ -85,9 +85,44 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  
+  // Server-side Data
+  const [serverData, setServerData] = useState<TransaksiPembelian[]>([]);
+  const [serverTotal, setServerTotal] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
 
-
-  // Confirm Modal state to avoid blocking browser locker errors
+  React.useEffect(() => {
+    let isMounted = true;
+    const fetchData = async () => {
+      setIsLoading(true);
+      const { ErpApiService } = await import('../../services/erpApi');
+      const filters = {
+        start_date: startDate,
+        end_date: endDate,
+        search: tableSearch || filterKupon,
+        petani_id: filterPetaniId,
+        status_bayar: filterStatusBayar === 'all' ? undefined : filterStatusBayar
+      };
+      
+      const res = await ErpApiService.getTransaksiListPaginated(currentPage, itemsPerPage, filters);
+      if (isMounted) {
+        setServerData(res.data);
+        setServerTotal(res.pagination.total);
+        setIsLoading(false);
+      }
+    };
+    
+    // Only debounce if there is a search term typed, otherwise fetch immediately (e.g. for page change)
+    const delay = tableSearch ? 300 : 0;
+    const timer = setTimeout(() => {
+      fetchData();
+    }, delay);
+    
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [currentPage, itemsPerPage, startDate, endDate, filterKupon, tableSearch, filterPetaniId, filterStatusBayar]);  // Confirm Modal state to avoid blocking browser locker errors
   const [confirmConfig, setConfirmConfig] = useState<{
     isOpen: boolean;
     title: string;
@@ -156,7 +191,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     },
     directPrintAfter?: boolean
   ): Promise<boolean> => {
-    const tx = transaksiList.find((t) => t.transaksi_id === txId);
+    const tx = serverData.find((t) => t.transaksi_id === txId);
     if (!tx) return false;
 
     // Strict validation: Kupon MUST have all bales weighed before payment can be confirmed!
@@ -198,7 +233,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
   const handleEditKupon = (tx: TransaksiPembelian) => {
     if (!onEditKupon || !canEditKupon) return;
     // Pakai data terbaru, bukan salinan lama dari modal Detail
-    const latest = transaksiList.find((t) => t.transaksi_id === tx.transaksi_id) || tx;
+    const latest = serverData.find((t) => t.transaksi_id === tx.transaksi_id) || tx;
     const alasan = alasanBalSusulanDitolak(latest);
     if (alasan) {
       setConfirmConfig({
@@ -216,7 +251,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
   };
 
   const handleMarkAsLunas = (txId: string) => {
-    const tx = transaksiList.find((t) => t.transaksi_id === txId);
+    const tx = serverData.find((t) => t.transaksi_id === txId);
     if (!tx) return;
 
     const weighStatus = getKuponWeighStatus(tx);
@@ -238,9 +273,9 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     setSelectedTxForBayar(tx);
   };
 
-  // Main Filter logic
+  // Main Filter logic (Now applies to the current paginated data for stats calculation)
   const filteredList = useMemo(() => {
-    return transaksiList.filter((tx) => {
+    return serverData.filter((tx) => {
       // Tanggal Mulai
       if (startDate) {
         const txDate = (tx.tanggal_transaksi || '').split(' ')[0];
@@ -289,7 +324,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
       grup.nilai += nilai;
     };
 
-    transaksiList.forEach((t) => {
+    serverData.forEach((t) => {
       const nilai = t.harga_final || 0;
       const isLunas = isTransaksiLunas(t);
       const isAllWeighed = checkIsAllWeighed(t);
@@ -308,7 +343,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     });
 
     return { semua, siapBayar, belumLengkap, lunas, belumLunas };
-  }, [transaksiList]);
+  }, [serverData]);
 
   // Kartu filter status pembayaran: satu klik langsung menyaring tabel
   const kartuStatus = [
@@ -431,9 +466,9 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     };
   }, [filteredList]);
 
-  // Table Quick Search filtering & sorting
+  // Table Quick Search filtering & sorting (local sorting for the current page)
   const searchedAndSortedList = useMemo(() => {
-    let result = [...filteredList];
+    let result = [...serverData];
 
     // Quick text search across all columns
     if (tableSearch.trim()) {
@@ -524,14 +559,13 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     });
 
     return result;
-  }, [filteredList, tableSearch, sortField, sortDirection]);
+  }, [serverData, tableSearch, sortField, sortDirection]);
 
   // Pagination calculation
-  const totalPages = Math.ceil(searchedAndSortedList.length / itemsPerPage) || 1;
+  const totalPages = Math.ceil(serverTotal / itemsPerPage) || 1;
   const paginatedList = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
-    return searchedAndSortedList.slice(start, start + itemsPerPage);
-  }, [searchedAndSortedList, currentPage, itemsPerPage]);
+    return searchedAndSortedList;
+  }, [searchedAndSortedList]);
 
   const handleHeaderSort = (field: string) => {
     if (sortField === field) {
@@ -983,7 +1017,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-700">
+            <tbody className={`divide-y divide-slate-100 text-slate-700 transition-opacity duration-200 ${isLoading ? 'opacity-40 pointer-events-none' : ''}`}>
               {paginatedList.length === 0 ? (
                 <tr>
                   <td colSpan={14} className="py-12 text-center text-slate-400 bg-white">
@@ -1261,7 +1295,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
           <Pagination
             currentPage={currentPage}
             totalPages={totalPages}
-            totalItems={searchedAndSortedList.length}
+            totalItems={serverTotal}
             itemsPerPage={itemsPerPage}
             onPageChange={setCurrentPage}
             showQuickJumper={true}

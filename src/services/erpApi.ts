@@ -417,6 +417,56 @@ export class ErpApiService {
     return { data: loadTransaksiData(), fromBackend: false };
   }
 
+  public static async getTransaksiListPaginated(page = 1, perPage = 50, filters: any = {}): Promise<{ data: TransaksiPembelian[]; pagination: any; fromBackend: boolean }> {
+    try {
+      const isOnline = await this.isBackendOnline();
+      if (isOnline) {
+        let url = `/transaksi?paginated=true&page=${page}&per_page=${perPage}`;
+        if (filters.tanggal) url += `&tanggal=${filters.tanggal}`;
+        if (filters.tahap) url += `&tahap=${filters.tahap}`;
+        if (filters.pembayaran) url += `&pembayaran=${filters.pembayaran}`;
+        if (filters.start_date) url += `&start_date=${filters.start_date}`;
+        if (filters.end_date) url += `&end_date=${filters.end_date}`;
+        if (filters.search) url += `&search=${encodeURIComponent(filters.search)}`;
+        if (filters.petani_id) url += `&petani_id=${filters.petani_id}`;
+        if (filters.status_bayar) url += `&status_bayar=${filters.status_bayar}`;
+        
+        const res = await api.get<any>(url);
+        if (res.status === 'success' && Array.isArray(res.data)) {
+          const mapped = res.data.map((t: any) => this.mapBackendTransaksi(t));
+          const gabungan = overlayTransaksi(mapped);
+          return { data: gabungan, pagination: res.pagination, fromBackend: true };
+        }
+      }
+    } catch (err) {
+      console.warn('Gagal mengambil transaksi pagination dari API:', err);
+    }
+    
+    // Fallback: paginate local data
+    const allData = loadTransaksiData();
+    let filtered = [...allData];
+    if (filters.tanggal) filtered = filtered.filter(t => t.tanggal_transaksi === filters.tanggal);
+    if (filters.tahap) filtered = filtered.filter(t => t.status_tahap === filters.tahap);
+    if (filters.pembayaran) filtered = filtered.filter(t => t.status_pembayaran === filters.pembayaran);
+    if (filters.start_date) filtered = filtered.filter(t => (t.tanggal_transaksi || '') >= filters.start_date);
+    if (filters.end_date) filtered = filtered.filter(t => (t.tanggal_transaksi || '') <= filters.end_date);
+    if (filters.petani_id) filtered = filtered.filter(t => t.petani_id === filters.petani_id);
+    
+    const startIndex = (page - 1) * perPage;
+    const paginatedItems = filtered.slice(startIndex, startIndex + perPage);
+    
+    return { 
+      data: paginatedItems, 
+      pagination: {
+        current_page: page,
+        last_page: Math.ceil(filtered.length / perPage) || 1,
+        total: filtered.length,
+        per_page: perPage
+      },
+      fromBackend: false 
+    };
+  }
+
   /**
    * Kupon tunggal terbaru dari server, dipakai untuk menyegarkan salinan lokal SESAAT SEBELUM mengirim
    * simpanan (bukan lewat tampilan) supaya bal saudara yang sudah basi tidak ikut menimpa balik data
