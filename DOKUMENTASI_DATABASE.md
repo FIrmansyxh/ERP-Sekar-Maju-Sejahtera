@@ -450,6 +450,26 @@ dipakai FE (`PATCH /transaksi/{id}`, `POST/PATCH/DELETE /transaksi/{id}/bal...`,
 `PUT /transaksi/{id}/koreksi`, `GET /dashboard/stats`, `GET /master/grades|gudang|roles|modules`, `/auth/me`,
 `/auth/logout`) dibiarkan dan ikut aturan stok bal yang sama.
 
+**Uji menyeluruh 2 perangkat (2026-10-01).** FE asli di dua origin terpisah (localStorage berbeda, seperti dua komputer) ke
+BE lokal dengan database uji terpisah, lalu isi database diperiksa langsung. Semua lolos: Master Petani (tambah, ubah,
+ganti ID kartu ikut memindah kupon & bal), Harga Beli (ubah tanpa baris ganda), Harga Jual, Potongan Tara (tara 2 kg
+terpakai di Timbangan), Pengguna (tambah, nonaktif = login 403, reset sandi); Sortir di PC A → Timbangan di PC B (GT,
+tara) → Selesai Sortir → Kasir (potongan & jumlah bayar sama dengan server); Batch Sample Draft berisi bal belum lunas &
+belum ditimbang → Finalkan → evaluasi pembeli (harga deal); DO dari bal belum lunas (Atur Netto, berat kirim, netto jual),
+edit DO dari PC B, status sampai Selesai (bal keluar), bayar sesudahnya (bal tetap keluar), batal DO (bal kembali);
+Koreksi No Bal (kupon tetap, stok & Timbangan memakai nomor baru); hapus bal di batch, hapus batch, hapus kupon belum
+lunas; semua Laporan & Dashboard tanpa galat; antrean kosong di kedua perangkat, tidak ada jawaban 4xx/5xx.
+
+Ditemukan dan diperbaiki saat uji itu:
+
+| Masalah | Akar | Perbaikan |
+|---------|------|-----------|
+| Jam terakhir login / ganti No Bal / bayar tercatat 7 jam lebih awal | Laravel menulis jam UTC tanpa zona, sesi Postgres memakai zona server (Asia/Bangkok) | BE `config/database.php` pgsql `timezone` = `DB_TIMEZONE` (bawaan `UTC`) |
+| Jam berzona dari server/perangkat tampil dalam UTC | `formatDateTimeIndo` memotong teks jam apa adanya | Waktu berzona dikonversi ke jam perangkat (`utils/formatters.ts`) |
+| Berat bal di Batch Sample tetap 0 di perangkat yang sudah pernah memuat batch, walau bal sudah ditimbang | `gabungBatchServer` memakai berat & No Bal dari salinan lokal | Berat, No Bal, dan grade dari server menjadi acuan bila server mengirimnya |
+| Bal yang dikeluarkan dari batch di komputer lain tetap tampil (dan menyimpan batch lagi ditolak server) | Isi batch server yang kosong diganti salinan lokal | Isi batch server selalu acuan; perubahan lokal yang belum terkirim tetap dijaga overlay antrean |
+| Notifikasi hapus kupon menampilkan ID internal | Pesan memakai `transaksi_id` | Memakai No. Kupon |
+
 **Cara kerja selanjutnya:** setiap perubahan FE yang mengubah data yang dikirim/dibaca (field, status, aturan boleh/tidak)
 langsung diikuti perubahan backend di pekerjaan yang sama: perbarui tabel bagian 5 ini, tambah/ubah tes di backend
 (`php artisan test`, DB uji `erp_sekar_maju_uji` diperbarui dulu dengan `DB_DATABASE=erp_sekar_maju_uji php artisan

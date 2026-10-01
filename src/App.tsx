@@ -1625,7 +1625,7 @@ export default function App() {
 
     
     
-    showToast(`Transaksi ${transaksiId} dan data bal terkait berhasil dihapus.`);
+    showToast(`Kupon ${txToDelete.no_kupon || '-'} dan data bal terkait berhasil dihapus.`);
     return true;
   };
 

@@ -1102,14 +1102,24 @@ export class ErpApiService {
   ): BatchPengirimanSample {
     if (!lokal) return server;
     const itemsLokal = lokal.items || [];
-    const sumber = server.items && server.items.length > 0 ? server.items : itemsLokal;
+    // Isi batch di server menjadi acuan, termasuk kosong (semua bal dikeluarkan / kuponnya dihapus di komputer lain).
+    // Isi yang diubah di perangkat ini dan belum terkirim dijaga overlay antrean (overlayBatchSample).
+    const sumber = server.items || [];
     const items = sumber.map((sv) => {
       const lk = itemsLokal.find(
         (l) => (sv.barang_id && l.barang_id === sv.barang_id) || (sv.sample_item_id && l.sample_item_id === sv.sample_item_id)
       );
       if (!lk || lk === sv) return sv;
+      // Berat bal ikut timbangan terbaru di server (bal bisa ditimbang setelah masuk batch) dan No Bal ikut Koreksi
+      // No Bal; salinan lokal hanya dipakai bila server tidak mengirim rincian bal
+      const adaBeratServer = (sv.berat_bal_kg || 0) > 0 || (sv.berat_bruto_kg || 0) > 0;
       return {
         ...lk,
+        no_bal: sv.no_bal || lk.no_bal,
+        kode_grade: sv.kode_grade || lk.kode_grade,
+        ...(adaBeratServer
+          ? { berat_bal_kg: sv.berat_bal_kg, berat_bruto_kg: sv.berat_bruto_kg, potongan_tara_kg: sv.potongan_tara_kg }
+          : {}),
         sample_item_id: sv.sample_item_id || lk.sample_item_id,
         // Server lama belum menyimpan No Jadi: yang di perangkat ini tetap dipakai
         kode_bal_pembeli: sv.kode_bal_pembeli || lk.kode_bal_pembeli,
