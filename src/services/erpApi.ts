@@ -722,7 +722,7 @@ export class ErpApiService {
         if (res.status === 'success' && Array.isArray(res.data)) {
           const dariServer = res.data.map((b) => this.mapBackendBarang(b));
           // Status bal yang diubah di perangkat ini dan belum sampai ke server tetap dipakai; bal milik kupon yang sedang dihapus disembunyikan
-          // Bal yang baru disortir belum ada di server sampai kuponnya dibayar, tetapi sudah terkumpul dan harus tetap tampil
+          // Server membuat bal sejak kupon Sortir diterima; bal dari kupon yang belum sampai ke server tetap ditampilkan
           const mapped = lengkapiBalDariKupon(overlayBarang(dariServer), loadTransaksiData());
           saveBarangData(mapped);
           return { data: mapped, fromBackend: true };
