@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Barang, TransaksiPembelian } from '../types';
-import { alasanKuponTerkunciBayar, filterBarangLunas, isTransaksiLunas, labelStatusBayar } from './statusBayar';
+import { alasanKuponTerkunciBayar, filterBarangLunas, isTransaksiLunas, kuponBelumLunasDiSuratJalan, labelStatusBayar } from './statusBayar';
 
 const tx = (id: string, bayar: Partial<TransaksiPembelian>): TransaksiPembelian =>
   ({ transaksi_id: id, items: [], ...bayar }) as unknown as TransaksiPembelian;
@@ -24,6 +24,20 @@ describe('filterBarangLunas', () => {
     const transaksi = [tx('T1', { status_pembayaran: 'lunas' }), tx('T2', {})];
     const hasil = filterBarangLunas([bal('A', 'T1'), bal('B', 'T2'), bal('C')], transaksi);
     expect(hasil.map((b) => b.barang_id)).toEqual(['A', 'C']);
+  });
+});
+
+describe('kuponBelumLunasDiSuratJalan', () => {
+  it('menyebut kupon belum lunas beserta No Bal-nya; kupon lunas dan bal tanpa kupon tidak menahan Selesai', () => {
+    const transaksi = [tx('T1', { status_pembayaran: 'lunas', no_kupon: 'K1' }), tx('T2', { no_kupon: 'K2' })];
+    const barang = [
+      { ...bal('A', 'T1'), no_bal: 'SB01' },
+      { ...bal('B', 'T2'), no_bal: 'SB02' },
+      { ...bal('C', 'T2'), no_bal: 'SB03' },
+      { ...bal('D'), no_bal: 'LAMA' },
+    ];
+    expect(kuponBelumLunasDiSuratJalan(['A', 'B', 'C', 'D'], barang, transaksi)).toEqual([{ no_kupon: 'K2', no_bal: ['SB02', 'SB03'] }]);
+    expect(kuponBelumLunasDiSuratJalan(['A', 'D'], barang, transaksi)).toEqual([]);
   });
 });
 

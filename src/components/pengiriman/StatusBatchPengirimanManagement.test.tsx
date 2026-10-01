@@ -146,6 +146,28 @@ describe('Status & Detail Batch: tab Batch Sample & Reclass menampilkan semua da
     expect(screen.getByRole('button', { name: /Simpan Hasil Sortir Buyer/ })).toBeInTheDocument();
   });
 
+  it('Tolak mencatat bal sebagai Ditolak (tidak dikeluarkan) dan batch Selesai bila sisa balnya sudah di Surat Jalan', async () => {
+    // Keputusan pemilik 2026-10-01: penolakan tetap tercatat (Laporan Pengiriman Sample), batch ditutup otomatis
+    const batch = buatBatch('4', 'sample', {
+      items: [buatItemSample('B1', { sudah_dikirim_do: true }), buatItemSample('B2')],
+    });
+    const props = await bukaTabDetail(buatProps({ batchSampleList: [batch] }));
+    await userEvent.click(within(screen.getByText('SAMPLE-4').closest('tr') as HTMLElement).getByRole('button', { name: /Detail/ }));
+
+    const barisB2 = screen.getAllByText('B2').map((el) => el.closest('tr')).find(Boolean) as HTMLElement;
+    await userEvent.click(within(barisB2).getByRole('button', { name: 'Tolak' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Ya, Tolak' }));
+    await userEvent.click(screen.getByRole('button', { name: /Simpan Hasil Sortir Buyer/ }));
+
+    const [batchTersimpan] = (props.onUpdateBatchSample as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(batchTersimpan.items.map((it: { barang_id: string; status_item: string }) => [it.barang_id, it.status_item])).toEqual([
+      ['B1', 'dikirim'],
+      ['B2', 'ditolak'],
+    ]);
+    expect(batchTersimpan.total_bal_ditolak).toBe(1);
+    expect(batchTersimpan.status).toBe('selesai');
+  });
+
   it('Detail membuka satu batch dan dapat kembali ke daftar', async () => {
     await bukaTabDetail();
     await userEvent.click(within(screen.getByText('SAMPLE-1').closest('tr') as HTMLElement).getByRole('button', { name: /Detail/ }));

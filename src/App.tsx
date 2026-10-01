@@ -40,7 +40,7 @@ import {
   STORAGE_KEY_RIWAYAT_NO_BAL
 } from './utils/storage';
 import { mergeKuponParalel, normalizeStatusBal, resolveStatusStok } from './utils/kuponSortir';
-import { filterBarangLunas } from './utils/statusBayar';
+import { filterBarangLunas, kuponBelumLunasDiSuratJalan } from './utils/statusBayar';
 import { RencanaGantiNoBal, terapkanGantiNoBal } from './utils/gantiNoBal';
 import { aturRiwayatNoBal } from './utils/noBalPensiun';
 import { barisSampleDariBatch } from './utils/statusBatchSample';
@@ -665,6 +665,8 @@ export default function App() {
   };
 
   const handleLogout = (autoLogout: boolean = false) => {
+    // Logout manual mencabut token di server; auto-logout tidak, supaya antrean simpanan tetap terkirim
+    if (autoLogout !== true) void ErpApiService.logout();
     setCurrentUser(null);
     saveCurrentUser(null);
     clearAllDrafts();
@@ -1972,6 +1974,15 @@ export default function App() {
     if (isSuratJalanTerkunci(target)) {
       showToast(`Surat Jalan ${target.no_surat_jalan} sudah Selesai dan statusnya tidak dapat diubah lagi.`, 'info');
       return;
+    }
+    // Bal belum lunas boleh dikirim, tetapi Surat Jalan baru Selesai setelah semua kuponnya dibayar di Kasir
+    if (newStatus === 'selesai') {
+      const belumLunas = kuponBelumLunasDiSuratJalan(target.barang_ids || [], barangList, transaksiList);
+      if (belumLunas.length > 0) {
+        const daftar = belumLunas.map((k) => `kupon ${k.no_kupon} (${k.no_bal.join(', ')})`).join('; ');
+        showToast(`Surat Jalan ${target.no_surat_jalan} belum bisa Selesai: ${daftar} belum dibayar di Kasir.`, 'info');
+        return;
+      }
     }
 
     try {

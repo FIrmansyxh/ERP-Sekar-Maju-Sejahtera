@@ -3,7 +3,7 @@
  * Mengimplementasikan pola "API-First with Offline LocalStorage Fallback".
  */
 
-import { api, ApiError, checkBackendHealth, setAuthToken, getTerakhirGagalJaringan } from './apiClient';
+import { api, ApiError, checkBackendHealth, getAuthToken, setAuthToken, getTerakhirGagalJaringan } from './apiClient';
 import { hashPassword } from '../utils/crypto';
 import { beratBrutoItemSample } from '../utils/beratKirim';
 import { statusSetelahSinkron, tandaiServerKenalDraft } from '../utils/statusBatchSample';
@@ -184,6 +184,25 @@ export class ErpApiService {
     // 2. Fallback autentikasi lokal
     const localRes = await authenticateLocalUser(username, password);
     return { ...localRes, mode: 'local' };
+  }
+
+  /**
+   * Logout manual: token dicabut di server lalu dihapus dari perangkat ini (keputusan pemilik 2026-10-01), supaya akun
+   * tidak tetap terbuka di komputer yang dipakai bergantian. Auto-logout tidak memanggil ini, jadi antrean simpanan tetap
+   * terkirim; simpanan yang masih antre setelah logout manual dikirim begitu login lagi.
+   */
+  public static async logout(): Promise<void> {
+    const token = getAuthToken();
+    if (!token) return;
+    try {
+      await api.post('/auth/logout');
+    } catch (err) {
+      // Server tidak terjangkau / token sudah tidak berlaku: tetap dihapus dari perangkat ini
+      console.warn('Token login belum bisa dicabut di server:', err instanceof Error ? err.message : err);
+    } finally {
+      // Jangan menghapus token baru bila pengguna sudah login lagi sebelum permintaan ini selesai
+      if (getAuthToken() === token) setAuthToken(null);
+    }
   }
 
   // --- PETANI ---

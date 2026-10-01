@@ -246,6 +246,9 @@ Status: `dimuat` / `dikirim` (Akan Dikirim) → `dalam_perjalanan` → `diterima
   Bal Terjual; total Excel Laporan Pengiriman). Angka `serverStats` di Dashboard dihitung server dan bisa lebih
   besar sampai server mengikuti aturan yang sama.
 - **`selesai` final**: tidak bisa dihapus dan statusnya tidak bisa diubah lagi (FE meminta konfirmasi lebih dulu).
+- **`selesai` menunggu lunas** (keputusan pemilik 2026-10-01): bal yang sudah ditimbang boleh dimuat dan dikirim walau
+  kuponnya belum dibayar, tetapi Surat Jalan baru boleh `selesai` setelah semua kupon balnya lunas. FE menolak lebih dulu
+  (`kuponBelumLunasDiSuratJalan`), server menjawab 422 dengan daftar kupon & No Bal yang belum dibayar.
 - Selama bal masih tercatat di Surat Jalan, kupon pembelian yang memuatnya tetap tidak dapat dihapus.
 
 Ketiga rute (`PUT /pengiriman/{id}`, `DELETE /pengiriman/{id}`, `PUT /pengiriman/{id}/status`) sudah ada di backend.
@@ -469,6 +472,15 @@ Ditemukan dan diperbaiki saat uji itu:
 | Berat bal di Batch Sample tetap 0 di perangkat yang sudah pernah memuat batch, walau bal sudah ditimbang | `gabungBatchServer` memakai berat & No Bal dari salinan lokal | Berat, No Bal, dan grade dari server menjadi acuan bila server mengirimnya |
 | Bal yang dikeluarkan dari batch di komputer lain tetap tampil (dan menyimpan batch lagi ditolak server) | Isi batch server yang kosong diganti salinan lokal | Isi batch server selalu acuan; perubahan lokal yang belum terkirim tetap dijaga overlay antrean |
 | Notifikasi hapus kupon menampilkan ID internal | Pesan memakai `transaksi_id` | Memakai No. Kupon |
+
+**Keputusan pemilik setelah uji (2026-10-01), diterapkan di FE dan BE:**
+
+| Topik | Aturan | FE | BE |
+|-------|--------|----|----|
+| Surat Jalan dengan bal belum lunas | Boleh dibuat & berangkat; `selesai` hanya bila semua kupon balnya lunas | `handleUpdatePengirimanStatus` + `utils/statusBayar.kuponBelumLunasDiSuratJalan` | `PengirimanController::updateStatus` 422 |
+| Bal ditolak pembeli di Batch Sample | Tetap tercatat `ditolak` di batch (masuk Laporan Pengiriman Sample), bal bebas dipakai DO/batch lain; tombol hapus (x) tetap mengeluarkan bal dari batch | Tombol Tolak + konfirmasi di Status & Detail Batch; Buat DO dari batch tidak membuang bal ditolak | Sudah mendukung (indeks unik mengabaikan `ditolak`) |
+| Status batch otomatis | Semua bal selain yang ditolak sudah di Surat Jalan = `selesai`, kapan pun (juga bila evaluasi disimpan setelah DO); dibuka lagi (`diproses`) bila tidak lagi; Draft tidak pernah ditutup otomatis; semua ditolak = `diproses` | `utils/statusBatchSample.statusBatchDariEvaluasi` | `RelasiBatchSample::sesuaikan` dipanggil juga saat simpan batch |
+| Logout | Logout manual mencabut token di server; auto-logout 30 menit tidak (antrean tetap terkirim) | `ErpApiService.logout` dari `handleLogout` | `POST /auth/logout` (sudah ada) |
 
 **Cara kerja selanjutnya:** setiap perubahan FE yang mengubah data yang dikirim/dibaca (field, status, aturan boleh/tidak)
 langsung diikuti perubahan backend di pekerjaan yang sama: perbarui tabel bagian 5 ini, tambah/ubah tes di backend
