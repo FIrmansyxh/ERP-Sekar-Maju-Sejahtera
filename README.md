@@ -115,7 +115,7 @@ tersimpan dari sesi sebelumnya. Definisi lengkap ada di `src/utils/rbac.ts`.
 | Peran | Modul yang dapat dibuka |
 |---|---|
 | Super Admin | Seluruh modul, termasuk Daftar Pengguna dan Audit Trail |
-| Admin Sortir | Sortir, Master Petani, Master Harga Beli, Master Harga Jual, dashboard, dan seluruh laporan |
+| Admin Sortir | Sortir, Master Petani, Master Harga Beli, Master Harga Jual, dashboard, dan laporan. Laporan mana saja yang terbuka dipilih Super Admin di Daftar Pengguna, tombol Akses Laporan Admin Sortir (bawaan: semua) |
 | Admin Timbang | Timbangan |
 | Admin Kasir | Sortir, Timbangan, Kasir, dashboard, dan seluruh laporan |
 | Admin Pengiriman | Pengiriman Sample, Status Batch & Reclass, Pengiriman Reguler, Status Pengiriman Reguler, Master Harga Jual, dan Laporan Pengiriman |

@@ -195,7 +195,8 @@ Semua di bawah `/api/v1`, JSON, `Authorization: Bearer <token Sanctum>`. Batas w
 | `DELETE /pengiriman/{id}` | batalkan Surat Jalan yang **belum Selesai** | Hapus DO beserta itemnya, bal kembali `di_gudang`; 422 bila `selesai` |
 | `PUT /pengiriman/{id}/status` | ubah status Surat Jalan | Body `{ status }`; `selesai` final dan membuat bal `keluar`; kirim ulang `selesai` = 200 |
 | `GET/POST/PUT /users…` | manajemen pengguna | |
-| `GET /ringkasan` | angka di menu samping | Jumlah petani, kupon, batch sample, Surat Jalan, harga beli, harga jual, pengguna (bagian 5.7) |
+| `GET /ringkasan` | angka di menu samping | Jumlah petani, kupon, batch sample, Surat Jalan, harga beli, harga jual, pengguna (bagian 5.7), dan `akses_laporan` = laporan yang terbuka untuk Admin Sortir |
+| `PUT /peran/{peran}/akses-laporan` | Super Admin memilih laporan Admin Sortir | `{ modul: [...] }` dari 7 modul laporan (Dashboard Analytic + 6 Laporan); hanya Super Admin (403), hanya `admin_sortir` (422). Tersimpan di tabel `akses_laporan_peran` (tanpa baris = semua terbuka), tercatat di `audit_log`. Perangkat lain menerimanya lewat `GET /ringkasan` tanpa login ulang |
 
 Semua `GET` daftar di atas (petani, kupon, bal, harga, pengguna, batch sample, Surat Jalan, riwayat No Bal, potongan,
 ringkasan) memakai **ETag** dari versi tabel sumbernya: FE mengirim `If-None-Match`, server menjawab **304** tanpa isi bila

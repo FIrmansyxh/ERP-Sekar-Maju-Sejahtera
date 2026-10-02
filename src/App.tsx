@@ -1,4 +1,4 @@
-import { Suspense, useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Suspense, useState, useEffect, useRef, useMemo, useCallback, useSyncExternalStore } from 'react';
 import { 
   Petani, 
   Barang, 
@@ -54,7 +54,14 @@ import {
   sesuaikanBatchSetelahPerubahanDO,
 } from './utils/alurPengiriman';
 import { clearAllDrafts, getDraftRecovery, markDraftCleanExit, touchDraftAlive } from './utils/draftStorage';
-import { hasModuleAccess } from './utils/rbac';
+import {
+  hasModuleAccess,
+  aturAksesLaporan,
+  pantauAksesLaporan,
+  ambilAksesLaporan,
+  laporanTerbuka,
+  MODUL_LAPORAN,
+} from './utils/rbac';
 import { antrianSinkron } from './services/antrianSinkron';
 import { normalizeKg, generatePetaniId } from './utils/formatters';
 import { hashPassword } from './utils/crypto';
@@ -475,6 +482,10 @@ export default function App() {
   // Laporan sedang memuat data sumbernya (saat dibuka atau tombol muat ulang); lihat efek penyegaran menu
   const [laporanRefreshing, setLaporanRefreshing] = useState(false);
 
+  // Laporan yang dibuka Admin Sortir dipilih Super Admin; menu samping, Home, dan penjaga di bawah ikut berubah
+  const aksesLaporan = useSyncExternalStore(pantauAksesLaporan, ambilAksesLaporan);
+  const aksesLaporanAwal = useRef(aksesLaporan);
+
   // Modul terakhir yang dibuka disimpan di peramban. Saat halaman dimuat ulang
   // hak aksesnya diperiksa ulang agar pengguna tidak masuk ke modul terlarang.
   useEffect(() => {
@@ -483,8 +494,11 @@ export default function App() {
       currentUser.status_aktif === false || !hasModuleAccess(currentUser.role, activeModuleId);
     if (isBlocked && activeModuleId !== 'modul-home') {
       setActiveModuleId('modul-home');
+      // Laporan yang sedang dibuka baru saja ditutup Super Admin dari komputer lain
+      if (aksesLaporan !== aksesLaporanAwal.current) showToast('Laporan ini sudah ditutup untuk peran Anda.', 'info');
     }
-  }, [currentUser, activeModuleId]);
+    aksesLaporanAwal.current = aksesLaporan;
+  }, [currentUser, activeModuleId, aksesLaporan]);
   const [targetKuponNo, setTargetKuponNo] = useState<string | undefined>(undefined);
   const [targetTxId, setTargetTxId] = useState<string | undefined>(undefined);
   const [targetBalNo, setTargetBalNo] = useState<string | undefined>(undefined);
@@ -727,6 +741,23 @@ export default function App() {
     setUserList(updated);
     saveUserData(updated);
     showToast(`Akun "${target.nama_lengkap}" sekarang ${nextStatus ? 'AKTIF' : 'NONAKTIF'}.`);
+  };
+
+  // Super Admin memilih laporan Admin Sortir. Berlaku di semua komputer, jadi harus sampai ke server; bila gagal,
+  // galatnya tampil di jendela pengaturan dan tidak ada yang berubah.
+  const handleSimpanAksesLaporan = async (modul: string[]) => {
+    const terbuka = await ErpApiService.simpanAksesLaporan('admin_sortir', modul);
+    aturAksesLaporan({ admin_sortir: terbuka });
+    const nama = MODUL_LAPORAN.filter((m) => terbuka.includes(m.id)).map((m) => m.nama);
+    recordAuditLog({
+      user_nama: currentUser?.nama_lengkap || 'Sistem',
+      user_role: currentRole,
+      modul: 'Daftar Pengguna',
+      aksi: 'UBAH_AKSES_LAPORAN',
+      target_id: 'admin_sortir',
+      deskripsi: `Akses laporan Admin Sortir: ${nama.length ? nama.join(', ') : 'semua laporan ditutup'}`,
+    });
+    showToast(`Akses laporan Admin Sortir disimpan: ${terbuka.length} dari ${MODUL_LAPORAN.length} laporan terbuka.`);
   };
 
   const handleResetUserPassword = async (userId: string, newPass: string) => {
@@ -1351,7 +1382,10 @@ export default function App() {
         pasangBila(await ErpApiService.getRiwayatNoBalList(opsi), setRiwayatNoBalList, saveRiwayatNoBalData, overlayRiwayatNoBal),
       ringkasan: async () => {
         const hasil = await ErpApiService.getRingkasan(opsi);
-        if (hasil && !hasil.tidakBerubah) setRingkasan(hasil);
+        if (hasil && !hasil.tidakBerubah) {
+          setRingkasan(hasil);
+          if (hasil.akses_laporan) aturAksesLaporan(hasil.akses_laporan);
+        }
       },
     };
     await Promise.all(
@@ -2277,6 +2311,8 @@ export default function App() {
                 onSaveUser={handleSaveUser}
                 onToggleStatus={handleToggleUserStatus}
                 onResetPassword={handleResetUserPassword}
+                aksesLaporanAdminSortir={laporanTerbuka('admin_sortir')}
+                onSimpanAksesLaporan={handleSimpanAksesLaporan}
               />
             )}
 

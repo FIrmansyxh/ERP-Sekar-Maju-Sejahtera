@@ -28,6 +28,7 @@ import {
   TabelHarga, 
   MasterHargaJual,
   User,
+  UserRole,
   BatchPengirimanSample,
   PengirimanBarang,
   RiwayatNoBal
@@ -118,6 +119,8 @@ export interface RingkasanServer {
   harga_beli: number;
   harga_jual: number;
   pengguna: number;
+  /** Laporan yang terbuka per peran yang diatur Super Admin, mis. { admin_sortir: ['modul-6-laporan-bal', ...] } */
+  akses_laporan?: Partial<Record<UserRole, string[]>>;
 }
 
 export class ErpApiService {
@@ -989,6 +992,16 @@ export class ErpApiService {
       saveUserData([resultUser, ...currentList]);
     }
     return resultUser;
+  }
+
+  /**
+   * Super Admin memilih laporan yang boleh dibuka sebuah peran (Admin Sortir). Harus sampai ke server: pengaturan ini
+   * berlaku di semua komputer, jadi tidak disimpan di perangkat ini saja. Mengembalikan laporan yang kini terbuka.
+   */
+  public static async simpanAksesLaporan(peran: UserRole, modul: string[]): Promise<string[]> {
+    if (!(await this.isBackendOnline())) throw new Error('server tidak dapat dihubungi');
+    const res = await api.put<{ role: UserRole; modul: string[] }>(`/peran/${peran}/akses-laporan`, { modul });
+    return res.data?.modul ?? modul;
   }
 
   public static async resetUserPassword(userId: string, newPass: string): Promise<boolean> {

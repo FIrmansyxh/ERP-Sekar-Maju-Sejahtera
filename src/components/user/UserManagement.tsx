@@ -9,7 +9,8 @@ import {
   X,
   Ban,
   CheckCircle,
-  Plus
+  Plus,
+  FileBarChart
 } from 'lucide-react';
 import { User } from '../../types';
 import { ALL_ROLES, ROLE_DEFINITIONS, getRoleInfo } from '../../utils/rbac';
@@ -18,6 +19,7 @@ import { tampilkanInfo } from '../../utils/dialog';
 import { UserFormModal } from './UserFormModal';
 import { UserResetPasswordModal } from './UserResetPasswordModal';
 import { RoleMatrixModal } from './RoleMatrixModal';
+import { AksesLaporanModal } from './AksesLaporanModal';
 import { Pagination } from '../common/Pagination';
 
 interface UserManagementProps {
@@ -27,6 +29,9 @@ interface UserManagementProps {
   onDeleteUser?: (userId: string) => void;
   onToggleStatus: (userId: string) => void;
   onResetPassword: (userId: string, newPass: string) => void;
+  /** Laporan yang terbuka untuk Admin Sortir (diatur Super Admin). */
+  aksesLaporanAdminSortir?: string[];
+  onSimpanAksesLaporan?: (modul: string[]) => Promise<void>;
 }
 
 export const UserManagement: React.FC<UserManagementProps> = ({
@@ -35,6 +40,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({
   onSaveUser,
   onToggleStatus,
   onResetPassword,
+  aksesLaporanAdminSortir = [],
+  onSimpanAksesLaporan,
 }) => {
   // Filter & Pagination states
   const [isFilterOpen, setIsFilterOpen] = useState(true);
@@ -50,6 +57,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [resettingUser, setResettingUser] = useState<User | null>(null);
   const [isMatrixOpen, setIsMatrixOpen] = useState(false);
+  const [isAksesLaporanOpen, setIsAksesLaporanOpen] = useState(false);
 
   // Extract unique units for filter
   const uniqueUnits = useMemo(() => {
@@ -194,6 +202,16 @@ export const UserManagement: React.FC<UserManagementProps> = ({
           </h2>
 
           <div className="flex items-center space-x-2">
+            {onSimpanAksesLaporan && currentUser?.role === 'superadmin' && (
+              <button
+                onClick={() => setIsAksesLaporanOpen(true)}
+                className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
+                title="Pilih laporan yang boleh dibuka Admin Sortir"
+              >
+                <FileBarChart className="w-3.5 h-3.5 text-[#b81d24]" />
+                <span>Akses Laporan Admin Sortir</span>
+              </button>
+            )}
             <button
               onClick={() => setIsMatrixOpen(true)}
               className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-sm transition flex items-center space-x-1.5 cursor-pointer shadow-xs"
@@ -460,6 +478,15 @@ export const UserManagement: React.FC<UserManagementProps> = ({
         user={resettingUser}
         onConfirmReset={onResetPassword}
       />
+
+      {onSimpanAksesLaporan && (
+        <AksesLaporanModal
+          isOpen={isAksesLaporanOpen}
+          onClose={() => setIsAksesLaporanOpen(false)}
+          terbuka={aksesLaporanAdminSortir}
+          onSimpan={onSimpanAksesLaporan}
+        />
+      )}
 
       {/* Role Matrix Modal */}
       <RoleMatrixModal

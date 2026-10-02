@@ -144,6 +144,7 @@ Kolom "Hasil yang diharapkan" selalu ditambah tiga pemeriksaan di bagian 1.
 | U5 | Reset sandi saat server mati | Ditolak; sandi tidak berubah di mana pun | - |
 | U6 | Matriks Wewenang | Daftar menu sama dengan menu samping | - |
 | U7 | Menu Audit Trail | Riwayat aktivitas perangkat ini tampil; hanya Super Admin yang melihat menu ini | - |
+| U8 | Daftar Pengguna → Akses Laporan Admin Sortir: lepas centang Laporan Bal, Simpan. Di komputer lain login sebagai Admin Sortir | Laporan Bal hilang dari menu samping dan Home Admin Sortir (paling lambat saat pindah menu); laporan lain dan menu Sortir tetap ada; Matriks Wewenang ikut berubah | `PUT /peran/admin_sortir/akses-laporan`, `GET /ringkasan` |
 
 ---
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { X, ShieldCheck, Check, Ban } from 'lucide-react';
-import { ALL_ROLES, ROLE_DEFINITIONS } from '../../utils/rbac';
+import { ALL_ROLES, ROLE_DEFINITIONS, hasModuleAccess } from '../../utils/rbac';
 
 interface RoleMatrixModalProps {
   isOpen: boolean;
@@ -98,7 +98,8 @@ export const RoleMatrixModal: React.FC<RoleMatrixModalProps> = ({
                         {mod.name}
                       </td>
                       {ALL_ROLES.map((r) => {
-                        const hasAccess = ROLE_DEFINITIONS[r].allowedModules.includes(mod.id);
+                        // Termasuk laporan Admin Sortir yang dipilih Super Admin
+                        const hasAccess = hasModuleAccess(r, mod.id);
                         return (
                           <td key={r} className="py-2.5 px-2 text-center">
                             {hasAccess ? (
