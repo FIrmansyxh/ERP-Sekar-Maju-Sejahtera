@@ -92,8 +92,9 @@ Konsekuensi penting:
 | Modul | Fungsi |
 |---|---|
 | Pengiriman Sample | Pengiriman contoh bal ke pabrik dengan No. Surat Pengiriman Sample manual, lalu pencatatan hasil uji |
-| Status & Detail Batch | Evaluasi sortir pembeli per bal sample (ACC, nego, tolak) dan harga deal |
+| Status Batch & Reclass | Evaluasi sortir pembeli per bal sample (ACC, nego, tolak), harga deal, finalkan, cetak, dan batal batch |
 | Pengiriman Reguler (DO) | Penyusunan muatan per nomor bal, No. Surat Jalan manual, harga jual, dan cetak surat jalan |
+| Status Pengiriman Reguler (DO) | Status Surat Jalan sampai Selesai, edit, batal, dan cetak Surat Jalan |
 
 ### Laporan dan administrasi
 
@@ -102,7 +103,8 @@ Konsekuensi penting:
 | Dashboard Analytic | Ringkasan pembelian, penjualan, laba, valuasi stok, tren, sample disetujui, dan unduhan Excel |
 | Laporan Bal, Laporan Harga | Detail bal (termasuk rekap per kode bal) dan analisis per kode harga beli/jual |
 | Laporan Pembelian, Petani, Pengiriman | Rekapitulasi dengan filter, ringkasan, dan unduhan Excel |
-| Manajemen Pengguna | Pembuatan akun, penetapan peran, reset kata sandi, dan jejak audit |
+| Manajemen Pengguna: Daftar Pengguna | Pembuatan akun, penetapan peran, status login, reset kata sandi, dan Matriks Wewenang |
+| Manajemen Pengguna: Audit Trail | Riwayat aktivitas pengguna yang tercatat di perangkat |
 
 ## Peran pengguna dan hak akses
 
@@ -112,12 +114,12 @@ tersimpan dari sesi sebelumnya. Definisi lengkap ada di `src/utils/rbac.ts`.
 
 | Peran | Modul yang dapat dibuka |
 |---|---|
-| Super Admin | Seluruh modul, termasuk Manajemen Pengguna dan jejak audit |
+| Super Admin | Seluruh modul, termasuk Daftar Pengguna dan Audit Trail |
 | Admin Sortir | Sortir, Master Petani, Master Harga Beli, Master Harga Jual, dashboard, dan seluruh laporan |
 | Admin Timbang | Timbangan |
 | Admin Kasir | Sortir, Timbangan, Kasir, dashboard, dan seluruh laporan |
-| Admin Pengiriman | Pengiriman Sample, Status & Detail Batch, Pengiriman Reguler, Master Harga Jual, dan Laporan Pengiriman |
-| Kepala Gudang | Status & Detail Batch, dashboard, dan seluruh laporan |
+| Admin Pengiriman | Pengiriman Sample, Status Batch & Reclass, Pengiriman Reguler, Status Pengiriman Reguler, Master Harga Jual, dan Laporan Pengiriman |
+| Kepala Gudang | Status Batch & Reclass, Status Pengiriman Reguler, dashboard, dan seluruh laporan |
 
 Berganti akun dilakukan melalui logout lalu login kembali. Tidak tersedia jalur pintas
 pergantian akun tanpa kata sandi.
@@ -321,8 +323,8 @@ dari nol, dan hanya tersedia satu akun bawaan.
 Urutan penyiapan yang disarankan. Lakukan di alamat VPS agar data tersimpan di server.
 
 1. Login memakai akun Super Admin di atas.
-2. **Ganti kata sandi Super Admin** melalui Manajemen Pengguna, menu Reset Kata Sandi.
-3. Buat akun staf melalui Manajemen Pengguna, Tambah Pengguna. Yang wajib hanya Username,
+2. **Ganti kata sandi Super Admin** melalui Manajemen Pengguna, menu Daftar Pengguna, tombol Reset Kata Sandi.
+3. Buat akun staf melalui Manajemen Pengguna, menu Daftar Pengguna, Tambah Pengguna. Yang wajib hanya Username,
    Kata Sandi (minimal 6 karakter), dan Role. Nama lengkap, email, dan nomor HP boleh kosong.
    Bila nama kosong, username dipakai sebagai nama pada dokumen. Username disimpan persis
    seperti diketik, tanpa spasi, dan login tidak membedakan huruf besar dan kecil.

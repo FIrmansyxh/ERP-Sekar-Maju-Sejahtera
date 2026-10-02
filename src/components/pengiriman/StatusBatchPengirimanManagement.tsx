@@ -40,6 +40,8 @@ import { alasanBatchBelumFinal, isBatchDraft, statusBatchDariEvaluasi } from '..
 import { hariIniLokal, formatTanggalLokal } from '../../utils/rentangTanggal';
 
 interface StatusBatchPengirimanManagementProps {
+  /** Menu yang dibuka: Status Batch & Reclass (di bawah Pengiriman Sample) atau Status Pengiriman Reguler (DO). */
+  tampilan: 'sample_batch' | 'pengiriman_batch';
   batchSampleList: BatchPengirimanSample[];
   pengirimanList: PengirimanBarang[];
   barangList: Barang[];
@@ -60,6 +62,7 @@ interface StatusBatchPengirimanManagementProps {
 }
 
 export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanManagementProps> = ({
+  tampilan,
   batchSampleList = [],
   pengirimanList = [],
   barangList = [],
@@ -88,8 +91,8 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
     };
   }, [onRefreshPengirimanData]);
 
-  // Main Module Tab
-  const [activeMainTab, setActiveMainTab] = useState<'sample_batch' | 'pengiriman_batch'>('pengiriman_batch');
+  // Setiap tampilan kini menu sendiri di menu samping (dulu dua tab dalam satu menu)
+  const activeMainTab = tampilan;
   const [isBatchDropdownOpen, setIsBatchDropdownOpen] = useState(false);
   const [highlightedBatchIndex, setHighlightedBatchIndex] = useState(0);
   const [itemToRemove, setItemToRemove] = useState<string | null>(null);
@@ -642,44 +645,14 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
         <div>
           <div className="flex items-center space-x-2.5">
             <div className="p-2.5 bg-[#b81d24] text-white rounded-xs shadow-xs">
-              <Layers className="w-5 h-5" />
+              {activeMainTab === 'sample_batch' ? <FlaskConical className="w-5 h-5" /> : <Truck className="w-5 h-5" />}
             </div>
             <div>
               <h1 className="text-lg font-bold text-gray-900 tracking-tight">
-                Status & Detail Batch Pengiriman
+                {activeMainTab === 'sample_batch' ? 'Status Batch & Reclass' : 'Status Pengiriman Reguler (DO)'}
               </h1>
-              
             </div>
           </div>
-        </div>
-
-        {/* Master Navigation Switcher */}
-        <div className="flex items-center p-1 bg-gray-100 border border-gray-300 rounded-xs shrink-0">
-          <button
-            type="button"
-            onClick={() => setActiveMainTab('pengiriman_batch')}
-            className={`px-3.5 py-1.5 text-xs font-bold rounded-xs flex items-center space-x-1.5 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
-              activeMainTab === 'pengiriman_batch'
-                ? 'bg-white text-gray-900 shadow-xs border border-gray-200'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            <Truck className="w-3.5 h-3.5 text-[#b81d24]" />
-            <span>Status Pengiriman Barang</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveMainTab('sample_batch')}
-            className={`px-3.5 py-1.5 text-xs font-bold rounded-xs flex items-center space-x-1.5 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
-              activeMainTab === 'sample_batch'
-                ? 'bg-white text-gray-900 shadow-xs border border-gray-200'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            <FlaskConical className="w-3.5 h-3.5 text-[#b81d24]" />
-            <span>Batch Sample & Reclass</span>
-          </button>
         </div>
       </div>
 

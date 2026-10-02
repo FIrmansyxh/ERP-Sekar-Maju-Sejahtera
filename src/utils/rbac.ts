@@ -29,7 +29,9 @@ export const ROLE_DEFINITIONS: Record<UserRole, RolePermissionInfo> = {
       'modul-5-pengiriman',
       'modul-4-sample',
       'modul-status-batch',
+      'modul-status-pengiriman',
       'modul-users',
+      'modul-audit-trail',
       ],
     capabilities: {
       canManageUsers: true,
@@ -146,6 +148,7 @@ export const ROLE_DEFINITIONS: Record<UserRole, RolePermissionInfo> = {
       'modul-5-pengiriman',
       'modul-4-sample',
       'modul-status-batch',
+      'modul-status-pengiriman',
       'modul-3-harga-jual',
       'modul-6-laporan-pengiriman',
       'modul-6-laporan-sample',
@@ -172,6 +175,7 @@ export const ROLE_DEFINITIONS: Record<UserRole, RolePermissionInfo> = {
     allowedModules: [
       'modul-home',
       'modul-status-batch',
+      'modul-status-pengiriman',
       'modul-6-dashboard-analytic',
       'modul-6-laporan-bal',
       'modul-6-laporan-grade',

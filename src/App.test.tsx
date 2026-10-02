@@ -19,14 +19,17 @@ const MENU = [
   'Master Petani',
   'Master Harga Beli',
   'Master Harga Jual',
+  'Master Potongan Tara',
   'Sortir',
   'Timbangan',
   'Kasir',
   'Koreksi No Bal',
   'Pengiriman Sample',
-  'Status & Detail Batch',
+  'Status Batch & Reclass',
   'Pengiriman Reguler (DO)',
-  'Manajemen Pengguna',
+  'Status Pengiriman Reguler (DO)',
+  'Daftar Pengguna',
+  'Audit Trail',
 ];
 
 /**

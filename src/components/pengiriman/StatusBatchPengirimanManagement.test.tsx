@@ -5,6 +5,7 @@ import { StatusBatchPengirimanManagement } from './StatusBatchPengirimanManageme
 import { buatBal, buatBatch, buatItemSample, buatSuratJalan } from '../../test/fixtures';
 
 const buatProps = (extra: Partial<React.ComponentProps<typeof StatusBatchPengirimanManagement>> = {}) => ({
+  tampilan: 'pengiriman_batch' as const,
   batchSampleList: [],
   pengirimanList: [],
   barangList: [buatBal('B1', { status_stok: 'keluar' }), buatBal('B2', { status_stok: 'keluar' })],
@@ -21,15 +22,13 @@ const buatProps = (extra: Partial<React.ComponentProps<typeof StatusBatchPengiri
 
 const barisSuratJalan = (no: string) => screen.getByText(no).closest('tr') as HTMLElement;
 
-describe('Status & Detail Batch: tab Status Pengiriman', () => {
-  it('membuka Status Pengiriman lebih dulu, lalu Detail Batch', () => {
-    render(<StatusBatchPengirimanManagement {...buatProps()} />);
-    const tab = screen.getAllByRole('button').filter((b) => /Status Pengiriman Barang|Batch Sample & Reclass/.test(b.textContent || ''));
-    expect(tab.map((b) => b.textContent)).toEqual([
-      expect.stringContaining('Status Pengiriman Barang'),
-      expect.stringContaining('Batch Sample & Reclass'),
-    ]);
+describe('Status Pengiriman Reguler (DO)', () => {
+  it('menu sendiri: hanya daftar Surat Jalan, tanpa tab Batch Sample', () => {
+    render(<StatusBatchPengirimanManagement {...buatProps({ batchSampleList: [buatBatch('1', 'sample')] })} />);
+    expect(screen.getByRole('heading', { name: 'Status Pengiriman Reguler (DO)' })).toBeInTheDocument();
     expect(screen.getByText('Semua Surat Jalan')).toBeInTheDocument();
+    expect(screen.queryByText('Semua Batch Sample')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Batch Sample & Reclass/ })).not.toBeInTheDocument();
   });
 
   it('Surat Jalan belum Selesai boleh diedit dan dihapus; yang Selesai terkunci', async () => {
@@ -68,7 +67,7 @@ describe('Status & Detail Batch: tab Status Pengiriman', () => {
   });
 });
 
-describe('Status & Detail Batch: tab Batch Sample & Reclass menampilkan semua daftar batch', () => {
+describe('Status Batch & Reclass menampilkan semua daftar batch', () => {
   const batchList = [
     buatBatch('1', 'sample'),
     buatBatch('2', 'dikirim', { tujuan_buyer: 'Buyer B' }),
@@ -76,8 +75,7 @@ describe('Status & Detail Batch: tab Batch Sample & Reclass menampilkan semua da
   ];
 
   const bukaTabDetail = async (props = buatProps({ batchSampleList: batchList })) => {
-    render(<StatusBatchPengirimanManagement {...props} />);
-    await userEvent.click(screen.getByRole('button', { name: /Batch Sample & Reclass/ }));
+    render(<StatusBatchPengirimanManagement {...props} tampilan="sample_batch" />);
     return props;
   };
 
@@ -87,6 +85,9 @@ describe('Status & Detail Batch: tab Batch Sample & Reclass menampilkan semua da
     expect(screen.getByText('SAMPLE-2')).toBeInTheDocument();
     expect(screen.getByText('SAMPLE-3')).toBeInTheDocument();
     expect(screen.getByText('Semua Batch Sample')).toBeInTheDocument();
+    // Menu sendiri: Surat Jalan ada di menu Status Pengiriman Reguler (DO)
+    expect(screen.getByRole('heading', { name: 'Status Batch & Reclass' })).toBeInTheDocument();
+    expect(screen.queryByText('Semua Surat Jalan')).not.toBeInTheDocument();
   });
 
   it('kartu status menyaring daftar dengan satu klik', async () => {
@@ -178,13 +179,12 @@ describe('Status & Detail Batch: tab Batch Sample & Reclass menampilkan semua da
   });
 });
 
-describe('Status & Detail Batch: batch Draft', () => {
+describe('Status Batch & Reclass: batch Draft', () => {
   const draft = buatBatch('1', 'draft');
   const final = buatBatch('2', 'sample', { tujuan_buyer: 'Buyer B' });
 
   const bukaTabDetail = async (props = buatProps({ batchSampleList: [draft, final] })) => {
-    render(<StatusBatchPengirimanManagement {...props} />);
-    await userEvent.click(screen.getByRole('button', { name: /Batch Sample & Reclass/ }));
+    render(<StatusBatchPengirimanManagement {...props} tampilan="sample_batch" />);
     return props;
   };
   const baris = (kode: string) => within(screen.getByText(kode).closest('tr') as HTMLElement);

@@ -45,9 +45,9 @@ interface SampleManagementProps {
   onSaveBatchSample: (newBatch: BatchPengirimanSample, updatedBarangs: Barang[]) => Promise<boolean>;
   onUpdateBatchSample: (updatedBatch: BatchPengirimanSample, updatedBarangs?: Barang[]) => Promise<boolean>;
   onNavigateToPengiriman?: (batchId?: string) => void;
-  /** Membuka halaman Status & Detail Batch (daftar batch, status, hasil sortir, cetak, batal). */
+  /** Membuka halaman Status Batch & Reclass (daftar batch, status, hasil sortir, cetak, batal). */
   onNavigateToStatusBatch?: () => void;
-  /** Batch yang sedang diedit (dipilih dari halaman Status & Detail Batch). */
+  /** Batch yang sedang diedit (dipilih dari halaman Status Batch & Reclass). */
   editBatchId?: string | null;
   /** Dipanggil saat mode edit berakhir (disimpan atau dibatalkan). */
   onSelesaiEdit?: () => void;
@@ -145,7 +145,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
   // Pengiriman sample memakai berat bruto hasil timbangan (tanpa tara tebakan)
   const resolveBeratBruto = (bal: Partial<Barang> | undefined): number => beratBrutoBal(bal);
 
-  // Batch yang sedang diedit (dipilih dari halaman Status & Detail Batch); null berarti membuat batch baru
+  // Batch yang sedang diedit (dipilih dari halaman Status Batch & Reclass); null berarti membuat batch baru
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
   // Batch yang menunggu konfirmasi karena draf batch baru akan tergantikan
   const [editMenunggu, setEditMenunggu] = useState<BatchPengirimanSample | null>(null);
@@ -661,7 +661,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Batch yang dipilih dari halaman Status & Detail Batch dimuat ke formulir untuk diedit
+  // Batch yang dipilih dari halaman Status Batch & Reclass dimuat ke formulir untuk diedit
   useEffect(() => {
     if (!editBatchId) {
       editDimuatRef.current = null;
@@ -888,7 +888,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                 onClick={onNavigateToStatusBatch}
                 className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-xs transition cursor-pointer shadow-xs"
               >
-                Status & Detail Batch
+                Status Batch & Reclass
               </button>
             )}
             <button

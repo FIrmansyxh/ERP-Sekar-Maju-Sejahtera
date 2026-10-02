@@ -436,7 +436,7 @@ penggantian yang belum sampai server di `services/overlayDaftar.ts`.
 ### 5.6 Penyelarasan FE → BE (2026-10-01)
 
 Backend disamakan dengan kondisi frontend saat ini (FE sebagai patokan). Semua endpoint yang dipanggil FE ada di backend,
-6 peran dan 21 modul menu sama persis, dan payload tiap simpanan diuji di `tests/Feature/KontrakFrontendTest.php`.
+6 peran dan semua modul menu sama persis (23 modul sejak 2026-10-02: menu Status dipisah menjadi Status Batch & Reclass dan Status Pengiriman Reguler (DO), Manajemen Pengguna menjadi Daftar Pengguna dan Audit Trail; `database/schema/seed.sql`, tes `ModulMenuTest`), dan payload tiap simpanan diuji di `tests/Feature/KontrakFrontendTest.php`.
 Yang diubah di backend:
 
 | Perilaku FE | Dulu di backend | Sekarang |

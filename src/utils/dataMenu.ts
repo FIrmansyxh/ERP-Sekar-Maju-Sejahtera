@@ -41,9 +41,13 @@ export const DATA_MENU: Record<string, JenisData[]> = {
   'modul-koreksi-no-bal': ['kupon', 'bal', 'batchSample', 'suratJalan', 'riwayatNoBal'],
   'modul-4-sample': [...PEMBELIAN, 'hargaJual', 'batchSample'],
   'modul-5-pengiriman': [...PEMBELIAN, 'hargaJual', 'batchSample', 'suratJalan'],
+  // Surat Jalan dipakai untuk mengunci batch yang sudah dibuatkan DO dan menutup batch otomatis
+  'modul-status-batch': ['bal', 'hargaJual', 'batchSample', 'suratJalan'],
   // Kupon dipakai untuk menolak Surat Jalan Selesai bila ada kupon bal yang belum lunas
-  'modul-status-batch': ['kupon', 'bal', 'hargaJual', 'batchSample', 'suratJalan'],
+  'modul-status-pengiriman': ['kupon', 'bal', 'hargaJual', 'batchSample', 'suratJalan'],
   'modul-users': ['pengguna'],
+  // Riwayat aktivitas tersimpan di perangkat ini, tidak dimuat dari server
+  'modul-audit-trail': [],
 };
 
 /**

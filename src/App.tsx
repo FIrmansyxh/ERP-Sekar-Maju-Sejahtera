@@ -95,6 +95,7 @@ import { hariIniLokal } from './utils/rentangTanggal';
 
 // Setiap menu diunduh saat pertama dibuka, sehingga halaman login dan Beranda tidak memuat kode laporan, PDF, dan grafik.
 const UserManagement = lazyNamed(() => import('./components/user/UserManagement'), 'UserManagement');
+const AuditTrailView = lazyNamed(() => import('./components/user/AuditTrailView'), 'AuditTrailView');
 const DashboardAnalyticView = lazyNamed(() => import('./components/laporan/DashboardAnalyticView'), 'DashboardAnalyticView');
 const LaporanBalView = lazyNamed(() => import('./components/laporan/LaporanBalView'), 'LaporanBalView');
 const LaporanGradeView = lazyNamed(() => import('./components/laporan/LaporanGradeView'), 'LaporanGradeView');
@@ -265,7 +266,7 @@ export default function App() {
   const [selectedBatchIdForShipment, setSelectedBatchIdForShipment] = useState<string>('');
   // Surat Jalan yang sedang diedit di halaman Pengiriman Reguler (dipilih dari Status Pengiriman)
   const [editPengirimanId, setEditPengirimanId] = useState<string | null>(null);
-  // Batch sample yang sedang diedit di halaman Pengiriman Sample (dipilih dari Status & Detail Batch)
+  // Batch sample yang sedang diedit di halaman Pengiriman Sample (dipilih dari Status Batch & Reclass)
   const [editBatchId, setEditBatchId] = useState<string | null>(null);
   
 
@@ -1248,7 +1249,7 @@ export default function App() {
 
   /**
    * Tarik ulang batch sample, Surat Jalan, dan bal dari server. Dipakai polling ringan di Pengiriman Sample,
-   * Status & Detail Batch, dan Pengiriman Reguler (DO) supaya bal yang baru saja dipakai batch/DO oleh
+   * Status Batch & Reclass, Pengiriman Reguler (DO), dan Status Pengiriman Reguler (DO) supaya bal yang baru saja dipakai batch/DO oleh
    * perangkat LAIN langsung terlihat di sini juga, dan tidak bisa "dipesan dobel" ke batch/DO lain karena
    * daftar di layar sudah basi. Antrean mutasi yang belum selesai di perangkat ini tetap dijaga lewat overlay
    * (lihat services/overlayDaftar.ts), dan layar hanya diperbarui bila data memang berubah.
@@ -1609,7 +1610,7 @@ export default function App() {
       }
       showToast(
         serverBatch.status === 'draft'
-          ? `Batch Sample ${serverBatch.kode_batch} disimpan sebagai Draft. Finalkan di Status & Detail Batch bila sudah siap dipakai.`
+          ? `Batch Sample ${serverBatch.kode_batch} disimpan sebagai Draft. Finalkan di Status Batch & Reclass bila sudah siap dipakai.`
           : `Batch Sample ${serverBatch.kode_batch} berhasil dikirim ke ${serverBatch.tujuan_buyer}!`
       );
       return true;
@@ -1910,9 +1911,11 @@ export default function App() {
     'modul-koreksi-no-bal': 'Koreksi No Bal',
     'modul-master-potongan': 'Master Potongan Tara',
     'modul-4-sample': 'Pengiriman Sample',
-    'modul-status-batch': 'Status & Detail Batch',
+    'modul-status-batch': 'Status Batch & Reclass',
     'modul-5-pengiriman': 'Pengiriman Reguler (DO)',
-    'modul-users': 'Manajemen Pengguna',
+    'modul-status-pengiriman': 'Status Pengiriman Reguler (DO)',
+    'modul-users': 'Daftar Pengguna',
+    'modul-audit-trail': 'Audit Trail',
   };
   const pageTitle = JUDUL_MODUL[activeModuleId] || 'Home';
 
@@ -2258,24 +2261,27 @@ export default function App() {
                 onSaveNewPengiriman={handleSaveNewPengiriman}
                 onUpdatePengiriman={handleUpdatePengiriman}
                 onDeletePengiriman={handleDeletePengiriman}
-                onNavigateToStatusBatch={() => handleSelectModule('modul-status-batch')}
+                onNavigateToStatusBatch={() => handleSelectModule('modul-status-pengiriman')}
                 editPengirimanId={editPengirimanId}
                 onSelesaiEdit={() => setEditPengirimanId(null)}
                 onRefreshPengirimanData={handleRefreshPengirimanData}
               />
             )}
 
-            {/*  Manajemen Pengguna (RBAC 5 Role) */}
+            {/* Manajemen Pengguna: Daftar Pengguna */}
             {activeModuleId === 'modul-users' && (
               <UserManagement
                 userList={userList}
                 currentUser={currentUser}
-                
+
                 onSaveUser={handleSaveUser}
                 onToggleStatus={handleToggleUserStatus}
                 onResetPassword={handleResetUserPassword}
               />
             )}
+
+            {/* Manajemen Pengguna: Audit Trail */}
+            {activeModuleId === 'modul-audit-trail' && <AuditTrailView />}
 
             {/* Master Harga Jual */}
             {activeModuleId === 'modul-3-harga-jual' && (
@@ -2303,9 +2309,11 @@ export default function App() {
               />
             )}
 
-            {/* Status & Detail Batch */}
-            {activeModuleId === 'modul-status-batch' && (
+            {/* Status Batch & Reclass (di bawah Pengiriman Sample) dan Status Pengiriman Reguler (DO) */}
+            {(activeModuleId === 'modul-status-batch' || activeModuleId === 'modul-status-pengiriman') && (
               <StatusBatchPengirimanManagement
+                key={activeModuleId}
+                tampilan={activeModuleId === 'modul-status-batch' ? 'sample_batch' : 'pengiriman_batch'}
                 batchSampleList={batchSampleList}
                 pengirimanList={pengirimanList}
                 barangList={barangList}

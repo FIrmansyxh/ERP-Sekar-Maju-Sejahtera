@@ -25,14 +25,17 @@ export const RoleMatrixModal: React.FC<RoleMatrixModalProps> = ({
     { id: 'modul-1-petani', name: 'Master Petani' },
     { id: 'modul-3-harga', name: 'Master Harga Beli' },
     { id: 'modul-3-harga-jual', name: 'Master Harga Jual' },
+    { id: 'modul-master-potongan', name: 'Master Potongan Tara' },
     { id: 'modul-0-sortir', name: 'Sortir' },
     { id: 'modul-0-timbangan', name: 'Timbangan' },
     { id: 'modul-0-kasir', name: 'Kasir' },
     { id: 'modul-koreksi-no-bal', name: 'Koreksi No Bal' },
     { id: 'modul-4-sample', name: 'Pengiriman Sample' },
-    { id: 'modul-status-batch', name: 'Status & Detail Batch' },
+    { id: 'modul-status-batch', name: 'Status Batch & Reclass' },
     { id: 'modul-5-pengiriman', name: 'Pengiriman Reguler (DO)' },
-    { id: 'modul-users', name: 'Manajemen Pengguna' },
+    { id: 'modul-status-pengiriman', name: 'Status Pengiriman Reguler (DO)' },
+    { id: 'modul-users', name: 'Daftar Pengguna' },
+    { id: 'modul-audit-trail', name: 'Audit Trail' },
   ];
 
   const capabilitiesList = [
