@@ -7,7 +7,8 @@ import {
   AlertCircle,
   Trash2,
   Barcode,
-  Package
+  Package,
+  FileUp
 } from 'lucide-react';
 import {
   BatchPengirimanSample,
@@ -22,6 +23,8 @@ import {
 } from '../../types';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { SortIcon } from '../common/SortIcon';
+import { ImporSampleModal } from './ImporSampleModal';
+import type { BarisImpor, KonteksImpor } from '../../utils/imporSample';
 
 import { akhiranUnik } from '../../utils/idUnik';
 import { generateBatchSampleId, generateSampleId, formatRupiah, formatNumber } from '../../utils/formatters';
@@ -509,6 +512,43 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
 
   
 
+  // Satu baris tabel batch dari bal gudang: dipakai scan manual dan impor Excel/CSV (berat, tara, harga beli dari sistem)
+  const buatBarisTabel = (bal: Barang, hj: MasterHargaJual, noJadi: string) => ({
+    barangId: bal.barang_id,
+    noBal: bal.no_bal || bal.barang_id,
+    kodeBalPembeli: noJadi,
+    grade: bal.kode_grade || '-',
+    beratBalKg: resolveBeratNetto(bal),
+    beratBrutoKg: resolveBeratBruto(bal),
+    potonganTaraKg: bal.potongan_tara_kg !== undefined ? bal.potongan_tara_kg : 2,
+    hargaBeliKg: resolveHargaBeli(bal),
+    kodeHargaJual: hj.kode,
+    hargaTawaranKg: hj.harga_jual,
+  });
+
+  // Impor daftar sample dari Excel/CSV: aturan pemakaian bal dan No Jadi sama dengan scan manual
+  const [isImporOpen, setIsImporOpen] = useState(false);
+  const konteksImpor: KonteksImpor = {
+    barangList,
+    hargaJualAktif: activeHargaJualList.filter((h) => h.status_aktif !== false),
+    cekBal: checkBalUsage,
+    noJadiDipakai: isNoJadiAlreadyUsed,
+  };
+  const handleMasukkanImpor = (baris: BarisImpor[], info: { namaFile: string; namaTab: string; ditolak: number }) => {
+    const itemBaru = baris
+      .filter((b) => b.bal && b.hargaJual && b.noJadi)
+      .map((b) => buatBarisTabel(b.bal!, b.hargaJual!, b.noJadi!));
+    // Urutan file dipertahankan, ditaruh di atas bal yang sudah ada di tabel
+    setSelectedBalItems((prev) => [...itemBaru, ...prev]);
+    setPendingScanBal(null);
+    setScanSampleAlert({
+      type: info.ditolak > 0 ? 'warning' : 'success',
+      message: `${itemBaru.length} bal dari ${info.namaFile}${info.namaTab ? ` (tab ${info.namaTab})` : ''} masuk ke tabel.${
+        info.ditolak > 0 ? ` ${info.ditolak} baris tidak dimasukkan.` : ''
+      }`,
+    });
+  };
+
   const handleScanHargaJualSubmitWithCode = (foundHJ: MasterHargaJual) => {
     if (!pendingScanBal) {
       setScanSampleAlert({
@@ -520,7 +560,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
     }
 
     const finalKodeBalPembeli = scanPembeli.trim() || (pendingScanBal.no_bal || pendingScanBal.barang_id);
-    
+
     if (isNoJadiAlreadyUsed(finalKodeBalPembeli)) {
       setScanSampleAlert({
         type: 'error',
@@ -530,23 +570,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
       return;
     }
 
-    const finalNetto = resolveBeratNetto(pendingScanBal);
-    const finalBruto = resolveBeratBruto(pendingScanBal);
-    const finalTara = pendingScanBal.potongan_tara_kg !== undefined ? pendingScanBal.potongan_tara_kg : 2;
-    const finalHargaBeli = resolveHargaBeli(pendingScanBal);
-
-    const newItem = {
-      barangId: pendingScanBal.barang_id,
-      noBal: pendingScanBal.no_bal || pendingScanBal.barang_id,
-      kodeBalPembeli: finalKodeBalPembeli,
-      grade: pendingScanBal.kode_grade || '-',
-      beratBalKg: finalNetto,
-      beratBrutoKg: finalBruto,
-      potonganTaraKg: finalTara,
-      hargaBeliKg: finalHargaBeli,
-      kodeHargaJual: foundHJ.kode,
-      hargaTawaranKg: foundHJ.harga_jual,
-    };
+    const newItem = buatBarisTabel(pendingScanBal, foundHJ, finalKodeBalPembeli);
 
     // Bal yang baru discan tampil paling atas di tabel
     setSelectedBalItems((prev) => [newItem, ...prev]);
@@ -998,7 +1022,16 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                     <span>Input Data Sample</span>
                   </h3>
                 </div>
-                <div className="text-right">
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsImporOpen(true)}
+                    className="px-2.5 py-1 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-xs transition flex items-center space-x-1.5 cursor-pointer shadow-2xs"
+                    title="Isi bal dari daftar sample di Excel/CSV"
+                  >
+                    <FileUp className="w-3.5 h-3.5 text-[#b81d24]" />
+                    <span>Impor Excel/CSV</span>
+                  </button>
                   <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 border border-emerald-200 rounded-xs">
                     {selectedBalItems.length} Bal Terpilih • Est. Nilai: {formatRupiah(selectedBalItems.reduce((s, it) => s + (it.beratBrutoKg * it.hargaTawaranKg), 0))}
                   </span>
@@ -1449,6 +1482,14 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
           setEditMenunggu(null);
           onSelesaiEdit?.();
         }}
+      />
+
+      <ImporSampleModal
+        isOpen={isImporOpen}
+        onClose={() => setIsImporOpen(false)}
+        konteks={konteksImpor}
+        hargaBeli={resolveHargaBeli}
+        onMasukkan={handleMasukkanImpor}
       />
 
     </div>

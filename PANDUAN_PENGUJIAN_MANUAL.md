@@ -110,6 +110,7 @@ Kolom "Hasil yang diharapkan" selalu ditambah tiga pemeriksaan di bagian 1.
 | B6 | Cetak surat pengiriman sample | Surat tampil dengan kode harga, bukan nilai rupiah | - |
 | B7 | Hapus batch yang belum punya Surat Jalan | Batch hilang, bal tetap di stok gudang | `DELETE /sample-batch/{id}` **(menunggu backend; sementara `PUT status=dibatalkan`)** |
 | B8 | Dashboard: kartu "Sample Disetujui" dan Laporan Pengiriman tab Pengiriman Sample | Angka sesuai hasil B5 | - |
+| B9 | Pengiriman Sample → Impor Excel/CSV: pilih file berisi Gulungan, No Bal, Harga Jual (kode atau angka), termasuk 1 No Bal yang tidak ada dan 1 harga yang tidak ada di Master | Pratinjau: bal ditemukan berisi berat & harga beli dari sistem; No Bal tidak ada dan harga tidak di Master ditandai Tidak Dimasukkan dan bisa diunduh; Masukkan → hanya bal yang siap masuk tabel | - (simpan seperti B1/B3) |
 
 ### 2.6 Pengiriman Reguler (DO) dan Status Pengiriman Reguler (DO) ⧉
 
