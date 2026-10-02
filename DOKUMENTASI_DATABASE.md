@@ -195,6 +195,11 @@ Semua di bawah `/api/v1`, JSON, `Authorization: Bearer <token Sanctum>`. Batas w
 | `DELETE /pengiriman/{id}` | batalkan Surat Jalan yang **belum Selesai** | Hapus DO beserta itemnya, bal kembali `di_gudang`; 422 bila `selesai` |
 | `PUT /pengiriman/{id}/status` | ubah status Surat Jalan | Body `{ status }`; `selesai` final dan membuat bal `keluar`; kirim ulang `selesai` = 200 |
 | `GET/POST/PUT /users…` | manajemen pengguna | |
+| `GET /ringkasan` | angka di menu samping | Jumlah petani, kupon, batch sample, Surat Jalan, harga beli, harga jual, pengguna (bagian 5.7) |
+
+Semua `GET` daftar di atas (petani, kupon, bal, harga, pengguna, batch sample, Surat Jalan, riwayat No Bal, potongan,
+ringkasan) memakai **ETag** dari versi tabel sumbernya: FE mengirim `If-None-Match`, server menjawab **304** tanpa isi bila
+tidak ada perubahan (bagian 5.7).
 
 Sejak 2026-09-21 FE **tidak lagi memanggil** `GET /dashboard/stats` (hanya dipakai kartu pembanding untuk
 pengembang yang tampil ke pengguna; angka Dashboard dihitung dari daftar yang sudah dimuat dari server) dan
@@ -481,6 +486,24 @@ Ditemukan dan diperbaiki saat uji itu:
 | Bal ditolak pembeli di Batch Sample | Tetap tercatat `ditolak` di batch (masuk Laporan Pengiriman Sample), bal bebas dipakai DO/batch lain; tombol hapus (x) tetap mengeluarkan bal dari batch | Tombol Tolak + konfirmasi di Status & Detail Batch; Buat DO dari batch tidak membuang bal ditolak | Sudah mendukung (indeks unik mengabaikan `ditolak`) |
 | Status batch otomatis | Semua bal selain yang ditolak sudah di Surat Jalan = `selesai`, kapan pun (juga bila evaluasi disimpan setelah DO); dibuka lagi (`diproses`) bila tidak lagi; Draft tidak pernah ditutup otomatis; semua ditolak = `diproses` | `utils/statusBatchSample.statusBatchDariEvaluasi` | `RelasiBatchSample::sesuaikan` dipanggil juga saat simpan batch |
 | Logout | Logout manual mencabut token di server; auto-logout 30 menit tidak (antrean tetap terkirim) | `ErpApiService.logout` dari `handleLogout` | `POST /auth/logout` (sudah ada) |
+
+### 5.7 Muat data per menu dan ETag (2026-10-02)
+
+Keluhan: aplikasi berat karena semua data semua menu dimuat dan selalu siaga. Dulu login dan setiap buka menu Laporan
+memuat 9 daftar penuh sekaligus (semua kupon dengan semua balnya, semua bal, dst.), Home menyegarkan seluruh kupon dan bal
+tiap 10 detik walau hanya menampilkan menu, dan setiap penyegaran mengunduh, mengolah, membandingkan, dan menyimpan ulang
+daftar penuh ke peramban walau tidak berubah.
+
+| Bagian | Sekarang |
+|--------|----------|
+| Data per menu | `utils/dataMenu.ts`: saat login, pindah menu, dan berkala (10 dtk, tab terlihat) hanya daftar menu yang dibuka yang diminta. Home hanya ringkasan. Laporan dimuat saat dibuka / tombol muat ulang, tidak berkala. Daftar menu lain tetap memakai salinan terakhir di perangkat sampai menunya dibuka |
+| ETag | BE `App\Http\Middleware\VersiData` (`->middleware('versi:tabel,...')`): versi dari tabel `versi_log` yang diisi trigger setiap pernyataan tulis (hanya INSERT, tanpa kunci baris, tidak bisa deadlock). `If-None-Match` sama = **304** tanpa menjalankan kueri daftar. FE `apiClient` (`api.get(alamat, { daftar: true })`) menyimpan ETag & isi terakhir di memori; `ErpApiService.ambilDaftar` mengembalikan hasil olahan sebelumnya (`tidakBerubah`) tanpa memetakan, membandingkan, atau menyimpan ulang |
+| Muat ulang paksa | Setelah penghapusan dari perangkat lain (410) atau penolakan antrean (mis. Koreksi No Bal ditolak), daftar menu aktif + daftar terdampak (`DATA_ENTITAS`) dimuat dengan `paksa: true` (tanpa ETag), karena server tidak berubah padahal layar sudah terlanjur berubah |
+| Angka menu samping | `GET /ringkasan` (jumlah saja) menggantikan panjang daftar; tanpa server tetap panjang daftar di perangkat |
+
+Daftar yang memuat relasi ikut berganti versi bila tabel relasinya berubah (mis. petani baru mengganti ETag kupon & bal
+karena keduanya membawa nama petani). Bila Nginx mengompres (gzip) dan melemahkan ETag (`W/"..."`), server tetap
+mengenalinya. Deploy BE: `php artisan erp:perbarui-skema` (tabel `versi_log` + trigger).
 
 **Cara kerja selanjutnya:** setiap perubahan FE yang mengubah data yang dikirim/dibaca (field, status, aturan boleh/tidak)
 langsung diikuti perubahan backend di pekerjaan yang sama: perbarui tabel bagian 5 ini, tambah/ubah tes di backend

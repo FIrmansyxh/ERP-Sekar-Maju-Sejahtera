@@ -70,8 +70,9 @@ describe('Aplikasi: setiap menu dapat dibuka', () => {
 
       await userEvent.click(tombol[0]);
 
-      // Potongan kode menu selesai diunduh (tampilan "Memuat halaman" hilang), lalu tidak ada galat tampilan
-      await vi.waitFor(() => expect(screen.queryByText(/Memuat halaman/)).not.toBeInTheDocument(), { timeout: 8000 });
+      // Potongan kode menu selesai diunduh (tampilan "Memuat halaman" hilang), lalu tidak ada galat tampilan. Batas
+      // longgar: saat seluruh tes berjalan paralel, menu pertama (Dashboard, pustaka grafik) bisa lebih dari 8 detik.
+      await vi.waitFor(() => expect(screen.queryByText(/Memuat halaman/)).not.toBeInTheDocument(), { timeout: 18000 });
       expect(screen.queryByText('Halaman tidak dapat ditampilkan')).not.toBeInTheDocument();
       expect(screen.queryByText('Versi baru aplikasi tersedia')).not.toBeInTheDocument();
     },

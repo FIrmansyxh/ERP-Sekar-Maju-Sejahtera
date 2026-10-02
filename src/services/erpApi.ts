@@ -3,7 +3,8 @@
  * Mengimplementasikan pola "API-First with Offline LocalStorage Fallback".
  */
 
-import { api, ApiError, checkBackendHealth, getAuthToken, setAuthToken, getTerakhirGagalJaringan } from './apiClient';
+import { api, ApiError, checkBackendHealth, getAuthToken, setAuthToken, getTerakhirGagalJaringan, lupakanSimpananDaftar } from './apiClient';
+import type { OpsiDaftar } from './apiClient';
 import { hashPassword } from '../utils/crypto';
 import { beratBrutoItemSample } from '../utils/beratKirim';
 import { statusSetelahSinkron, tandaiServerKenalDraft } from '../utils/statusBatchSample';
@@ -101,8 +102,53 @@ export function mapPetaniFromApi(raw: any): Petani {
   };
 }
 
+/** Hasil satu daftar dari server. `tidakBerubah`: server menjawab 304, isi sama persis dengan penyegaran sebelumnya. */
+export interface HasilDaftar<T> {
+  data: T[];
+  fromBackend: boolean;
+  tidakBerubah?: boolean;
+}
+
+/** Jumlah data untuk angka di menu samping (GET /ringkasan). */
+export interface RingkasanServer {
+  petani: number;
+  kupon: number;
+  batch_sample: number;
+  pengiriman: number;
+  harga_beli: number;
+  harga_jual: number;
+  pengguna: number;
+}
+
 export class ErpApiService {
   private static isOnlineState: boolean | null = null;
+
+  /** Hasil olahan daftar terakhir per alamat; dipakai lagi saat server menjawab 304 (tanpa memetakan & menyimpan ulang). */
+  private static hasilDaftar = new Map<string, unknown[]>();
+
+  /** Dipanggil saat logout: daftar & ETag tersimpan di memori dilupakan. */
+  public static lupakanDaftar(): void {
+    this.hasilDaftar.clear();
+    lupakanSimpananDaftar();
+  }
+
+  /**
+   * Ambil satu daftar dengan ETag. `olah` (pemetaan, penggabungan, penyimpanan ke peramban) hanya dijalankan bila isinya
+   * berubah; bila server menjawab 304 hasil olahan sebelumnya dikembalikan apa adanya.
+   */
+  private static async ambilDaftar<T>(
+    alamat: string,
+    opsi: OpsiDaftar,
+    olah: (data: any[]) => T[]
+  ): Promise<{ data: T[]; tidakBerubah: boolean } | null> {
+    const res = await api.get<any[]>(alamat, { daftar: true, paksa: opsi.paksa });
+    const lama = this.hasilDaftar.get(alamat) as T[] | undefined;
+    if (res.tidakBerubah && lama) return { data: lama, tidakBerubah: true };
+    if (res.status !== 'success' || !Array.isArray(res.data)) return null;
+    const hasil = olah(res.data);
+    this.hasilDaftar.set(alamat, hasil);
+    return { data: hasil, tidakBerubah: false };
+  }
   private static cekServerTerakhir: { online: boolean; pada: number } | null = null;
   private static cekServerBerjalan: Promise<boolean> | null = null;
   /** Status server disimpan sebentar agar setiap klik tidak menunggu cek server (maks. 3 detik) lagi */
@@ -192,6 +238,7 @@ export class ErpApiService {
    * terkirim; simpanan yang masih antre setelah logout manual dikirim begitu login lagi.
    */
   public static async logout(): Promise<void> {
+    this.lupakanDaftar();
     const token = getAuthToken();
     if (!token) return;
     try {
@@ -206,18 +253,18 @@ export class ErpApiService {
   }
 
   // --- PETANI ---
-  public static async getPetaniList(): Promise<{ data: Petani[]; fromBackend: boolean }> {
+  public static async getPetaniList(opsi: OpsiDaftar = {}): Promise<HasilDaftar<Petani>> {
     try {
       const isOnline = await this.isBackendOnline();
       if (isOnline) {
-        const res = await api.get<Petani[]>('/petani');
-        if (res.status === 'success' && Array.isArray(res.data)) {
-          const dariServer = res.data.map(mapPetaniFromApi).filter((p) => p.petani_id && p.nama_petani);
+        const hasil = await this.ambilDaftar('/petani', opsi, (data) => {
+          const dariServer = data.map(mapPetaniFromApi).filter((p) => p.petani_id && p.nama_petani);
           // Perubahan di perangkat ini yang belum sampai ke server tidak boleh tertimpa data server yang lebih lama
           const mapped = overlayPetani(dariServer);
           savePetaniData(mapped);
-          return { data: mapped, fromBackend: true };
-        }
+          return mapped;
+        });
+        if (hasil) return { ...hasil, fromBackend: true };
       }
     } catch (err) {
       console.warn('Gagal mengambil data petani dari backend API, menggunakan cache lokal:', err);
@@ -417,18 +464,18 @@ export class ErpApiService {
     };
   }
 
-  public static async getTransaksiList(): Promise<{ data: TransaksiPembelian[]; fromBackend: boolean }> {
+  public static async getTransaksiList(opsi: OpsiDaftar = {}): Promise<HasilDaftar<TransaksiPembelian>> {
     try {
       const isOnline = await this.isBackendOnline();
       if (isOnline) {
-        const res = await api.get<any[]>('/transaksi');
-        if (res.status === 'success' && Array.isArray(res.data)) {
-          const mapped = res.data.map(t => this.mapBackendTransaksi(t));
+        const hasil = await this.ambilDaftar('/transaksi', opsi, (data) => {
+          const mapped = data.map(t => this.mapBackendTransaksi(t));
           // Perubahan di perangkat ini yang belum sampai ke server tidak boleh tertimpa data server yang lebih lama
           const gabungan = overlayTransaksi(mapped);
           saveTransaksiData(gabungan);
-          return { data: gabungan, fromBackend: true };
-        }
+          return gabungan;
+        });
+        if (hasil) return { ...hasil, fromBackend: true };
       }
     } catch (err) {
       console.warn('Gagal mengambil transaksi dari API, memakai fallback lokal:', err);
@@ -733,19 +780,19 @@ export class ErpApiService {
     });
   }
 
-  public static async getBarangList(): Promise<{ data: Barang[]; fromBackend: boolean }> {
+  public static async getBarangList(opsi: OpsiDaftar = {}): Promise<HasilDaftar<Barang>> {
     try {
       const isOnline = await this.isBackendOnline();
       if (isOnline) {
-        const res = await api.get<any[]>('/barang');
-        if (res.status === 'success' && Array.isArray(res.data)) {
-          const dariServer = res.data.map((b) => this.mapBackendBarang(b));
+        const hasil = await this.ambilDaftar('/barang', opsi, (data) => {
+          const dariServer = data.map((b) => this.mapBackendBarang(b));
           // Status bal yang diubah di perangkat ini dan belum sampai ke server tetap dipakai; bal milik kupon yang sedang dihapus disembunyikan
           // Server membuat bal sejak kupon Sortir diterima; bal dari kupon yang belum sampai ke server tetap ditampilkan
           const mapped = lengkapiBalDariKupon(overlayBarang(dariServer), loadTransaksiData());
           saveBarangData(mapped);
-          return { data: mapped, fromBackend: true };
-        }
+          return mapped;
+        });
+        if (hasil) return { ...hasil, fromBackend: true };
       }
     } catch (err) {
       console.warn('Gagal mengambil inventaris barang dari API, memakai fallback lokal:', err);
@@ -776,17 +823,17 @@ export class ErpApiService {
   /** Server belum punya endpoint riwayat ganti No Bal: jangan ditanya lagi sampai waktu ini (ms), supaya penyegaran berkala tidak menghasilkan 404 terus-menerus. */
   private static riwayatNoBalTakAdaSampai = 0;
 
-  public static async getRiwayatNoBalList(): Promise<{ data: RiwayatNoBal[]; fromBackend: boolean }> {
+  public static async getRiwayatNoBalList(opsi: OpsiDaftar = {}): Promise<HasilDaftar<RiwayatNoBal>> {
     if (Date.now() < this.riwayatNoBalTakAdaSampai) return { data: loadRiwayatNoBalData(), fromBackend: false };
     try {
       const isOnline = await this.isBackendOnline();
       if (isOnline) {
-        const res = await api.get<any[]>('/bal/riwayat-no-bal');
-        if (res.status === 'success' && Array.isArray(res.data)) {
-          const mapped = overlayRiwayatNoBal(res.data.map((r) => this.mapBackendRiwayatNoBal(r)));
+        const hasil = await this.ambilDaftar('/bal/riwayat-no-bal', opsi, (data) => {
+          const mapped = overlayRiwayatNoBal(data.map((r) => this.mapBackendRiwayatNoBal(r)));
           saveRiwayatNoBalData(mapped);
-          return { data: mapped, fromBackend: true };
-        }
+          return mapped;
+        });
+        if (hasil) return { ...hasil, fromBackend: true };
       }
     } catch (err) {
       if (endpointBelumAda(err)) {
@@ -799,17 +846,38 @@ export class ErpApiService {
     return { data: loadRiwayatNoBalData(), fromBackend: false };
   }
 
+  /** Server lama belum punya GET /ringkasan: jangan ditanya lagi sampai waktu ini (ms). */
+  private static ringkasanTakAdaSampai = 0;
+
+  /**
+   * Jumlah data untuk angka di menu samping, satu permintaan ringan (ETag), supaya perangkat tidak perlu memuat daftar
+   * menu lain hanya untuk angkanya. Null bila server tidak terjangkau / belum punya endpoint ini (angka memakai daftar
+   * yang tersimpan di perangkat).
+   */
+  public static async getRingkasan(opsi: OpsiDaftar = {}): Promise<(RingkasanServer & { tidakBerubah?: boolean }) | null> {
+    if (Date.now() < this.ringkasanTakAdaSampai) return null;
+    try {
+      if (!(await this.isBackendOnline())) return null;
+      const res = await api.get<RingkasanServer>('/ringkasan', { daftar: true, paksa: opsi.paksa });
+      if (res.status === 'success' && res.data) return { ...res.data, tidakBerubah: res.tidakBerubah };
+    } catch (err) {
+      if (endpointBelumAda(err)) this.ringkasanTakAdaSampai = Date.now() + 10 * 60_000;
+      else console.warn('Gagal mengambil ringkasan jumlah data:', err);
+    }
+    return null;
+  }
+
   // --- HARGA BELI & JUAL ---
-  public static async getHargaList(): Promise<{ data: TabelHarga[]; fromBackend: boolean }> {
+  public static async getHargaList(opsi: OpsiDaftar = {}): Promise<HasilDaftar<TabelHarga>> {
     try {
       const isOnline = await this.isBackendOnline();
       if (isOnline) {
-        const res = await api.get<TabelHarga[]>('/master/harga-beli');
-        if (res.status === 'success' && Array.isArray(res.data)) {
-          const mapped = overlayHargaBeli(res.data);
+        const hasil = await this.ambilDaftar('/master/harga-beli', opsi, (data) => {
+          const mapped = overlayHargaBeli(data as TabelHarga[]);
           saveHargaData(mapped);
-          return { data: mapped, fromBackend: true };
-        }
+          return mapped;
+        });
+        if (hasil) return { ...hasil, fromBackend: true };
       }
     } catch (err) {
       console.warn('Gagal mengambil harga beli dari API:', err);
@@ -818,16 +886,16 @@ export class ErpApiService {
   }
 
   // --- USERS MANAGEMENT ---
-  public static async getUserList(): Promise<{ data: User[]; fromBackend: boolean }> {
+  public static async getUserList(opsi: OpsiDaftar = {}): Promise<HasilDaftar<User>> {
     try {
       const isOnline = await this.isBackendOnline();
       if (isOnline) {
-        const res = await api.get<User[]>('/users');
-        if (res.status === 'success' && Array.isArray(res.data)) {
-          const mapped = overlayUser(res.data);
+        const hasil = await this.ambilDaftar('/users', opsi, (data) => {
+          const mapped = overlayUser(data as User[]);
           saveUserData(mapped);
-          return { data: mapped, fromBackend: true };
-        }
+          return mapped;
+        });
+        if (hasil) return { ...hasil, fromBackend: true };
       }
     } catch (err) {
       console.warn('Gagal mengambil daftar users dari API, memakai fallback lokal:', err);
@@ -938,16 +1006,16 @@ export class ErpApiService {
   }
 
   // --- HARGA JUAL ---
-  public static async getHargaJualList(): Promise<{ data: MasterHargaJual[]; fromBackend: boolean }> {
+  public static async getHargaJualList(opsi: OpsiDaftar = {}): Promise<HasilDaftar<MasterHargaJual>> {
     try {
       const isOnline = await this.isBackendOnline();
       if (isOnline) {
-        const res = await api.get<MasterHargaJual[]>('/master/harga-jual');
-        if (res.status === 'success' && Array.isArray(res.data)) {
-          const mapped = overlayHargaJual(res.data);
+        const hasil = await this.ambilDaftar('/master/harga-jual', opsi, (data) => {
+          const mapped = overlayHargaJual(data as MasterHargaJual[]);
           saveHargaJualData(mapped);
-          return { data: mapped, fromBackend: true };
-        }
+          return mapped;
+        });
+        if (hasil) return { ...hasil, fromBackend: true };
       }
     } catch (err) {
       console.warn('Gagal mengambil harga jual dari API:', err);
@@ -1182,16 +1250,15 @@ export class ErpApiService {
     };
   }
 
-  public static async getBatchSampleList(): Promise<{ data: BatchPengirimanSample[]; fromBackend: boolean }> {
+  public static async getBatchSampleList(opsi: OpsiDaftar = {}): Promise<HasilDaftar<BatchPengirimanSample>> {
     try {
       const isOnline = await this.isBackendOnline();
       if (isOnline) {
-        const res = await api.get<any[]>('/sample-batch');
-        if (res.status === 'success' && Array.isArray(res.data)) {
+        const hasil = await this.ambilDaftar('/sample-batch', opsi, (data) => {
           // Ada batch berstatus Draft di server: server ini menyimpan Draft, jadi statusnya menjadi acuan
-          if (res.data.some((b: any) => b?.status === 'draft')) tandaiServerKenalDraft(true);
+          if (data.some((b: any) => b?.status === 'draft')) tandaiServerKenalDraft(true);
           const lokal = loadBatchSampleData();
-          const mapped = res.data.map((b: any) => {
+          const mapped = data.map((b: any) => {
             const server = this.mapBackendBatchSample(b);
             const cocok = lokal.find((l) => l.batch_id === server.batch_id || l.kode_batch === server.kode_batch);
             return this.gabungBatchServer(cocok, server);
@@ -1199,8 +1266,9 @@ export class ErpApiService {
           // Batch yang dihapus atau diubah di perangkat ini dan belum sampai ke server tidak boleh muncul lagi / kembali ke isi lama
           const gabungan = overlayBatchSample(mapped);
           saveBatchSampleData(gabungan);
-          return { data: gabungan, fromBackend: true };
-        }
+          return gabungan;
+        });
+        if (hasil) return { ...hasil, fromBackend: true };
       }
     } catch (err) {
       console.warn('Gagal mengambil batch sample dari API, memakai fallback lokal:', err);
@@ -1209,14 +1277,13 @@ export class ErpApiService {
   }
 
   // --- PENGIRIMAN REGULER (DO) ---
-  public static async getPengirimanList(): Promise<{ data: PengirimanBarang[]; fromBackend: boolean }> {
+  public static async getPengirimanList(opsi: OpsiDaftar = {}): Promise<HasilDaftar<PengirimanBarang>> {
     try {
       const isOnline = await this.isBackendOnline();
       if (isOnline) {
-        const res = await api.get<any[]>('/pengiriman');
-        if (res.status === 'success' && Array.isArray(res.data)) {
+        const hasil = await this.ambilDaftar('/pengiriman', opsi, (data) => {
           const lokal = loadPengirimanData();
-          const mapped = res.data.map((p: any) => {
+          const mapped = data.map((p: any) => {
             const server = this.mapBackendPengiriman(p);
             const cocok = lokal.find(
               (l) => l.pengiriman_id === server.pengiriman_id || (server.no_surat_jalan && l.no_surat_jalan === server.no_surat_jalan)
@@ -1225,8 +1292,9 @@ export class ErpApiService {
           });
           const gabungan = overlayPengiriman(mapped);
           savePengirimanData(gabungan);
-          return { data: gabungan, fromBackend: true };
-        }
+          return gabungan;
+        });
+        if (hasil) return { ...hasil, fromBackend: true };
       }
     } catch (err) {
       console.warn('Gagal mengambil data pengiriman dari API, memakai fallback lokal:', err);
