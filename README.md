@@ -91,7 +91,7 @@ Konsekuensi penting:
 
 | Modul | Fungsi |
 |---|---|
-| Pengiriman Sample | Pengiriman contoh bal ke pabrik dengan No. Surat Pengiriman Sample manual, lalu pencatatan hasil uji. Daftar bal bisa diimpor dari Excel/CSV (kolom Gulungan, No Bal, Harga Jual; satu tab = satu batch) dengan pratinjau bal yang tidak ada di sistem |
+| Pengiriman Sample | Pengiriman contoh bal ke pabrik dengan No. Surat Pengiriman Sample manual, lalu pencatatan hasil uji. Daftar bal bisa diimpor dari Excel/CSV (kolom Gulungan, No Bal, Kode Harga Jual dan/atau Harga Jual; satu tab = satu batch; kode dan nominal dicek tidak tertukar) dengan pratinjau bal yang tidak ada di sistem |
 | Status Batch & Reclass | Evaluasi sortir pembeli per bal sample (ACC, nego, tolak), harga deal, finalkan, cetak, dan batal batch |
 | Pengiriman Reguler (DO) | Penyusunan muatan per nomor bal, No. Surat Jalan manual, harga jual, dan cetak surat jalan |
 | Status Pengiriman Reguler (DO) | Status Surat Jalan sampai Selesai, edit, batal, dan cetak Surat Jalan |

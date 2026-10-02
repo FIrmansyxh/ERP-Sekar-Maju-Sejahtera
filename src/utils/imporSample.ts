@@ -7,8 +7,8 @@ import { noBalTerkini } from './noBalPensiun';
  * tiap tab satu pengiriman sample berisi kolom Gulungan, No Bal, dan Harga Jual/Tawaran.
  *
  * - Gulungan hanya pengelompokan di luar sistem: tidak disimpan, hanya ditampilkan agar baris bermasalah mudah dicari.
- * - Harga boleh kode Master Harga Jual (HJ-45) atau angka (45000 / 45.000), dicocokkan ke Master Harga Jual aktif.
- *   Harga yang tidak ada di Master tidak dimasukkan.
+ * - Kolom Kode Harga Jual/Tawar (55, HJ-45) dan/atau Harga Jual/Tawar (55000 / 55.000) dicocokkan ke Master Harga Jual
+ *   aktif tanpa tertukar (tentukanHargaJual). Yang tidak ada di Master atau nominalnya tidak sama tidak dimasukkan.
  * - Berat dan harga beli diambil dari bal di sistem. No Jadi = kolom No Jadi bila ada, selain itu sama dengan No Bal.
  * - Bal yang tidak bisa dipakai (tidak ada, sudah di batch lain, sudah keluar, dobel) tidak dimasukkan dan dilaporkan.
  */
@@ -23,7 +23,10 @@ export interface PetaKolom {
   /** Indeks baris judul (0 = baris 1) */
   barisJudul: number;
   noBal: number;
-  harga: number;
+  /** Kolom Kode Harga Jual/Tawar (mis. 55, HJ-45) */
+  kode: number | null;
+  /** Kolom Harga Jual/Tawar dalam Rupiah per kg (mis. 55000); boleh juga berisi kode bila file hanya punya satu kolom */
+  harga: number | null;
   gulungan: number | null;
   noJadi: number | null;
 }
@@ -35,6 +38,7 @@ export interface BarisImpor {
   barisExcel: number;
   gulungan: string;
   noBalFile: string;
+  kodeFile: string;
   hargaFile: string;
   status: StatusBarisImpor;
   /** Alasan ditolak dan/atau peringatan */
@@ -59,23 +63,29 @@ const kunciBal = (noBal: string): string => String(noBal || '').trim().replace(/
 
 const JENIS_KOLOM = {
   noBal: (j: string) => j === 'nobal' || j === 'nomorbal' || j === 'bal' || j.startsWith('nobal'),
-  harga: (j: string) => j.includes('harga') || j.includes('tawaran') || j === 'hj',
+  // "Kode Harga Jual/Tawar", "Kode HJ", "Kode"; bukan Kode Bal Pembeli atau Kode Grade
+  kode: (j: string) => j.startsWith('kode') && !j.includes('bal') && !j.includes('grade') && !j.includes('pembeli'),
+  // "Harga Jual/Tawaran" (Rp/kg); kolom Harga Beli di file tidak dipakai
+  harga: (j: string) =>
+    (j.includes('harga') || j.includes('tawar') || j === 'hj') && !j.startsWith('kode') && !j.includes('hargabeli'),
   gulungan: (j: string) => j.includes('gulung'),
   noJadi: (j: string) => j.includes('nojadi') || j.includes('kodebalpembeli') || j === 'jadi',
 };
 
-/** Mencari baris judul (10 baris pertama) yang memuat kolom No Bal dan Harga. */
+/** Mencari baris judul (10 baris pertama) yang memuat kolom No Bal dan Kode Harga Jual dan/atau Harga Jual. */
 export function kenaliKolom(baris: string[][]): PetaKolom | null {
   for (let r = 0; r < Math.min(baris.length, 10); r++) {
     const judul = baris[r].map((t) => rata(t || ''));
     const cari = (cocok: (j: string) => boolean, kecuali: number[] = []) =>
       judul.findIndex((j, i) => j !== '' && !kecuali.includes(i) && cocok(j));
     const noJadi = cari(JENIS_KOLOM.noJadi);
-    const noBal = cari(JENIS_KOLOM.noBal, [noJadi]);
-    const harga = cari(JENIS_KOLOM.harga);
-    if (noBal >= 0 && harga >= 0) {
+    const kode = cari(JENIS_KOLOM.kode, [noJadi]);
+    const harga = cari(JENIS_KOLOM.harga, [noJadi, kode]);
+    const noBal = cari(JENIS_KOLOM.noBal, [noJadi, kode]);
+    if (noBal >= 0 && (harga >= 0 || kode >= 0)) {
       const gulungan = cari(JENIS_KOLOM.gulungan);
-      return { barisJudul: r, noBal, harga, gulungan: gulungan >= 0 ? gulungan : null, noJadi: noJadi >= 0 ? noJadi : null };
+      const ada = (i: number) => (i >= 0 ? i : null);
+      return { barisJudul: r, noBal, kode: ada(kode), harga: ada(harga), gulungan: ada(gulungan), noJadi: ada(noJadi) };
     }
   }
   return null;
@@ -91,17 +101,52 @@ export function angkaHarga(teks: string): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-/** Kode Master Harga Jual aktif dari isi kolom harga (kode atau angka). */
-export function cocokkanHarga(teks: string, hargaJualAktif: MasterHargaJual[]): MasterHargaJual | null {
-  const isi = String(teks || '').trim();
-  if (!isi) return null;
-  const perKode = hargaJualAktif.find((h) => h.kode.trim().toUpperCase() === isi.toUpperCase());
-  if (perKode) return perKode;
-  const angka = angkaHarga(isi);
-  if (angka === null) return null;
+const rupiah = (n: number) => `Rp ${n.toLocaleString('id-ID')}`;
+
+/**
+ * Menentukan Master Harga Jual dari kolom Kode dan kolom Harga (Rp/kg) tanpa tertukar:
+ * - kode menentukan Master; bila kolom harga juga diisi, nominalnya harus sama dengan harga kode itu
+ * - isi kedua kolom yang tertukar (kode di kolom harga, nominal di kolom kode) dikenali dan dibetulkan
+ * - hanya nominal: dicocokkan ke kode dengan harga yang sama
+ */
+export function tentukanHargaJual(
+  kodeFile: string,
+  hargaFile: string,
+  master: MasterHargaJual[]
+): { hargaJual?: MasterHargaJual; tolak?: string; peringatan?: string } {
+  const kode = String(kodeFile || '').trim();
+  const harga = String(hargaFile || '').trim();
+  if (!kode && !harga) return { tolak: 'Kode/Harga Jual kosong' };
+  const perKode = (v: string) => (v ? master.find((h) => h.kode.trim().toUpperCase() === v.toUpperCase()) : undefined);
+
+  const dariKolomKode = perKode(kode);
+  const dariKolomHarga = dariKolomKode ? undefined : perKode(harga);
+  const hj = dariKolomKode ?? dariKolomHarga;
+  if (hj) {
+    // Nominal pembanding: kolom harga, atau kolom kode bila isinya tertukar
+    const nominalTeks = dariKolomKode ? harga : kode;
+    const tertukar = Boolean(dariKolomHarga && kode);
+    if (nominalTeks) {
+      const n = angkaHarga(nominalTeks);
+      if (n === null) return { tolak: `${tertukar ? 'Kode' : 'Harga'} "${nominalTeks}" tidak dikenali` };
+      if (n !== Number(hj.harga_jual)) {
+        return { tolak: `Harga ${rupiah(n)} tidak sama dengan kode ${hj.kode} (${rupiah(Number(hj.harga_jual))})` };
+      }
+    }
+    return { hargaJual: hj, peringatan: tertukar ? 'Kode dan harga tertukar di file, sudah disesuaikan' : undefined };
+  }
+
+  if (kode && harga) return { tolak: `Kode "${kode}" tidak ada di Master Harga Jual` };
+  const isi = harga || kode;
+  const n = angkaHarga(isi);
+  const sama = n === null ? [] : master.filter((h) => Number(h.harga_jual) === n);
+  if (sama.length === 0) return { tolak: `Harga "${isi}" tidak ada di Master Harga Jual` };
   // Harga sama di beberapa kode: pakai yang tanggal berlakunya paling baru
-  const sama = hargaJualAktif.filter((h) => Number(h.harga_jual) === angka);
-  return sama.sort((a, b) => String(b.tanggal_berlaku || '').localeCompare(String(a.tanggal_berlaku || '')))[0] ?? null;
+  const terpilih = [...sama].sort((a, b) => String(b.tanggal_berlaku || '').localeCompare(String(a.tanggal_berlaku || '')))[0];
+  return {
+    hargaJual: terpilih,
+    peringatan: sama.length > 1 ? `${rupiah(n as number)} dipakai ${sama.length} kode, dipilih ${terpilih.kode}` : undefined,
+  };
 }
 
 /** Mencari bal gudang lewat No Bal; nomor lama hasil Koreksi No Bal diganti ke nomor terbarunya. */
@@ -130,10 +175,11 @@ export function periksaBarisImpor(tab: TabImpor, peta: PetaKolom, k: KonteksImpo
   tab.baris.slice(peta.barisJudul + 1).forEach((sel, i) => {
     const ambil = (kolom: number | null) => (kolom === null ? '' : String(sel[kolom] ?? '').trim());
     const noBalFile = ambil(peta.noBal);
+    const kodeFile = ambil(peta.kode);
     const hargaFile = ambil(peta.harga);
     const noJadiFile = ambil(peta.noJadi);
     const gulunganSel = ambil(peta.gulungan);
-    if (!noBalFile && !hargaFile && !noJadiFile) return; // baris kosong / pemisah antar gulungan
+    if (!noBalFile && !kodeFile && !hargaFile && !noJadiFile) return; // baris kosong / pemisah antar gulungan
     // Sel gulungan yang digabung (merge) atau hanya diisi di baris pertama kelompok: ikut baris di atasnya
     if (gulunganSel) gulunganTerakhir = gulunganSel;
 
@@ -141,6 +187,7 @@ export function periksaBarisImpor(tab: TabImpor, peta: PetaKolom, k: KonteksImpo
       barisExcel: peta.barisJudul + 2 + i,
       gulungan: gulunganTerakhir,
       noBalFile,
+      kodeFile,
       hargaFile,
       status: 'siap',
       pesan: [],
@@ -164,10 +211,10 @@ export function periksaBarisImpor(tab: TabImpor, peta: PetaKolom, k: KonteksImpo
     const pakai = k.cekBal(bal);
     if (!pakai.isAvailable) return tolak(pakai.message);
 
-    if (!hargaFile) return tolak('Harga kosong');
-    const hargaJual = cocokkanHarga(hargaFile, k.hargaJualAktif);
-    if (!hargaJual) return tolak(`Harga "${hargaFile}" tidak ada di Master Harga Jual`);
-    baris.hargaJual = hargaJual;
+    const harga = tentukanHargaJual(kodeFile, hargaFile, k.hargaJualAktif);
+    if (!harga.hargaJual) return tolak(harga.tolak || 'Kode/Harga Jual tidak dikenali');
+    baris.hargaJual = harga.hargaJual;
+    if (harga.peringatan) baris.pesan.push(harga.peringatan);
 
     const noJadi = noJadiFile || bal.no_bal || bal.barang_id;
     const kunciNoJadi = noJadi.trim().toLowerCase();
@@ -275,7 +322,8 @@ export async function unduhTemplateImporSample(): Promise<void> {
   ws.columns = [
     { header: 'Gulungan', key: 'gulungan', width: 12 },
     { header: 'No Bal', key: 'no_bal', width: 16, style: { numFmt: '@' } },
-    { header: 'Harga Jual', key: 'harga', width: 16 },
+    { header: 'Kode Harga Jual', key: 'kode', width: 18, style: { numFmt: '@' } },
+    { header: 'Harga Jual (Rp/Kg)', key: 'harga', width: 20, style: { numFmt: '#,##0' } },
   ];
   ws.getRow(1).font = { bold: true };
   ws.views = [{ state: 'frozen', ySplit: 1 }];

@@ -57,7 +57,7 @@ export const ImporSampleModal: React.FC<ImporSampleModalProps> = ({ isOpen, onCl
   const pilihTab = (i: number, daftar = tabs) => {
     setIdxTab(i);
     // Kolom dikenali dari judul; bila tidak dikenali, user memilih sendiri (baris 1 dianggap judul)
-    setPeta(kenaliKolom(daftar[i]?.baris || []) ?? { barisJudul: 0, noBal: -1, harga: -1, gulungan: null, noJadi: null });
+    setPeta(kenaliKolom(daftar[i]?.baris || []) ?? { barisJudul: 0, noBal: -1, kode: null, harga: null, gulungan: null, noJadi: null });
   };
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -80,7 +80,8 @@ export const ImporSampleModal: React.FC<ImporSampleModalProps> = ({ isOpen, onCl
     }
   };
 
-  const kolomLengkap = Boolean(peta && peta.noBal >= 0 && peta.harga >= 0);
+  // No Bal wajib; harga dari kolom Kode Harga Jual dan/atau Harga Jual
+  const kolomLengkap = Boolean(peta && peta.noBal >= 0 && (peta.kode !== null || peta.harga !== null));
   const hasil = useMemo<BarisImpor[]>(
     // konteks berubah tiap render (daftar bal di tabel batch ikut diperiksa); pemeriksaan murah untuk ratusan baris
     () => (tab && peta && kolomLengkap ? periksaBarisImpor(tab, peta, konteks) : []),
@@ -105,7 +106,7 @@ export const ImporSampleModal: React.FC<ImporSampleModalProps> = ({ isOpen, onCl
   const ubahPeta = (kunci: keyof PetaKolom, nilai: string) => {
     if (!peta) return;
     const angka = Number(nilai);
-    setPeta({ ...peta, [kunci]: (kunci === 'gulungan' || kunci === 'noJadi') && nilai === '' ? null : angka });
+    setPeta({ ...peta, [kunci]: kunci !== 'noBal' && kunci !== 'barisJudul' && nilai === '' ? null : angka });
   };
 
   const unduhBermasalah = () =>
@@ -118,12 +119,13 @@ export const ImporSampleModal: React.FC<ImporSampleModalProps> = ({ isOpen, onCl
           { header: 'Baris', type: 'integer', align: 'center' },
           { header: 'Gulungan', align: 'center' },
           { header: 'No Bal', type: 'text' },
+          { header: 'Kode di File', type: 'text' },
           { header: 'Harga di File', type: 'text' },
           { header: 'Keterangan' },
         ],
         rows: hasil
           .filter((b) => b.status === 'tolak')
-          .map((b) => [b.barisExcel, b.gulungan || '-', b.noBalFile || '-', b.hargaFile || '-', b.pesan.join('; ')]),
+          .map((b) => [b.barisExcel, b.gulungan || '-', b.noBalFile || '-', b.kodeFile || '-', b.hargaFile || '-', b.pesan.join('; ')]),
       },
     ]);
 
@@ -179,7 +181,7 @@ export const ImporSampleModal: React.FC<ImporSampleModalProps> = ({ isOpen, onCl
           )}
 
           {tab && peta && (
-            <div className="grid grid-cols-2 md:grid-cols-6 gap-3 p-3 bg-gray-50 border border-gray-200 rounded-sm">
+            <div className="grid grid-cols-2 md:grid-cols-7 gap-3 p-3 bg-gray-50 border border-gray-200 rounded-sm">
               {tabs.length > 1 && (
                 <label className="space-y-1 col-span-2 md:col-span-1">
                   <span className="block font-semibold text-gray-700">Tab</span>
@@ -205,7 +207,8 @@ export const ImporSampleModal: React.FC<ImporSampleModalProps> = ({ isOpen, onCl
               {(
                 [
                   ['noBal', 'No Bal', true],
-                  ['harga', 'Harga Jual', true],
+                  ['kode', 'Kode Harga Jual', false],
+                  ['harga', 'Harga Jual (Rp/Kg)', false],
                   ['gulungan', 'Gulungan', false],
                   ['noJadi', 'No Jadi', false],
                 ] as const
@@ -235,7 +238,7 @@ export const ImporSampleModal: React.FC<ImporSampleModalProps> = ({ isOpen, onCl
           {tab && !kolomLengkap && (
             <div className="p-2.5 bg-amber-50 border border-amber-200 text-amber-900 rounded-xs flex items-center space-x-2">
               <AlertTriangle className="w-4 h-4 shrink-0" />
-              <span>Kolom No Bal dan Harga Jual belum dikenali. Pilih kolomnya.</span>
+              <span>Pilih kolom No Bal, dan kolom Kode Harga Jual dan/atau Harga Jual.</span>
             </div>
           )}
 
@@ -266,10 +269,10 @@ export const ImporSampleModal: React.FC<ImporSampleModalProps> = ({ isOpen, onCl
               </div>
 
               <div className="overflow-x-auto border border-gray-200 rounded-sm">
-                <table className="w-full min-w-[900px] text-xs border-collapse">
+                <table className="w-full min-w-[1080px] text-xs border-collapse">
                   <thead>
                     <tr className="bg-gray-50 text-gray-700">
-                      {['Baris', 'Gulungan', 'No Bal', 'Harga di File', 'Kode Harga Jual', 'Berat Bruto', 'Harga Beli/Kg', 'Keterangan'].map((h) => (
+                      {['Baris', 'Gulungan', 'No Bal', 'Kode di File', 'Harga di File', 'Kode Harga Jual', 'Harga Jual/Kg', 'Berat Bruto', 'Harga Beli/Kg', 'Keterangan'].map((h) => (
                         <th key={h} className="px-2.5 py-2 border border-gray-200 text-center font-semibold whitespace-nowrap">
                           {h}
                         </th>
@@ -287,9 +290,11 @@ export const ImporSampleModal: React.FC<ImporSampleModalProps> = ({ isOpen, onCl
                         <td className="px-2.5 py-1.5 border border-gray-200 font-mono font-semibold">
                           {b.bal?.no_bal && b.bal.no_bal !== b.noBalFile ? `${b.noBalFile} → ${b.bal.no_bal}` : b.noBalFile || '-'}
                         </td>
-                        <td className="px-2.5 py-1.5 border border-gray-200 font-mono">{b.hargaFile || '-'}</td>
-                        <td className="px-2.5 py-1.5 border border-gray-200 font-mono">
-                          {b.hargaJual ? `${b.hargaJual.kode} · ${formatRupiah(b.hargaJual.harga_jual)}` : '-'}
+                        <td className="px-2.5 py-1.5 border border-gray-200 font-mono text-gray-500">{b.kodeFile || '-'}</td>
+                        <td className="px-2.5 py-1.5 border border-gray-200 font-mono text-gray-500">{b.hargaFile || '-'}</td>
+                        <td className="px-2.5 py-1.5 border border-gray-200 text-center font-mono font-semibold">{b.hargaJual?.kode || '-'}</td>
+                        <td className="px-2.5 py-1.5 border border-gray-200 text-right font-mono">
+                          {b.hargaJual ? formatRupiah(Number(b.hargaJual.harga_jual)) : '-'}
                         </td>
                         <td className="px-2.5 py-1.5 border border-gray-200 text-right font-mono">
                           {b.bal ? `${formatNumber(beratBrutoBal(b.bal), 1)} kg` : '-'}
@@ -308,7 +313,7 @@ export const ImporSampleModal: React.FC<ImporSampleModalProps> = ({ isOpen, onCl
                     ))}
                     {tampil.length === 0 && (
                       <tr>
-                        <td colSpan={8} className="px-2.5 py-6 border border-gray-200 text-center text-gray-500">
+                        <td colSpan={10} className="px-2.5 py-6 border border-gray-200 text-center text-gray-500">
                           {hasil.length === 0 ? 'Tidak ada baris data di bawah baris judul.' : 'Tidak ada baris bermasalah.'}
                         </td>
                       </tr>

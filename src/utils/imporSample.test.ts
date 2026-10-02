@@ -7,15 +7,17 @@ import {
   KonteksImpor,
   angkaHarga,
   bacaBerkasImpor,
-  cocokkanHarga,
   kenaliKolom,
   pecahCsv,
   periksaBarisImpor,
+  tentukanHargaJual,
 } from './imporSample';
 
 const HJ: MasterHargaJual[] = [
   { harga_jual_id: 'HJ-001', kode: 'HJ-45', harga_jual: 45000, tanggal_berlaku: '2026-09-01', status_aktif: true },
   { harga_jual_id: 'HJ-002', kode: 'HJ-50', harga_jual: 50000, tanggal_berlaku: '2026-09-01', status_aktif: true },
+  // Kode berupa angka seperti di Master Harga Jual pemilik (kode 55 = Rp 55.000/kg)
+  { harga_jual_id: 'HJ-003', kode: '55', harga_jual: 55000, tanggal_berlaku: '2026-09-22', status_aktif: true },
 ];
 
 const konteks = (extra: Partial<KonteksImpor> = {}, barang: Barang[] = []): KonteksImpor => ({
@@ -43,11 +45,18 @@ describe('impor Batch Sample: membaca kolom dan harga', () => {
       [''],
       ['Gulungan', 'No. Bal', 'Harga Tawaran'],
     ]);
-    expect(peta).toEqual({ barisJudul: 2, noBal: 1, harga: 2, gulungan: 0, noJadi: null });
+    expect(peta).toEqual({ barisJudul: 2, noBal: 1, kode: null, harga: 2, gulungan: 0, noJadi: null });
   });
 
   it('kolom No Jadi tidak tertukar dengan No Bal', () => {
     expect(kenaliKolom([['No Jadi', 'No Bal', 'Harga Jual']])).toMatchObject({ noBal: 1, noJadi: 0, harga: 2 });
+  });
+
+  it('kolom Kode Harga Jual dan Harga Jual dibedakan; Harga Beli dan Kode Bal Pembeli tidak dipakai', () => {
+    expect(
+      kenaliKolom([['Gulungan', 'No Bal', 'Harga Beli', 'Harga Jual/Tawar', 'Kode Harga Jual/Tawar', 'Kode Bal Pembeli']])
+    ).toEqual({ barisJudul: 0, noBal: 1, kode: 4, harga: 3, gulungan: 0, noJadi: 5 });
+    expect(kenaliKolom([['No Bal', 'Kode']])).toMatchObject({ noBal: 0, kode: 1, harga: null });
   });
 
   it('judul tidak dikenali = null (user memilih kolom sendiri)', () => {
@@ -63,11 +72,28 @@ describe('impor Batch Sample: membaca kolom dan harga', () => {
     expect(angkaHarga('HJ-45')).toBeNull();
   });
 
-  it('harga boleh kode atau angka; yang tidak ada di Master = null', () => {
-    expect(cocokkanHarga('hj-45', HJ)?.kode).toBe('HJ-45');
-    expect(cocokkanHarga('50.000', HJ)?.kode).toBe('HJ-50');
-    expect(cocokkanHarga('47500', HJ)).toBeNull();
-    expect(cocokkanHarga('HJ-99', HJ)).toBeNull();
+  it('satu kolom: boleh kode atau nominal; yang tidak ada di Master ditolak', () => {
+    expect(tentukanHargaJual('', 'hj-45', HJ).hargaJual?.kode).toBe('HJ-45');
+    expect(tentukanHargaJual('', '50.000', HJ).hargaJual?.kode).toBe('HJ-50');
+    expect(tentukanHargaJual('55', '', HJ).hargaJual?.kode).toBe('55');
+    expect(tentukanHargaJual('', '55', HJ).hargaJual?.kode).toBe('55');
+    expect(tentukanHargaJual('', '47500', HJ).tolak).toBe('Harga "47500" tidak ada di Master Harga Jual');
+    expect(tentukanHargaJual('', '', HJ).tolak).toBe('Kode/Harga Jual kosong');
+  });
+
+  it('dua kolom: kode menentukan, nominal harus sama dengan harga kode itu', () => {
+    expect(tentukanHargaJual('55', '55.000', HJ)).toEqual({ hargaJual: HJ[2], peringatan: undefined });
+    expect(tentukanHargaJual('55', '50000', HJ).tolak).toBe('Harga Rp 50.000 tidak sama dengan kode 55 (Rp 55.000)');
+    expect(tentukanHargaJual('57', '55000', HJ).tolak).toBe('Kode "57" tidak ada di Master Harga Jual');
+  });
+
+  it('dua kolom yang isinya tertukar dikenali dan dibetulkan', () => {
+    expect(tentukanHargaJual('55000', '55', HJ)).toEqual({
+      hargaJual: HJ[2],
+      peringatan: 'Kode dan harga tertukar di file, sudah disesuaikan',
+    });
+    expect(tentukanHargaJual('45.000', 'HJ-45', HJ).hargaJual?.kode).toBe('HJ-45');
+    expect(tentukanHargaJual('50000', 'HJ-45', HJ).tolak).toBe('Harga Rp 50.000 tidak sama dengan kode HJ-45 (Rp 45.000)');
   });
 
   it('CSV dengan titik koma dan tanda kutip', () => {
@@ -82,7 +108,7 @@ describe('impor Batch Sample: pemeriksaan per baris', () => {
   afterEach(() => aturRiwayatNoBal([]));
 
   const tab = (baris: string[][]) => ({ nama: 'Sample 1', baris: [['Gulungan', 'No Bal', 'Harga Jual'], ...baris] });
-  const peta = { barisJudul: 0, noBal: 1, harga: 2, gulungan: 0, noJadi: null };
+  const peta = { barisJudul: 0, noBal: 1, kode: null, harga: 2, gulungan: 0, noJadi: null };
 
   it('bal ditemukan: berat & harga beli dari sistem, harga dicocokkan ke kode Master', () => {
     const [b] = periksaBarisImpor(tab([['1', 'SB0001', '45000']]), peta, konteks());
@@ -112,7 +138,7 @@ describe('impor Batch Sample: pemeriksaan per baris', () => {
       [5, 'tolak', 'Dobel di file (sama dengan baris 2)'],
       [6, 'tolak', 'Harga "47500" tidak ada di Master Harga Jual'],
       [7, 'tolak', 'No Bal kosong'],
-      [8, 'tolak', 'Harga kosong'],
+      [8, 'tolak', 'Kode/Harga Jual kosong'],
     ]);
   });
 
@@ -134,6 +160,19 @@ describe('impor Batch Sample: pemeriksaan per baris', () => {
     ]);
   });
 
+  it('file dengan kolom Kode dan Harga: tiap baris dicocokkan tanpa tertukar', () => {
+    const p = { barisJudul: 0, noBal: 0, kode: 1, harga: 2, gulungan: null, noJadi: null };
+    const hasil = periksaBarisImpor(
+      { nama: 't', baris: [['No Bal', 'Kode Harga Jual', 'Harga Jual'], ['SB0001', '55', '55.000'], ['SB0002', '55000', '55']] },
+      p,
+      konteks()
+    );
+    expect(hasil.map((b) => [b.status, b.hargaJual?.kode, b.kodeFile, b.hargaFile, b.pesan])).toEqual([
+      ['siap', '55', '55', '55.000', []],
+      ['peringatan', '55', '55000', '55', ['Kode dan harga tertukar di file, sudah disesuaikan']],
+    ]);
+  });
+
   it('bal belum ditimbang tetap masuk dengan peringatan', () => {
     const [b] = periksaBarisImpor(tab([['1', 'HF0003', 'HJ-50']]), peta, konteks());
     expect(b.status).toBe('peringatan');
@@ -149,7 +188,7 @@ describe('impor Batch Sample: pemeriksaan per baris', () => {
   });
 
   it('No Jadi dari kolom No Jadi; yang sudah dipakai atau dobel ditolak', () => {
-    const p = { barisJudul: 0, noBal: 1, harga: 2, gulungan: null, noJadi: 0 };
+    const p = { barisJudul: 0, noBal: 1, kode: null, harga: 2, gulungan: null, noJadi: 0 };
     const hasil = periksaBarisImpor(
       { nama: 't', baris: [['No Jadi', 'No Bal', 'Harga'], ['J1', 'SB0001', 'HJ-45'], ['J1', 'SB0002', 'HJ-45']] },
       p,
