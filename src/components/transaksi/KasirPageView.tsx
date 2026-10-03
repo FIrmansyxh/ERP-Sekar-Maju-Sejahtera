@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { TransaksiPembelian, Petani, TabelHarga, Barang, UserRole, User as UserType, SaveTransaksiMeta } from '../../types';
 import { isTransaksiLunas, labelStatusBayar } from '../../utils/statusBayar';
-import { formatRupiah, formatAccounting, formatDateIndo, formatNoKupon, normalizeKg } from '../../utils/formatters';
+import { formatRupiah, formatAccounting, formatDateIndo, formatNoKupon } from '../../utils/formatters';
 import { TransaksiDetailModal } from './TransaksiDetailModal';
 import { PembayaranKasirModal } from './PembayaranKasirModal';
 import { ConfirmModal } from '../common/ConfirmModal';
@@ -89,11 +89,51 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
   // Server-side Data
   const [serverData, setServerData] = useState<TransaksiPembelian[]>([]);
   const [serverTotal, setServerTotal] = useState(0);
+  const [summaryStats, setSummaryStats] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
+  // Total dari summary (untuk pagination yang muncul sebelum list fetch selesai)
+  const [totalFromSummary, setTotalFromSummary] = useState(0);
 
+  // Effect 1: Ambil summary stats dari backend (tidak terpengaruh oleh page/itemsPerPage)
   React.useEffect(() => {
     let isMounted = true;
-    const fetchData = async () => {
+    const fetchSummary = async () => {
+      const { ErpApiService } = await import('../../services/erpApi');
+      const filters = {
+        start_date: startDate,
+        end_date: endDate,
+        search: tableSearch || filterKupon,
+        petani_id: filterPetaniId,
+        status_bayar: filterStatusBayar === 'all' ? undefined : filterStatusBayar
+      };
+      const summaryRes = await ErpApiService.getKasirSummary(filters);
+      if (isMounted) {
+        if (summaryRes.data) {
+          setSummaryStats(summaryRes.data);
+          // Langsung update total paginate dari summary agar grid pagination muncul lebih awal
+          // Pilih total yang sesuai dengan filter status_bayar yang aktif
+          const sd = summaryRes.data;
+          let totalHint = sd.semua?.jumlah ?? 0;
+          if (filters.status_bayar === 'siap_bayar') totalHint = sd.siapBayar?.jumlah ?? 0;
+          else if (filters.status_bayar === 'belum_lengkap') totalHint = sd.belumLengkap?.jumlah ?? 0;
+          else if (filters.status_bayar === 'cash') totalHint = sd.lunas?.jumlah ?? 0;
+          else if (filters.status_bayar === 'kredit') totalHint = sd.belumLunas?.jumlah ?? 0;
+          setTotalFromSummary(totalHint);
+        } else {
+          setSummaryStats(null);
+          setTotalFromSummary(0);
+        }
+      }
+    };
+    const delay = tableSearch ? 300 : 0;
+    const timer = setTimeout(() => { fetchSummary(); }, delay);
+    return () => { isMounted = false; clearTimeout(timer); };
+  }, [startDate, endDate, filterKupon, tableSearch, filterPetaniId, filterStatusBayar]);
+
+  // Effect 2: Ambil data paginated (berubah ketika page, itemsPerPage, atau filter berubah)
+  React.useEffect(() => {
+    let isMounted = true;
+    const fetchList = async () => {
       setIsLoading(true);
       const { ErpApiService } = await import('../../services/erpApi');
       const filters = {
@@ -103,7 +143,6 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
         petani_id: filterPetaniId,
         status_bayar: filterStatusBayar === 'all' ? undefined : filterStatusBayar
       };
-      
       const res = await ErpApiService.getTransaksiListPaginated(currentPage, itemsPerPage, filters);
       if (isMounted) {
         setServerData(res.data);
@@ -111,18 +150,11 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
         setIsLoading(false);
       }
     };
-    
-    // Only debounce if there is a search term typed, otherwise fetch immediately (e.g. for page change)
     const delay = tableSearch ? 300 : 0;
-    const timer = setTimeout(() => {
-      fetchData();
-    }, delay);
-    
-    return () => {
-      isMounted = false;
-      clearTimeout(timer);
-    };
-  }, [currentPage, itemsPerPage, startDate, endDate, filterKupon, tableSearch, filterPetaniId, filterStatusBayar]);  // Confirm Modal state to avoid blocking browser locker errors
+    const timer = setTimeout(() => { fetchList(); }, delay);
+    return () => { isMounted = false; clearTimeout(timer); };
+  }, [currentPage, itemsPerPage, startDate, endDate, filterKupon, tableSearch, filterPetaniId, filterStatusBayar]);
+
   const [confirmConfig, setConfirmConfig] = useState<{
     isOpen: boolean;
     title: string;
@@ -166,16 +198,6 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     };
   };
 
-  // Helper super cepat untuk memantau status timbang dalam loop useMemo, tanpa alokasi memori untuk map/filter
-  const checkIsAllWeighed = (tx: TransaksiPembelian) => {
-    if (isKuponProsesSortir(tx)) return false;
-    const items = tx.items || [];
-    if (items.length === 0) return (tx.berat_kg || 0) > 0;
-    for (let i = 0; i < items.length; i++) {
-      if ((items[i].berat_kg || 0) <= 0) return false;
-    }
-    return true;
-  };
 
   const alasanBelumSiapBayar = (tx: TransaksiPembelian, status: ReturnType<typeof getKuponWeighStatus>) =>
     status.isSortirOpen
@@ -273,77 +295,27 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     setSelectedTxForBayar(tx);
   };
 
-  // Main Filter logic (Now applies to the current paginated data for stats calculation)
-  const filteredList = useMemo(() => {
-    return serverData.filter((tx) => {
-      // Tanggal Mulai
-      if (startDate) {
-        const txDate = (tx.tanggal_transaksi || '').split(' ')[0];
-        if (txDate < startDate) return false;
-      }
-      // Tanggal Akhir
-      if (endDate) {
-        const txDate = (tx.tanggal_transaksi || '').split(' ')[0];
-        if (txDate > endDate) return false;
-      }
-      // Kupon / ID / Bal
-      if (filterKupon.trim()) {
-        const q = filterKupon.trim().toLowerCase();
-        const matchKupon = (tx.no_kupon || '').toLowerCase().includes(q);
-        const matchId = (tx.transaksi_id || '').toLowerCase().includes(q);
-        const matchBal = (tx.no_bal || '').toLowerCase().includes(q);
-        if (!matchKupon && !matchId && !matchBal) return false;
-      }
-      // Petani
-      if (filterPetaniId && tx.petani_id !== filterPetaniId) {
-        return false;
-      }
-      // Status Kas (Cash vs Kredit) & Kesiapan Timbang
-      const isLunas = isTransaksiLunas(tx);
-      const isAllWeighed = checkIsAllWeighed(tx);
 
-      if (filterStatusBayar === 'cash' && !isLunas) return false;
-      if (filterStatusBayar === 'kredit' && isLunas) return false;
-      if (filterStatusBayar === 'siap_bayar' && (!isAllWeighed || isLunas)) return false;
-      if (filterStatusBayar === 'belum_lengkap' && isAllWeighed) return false;
-
-      return true;
-    });
-  }, [transaksiList, startDate, endDate, filterKupon, filterPetaniId, filterStatusBayar]);
-
-  // Jumlah dan nilai kupon per status untuk kartu filter status
+  // Jumlah dan nilai kupon per status untuk kartu filter status (merangkum SELURUH data paginate dari summaryStats)
   const statusCounts = useMemo(() => {
+    if (summaryStats) {
+      return {
+        semua: summaryStats.semua,
+        siapBayar: summaryStats.siapBayar,
+        belumLengkap: summaryStats.belumLengkap,
+        lunas: summaryStats.lunas,
+        belumLunas: summaryStats.belumLunas,
+      };
+    }
     const kosong = () => ({ jumlah: 0, nilai: 0 });
-    const semua = kosong();
-    const siapBayar = kosong();
-    const belumLengkap = kosong();
-    const lunas = kosong();
-    const belumLunas = kosong();
-    const tambah = (grup: { jumlah: number; nilai: number }, nilai: number) => {
-      grup.jumlah += 1;
-      grup.nilai += nilai;
+    return {
+      semua: kosong(),
+      siapBayar: kosong(),
+      belumLengkap: kosong(),
+      lunas: kosong(),
+      belumLunas: kosong(),
     };
-
-    serverData.forEach((t) => {
-      const nilai = t.harga_final || 0;
-      const isLunas = isTransaksiLunas(t);
-      const isAllWeighed = checkIsAllWeighed(t);
-      tambah(semua, nilai);
-      if (isLunas) {
-        tambah(lunas, nilai);
-      } else {
-        tambah(belumLunas, nilai);
-        if (isAllWeighed) {
-          tambah(siapBayar, nilai);
-        }
-      }
-      if (!isAllWeighed) {
-        tambah(belumLengkap, nilai);
-      }
-    });
-
-    return { semua, siapBayar, belumLengkap, lunas, belumLunas };
-  }, [serverData]);
+  }, [summaryStats]);
 
   // Kartu filter status pembayaran: satu klik langsung menyaring tabel
   const kartuStatus = [
@@ -409,62 +381,45 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     },
   ];
 
-  // Overall stats for the filtered list
+  // Overall stats for the entire paginated list (merangkum SELURUH data paginate dari summaryStats)
   const stats = useMemo(() => {
-    let totalBal = 0, totalNetto = 0, totalKotor = 0, totalPajak = 0, totalPotongan = 0, totalBayar = 0;
-    let lunasCount = 0, belumLunasCount = 0, lunasNominal = 0, belumLunasNominal = 0;
-    let unweighedPendingCount = 0, siapBayarCount = 0;
-
-    for (let i = 0; i < filteredList.length; i++) {
-      const t = filteredList[i];
-      totalBal += t.total_bal || (t.items ? t.items.length : 1);
-      totalNetto += t.berat_kg || 0;
-      const kotor = t.total_kotor || t.total_harga_beli || 0;
-      totalKotor += kotor;
-      totalPajak += t.pajak || 0;
-      totalPotongan += t.total_potongan || 0;
-      const final = t.harga_final || 0;
-      totalBayar += final;
-
-      const isLunas = isTransaksiLunas(t);
-      const isAllWeighed = checkIsAllWeighed(t);
-
-      if (isLunas) {
-        lunasCount++;
-        lunasNominal += final;
-      } else {
-        belumLunasCount++;
-        belumLunasNominal += final;
-        if (isAllWeighed) {
-          siapBayarCount++;
-        }
-      }
-
-      if (!isAllWeighed) {
-        unweighedPendingCount++;
-      }
+    if (summaryStats) {
+      const avgHarga = summaryStats.totalNetto > 0 ? Math.round(summaryStats.totalKotor / summaryStats.totalNetto) : 0;
+      return {
+        totalTx: summaryStats.totalTx,
+        totalBal: summaryStats.totalBal,
+        totalNetto: summaryStats.totalNetto,
+        totalKotor: summaryStats.totalKotor,
+        totalPajak: summaryStats.totalPajak,
+        totalPotongan: summaryStats.totalPotongan,
+        totalBayar: summaryStats.totalBayar,
+        avgHarga,
+        lunasNominal: summaryStats.lunas.nilai,
+        belumLunasNominal: summaryStats.belumLunas.nilai,
+        lunasCount: summaryStats.lunas.jumlah,
+        belumLunasCount: summaryStats.belumLunas.jumlah,
+        unweighedPendingCount: summaryStats.unweighedPendingCount,
+        siapBayarCount: summaryStats.siapBayar.jumlah,
+      };
     }
-
-    totalNetto = normalizeKg(totalNetto);
-    const avgHarga = totalNetto > 0 ? Math.round(totalKotor / totalNetto) : 0;
-
+    
     return {
-      totalTx: filteredList.length,
-      totalBal,
-      totalNetto,
-      totalKotor,
-      totalPajak,
-      totalPotongan,
-      totalBayar,
-      avgHarga,
-      lunasNominal,
-      belumLunasNominal,
-      lunasCount,
-      belumLunasCount,
-      unweighedPendingCount,
-      siapBayarCount,
+      totalTx: 0,
+      totalBal: 0,
+      totalNetto: 0,
+      totalKotor: 0,
+      totalPajak: 0,
+      totalPotongan: 0,
+      totalBayar: 0,
+      avgHarga: 0,
+      lunasNominal: 0,
+      belumLunasNominal: 0,
+      lunasCount: 0,
+      belumLunasCount: 0,
+      unweighedPendingCount: 0,
+      siapBayarCount: 0,
     };
-  }, [filteredList]);
+  }, [summaryStats]);
 
   // Table Quick Search filtering & sorting (local sorting for the current page)
   const searchedAndSortedList = useMemo(() => {
@@ -562,7 +517,9 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
   }, [serverData, tableSearch, sortField, sortDirection]);
 
   // Pagination calculation
-  const totalPages = Math.ceil(serverTotal / itemsPerPage) || 1;
+  // Gunakan serverTotal (dari list fetch) jika tersedia, fallback ke totalFromSummary (dari summary fetch yang lebih cepat)
+  const effectiveTotal = serverTotal > 0 ? serverTotal : totalFromSummary;
+  const totalPages = Math.ceil(effectiveTotal / itemsPerPage) || 1;
   const paginatedList = useMemo(() => {
     return searchedAndSortedList;
   }, [searchedAndSortedList]);
@@ -624,7 +581,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
             <span>Filter</span>
           </div>
           <span className="text-[11px] text-slate-500">
-            Ditemukan <strong className="text-slate-800">{filteredList.length}</strong> dari {transaksiList.length} transaksi
+            Ditemukan <strong className="text-slate-800">{effectiveTotal}</strong> dari {summaryStats?.semua?.jumlah ?? totalFromSummary} transaksi
           </span>
         </div>
 
@@ -1295,7 +1252,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
           <Pagination
             currentPage={currentPage}
             totalPages={totalPages}
-            totalItems={serverTotal}
+            totalItems={effectiveTotal}
             itemsPerPage={itemsPerPage}
             onPageChange={setCurrentPage}
             showQuickJumper={true}

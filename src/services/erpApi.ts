@@ -467,6 +467,33 @@ export class ErpApiService {
     };
   }
 
+  public static async getKasirSummary(filters: any = {}): Promise<any> {
+    try {
+      const isOnline = await this.isBackendOnline();
+      if (isOnline) {
+        let url = `/transaksi/summary-kasir?dummy=1`;
+        if (filters.tanggal) url += `&tanggal=${filters.tanggal}`;
+        if (filters.tahap) url += `&tahap=${filters.tahap}`;
+        if (filters.pembayaran) url += `&pembayaran=${filters.pembayaran}`;
+        if (filters.start_date) url += `&start_date=${filters.start_date}`;
+        if (filters.end_date) url += `&end_date=${filters.end_date}`;
+        if (filters.search) url += `&search=${encodeURIComponent(filters.search)}`;
+        if (filters.petani_id) url += `&petani_id=${filters.petani_id}`;
+        if (filters.status_bayar) url += `&status_bayar=${filters.status_bayar}`;
+        
+        const res = await api.get<any>(url);
+        if (res.status === 'success' && res.data) {
+          return { data: res.data, fromBackend: true };
+        }
+      }
+    } catch (err) {
+      console.warn('Gagal mengambil kasir summary dari API:', err);
+    }
+    
+    // Fallback if needed can be implemented, but for now just return null
+    return { data: null, fromBackend: false };
+  }
+
   /**
    * Kupon tunggal terbaru dari server, dipakai untuk menyegarkan salinan lokal SESAAT SEBELUM mengirim
    * simpanan (bukan lewat tampilan) supaya bal saudara yang sudah basi tidak ikut menimpa balik data
