@@ -54,16 +54,17 @@ export function pulihkanStatusSampleLama<T extends Pick<Barang, 'status_stok' | 
  * Melengkapi daftar bal dengan bal dari kupon yang sudah disortir tetapi belum ada di daftar bal.
  *
  * Begitu bal disortir (sudah ada No Bal dan harga), bal itu sudah terkumpul dan boleh dipakai di Pengiriman Sample
- * serta tampil di Laporan Bal, walau belum ditimbang dan belum dibayar. Server baru membuat data bal saat kupon
- * dibayar, jadi tanpa ini bal yang belum lunas hilang dari daftar setiap kali data dimuat ulang dari server.
+ * serta tampil di Laporan Bal, walau belum ditimbang dan belum dibayar. Server membuat data bal begitu kupon Sortir
+ * diterima (backend App\Support\StokBal); ini tetap dibutuhkan untuk kupon yang belum sampai ke server (antrean /
+ * offline), supaya balnya tidak hilang dari daftar setiap kali data dimuat ulang dari server.
  * Pencocokan lewat No Bal (unik) supaya bal yang sudah ada di server tidak dobel.
  */
 /**
  * Nomor urut bal dalam kupon, diambil dari akhiran item_id (mis. "TRX-...-BAL-02" -> 2), BUKAN dari
  * posisinya di larik (bisa berbeda kalau bal pernah ditambah/dihapus tidak berurutan) atau angka pada
  * No Bal (dua No Bal seperti "12A" dan "12B" bisa mengandung angka yang sama). Harus sama dengan aturan
- * di backend (TransaksiController::urutanDariItemId) supaya ID sementara ini nanti cocok dengan barang_id
- * sungguhan begitu kupon dibayar.
+ * di backend (StokBal::idBal) supaya ID sementara ini sama dengan barang_id yang dibuat server saat kupon
+ * Sortir diterima.
  */
 function urutanDariItemId(itemId: string | undefined, fallback: number): number {
   const m = itemId ? itemId.match(/-BAL-(\d+)$/) : null;

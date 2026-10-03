@@ -98,11 +98,11 @@ Kolom "Hasil yang diharapkan" selalu ditambah tiga pemeriksaan di bagian 1.
 | K6 | Hapus kupon belum lunas dengan alasan | Kupon dan balnya hilang dari semua menu | `DELETE /transaksi/{id}` **(menunggu backend)** |
 | K7 | Cetak nota kupon lunas, unduh PDF | Nota per lembar, tidak ada baris terpotong | - |
 
-### 2.5 Pengiriman Sample dan Status & Detail Batch ⧉
+### 2.5 Pengiriman Sample dan Status Batch & Reclass ⧉
 
 | No | Langkah | Hasil yang diharapkan | Endpoint |
 |---|---|---|---|
-| B1 | Pengiriman Sample: isi No. Surat Pengiriman Sample, tujuan, scan 3 bal, Simpan sebagai Draft | Batch berstatus DRAFT di Status & Detail Batch | `POST /sample-batch` (`status: "draft"`) |
+| B1 | Pengiriman Sample: isi No. Surat Pengiriman Sample, tujuan, scan 3 bal, Simpan sebagai Draft | Batch berstatus DRAFT di Status Batch & Reclass | `POST /sample-batch` (`status: "draft"`) |
 | B2 | Buka komputer kedua | Batch tampil sebagai Draft bila backend sudah menerima status `draft`; bila belum, tampil sebagai final (lihat Laporan Audit) | `GET /sample-batch` |
 | B3 | Edit batch B1: tambah 1 bal, ubah harga jual 1 bal, Simpan & Finalkan | Batch final berisi 4 bal dengan harga baru | `PUT /sample-batch/{id}` |
 | B4 | Nomor surat sample kembar | Ditolak dengan saran nomor berikutnya | - |
@@ -110,12 +110,13 @@ Kolom "Hasil yang diharapkan" selalu ditambah tiga pemeriksaan di bagian 1.
 | B6 | Cetak surat pengiriman sample | Surat tampil dengan kode harga, bukan nilai rupiah | - |
 | B7 | Hapus batch yang belum punya Surat Jalan | Batch hilang, bal tetap di stok gudang | `DELETE /sample-batch/{id}` **(menunggu backend; sementara `PUT status=dibatalkan`)** |
 | B8 | Dashboard: kartu "Sample Disetujui" dan Laporan Pengiriman tab Pengiriman Sample | Angka sesuai hasil B5 | - |
+| B9 | Pengiriman Sample → Impor Excel/CSV: pilih file berisi Gulungan, No Bal, Kode Harga Jual, Harga Jual, termasuk 1 baris yang kode & harganya ditukar, termasuk 1 No Bal yang tidak ada dan 1 harga yang tidak ada di Master | Pratinjau: bal ditemukan berisi berat & harga beli dari sistem; No Bal tidak ada dan harga tidak di Master ditandai Tidak Dimasukkan dan bisa diunduh; Masukkan → hanya bal yang siap masuk tabel | - (simpan seperti B1/B3) |
 
-### 2.6 Pengiriman Reguler (DO) dan Status Pengiriman ⧉
+### 2.6 Pengiriman Reguler (DO) dan Status Pengiriman Reguler (DO) ⧉
 
 | No | Langkah | Hasil yang diharapkan | Endpoint |
 |---|---|---|---|
-| D1 | Sumber Bal: Stok Gudang. Isi No. Surat Jalan, tujuan, sopir, nopol; scan 3 bal; pilih harga jual; Terbitkan Surat Jalan | Surat Jalan tampil di Status & Detail Batch (Akan Dikirim); bal berstatus Dikirim | `POST /pengiriman` |
+| D1 | Sumber Bal: Stok Gudang. Isi No. Surat Jalan, tujuan, sopir, nopol; scan 3 bal; pilih harga jual; Terbitkan Surat Jalan | Surat Jalan tampil di Status Pengiriman Reguler (DO) (Akan Dikirim); bal berstatus Dikirim | `POST /pengiriman` |
 | D2 | Bal tanpa harga jual | Penerbitan ditolak, bal tanpa harga disebut | - |
 | D3 | Atur Netto: tambah baris potongan, periksa Netto Jual dan Total Nilai | Netto jual = bruto timbang ulang − potongan | - |
 | D4 | Dari Batch Sample: pilih batch final, centang semua bal, terbitkan | Bal batch tertandai sudah DO | `POST /pengiriman`, `PUT /sample-batch/{id}` |
@@ -133,7 +134,7 @@ Kolom "Hasil yang diharapkan" selalu ditambah tiga pemeriksaan di bagian 1.
 | R4 | Laporan Pembelian: rekap ganti tikar dan jasa | Jumlah bal ganti tikar dan potongan sama dengan data Timbangan |
 | R5 | Dashboard: Total Penjualan | Hanya Surat Jalan berstatus Selesai |
 
-### 2.8 Manajemen Pengguna ⧉
+### 2.8 Manajemen Pengguna: Daftar Pengguna dan Audit Trail ⧉
 
 | No | Langkah | Hasil yang diharapkan | Endpoint |
 |---|---|---|---|
@@ -143,6 +144,8 @@ Kolom "Hasil yang diharapkan" selalu ditambah tiga pemeriksaan di bagian 1.
 | U4 | Reset sandi U1 (server menyala) | Sandi baru berlaku | `PUT /users/{id}/reset-password` |
 | U5 | Reset sandi saat server mati | Ditolak; sandi tidak berubah di mana pun | - |
 | U6 | Matriks Wewenang | Daftar menu sama dengan menu samping | - |
+| U7 | Menu Audit Trail | Riwayat aktivitas perangkat ini tampil; hanya Super Admin yang melihat menu ini | - |
+| U8 | Daftar Pengguna → Akses Laporan Admin Sortir: lepas centang Laporan Bal, Simpan. Di komputer lain login sebagai Admin Sortir | Laporan Bal hilang dari menu samping dan Home Admin Sortir (paling lambat saat pindah menu); laporan lain dan menu Sortir tetap ada; Matriks Wewenang ikut berubah | `PUT /peran/admin_sortir/akses-laporan`, `GET /ringkasan` |
 
 ---
 

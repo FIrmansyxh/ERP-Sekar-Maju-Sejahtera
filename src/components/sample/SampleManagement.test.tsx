@@ -103,3 +103,47 @@ describe('Pengiriman Sample: bal yang sudah disortir boleh dipilih walau belum d
     expect(screen.queryByText('TERSEDIA')).not.toBeInTheDocument();
   });
 });
+
+describe('Pengiriman Sample: impor Excel/CSV', () => {
+  beforeEach(() => {
+    window.scrollTo = vi.fn();
+    sessionStorage.clear();
+    localStorage.clear();
+  });
+
+  const fileCsv = (isi: string, nama: string) => {
+    const file = new File([isi], nama, { type: 'text/csv' });
+    if (!('text' in file)) Object.defineProperty(file, 'text', { value: () => new Response(isi).text() });
+    return file;
+  };
+
+  it('bal di file masuk ke tabel; yang tidak ada di sistem dilaporkan dan tidak masuk', async () => {
+    render(
+      <SampleManagement
+        {...({
+          batchSampleList: [],
+          barangList: [buatBal('SB0001'), buatBal('SB0002')],
+          hargaJualList: [{ harga_jual_id: 'HJ-1', kode: 'HJ-45', harga_jual: 45000, tanggal_berlaku: '2026-09-01', status_aktif: true }],
+          userRole: 'superadmin',
+          onSaveBatchSample: vi.fn().mockResolvedValue(true),
+          onUpdateBatchSample: vi.fn().mockResolvedValue(true),
+        } as unknown as React.ComponentProps<typeof SampleManagement>)}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /Impor Excel\/CSV/ }));
+    await userEvent.upload(
+      screen.getByLabelText('Pilih file'),
+      fileCsv('Gulungan;No Bal;Harga Jual\n1;SB0001;45.000\n;SB0002;HJ-45\n2;XX0404;45000\n', 'pjm.csv')
+    );
+
+    expect(await screen.findByText('Siap 2')).toBeInTheDocument();
+    expect(screen.getByText('Tidak Dimasukkan 1')).toBeInTheDocument();
+    expect(screen.getByText('No Bal tidak ada di sistem')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Masukkan 2 Bal ke Batch' }));
+    expect(screen.queryByRole('dialog', { name: 'Impor Batch Sample' })).not.toBeInTheDocument();
+    expect(screen.getByText(/2 bal dari pjm\.csv \(tab pjm\) masuk ke tabel\. 1 baris tidak dimasukkan\./)).toBeInTheDocument();
+    expect(screen.getByText('2 Bal Terpilih', { exact: false })).toBeInTheDocument();
+  });
+});

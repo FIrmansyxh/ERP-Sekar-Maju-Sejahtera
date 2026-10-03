@@ -69,7 +69,24 @@ export interface ApiResponse<T = any> {
   message?: string;
   data?: T;
   pagination?: any;
+  /** Server menjawab 304: isi daftar sama dengan penyegaran sebelumnya (isi diambil dari simpanan di memori). */
+  tidakBerubah?: boolean;
 }
+
+/** Opsi permintaan daftar yang disegarkan berkala (lihat api.get). */
+export interface OpsiDaftar {
+  /** Pakai ETag: server menjawab 304 tanpa isi bila daftar tidak berubah sejak penyegaran sebelumnya. */
+  daftar?: boolean;
+  /** Abaikan ETag dan ambil isi penuh (mis. setelah penolakan/penghapusan dari perangkat lain). */
+  paksa?: boolean;
+}
+
+/**
+ * Jawaban daftar terakhir per alamat beserta ETag-nya, hanya di memori (hilang saat halaman dimuat ulang). Dipakai
+ * supaya penyegaran berkala menu yang sedang dibuka tidak mengunduh dan mengolah ulang daftar yang tidak berubah.
+ */
+const simpananDaftar = new Map<string, { etag: string; jawaban: ApiResponse<any> }>();
+export const lupakanSimpananDaftar = (): void => simpananDaftar.clear();
 
 /**
  * Cek apakah backend Laravel sedang aktif dan dapat dihubungi
@@ -109,20 +126,26 @@ export async function checkBackendHealth(): Promise<boolean> {
  * Wrapper pemanggilan API HTTP generik
  */
 export async function apiRequest<T = any>(
-  endpoint: string, 
-  options: RequestInit = {}
+  endpoint: string,
+  options: RequestInit & OpsiDaftar = {}
 ): Promise<ApiResponse<T>> {
   const token = getAuthToken();
   const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+  const { daftar, paksa, ...init } = options;
+  const pakaiEtag = Boolean(daftar) && (init.method ?? 'GET') === 'GET';
+  const simpanan = pakaiEtag && !paksa ? simpananDaftar.get(url) : undefined;
 
   const headers: Record<string, string> = {
     'Accept': 'application/json',
     'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string> || {}),
+    ...(init.headers as Record<string, string> || {}),
   };
 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
+  }
+  if (simpanan) {
+    headers['If-None-Match'] = simpanan.etag;
   }
 
   const controller = new AbortController();
@@ -130,9 +153,11 @@ export async function apiRequest<T = any>(
   let res: Response;
   try {
     res = await fetch(url, {
-      ...options,
+      ...init,
       headers,
       signal: controller.signal,
+      // ETag diatur sendiri; cache HTTP peramban tidak ikut campur
+      ...(pakaiEtag ? { cache: 'no-store' as RequestCache } : {}),
     });
   } catch (err) {
     terakhirGagalJaringan = Date.now();
@@ -142,6 +167,13 @@ export async function apiRequest<T = any>(
     throw err;
   } finally {
     clearTimeout(timeoutId);
+  }
+
+  // Daftar tidak berubah sejak penyegaran sebelumnya: tidak ada isi yang diunduh
+  if (res.status === 304) {
+    if (simpanan) return { ...(simpanan.jawaban as ApiResponse<T>), tidakBerubah: true };
+    simpananDaftar.delete(url);
+    return apiRequest<T>(endpoint, { ...options, paksa: true });
   }
 
   const contentType = res.headers.get('content-type') || '';
@@ -165,11 +197,18 @@ export async function apiRequest<T = any>(
     throw new ApiError(detail, res.status);
   }
 
+  if (pakaiEtag) {
+    const etag = res.headers.get('ETag');
+    if (etag) simpananDaftar.set(url, { etag, jawaban: data });
+    else simpananDaftar.delete(url);
+  }
+
   return data;
 }
 
 export const api = {
-  get: <T = any>(endpoint: string) => apiRequest<T>(endpoint, { method: 'GET' }),
+  /** `opsi.daftar` untuk daftar yang disegarkan berkala: dijawab 304 (`tidakBerubah`) bila isinya tidak berubah. */
+  get: <T = any>(endpoint: string, opsi: OpsiDaftar = {}) => apiRequest<T>(endpoint, { method: 'GET', ...opsi }),
   post: <T = any>(endpoint: string, body?: any) => 
     apiRequest<T>(endpoint, { method: 'POST', body: body ? JSON.stringify(body) : undefined }),
   put: <T = any>(endpoint: string, body?: any) => 

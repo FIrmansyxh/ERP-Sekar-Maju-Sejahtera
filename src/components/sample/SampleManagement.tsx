@@ -7,7 +7,8 @@ import {
   AlertCircle,
   Trash2,
   Barcode,
-  Package
+  Package,
+  FileUp
 } from 'lucide-react';
 import {
   BatchPengirimanSample,
@@ -22,6 +23,8 @@ import {
 } from '../../types';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { SortIcon } from '../common/SortIcon';
+import { ImporSampleModal } from './ImporSampleModal';
+import type { BarisImpor, KonteksImpor } from '../../utils/imporSample';
 
 import { akhiranUnik } from '../../utils/idUnik';
 import { generateBatchSampleId, generateSampleId, formatRupiah, formatNumber } from '../../utils/formatters';
@@ -45,9 +48,9 @@ interface SampleManagementProps {
   onSaveBatchSample: (newBatch: BatchPengirimanSample, updatedBarangs: Barang[]) => Promise<boolean>;
   onUpdateBatchSample: (updatedBatch: BatchPengirimanSample, updatedBarangs?: Barang[]) => Promise<boolean>;
   onNavigateToPengiriman?: (batchId?: string) => void;
-  /** Membuka halaman Status & Detail Batch (daftar batch, status, hasil sortir, cetak, batal). */
+  /** Membuka halaman Status Batch & Reclass (daftar batch, status, hasil sortir, cetak, batal). */
   onNavigateToStatusBatch?: () => void;
-  /** Batch yang sedang diedit (dipilih dari halaman Status & Detail Batch). */
+  /** Batch yang sedang diedit (dipilih dari halaman Status Batch & Reclass). */
   editBatchId?: string | null;
   /** Dipanggil saat mode edit berakhir (disimpan atau dibatalkan). */
   onSelesaiEdit?: () => void;
@@ -145,7 +148,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
   // Pengiriman sample memakai berat bruto hasil timbangan (tanpa tara tebakan)
   const resolveBeratBruto = (bal: Partial<Barang> | undefined): number => beratBrutoBal(bal);
 
-  // Batch yang sedang diedit (dipilih dari halaman Status & Detail Batch); null berarti membuat batch baru
+  // Batch yang sedang diedit (dipilih dari halaman Status Batch & Reclass); null berarti membuat batch baru
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
   // Batch yang menunggu konfirmasi karena draf batch baru akan tergantikan
   const [editMenunggu, setEditMenunggu] = useState<BatchPengirimanSample | null>(null);
@@ -509,6 +512,43 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
 
   
 
+  // Satu baris tabel batch dari bal gudang: dipakai scan manual dan impor Excel/CSV (berat, tara, harga beli dari sistem)
+  const buatBarisTabel = (bal: Barang, hj: MasterHargaJual, noJadi: string) => ({
+    barangId: bal.barang_id,
+    noBal: bal.no_bal || bal.barang_id,
+    kodeBalPembeli: noJadi,
+    grade: bal.kode_grade || '-',
+    beratBalKg: resolveBeratNetto(bal),
+    beratBrutoKg: resolveBeratBruto(bal),
+    potonganTaraKg: bal.potongan_tara_kg !== undefined ? bal.potongan_tara_kg : 2,
+    hargaBeliKg: resolveHargaBeli(bal),
+    kodeHargaJual: hj.kode,
+    hargaTawaranKg: hj.harga_jual,
+  });
+
+  // Impor daftar sample dari Excel/CSV: aturan pemakaian bal dan No Jadi sama dengan scan manual
+  const [isImporOpen, setIsImporOpen] = useState(false);
+  const konteksImpor: KonteksImpor = {
+    barangList,
+    hargaJualAktif: activeHargaJualList.filter((h) => h.status_aktif !== false),
+    cekBal: checkBalUsage,
+    noJadiDipakai: isNoJadiAlreadyUsed,
+  };
+  const handleMasukkanImpor = (baris: BarisImpor[], info: { namaFile: string; namaTab: string; ditolak: number }) => {
+    const itemBaru = baris
+      .filter((b) => b.bal && b.hargaJual && b.noJadi)
+      .map((b) => buatBarisTabel(b.bal!, b.hargaJual!, b.noJadi!));
+    // Urutan file dipertahankan, ditaruh di atas bal yang sudah ada di tabel
+    setSelectedBalItems((prev) => [...itemBaru, ...prev]);
+    setPendingScanBal(null);
+    setScanSampleAlert({
+      type: info.ditolak > 0 ? 'warning' : 'success',
+      message: `${itemBaru.length} bal dari ${info.namaFile}${info.namaTab ? ` (tab ${info.namaTab})` : ''} masuk ke tabel.${
+        info.ditolak > 0 ? ` ${info.ditolak} baris tidak dimasukkan.` : ''
+      }`,
+    });
+  };
+
   const handleScanHargaJualSubmitWithCode = (foundHJ: MasterHargaJual) => {
     if (!pendingScanBal) {
       setScanSampleAlert({
@@ -520,7 +560,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
     }
 
     const finalKodeBalPembeli = scanPembeli.trim() || (pendingScanBal.no_bal || pendingScanBal.barang_id);
-    
+
     if (isNoJadiAlreadyUsed(finalKodeBalPembeli)) {
       setScanSampleAlert({
         type: 'error',
@@ -530,23 +570,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
       return;
     }
 
-    const finalNetto = resolveBeratNetto(pendingScanBal);
-    const finalBruto = resolveBeratBruto(pendingScanBal);
-    const finalTara = pendingScanBal.potongan_tara_kg !== undefined ? pendingScanBal.potongan_tara_kg : 2;
-    const finalHargaBeli = resolveHargaBeli(pendingScanBal);
-
-    const newItem = {
-      barangId: pendingScanBal.barang_id,
-      noBal: pendingScanBal.no_bal || pendingScanBal.barang_id,
-      kodeBalPembeli: finalKodeBalPembeli,
-      grade: pendingScanBal.kode_grade || '-',
-      beratBalKg: finalNetto,
-      beratBrutoKg: finalBruto,
-      potonganTaraKg: finalTara,
-      hargaBeliKg: finalHargaBeli,
-      kodeHargaJual: foundHJ.kode,
-      hargaTawaranKg: foundHJ.harga_jual,
-    };
+    const newItem = buatBarisTabel(pendingScanBal, foundHJ, finalKodeBalPembeli);
 
     // Bal yang baru discan tampil paling atas di tabel
     setSelectedBalItems((prev) => [newItem, ...prev]);
@@ -661,7 +685,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Batch yang dipilih dari halaman Status & Detail Batch dimuat ke formulir untuk diedit
+  // Batch yang dipilih dari halaman Status Batch & Reclass dimuat ke formulir untuk diedit
   useEffect(() => {
     if (!editBatchId) {
       editDimuatRef.current = null;
@@ -888,7 +912,7 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                 onClick={onNavigateToStatusBatch}
                 className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-xs transition cursor-pointer shadow-xs"
               >
-                Status & Detail Batch
+                Status Batch & Reclass
               </button>
             )}
             <button
@@ -998,7 +1022,16 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                     <span>Input Data Sample</span>
                   </h3>
                 </div>
-                <div className="text-right">
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsImporOpen(true)}
+                    className="px-2.5 py-1 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-xs transition flex items-center space-x-1.5 cursor-pointer shadow-2xs"
+                    title="Isi bal dari daftar sample di Excel/CSV"
+                  >
+                    <FileUp className="w-3.5 h-3.5 text-[#b81d24]" />
+                    <span>Impor Excel/CSV</span>
+                  </button>
                   <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 border border-emerald-200 rounded-xs">
                     {selectedBalItems.length} Bal Terpilih • Est. Nilai: {formatRupiah(selectedBalItems.reduce((s, it) => s + (it.beratBrutoKg * it.hargaTawaranKg), 0))}
                   </span>
@@ -1260,8 +1293,8 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
                     ))}
                     <th className="p-2.5 text-right w-32 border-r border-gray-200">Harga Beli (Rp/Kg)</th>
                     <th className="p-2.5 text-right w-24 border-r border-gray-200">Bruto (Kg)</th>
-                    <th className="p-2.5 text-center w-24 border-r border-gray-200">Grade</th>
-                    <th className="p-2.5 text-right w-36 border-r border-gray-200">Harga Tawar</th>
+                    <th className="p-2.5 text-center w-28 border-r border-gray-200">Kode Harga Jual</th>
+                    <th className="p-2.5 text-right w-36 border-r border-gray-200">Harga Jual/Tawar (Rp/Kg)</th>
                     <th className="p-2.5 text-right w-36 border-r border-gray-200">Est. Subtotal (Rp)</th>
                     <th className="p-2.5 text-center w-14">Aksi</th>
                   </tr>
@@ -1449,6 +1482,14 @@ export const SampleManagement: React.FC<SampleManagementProps> = ({
           setEditMenunggu(null);
           onSelesaiEdit?.();
         }}
+      />
+
+      <ImporSampleModal
+        isOpen={isImporOpen}
+        onClose={() => setIsImporOpen(false)}
+        konteks={konteksImpor}
+        hargaBeli={resolveHargaBeli}
+        onMasukkan={handleMasukkanImpor}
       />
 
     </div>

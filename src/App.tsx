@@ -1,4 +1,4 @@
-import { Suspense, useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Suspense, useState, useEffect, useRef, useMemo, useCallback, useSyncExternalStore } from 'react';
 import { 
   Petani, 
   Barang, 
@@ -40,7 +40,7 @@ import {
   STORAGE_KEY_RIWAYAT_NO_BAL
 } from './utils/storage';
 import { mergeKuponParalel, normalizeStatusBal, resolveStatusStok } from './utils/kuponSortir';
-import { filterBarangLunas } from './utils/statusBayar';
+import { filterBarangLunas, kuponBelumLunasDiSuratJalan } from './utils/statusBayar';
 import { RencanaGantiNoBal, terapkanGantiNoBal } from './utils/gantiNoBal';
 import { aturRiwayatNoBal } from './utils/noBalPensiun';
 import { barisSampleDariBatch } from './utils/statusBatchSample';
@@ -54,7 +54,14 @@ import {
   sesuaikanBatchSetelahPerubahanDO,
 } from './utils/alurPengiriman';
 import { clearAllDrafts, getDraftRecovery, markDraftCleanExit, touchDraftAlive } from './utils/draftStorage';
-import { hasModuleAccess } from './utils/rbac';
+import {
+  hasModuleAccess,
+  aturAksesLaporan,
+  pantauAksesLaporan,
+  ambilAksesLaporan,
+  laporanTerbuka,
+  MODUL_LAPORAN,
+} from './utils/rbac';
 import { antrianSinkron } from './services/antrianSinkron';
 import { normalizeKg, generatePetaniId } from './utils/formatters';
 import { hashPassword } from './utils/crypto';
@@ -63,7 +70,9 @@ import { Sidebar } from './components/Sidebar';
 
 // Auth Login View
 import { LoginView } from './components/auth/LoginView';
-import { ErpApiService } from './services/erpApi';
+import { ErpApiService, type HasilDaftar, type RingkasanServer } from './services/erpApi';
+import type { OpsiDaftar } from './services/apiClient';
+import { DATA_ENTITAS, dataUntukMenu, menuLaporan, type JenisData } from './utils/dataMenu';
 import { antrianMutasi, type SpesifikasiMutasi, type TugasMutasi } from './services/antrianMutasi';
 import { catatMutasi, catatStatusBal, handlerMutasi, kirimPetani, serverAktif } from './services/kirimMutasi';
 import {
@@ -74,7 +83,6 @@ import {
   overlayPengiriman,
   overlayPetani,
   overlayRiwayatNoBal,
-  overlayTransaksi,
   overlayUser,
 } from './services/overlayDaftar';
 import type { HasilBatchSample } from './services/kirimMutasi';
@@ -94,6 +102,7 @@ import { hariIniLokal } from './utils/rentangTanggal';
 
 // Setiap menu diunduh saat pertama dibuka, sehingga halaman login dan Beranda tidak memuat kode laporan, PDF, dan grafik.
 const UserManagement = lazyNamed(() => import('./components/user/UserManagement'), 'UserManagement');
+const AuditTrailView = lazyNamed(() => import('./components/user/AuditTrailView'), 'AuditTrailView');
 const DashboardAnalyticView = lazyNamed(() => import('./components/laporan/DashboardAnalyticView'), 'DashboardAnalyticView');
 const LaporanBalView = lazyNamed(() => import('./components/laporan/LaporanBalView'), 'LaporanBalView');
 const LaporanGradeView = lazyNamed(() => import('./components/laporan/LaporanGradeView'), 'LaporanGradeView');
@@ -245,6 +254,8 @@ export default function App() {
   const [barangList, setBarangList] = useState<Barang[]>(() => normalizeStatusBal(loadBarangData()));
   const [hargaList, setHargaList] = useState<TabelHarga[]>(() => loadHargaData());
   const [transaksiList, setTransaksiList] = useState<TransaksiPembelian[]>(() => loadTransaksiData());
+  const transaksiListRef = useRef(transaksiList);
+  transaksiListRef.current = transaksiList;
   const [pengirimanList, setPengirimanList] = useState<PengirimanBarang[]>(() => loadPengirimanData());
   const [hargaJualList, setHargaJualList] = useState<MasterHargaJual[]>(() => loadHargaJualData());
   const [batchSampleList, setBatchSampleList] = useState<BatchPengirimanSample[]>(() => loadBatchSampleData());
@@ -262,7 +273,7 @@ export default function App() {
   const [selectedBatchIdForShipment, setSelectedBatchIdForShipment] = useState<string>('');
   // Surat Jalan yang sedang diedit di halaman Pengiriman Reguler (dipilih dari Status Pengiriman)
   const [editPengirimanId, setEditPengirimanId] = useState<string | null>(null);
-  // Batch sample yang sedang diedit di halaman Pengiriman Sample (dipilih dari Status & Detail Batch)
+  // Batch sample yang sedang diedit di halaman Pengiriman Sample (dipilih dari Status Batch & Reclass)
   const [editBatchId, setEditBatchId] = useState<string | null>(null);
   
 
@@ -285,97 +296,18 @@ export default function App() {
     }
   }, [activeModuleId]);
 
-  // Sinkronisasi data riil dari backend PostgreSQL (login + saat buka modul laporan)
-  const refreshOperationalLists = useCallback(async () => {
-    if (!currentUser) return { fromBackend: false };
+  // Jumlah data untuk angka di menu samping (GET /ringkasan), supaya daftar menu lain tidak perlu dimuat hanya untuk angkanya
+  const [ringkasan, setRingkasan] = useState<RingkasanServer | null>(null);
+  const activeModuleIdRef = useRef(activeModuleId);
+  activeModuleIdRef.current = activeModuleId;
 
-    const [
-      petaniRes,
-      barangRes,
-      transaksiRes,
-      hargaRes,
-      userRes,
-      hargaJualRes,
-      batchRes,
-      pengirimanRes,
-      riwayatNoBalRes,
-    ] = await Promise.all([
-      ErpApiService.getPetaniList(),
-      ErpApiService.getBarangList(),
-      ErpApiService.getTransaksiList(),
-      ErpApiService.getHargaList(),
-      ErpApiService.getUserList(),
-      ErpApiService.getHargaJualList(),
-      ErpApiService.getBatchSampleList(),
-      ErpApiService.getPengirimanList(),
-      ErpApiService.getRiwayatNoBalList(),
-    ]);
-
-    // Memuat semua daftar bisa makan beberapa detik. Perubahan yang dibuat operator selama menunggu (centang ganti
-    // tikar, hapus batch, edit petani) sudah ada di antrean tetapi belum tentu ada di daftar yang baru tiba, jadi
-    // antrean diterapkan LAGI tepat sebelum daftar dipasang ke layar.
-    let fromBackend = false;
-    if (petaniRes.fromBackend) {
-      const daftar = overlayPetani(petaniRes.data);
-      setPetaniList(daftar);
-      savePetaniData(daftar);
-      fromBackend = true;
-    }
-    if (barangRes.fromBackend) {
-      const daftar = normalizeStatusBal(overlayBarang(barangRes.data));
-      setBarangList(daftar);
-      saveBarangData(daftar);
-      fromBackend = true;
-    }
-    if (transaksiRes.fromBackend) {
-      const daftar = overlayTransaksi(transaksiRes.data);
-      setTransaksiList(daftar);
-      saveTransaksiData(daftar);
-      fromBackend = true;
-    }
-    if (hargaRes.fromBackend) {
-      const daftar = overlayHargaBeli(hargaRes.data);
-      setHargaList(daftar);
-      saveHargaData(daftar);
-      fromBackend = true;
-    }
-    if (userRes.fromBackend) {
-      const daftar = overlayUser(userRes.data);
-      setUserList(daftar);
-      saveUserData(daftar);
-      fromBackend = true;
-    }
-    if (hargaJualRes.fromBackend) {
-      const daftar = overlayHargaJual(hargaJualRes.data);
-      setHargaJualList(daftar);
-      saveHargaJualData(daftar);
-      fromBackend = true;
-    }
-    if (batchRes.fromBackend) {
-      const daftar = overlayBatchSample(batchRes.data);
-      setBatchSampleList(daftar);
-      saveBatchSampleData(daftar);
-      fromBackend = true;
-    }
-    if (pengirimanRes.fromBackend) {
-      const daftar = overlayPengiriman(pengirimanRes.data);
-      setPengirimanList(daftar);
-      savePengirimanData(daftar);
-      fromBackend = true;
-    }
-    if (riwayatNoBalRes.fromBackend) {
-      const daftar = overlayRiwayatNoBal(riwayatNoBalRes.data);
-      setRiwayatNoBalList(daftar);
-      saveRiwayatNoBalData(daftar);
-    }
-    return { fromBackend };
-  }, [currentUser]);
-
-  useEffect(() => {
-    if (currentUser) {
-      void refreshOperationalLists();
-    }
-  }, [currentUser, refreshOperationalLists]);
+  // Data dimuat per menu (utils/dataMenu.ts): saat login dan pindah menu hanya data menu yang dibuka yang diminta ke
+  // server, lihat efek penyegaran menu di bawah. Setelah penolakan/penghapusan dari perangkat lain, daftar menu aktif dan
+  // daftar yang terdampak dimuat ulang paksa (tanpa ETag) supaya layar pasti dikoreksi sesuai server.
+  const muatUlangPaksa = useCallback((entitas?: string) => {
+    const jenis = new Set<JenisData>([...dataUntukMenu(activeModuleIdRef.current), ...(entitas ? DATA_ENTITAS[entitas] ?? [] : [])]);
+    void segarkanDaftarRef.current([...jenis], { paksa: true });
+  }, []);
 
   // Antrean sinkron kupon: mengirim ulang simpanan yang tertinggal (juga dari sesi sebelumnya) sampai berhasil
   useEffect(() => {
@@ -391,7 +323,7 @@ export default function App() {
     const muatUlangBal = async () => {
       try {
         const res = await ErpApiService.getBarangList();
-        if (res.fromBackend) setBarangList(normalizeStatusBal(res.data));
+        if (res.fromBackend && !res.tidakBerubah) setBarangList(normalizeStatusBal(res.data));
       } catch (err) {
         console.warn('Gagal memuat ulang bal setelah perubahan tersimpan:', err);
       }
@@ -513,7 +445,7 @@ export default function App() {
         });
       }
       showToast(pesan || `${tugas.label}: data sudah dihapus di perangkat lain.`, 'info');
-      void refreshOperationalLists();
+      muatUlangPaksa(tugas.entitas);
     });
     const lepasDitolak = antrianMutasi.saatHapusDitolak((tugas, pesan) => {
       if (tugas.entitas === 'no_bal') {
@@ -526,14 +458,14 @@ export default function App() {
         });
       }
       showToast(`${tugas.label} dibatalkan: ${pesan}`, 'info');
-      void refreshOperationalLists();
+      muatUlangPaksa(tugas.entitas);
     });
     return () => {
       lepasKupon();
       lepasDihapus();
       lepasDitolak();
     };
-  }, [currentUser, refreshOperationalLists]);
+  }, [currentUser, muatUlangPaksa]);
 
   // Peringatan bila halaman ditutup padahal masih ada simpanan yang belum sampai ke server
   useEffect(() => {
@@ -547,24 +479,12 @@ export default function App() {
     return () => window.removeEventListener('beforeunload', peringatan);
   }, []);
 
+  // Laporan sedang memuat data sumbernya (saat dibuka atau tombol muat ulang); lihat efek penyegaran menu
   const [laporanRefreshing, setLaporanRefreshing] = useState(false);
 
-  // Saat buka modul laporan: refresh list sumber dari BE agar angka tidak usang
-  useEffect(() => {
-    if (!currentUser || !activeModuleId.startsWith('modul-6-')) return;
-    let cancelled = false;
-    setLaporanRefreshing(true);
-    (async () => {
-      try {
-        await refreshOperationalLists();
-      } finally {
-        if (!cancelled) setLaporanRefreshing(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [activeModuleId, currentUser, refreshOperationalLists]);
+  // Laporan yang dibuka Admin Sortir dipilih Super Admin; menu samping, Home, dan penjaga di bawah ikut berubah
+  const aksesLaporan = useSyncExternalStore(pantauAksesLaporan, ambilAksesLaporan);
+  const aksesLaporanAwal = useRef(aksesLaporan);
 
   // Modul terakhir yang dibuka disimpan di peramban. Saat halaman dimuat ulang
   // hak aksesnya diperiksa ulang agar pengguna tidak masuk ke modul terlarang.
@@ -574,8 +494,11 @@ export default function App() {
       currentUser.status_aktif === false || !hasModuleAccess(currentUser.role, activeModuleId);
     if (isBlocked && activeModuleId !== 'modul-home') {
       setActiveModuleId('modul-home');
+      // Laporan yang sedang dibuka baru saja ditutup Super Admin dari komputer lain
+      if (aksesLaporan !== aksesLaporanAwal.current) showToast('Laporan ini sudah ditutup untuk peran Anda.', 'info');
     }
-  }, [currentUser, activeModuleId]);
+    aksesLaporanAwal.current = aksesLaporan;
+  }, [currentUser, activeModuleId, aksesLaporan]);
   const [targetKuponNo, setTargetKuponNo] = useState<string | undefined>(undefined);
   const [targetTxId, setTargetTxId] = useState<string | undefined>(undefined);
   const [targetBalNo, setTargetBalNo] = useState<string | undefined>(undefined);
@@ -665,6 +588,11 @@ export default function App() {
   };
 
   const handleLogout = (autoLogout: boolean = false) => {
+    // Logout manual mencabut token di server; auto-logout tidak, supaya antrean simpanan tetap terkirim. Daftar & ETag
+    // yang tersimpan di memori selalu dilupakan.
+    if (autoLogout !== true) void ErpApiService.logout();
+    else ErpApiService.lupakanDaftar();
+    setRingkasan(null);
     setCurrentUser(null);
     saveCurrentUser(null);
     clearAllDrafts();
@@ -813,6 +741,23 @@ export default function App() {
     setUserList(updated);
     saveUserData(updated);
     showToast(`Akun "${target.nama_lengkap}" sekarang ${nextStatus ? 'AKTIF' : 'NONAKTIF'}.`);
+  };
+
+  // Super Admin memilih laporan Admin Sortir. Berlaku di semua komputer, jadi harus sampai ke server; bila gagal,
+  // galatnya tampil di jendela pengaturan dan tidak ada yang berubah.
+  const handleSimpanAksesLaporan = async (modul: string[]) => {
+    const terbuka = await ErpApiService.simpanAksesLaporan('admin_sortir', modul);
+    aturAksesLaporan({ admin_sortir: terbuka });
+    const nama = MODUL_LAPORAN.filter((m) => terbuka.includes(m.id)).map((m) => m.nama);
+    recordAuditLog({
+      user_nama: currentUser?.nama_lengkap || 'Sistem',
+      user_role: currentRole,
+      modul: 'Daftar Pengguna',
+      aksi: 'UBAH_AKSES_LAPORAN',
+      target_id: 'admin_sortir',
+      deskripsi: `Akses laporan Admin Sortir: ${nama.length ? nama.join(', ') : 'semua laporan ditutup'}`,
+    });
+    showToast(`Akses laporan Admin Sortir disimpan: ${terbuka.length} dari ${MODUL_LAPORAN.length} laporan terbuka.`);
   };
 
   const handleResetUserPassword = async (userId: string, newPass: string) => {
@@ -1294,7 +1239,7 @@ export default function App() {
     if (syncedTx.status_pembayaran === 'lunas') {
       try {
         const barangRes = await ErpApiService.getBarangList();
-        if (barangRes.fromBackend) setBarangList(normalizeStatusBal(barangRes.data));
+        if (barangRes.fromBackend && !barangRes.tidakBerubah) setBarangList(normalizeStatusBal(barangRes.data));
       } catch (err) {
         console.warn('Gagal memuat ulang bal setelah pembayaran:', err);
       }
@@ -1311,9 +1256,11 @@ export default function App() {
    * kupon basi yang disimpan ulang bisa menimpa balik field sortir (ganti tikar dll.) bal lain di kupon
    * yang sama ke nilai lama.
    */
-  const handleRefreshTransaksiList = async (): Promise<TransaksiPembelian[]> => {
-    const res = await ErpApiService.getTransaksiList();
+  const handleRefreshTransaksiList = async (opsi: OpsiDaftar = {}): Promise<TransaksiPembelian[]> => {
+    const res = await ErpApiService.getTransaksiList(opsi);
     if (!res.fromBackend) return loadTransaksiData();
+    // Server menjawab "tidak berubah": tidak ada yang perlu digabung ulang, daftar di layar sudah sesuai
+    if (res.tidakBerubah) return transaksiListRef.current;
     const prev = loadTransaksiData();
     const byId = new Map(prev.map((t) => [t.transaksi_id, t]));
     const fromServer = res.data.map((incoming) =>
@@ -1333,46 +1280,13 @@ export default function App() {
 
   /**
    * Tarik ulang batch sample, Surat Jalan, dan bal dari server. Dipakai polling ringan di Pengiriman Sample,
-   * Status & Detail Batch, dan Pengiriman Reguler (DO) supaya bal yang baru saja dipakai batch/DO oleh
+   * Status Batch & Reclass, Pengiriman Reguler (DO), dan Status Pengiriman Reguler (DO) supaya bal yang baru saja dipakai batch/DO oleh
    * perangkat LAIN langsung terlihat di sini juga, dan tidak bisa "dipesan dobel" ke batch/DO lain karena
    * daftar di layar sudah basi. Antrean mutasi yang belum selesai di perangkat ini tetap dijaga lewat overlay
    * (lihat services/overlayDaftar.ts), dan layar hanya diperbarui bila data memang berubah.
    */
   const handleRefreshPengirimanData = async (): Promise<void> => {
-    if (!currentUser) return;
-    try {
-      const [batchRes, pengirimanRes, barangRes] = await Promise.all([
-        ErpApiService.getBatchSampleList(),
-        ErpApiService.getPengirimanList(),
-        ErpApiService.getBarangList(),
-      ]);
-      if (batchRes.fromBackend) {
-        const daftar = overlayBatchSample(batchRes.data);
-        setBatchSampleList((prev) => {
-          if (JSON.stringify(daftar) === JSON.stringify(prev)) return prev;
-          saveBatchSampleData(daftar);
-          return daftar;
-        });
-      }
-      if (pengirimanRes.fromBackend) {
-        const daftar = overlayPengiriman(pengirimanRes.data);
-        setPengirimanList((prev) => {
-          if (JSON.stringify(daftar) === JSON.stringify(prev)) return prev;
-          savePengirimanData(daftar);
-          return daftar;
-        });
-      }
-      if (barangRes.fromBackend) {
-        const daftar = normalizeStatusBal(overlayBarang(barangRes.data));
-        setBarangList((prev) => {
-          if (JSON.stringify(daftar) === JSON.stringify(prev)) return prev;
-          saveBarangData(daftar);
-          return daftar;
-        });
-      }
-    } catch (err) {
-      console.warn('Gagal menyegarkan data batch sample / Surat Jalan / bal:', err);
-    }
+    await segarkanDaftar(['batchSample', 'suratJalan', 'bal']);
   };
 
   /**
@@ -1429,111 +1343,90 @@ export default function App() {
   };
 
   /**
-   * Penyegaran data dari server untuk menu yang sedang dibuka, supaya perubahan dari perangkat lain (kupon baru
-   * dari Sortir, hasil timbang, pembayaran Kasir, petani/harga baru) terlihat tanpa login ulang. Hanya daftar
-   * yang dipasang ke layar, dan hanya bila isinya berubah; isian formulir tidak pernah disentuh. Perubahan di
-   * perangkat ini yang belum terkirim tetap menang (overlay antrean).
+   * Muat/segarkan beberapa daftar dari server. Hanya daftar yang dipasang ke layar, dan hanya bila isinya berubah;
+   * isian formulir tidak pernah disentuh. Server menjawab 304 (`tidakBerubah`) bila daftar tidak berubah sejak
+   * penyegaran sebelumnya: tidak ada yang diunduh, diolah, atau disimpan ulang. Perubahan di perangkat ini yang belum
+   * terkirim tetap menang (overlay antrean).
    */
-  const segarkanDataModul = async (modul: string): Promise<void> => {
+  const segarkanDaftar = async (jenis: JenisData[], opsi: OpsiDaftar = {}): Promise<void> => {
     if (!currentUser || !serverAktif()) return;
-    const pasangBila = <T,>(setter: React.Dispatch<React.SetStateAction<T[]>>, simpan: (d: T[]) => void, daftar: T[]) => {
+    const pasangBila = <T,>(
+      res: HasilDaftar<T>,
+      setter: React.Dispatch<React.SetStateAction<T[]>>,
+      simpan: (d: T[]) => void,
+      olah: (d: T[]) => T[]
+    ) => {
+      if (!res.fromBackend || res.tidakBerubah) return;
+      const daftar = olah(res.data);
       setter((prev) => {
         if (JSON.stringify(daftar) === JSON.stringify(prev)) return prev;
         simpan(daftar);
         return daftar;
       });
     };
-    const segarkanBal = async () => {
-      const res = await ErpApiService.getBarangList();
-      if (res.fromBackend) pasangBila(setBarangList, saveBarangData, normalizeStatusBal(overlayBarang(res.data)));
+    const tugas: Record<JenisData, () => Promise<unknown>> = {
+      petani: async () => pasangBila(await ErpApiService.getPetaniList(opsi), setPetaniList, savePetaniData, overlayPetani),
+      bal: async () =>
+        pasangBila(await ErpApiService.getBarangList(opsi), setBarangList, saveBarangData, (d) => normalizeStatusBal(overlayBarang(d))),
+      kupon: () => handleRefreshTransaksiList(opsi),
+      hargaBeli: async () => pasangBila(await ErpApiService.getHargaList(opsi), setHargaList, saveHargaData, overlayHargaBeli),
+      hargaJual: async () =>
+        pasangBila(await ErpApiService.getHargaJualList(opsi), setHargaJualList, saveHargaJualData, overlayHargaJual),
+      pengguna: async () => pasangBila(await ErpApiService.getUserList(opsi), setUserList, saveUserData, overlayUser),
+      batchSample: async () =>
+        pasangBila(await ErpApiService.getBatchSampleList(opsi), setBatchSampleList, saveBatchSampleData, overlayBatchSample),
+      suratJalan: async () =>
+        pasangBila(await ErpApiService.getPengirimanList(opsi), setPengirimanList, savePengirimanData, overlayPengiriman),
+      // Nomor yang sudah diganti di perangkat lain harus segera dikenal Sortir (tidak boleh discan lagi)
+      riwayatNoBal: async () =>
+        pasangBila(await ErpApiService.getRiwayatNoBalList(opsi), setRiwayatNoBalList, saveRiwayatNoBalData, overlayRiwayatNoBal),
+      ringkasan: async () => {
+        const hasil = await ErpApiService.getRingkasan(opsi);
+        if (hasil && !hasil.tidakBerubah) {
+          setRingkasan(hasil);
+          if (hasil.akses_laporan) aturAksesLaporan(hasil.akses_laporan);
+        }
+      },
     };
-    const segarkanPetani = async () => {
-      const res = await ErpApiService.getPetaniList();
-      if (res.fromBackend) pasangBila(setPetaniList, savePetaniData, overlayPetani(res.data));
-    };
-    const segarkanHargaBeli = async () => {
-      const res = await ErpApiService.getHargaList();
-      if (res.fromBackend) pasangBila(setHargaList, saveHargaData, overlayHargaBeli(res.data));
-    };
-    const segarkanHargaJual = async () => {
-      const res = await ErpApiService.getHargaJualList();
-      if (res.fromBackend) pasangBila(setHargaJualList, saveHargaJualData, overlayHargaJual(res.data));
-    };
-    const segarkanUser = async () => {
-      const res = await ErpApiService.getUserList();
-      if (res.fromBackend) pasangBila(setUserList, saveUserData, overlayUser(res.data));
-    };
-    const segarkanKupon = async () => {
-      await handleRefreshTransaksiList();
-    };
-    // Nomor yang sudah diganti di perangkat lain harus segera dikenal Sortir (tidak boleh discan lagi)
-    const segarkanRiwayatNoBal = async () => {
-      const res = await ErpApiService.getRiwayatNoBalList();
-      if (res.fromBackend) pasangBila(setRiwayatNoBalList, saveRiwayatNoBalData, overlayRiwayatNoBal(res.data));
-    };
-
-    const tugas: Array<() => Promise<unknown>> = [];
-    switch (modul) {
-      case 'modul-home':
-        tugas.push(segarkanKupon, segarkanBal);
-        break;
-      case 'modul-0-sortir':
-        tugas.push(segarkanPetani, segarkanHargaBeli, segarkanKupon, segarkanBal, segarkanRiwayatNoBal);
-        break;
-      case 'modul-koreksi-no-bal':
-        tugas.push(segarkanKupon, handleRefreshPengirimanData, segarkanRiwayatNoBal);
-        break;
-      case 'modul-0-timbangan':
-        tugas.push(segarkanHargaBeli, segarkanKupon, segarkanBal);
-        break;
-      case 'modul-0-transaksi':
-        tugas.push(segarkanPetani, segarkanKupon, segarkanBal);
-        break;
-      case 'modul-1-petani':
-        tugas.push(segarkanPetani, segarkanKupon);
-        break;
-      case 'modul-3-harga':
-        tugas.push(segarkanHargaBeli);
-        break;
-      case 'modul-3-harga-jual':
-        tugas.push(segarkanHargaJual);
-        break;
-      case 'modul-4-sample':
-      case 'modul-status-batch':
-      case 'modul-5-pengiriman':
-        tugas.push(segarkanHargaJual, segarkanKupon, handleRefreshPengirimanData);
-        break;
-      case 'modul-users':
-        tugas.push(segarkanUser);
-        break;
-      default:
-        return;
-    }
     await Promise.all(
-      tugas.map((t) =>
-        t().catch((err) => {
-          console.warn(`Gagal menyegarkan data menu ${modul}:`, err);
+      [...new Set(jenis)].map((j) =>
+        tugas[j]().catch((err) => {
+          console.warn(`Gagal menyegarkan data ${j}:`, err);
         })
       )
     );
   };
+  const segarkanDaftarRef = useRef(segarkanDaftar);
+  segarkanDaftarRef.current = segarkanDaftar;
+
+  /** Data menu yang sedang dibuka saja (utils/dataMenu.ts); data menu lain tidak dimuat sampai menunya dibuka. */
+  const segarkanDataModul = (modul: string, opsi: OpsiDaftar = {}): Promise<void> => segarkanDaftar(dataUntukMenu(modul), opsi);
   const segarkanDataModulRef = useRef(segarkanDataModul);
   segarkanDataModulRef.current = segarkanDataModul;
 
-  // Data dari perangkat lain: disegarkan setiap kali menu dibuka, lalu berkala selama tab terlihat, termasuk Sortir
-  // (dulu tidak, sehingga bal yang baru ditimbang atau ditambah di komputer lain tidak terlihat di Sortir dan bal
-  // yang sudah ditimbang masih bisa dihapus). Timbangan dan menu Pengiriman punya penyegaran berkalanya sendiri.
+  // Data dimuat saat login dan setiap kali menu dibuka (hanya data menu itu), lalu berkala selama tab terlihat. Berkala
+  // murah: server menjawab 304 tanpa isi bila tidak ada perubahan. Laporan hanya dimuat saat dibuka / tombol muat ulang.
   useEffect(() => {
     if (!currentUser) return;
-    void segarkanDataModulRef.current(activeModuleId);
-    const tanpaBerkala = new Set(['modul-0-timbangan', 'modul-4-sample', 'modul-status-batch', 'modul-5-pengiriman']);
-    if (tanpaBerkala.has(activeModuleId) || activeModuleId.startsWith('modul-6-')) return;
+    const laporan = menuLaporan(activeModuleId);
+    let batal = false;
+    if (laporan) setLaporanRefreshing(true);
+    void segarkanDataModulRef.current(activeModuleId).finally(() => {
+      if (laporan && !batal) setLaporanRefreshing(false);
+    });
+    if (laporan) {
+      return () => {
+        batal = true;
+        setLaporanRefreshing(false);
+      };
+    }
     const segarkan = () => {
       if (document.visibilityState === 'visible') void segarkanDataModulRef.current(activeModuleId);
     };
     const id = window.setInterval(segarkan, 10000);
     document.addEventListener('visibilitychange', segarkan);
     return () => {
+      batal = true;
       window.clearInterval(id);
       document.removeEventListener('visibilitychange', segarkan);
     };
@@ -1625,7 +1518,7 @@ export default function App() {
 
     
     
-    showToast(`Transaksi ${transaksiId} dan data bal terkait berhasil dihapus.`);
+    showToast(`Kupon ${txToDelete.no_kupon || '-'} dan data bal terkait berhasil dihapus.`);
     return true;
   };
 
@@ -1751,7 +1644,7 @@ export default function App() {
       }
       showToast(
         serverBatch.status === 'draft'
-          ? `Batch Sample ${serverBatch.kode_batch} disimpan sebagai Draft. Finalkan di Status & Detail Batch bila sudah siap dipakai.`
+          ? `Batch Sample ${serverBatch.kode_batch} disimpan sebagai Draft. Finalkan di Status Batch & Reclass bila sudah siap dipakai.`
           : `Batch Sample ${serverBatch.kode_batch} berhasil dikirim ke ${serverBatch.tujuan_buyer}!`
       );
       return true;
@@ -1973,6 +1866,15 @@ export default function App() {
       showToast(`Surat Jalan ${target.no_surat_jalan} sudah Selesai dan statusnya tidak dapat diubah lagi.`, 'info');
       return;
     }
+    // Bal belum lunas boleh dikirim, tetapi Surat Jalan baru Selesai setelah semua kuponnya dibayar di Kasir
+    if (newStatus === 'selesai') {
+      const belumLunas = kuponBelumLunasDiSuratJalan(target.barang_ids || [], barangList, transaksiList);
+      if (belumLunas.length > 0) {
+        const daftar = belumLunas.map((k) => `kupon ${k.no_kupon} (${k.no_bal.join(', ')})`).join('; ');
+        showToast(`Surat Jalan ${target.no_surat_jalan} belum bisa Selesai: ${daftar} belum dibayar di Kasir.`, 'info');
+        return;
+      }
+    }
 
     try {
       const isOnline = await ErpApiService.isBackendOnline();
@@ -2011,7 +1913,17 @@ export default function App() {
   // Laporan nilai/aset hanya memakai bal dari kupon yang sudah dibayar
   const barangLunasList = useMemo(() => filterBarangLunas(barangList, transaksiList), [barangList, transaksiList]);
 
-  const totalPetani = petaniList.length;
+  // Angka di menu samping: jumlah dari server (GET /ringkasan) bila ada, kalau tidak dari daftar di perangkat ini.
+  // Daftar menu lain tidak lagi dimuat hanya demi angkanya.
+  const jumlahMenu = {
+    petaniCount: ringkasan?.petani ?? petaniList.length,
+    transaksiCount: ringkasan?.kupon ?? transaksiList.length,
+    sampleCount: ringkasan?.batch_sample ?? batchSampleList.length,
+    pengirimanCount: ringkasan?.pengiriman ?? pengirimanList.length,
+    hargaJualCount: ringkasan?.harga_jual ?? hargaJualList.length,
+    hargaCount: ringkasan?.harga_beli ?? hargaList.length,
+    userCount: ringkasan?.pengguna ?? userList.length,
+  };
 
   // Judul di Header sama dengan nama menu di Sidebar
   const JUDUL_MODUL: Record<string, string> = {
@@ -2033,9 +1945,11 @@ export default function App() {
     'modul-koreksi-no-bal': 'Koreksi No Bal',
     'modul-master-potongan': 'Master Potongan Tara',
     'modul-4-sample': 'Pengiriman Sample',
-    'modul-status-batch': 'Status & Detail Batch',
+    'modul-status-batch': 'Status Batch & Reclass',
     'modul-5-pengiriman': 'Pengiriman Reguler (DO)',
-    'modul-users': 'Manajemen Pengguna',
+    'modul-status-pengiriman': 'Status Pengiriman Reguler (DO)',
+    'modul-users': 'Daftar Pengguna',
+    'modul-audit-trail': 'Audit Trail',
   };
   const pageTitle = JUDUL_MODUL[activeModuleId] || 'Home';
 
@@ -2091,13 +2005,7 @@ export default function App() {
             onSelectModule={(modId) => {
               handleSidebarClick(modId);
             }}
-            petaniCount={totalPetani}
-            transaksiCount={transaksiList.length}
-            sampleCount={batchSampleList.length}
-            pengirimanCount={pengirimanList.length}
-            hargaJualCount={hargaJualList.length}
-            hargaCount={hargaList.length}
-            userCount={userList.length}
+            {...jumlahMenu}
             userRole={currentRole}
           />
         )}
@@ -2114,13 +2022,7 @@ export default function App() {
               onSelectModule={(modId) => {
                 handleSidebarClick(modId);
               }}
-              petaniCount={totalPetani}
-              transaksiCount={transaksiList.length}
-              sampleCount={batchSampleList.length}
-              pengirimanCount={pengirimanList.length}
-              hargaJualCount={hargaJualList.length}
-              hargaCount={hargaList.length}
-              userCount={userList.length}
+              {...jumlahMenu}
               userRole={currentRole}
             />
           </div>
@@ -2137,7 +2039,7 @@ export default function App() {
               <HomeDashboardView
                 onNavigate={(modId) => handleSelectModule(modId)}
                 currentUser={currentUser}
-                userCount={userList.length}
+                userCount={jumlahMenu.userCount}
               />
             )}
 
@@ -2157,7 +2059,7 @@ export default function App() {
                 onRefreshSources={async () => {
                   setLaporanRefreshing(true);
                   try {
-                    await refreshOperationalLists();
+                    await segarkanDataModul(activeModuleId, { paksa: true });
                   } finally {
                     setLaporanRefreshing(false);
                   }
@@ -2393,24 +2295,29 @@ export default function App() {
                 onSaveNewPengiriman={handleSaveNewPengiriman}
                 onUpdatePengiriman={handleUpdatePengiriman}
                 onDeletePengiriman={handleDeletePengiriman}
-                onNavigateToStatusBatch={() => handleSelectModule('modul-status-batch')}
+                onNavigateToStatusBatch={() => handleSelectModule('modul-status-pengiriman')}
                 editPengirimanId={editPengirimanId}
                 onSelesaiEdit={() => setEditPengirimanId(null)}
                 onRefreshPengirimanData={handleRefreshPengirimanData}
               />
             )}
 
-            {/*  Manajemen Pengguna (RBAC 5 Role) */}
+            {/* Manajemen Pengguna: Daftar Pengguna */}
             {activeModuleId === 'modul-users' && (
               <UserManagement
                 userList={userList}
                 currentUser={currentUser}
-                
+
                 onSaveUser={handleSaveUser}
                 onToggleStatus={handleToggleUserStatus}
                 onResetPassword={handleResetUserPassword}
+                aksesLaporanAdminSortir={laporanTerbuka('admin_sortir')}
+                onSimpanAksesLaporan={handleSimpanAksesLaporan}
               />
             )}
+
+            {/* Manajemen Pengguna: Audit Trail */}
+            {activeModuleId === 'modul-audit-trail' && <AuditTrailView />}
 
             {/* Master Harga Jual */}
             {activeModuleId === 'modul-3-harga-jual' && (
@@ -2438,9 +2345,11 @@ export default function App() {
               />
             )}
 
-            {/* Status & Detail Batch */}
-            {activeModuleId === 'modul-status-batch' && (
+            {/* Status Batch & Reclass (di bawah Pengiriman Sample) dan Status Pengiriman Reguler (DO) */}
+            {(activeModuleId === 'modul-status-batch' || activeModuleId === 'modul-status-pengiriman') && (
               <StatusBatchPengirimanManagement
+                key={activeModuleId}
+                tampilan={activeModuleId === 'modul-status-batch' ? 'sample_batch' : 'pengiriman_batch'}
                 batchSampleList={batchSampleList}
                 pengirimanList={pengirimanList}
                 barangList={barangList}

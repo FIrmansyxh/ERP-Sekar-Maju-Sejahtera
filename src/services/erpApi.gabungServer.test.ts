@@ -123,6 +123,34 @@ describe('gabung data server lintas perangkat', () => {
     expect(hasil.nomor_kontrak).toBeNull();
   });
 
+  it('Batch sample: berat bal yang ditimbang setelah masuk batch dan No Bal hasil koreksi ikut server', () => {
+    // Regresi 2026-10-01 (uji 2 perangkat): bal masuk batch saat belum ditimbang (0 kg); salinan lokal yang tersimpan
+    // saat itu dulu menang selamanya, sehingga Status Batch, Laporan Sample, dan Surat Sample tetap 0 kg
+    const lokal = buatBatch('SPL4', 'draft', {
+      items: [buatItemSample('B1', { no_bal: 'HF0003', berat_bal_kg: 0, berat_bruto_kg: 0, potongan_tara_kg: 0 })],
+    });
+    const server = ErpApiService.mapBackendBatchSample({
+      batch_id: 'SPL4',
+      kode_batch: 'SS-4',
+      status: 'draft',
+      items: [{
+        sample_item_id: 'SPL4-001', barang_id: 'B1', status_item: 'sample', harga_tawaran_kg: 55000,
+        barang: { no_bal: 'HF0099', kode_grade: '40', item: { berat_kg: 40, berat_bruto_kg: 42, potongan_tara_kg: 2 } },
+      }],
+    });
+
+    const item = ErpApiService.gabungBatchServer(lokal, server).items[0];
+    expect(item).toMatchObject({ no_bal: 'HF0099', kode_grade: '40', berat_bal_kg: 40, berat_bruto_kg: 42, potongan_tara_kg: 2 });
+  });
+
+  it('Batch sample: bal yang dikeluarkan di komputer lain (isi server kosong) tidak bertahan dari salinan lokal', () => {
+    // Regresi 2026-10-01 (uji 2 perangkat): bal dihapus dari kupon di PC lain, server mengosongkan batch, tetapi PC ini
+    // tetap menampilkan bal itu; menyimpan batch lagi lalu ditolak server karena bal sudah tidak ada
+    const lokal = buatBatch('SPL5', 'draft', { items: [buatItemSample('B9')] });
+    const server = ErpApiService.mapBackendBatchSample({ batch_id: 'SPL5', kode_batch: 'SS-5', status: 'draft', items: [] });
+    expect(ErpApiService.gabungBatchServer(lokal, server).items).toEqual([]);
+  });
+
   it('Batch sample: ID akun pembuat di server tidak ditampilkan sebagai nama pengirim', () => {
     const server = ErpApiService.mapBackendBatchSample({ batch_id: 'SPL2', kode_batch: 'X', dikirim_oleh: 'USR-001', status: 'sample', items: [] });
     expect(server.dikirim_oleh).toBe('');

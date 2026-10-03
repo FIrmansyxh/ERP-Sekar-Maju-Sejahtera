@@ -69,3 +69,41 @@ describe('login: server adalah penentu, akun lokal hanya saat server tidak terja
     expect(hasil.success).toBe(false);
   });
 });
+
+describe('logout manual mencabut token (keputusan 2026-10-01)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    apiClient.setAuthToken(null);
+  });
+
+  it('token dicabut di server lalu dihapus dari perangkat ini', async () => {
+    apiClient.setAuthToken('token-lama');
+    const post = vi.spyOn(apiClient.api, 'post').mockResolvedValue({ status: 'success' });
+
+    await ErpApiService.logout();
+
+    expect(post).toHaveBeenCalledWith('/auth/logout');
+    expect(apiClient.getAuthToken()).toBeNull();
+  });
+
+  it('server tidak terjangkau: token tetap dihapus dari perangkat ini', async () => {
+    apiClient.setAuthToken('token-lama');
+    vi.spyOn(apiClient.api, 'post').mockRejectedValue(new Error('Failed to fetch'));
+
+    await ErpApiService.logout();
+
+    expect(apiClient.getAuthToken()).toBeNull();
+  });
+
+  it('token baru dari login berikutnya tidak ikut terhapus', async () => {
+    apiClient.setAuthToken('token-lama');
+    vi.spyOn(apiClient.api, 'post').mockImplementation(async () => {
+      apiClient.setAuthToken('token-baru');
+      return { status: 'success' };
+    });
+
+    await ErpApiService.logout();
+
+    expect(apiClient.getAuthToken()).toBe('token-baru');
+  });
+});

@@ -1505,7 +1505,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                 className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-xs transition flex items-center space-x-1 cursor-pointer shadow-xs"
               >
                 <Layers className="w-3.5 h-3.5" />
-                <span>Status & Detail Batch</span>
+                <span>Status Pengiriman Reguler (DO)</span>
               </button>
             )}
             <button
