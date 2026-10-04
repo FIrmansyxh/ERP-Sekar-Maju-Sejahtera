@@ -770,7 +770,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
       </div>
 
       {/* Kartu Status Pembayaran: klik untuk menyaring tabel */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-1 min-[520px]:grid-cols-2 xl:grid-cols-5 gap-3">
         {kartuStatus.map((k) => {
           const terpilih = filterStatusBayar === k.nilai;
           return (
@@ -782,19 +782,19 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 setFilterStatusBayar(k.nilai);
                 setCurrentPage(1);
               }}
-              className={`p-3.5 border rounded-sm shadow-2xs text-left cursor-pointer transition ${terpilih ? k.aktif : k.biasa}`}
+              className={`min-w-0 p-3.5 border rounded-sm shadow-2xs text-left cursor-pointer transition ${terpilih ? k.aktif : k.biasa}`}
             >
-              <div className="flex items-center justify-between gap-2">
-                <span className={`text-[11px] font-semibold ${k.teks}`}>{k.judul}</span>
+              <div className="flex items-start justify-between gap-2">
+                <span className={`text-[11px] font-semibold leading-snug ${k.teks}`}>{k.judul}</span>
                 <k.Ikon className={`w-4 h-4 shrink-0 ${k.ikon}`} />
               </div>
-              <div className="mt-2 flex items-baseline justify-between">
-                <span className={`text-xl font-bold ${k.teks}`}>{k.data.jumlah}</span>
-                <span className={`text-[11px] font-medium ${k.ikon}`}>{k.satuan}</span>
+              <div className="mt-2 flex items-baseline justify-between gap-2">
+                <span className={`text-xl font-bold tabular-nums ${k.teks}`}>{k.data.jumlah.toLocaleString('id-ID')}</span>
+                <span className={`text-[11px] font-medium shrink-0 ${k.ikon}`}>{k.satuan}</span>
               </div>
-              <div className={`mt-2 pt-2 border-t ${k.garis} flex items-center justify-between text-[11px]`}>
-                <span className={`font-medium ${k.teks}`}>Nilai Pembelian:</span>
-                <span className="font-mono font-bold text-slate-900">{formatRupiah(k.data.nilai)}</span>
+              <div className={`mt-2 pt-2 border-t ${k.garis} min-w-0`}>
+                <span className={`block text-[10px] font-medium ${k.teks}`}>Nilai Pembelian</span>
+                <span className="block mt-0.5 font-mono text-[12px] font-bold leading-snug text-slate-900 break-words">{formatRupiah(k.data.nilai)}</span>
               </div>
             </button>
           );
@@ -802,23 +802,23 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
       </div>
 
       {/* Total sesuai filter; jumlah nota lunas dan kredit ada di kartu status di atas */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="bg-white border border-slate-200 p-3 rounded-sm shadow-2xs">
+      <div className="grid grid-cols-1 min-[520px]:grid-cols-3 gap-3">
+        <div className="min-w-0 bg-white border border-slate-200 p-3 rounded-sm shadow-2xs">
           <span className="text-[10px] uppercase font-semibold text-slate-500 block tracking-wider">Total Bal</span>
-          <p className="text-base font-semibold text-slate-900 mt-0.5">{stats.totalBal} Bal</p>
-          <span className="text-[10px] text-slate-500 font-normal">{stats.totalTx} Kupon</span>
+          <p className="text-sm sm:text-base font-semibold text-slate-900 mt-0.5 break-words">{stats.totalBal.toLocaleString('id-ID')} Bal</p>
+          <span className="text-[10px] text-slate-500 font-normal">{stats.totalTx.toLocaleString('id-ID')} Kupon</span>
         </div>
 
-        <div className="bg-white border border-slate-200 p-3 rounded-sm shadow-2xs">
+        <div className="min-w-0 bg-white border border-slate-200 p-3 rounded-sm shadow-2xs">
           <span className="text-[10px] uppercase font-semibold text-slate-500 block tracking-wider">Total Tonase Netto</span>
-          <p className="text-base font-semibold text-slate-900 mt-0.5 font-mono">{stats.totalNetto.toLocaleString('id-ID')} Kg</p>
-          <span className="text-[10px] text-slate-500 font-normal">{(stats.totalNetto / 1000).toFixed(2)} Ton</span>
+          <p className="text-sm sm:text-base font-semibold text-slate-900 mt-0.5 font-mono break-words">{stats.totalNetto.toLocaleString('id-ID')} Kg</p>
+          <span className="text-[10px] text-slate-500 font-normal">{(stats.totalNetto / 1000).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Ton</span>
         </div>
 
-        <div className="bg-white border border-slate-200 p-3 rounded-sm shadow-2xs">
+        <div className="min-w-0 bg-white border border-slate-200 p-3 rounded-sm shadow-2xs">
           <span className="text-[10px] uppercase font-semibold text-slate-500 block tracking-wider">Total Pembelian</span>
-          <p className="text-base font-semibold text-slate-900 mt-0.5 font-mono">{formatRupiah(stats.totalBayar)}</p>
-          <span className="text-[10px] text-slate-500 font-normal">Potongan {formatRupiah(stats.totalPotongan)}</span>
+          <p className="text-sm sm:text-base font-semibold text-slate-900 mt-0.5 font-mono break-words">{formatRupiah(stats.totalBayar)}</p>
+          <span className="text-[10px] text-slate-500 font-normal break-words">Potongan {formatRupiah(stats.totalPotongan)}</span>
         </div>
 
       </div>
