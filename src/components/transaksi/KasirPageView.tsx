@@ -73,7 +73,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
 
   // Quick Table Search & Sort (DataTables style)
   const [tableSearch, setTableSearch] = useState('');
-  const [sortField, setSortField] = useState<string>('kupon');
+  const [sortField, setSortField] = useState<string>('terbaru');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   // Modals & Selection
@@ -107,12 +107,40 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     }
   }, [debouncedSearch]);
 
-  const [reloadKey, setReloadKey] = useState(0);
+  const [listReloadKey, setListReloadKey] = useState(0);
+  const [summaryReloadKey, setSummaryReloadKey] = useState(0);
+  // Refresh otomatis berjalan senyap (tanpa indikator loading) agar tabel tidak berkedip
+  const refreshSenyapRef = React.useRef(false);
+  // Mencegah request yang sama menumpuk bila server sedang lambat. Daftar dan ringkasan tidak saling menunggu:
+  // ringkasan menghitung seluruh kupon dan bisa lama, daftar harus tetap disegarkan.
+  const listInFlightRef = React.useRef(false);
+  const summaryInFlightRef = React.useRef(false);
+
+  // Tiap 3 detik & saat tab kembali aktif: tanya server apakah ada kupon baru ATAU kupon yang sudah ada berubah
+  // (hasil timbang, bal sortir, pelunasan). Server menjawab 304 tanpa menghitung ulang daftar bila versi tabel
+  // kupon dan bal tidak berubah. Ringkasan yang masih berjalan tidak menahan penyegaran daftar.
+  React.useEffect(() => {
+    const segarkan = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (!listInFlightRef.current) {
+        refreshSenyapRef.current = true;
+        setListReloadKey((k) => k + 1);
+      }
+      if (!summaryInFlightRef.current) setSummaryReloadKey((k) => k + 1);
+    };
+    const id = window.setInterval(segarkan, 3000);
+    document.addEventListener('visibilitychange', segarkan);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', segarkan);
+    };
+  }, []);
 
   // Effect 1: Ambil summary stats (tidak bergantung pada page/itemsPerPage/urutan)
   React.useEffect(() => {
     let batal = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    summaryInFlightRef.current = true;
     const fetchSummary = async (percobaan: number) => {
       try {
         const { ErpApiService } = await import('../../services/erpApi');
@@ -124,25 +152,37 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
           status_bayar: filterStatusBayar === 'all' ? undefined : filterStatusBayar,
         });
         if (batal) return;
+        if (summaryRes.tidakBerubah) {
+          summaryInFlightRef.current = false;
+          return;
+        }
         if (summaryRes.data) {
           setSummaryStats(summaryRes.data);
+          summaryInFlightRef.current = false;
         } else if (percobaan < 3) {
           timer = setTimeout(() => fetchSummary(percobaan + 1), 1500 * (percobaan + 1));
+        } else {
+          summaryInFlightRef.current = false;
         }
       } catch (err) {
         console.warn('Gagal memuat summary kasir:', err);
-        if (!batal && percobaan < 3) timer = setTimeout(() => fetchSummary(percobaan + 1), 1500 * (percobaan + 1));
+        if (batal) return;
+        if (percobaan < 3) timer = setTimeout(() => fetchSummary(percobaan + 1), 1500 * (percobaan + 1));
+        else summaryInFlightRef.current = false;
       }
     };
     fetchSummary(0);
-    return () => { batal = true; if (timer) clearTimeout(timer); };
-  }, [startDate, endDate, debouncedSearch, filterPetaniId, filterStatusBayar, reloadKey]);
+    return () => { batal = true; if (timer) clearTimeout(timer); summaryInFlightRef.current = false; };
+  }, [startDate, endDate, debouncedSearch, filterPetaniId, filterStatusBayar, summaryReloadKey]);
 
   // Effect 2: Ambil data paginated; respons usang dari filter lama diabaikan
   React.useEffect(() => {
     let batal = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    setIsLoading(true);
+    const senyap = refreshSenyapRef.current;
+    refreshSenyapRef.current = false;
+    if (!senyap) setIsLoading(true);
+    listInFlightRef.current = true;
     const fetchList = async (percobaan: number) => {
       try {
         const { ErpApiService } = await import('../../services/erpApi');
@@ -156,24 +196,38 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
           sort_dir: sortDirection,
         });
         if (batal) return;
-        // Server gagal dijangkau: hasil lokal tidak lengkap & tidak terfilter, coba lagi
-        if (!res.fromBackend && percobaan < 3) {
-          timer = setTimeout(() => fetchList(percobaan + 1), 1500 * (percobaan + 1));
+        // Tidak ada kupon baru dan tidak ada perubahan pada kupon yang sudah tampil
+        if (res.tidakBerubah) {
+          setIsLoading(false);
+          listInFlightRef.current = false;
           return;
+        }
+        // Server gagal dijangkau: hasil lokal tidak lengkap & tidak terfilter, coba lagi.
+        // Penyegaran senyap yang gagal tidak boleh menimpa grid dengan salinan lokal yang masih "belum ditimbang".
+        if (!res.fromBackend) {
+          if (senyap) {
+            listInFlightRef.current = false;
+            return;
+          }
+          if (percobaan < 3) {
+            timer = setTimeout(() => fetchList(percobaan + 1), 1500 * (percobaan + 1));
+            return;
+          }
         }
         setServerData(res.data);
         setServerTotal(res.pagination?.total ?? res.data.length);
         setIsLoading(false);
+        listInFlightRef.current = false;
       } catch (err) {
         console.warn('Gagal memuat daftar kasir:', err);
         if (batal) return;
         if (percobaan < 3) timer = setTimeout(() => fetchList(percobaan + 1), 1500 * (percobaan + 1));
-        else setIsLoading(false);
+        else { setIsLoading(false); listInFlightRef.current = false; }
       }
     };
     fetchList(0);
-    return () => { batal = true; if (timer) clearTimeout(timer); };
-  }, [currentPage, itemsPerPage, startDate, endDate, debouncedSearch, filterPetaniId, filterStatusBayar, sortField, sortField === 'kupon' ? sortDirection : null, reloadKey]);
+    return () => { batal = true; if (timer) clearTimeout(timer); listInFlightRef.current = false; };
+  }, [currentPage, itemsPerPage, startDate, endDate, debouncedSearch, filterPetaniId, filterStatusBayar, sortField, sortField === 'kupon' ? sortDirection : null, listReloadKey]);
 
   const [confirmConfig, setConfirmConfig] = useState<{
     isOpen: boolean;
@@ -447,6 +501,9 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
 
     // Pencarian & filter sudah dilakukan server; hanya urutan lokal untuk halaman ini
 
+    // Mode 'terbaru': urutan sudah ditentukan server (created_at terbaru di atas), jangan diurutkan ulang
+    if (sortField === 'terbaru') return result;
+
     // Dynamic sorting
     result.sort((a, b) => {
       let valA: any = 0;
@@ -547,7 +604,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     setFilterPetaniId('');
     setFilterStatusBayar('all');
     setTableSearch('');
-    setSortField('kupon');
+    setSortField('terbaru');
     setSortDirection('desc');
     setCurrentPage(1);
   };
@@ -671,13 +728,19 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
               Urutan Kupon
             </label>
             <select
-              value={sortDirection}
+              value={sortField === 'terbaru' ? 'terbaru' : sortDirection}
               onChange={(e) => {
+                if (e.target.value === 'terbaru') {
+                  setSortField('terbaru');
+                  setSortDirection('desc');
+                  return;
+                }
                 setSortField('kupon');
                 setSortDirection(e.target.value as 'desc' | 'asc');
               }}
               className="w-full bg-white border border-slate-300 rounded-sm px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800 font-medium"
             >
+              <option value="terbaru">Data Terbaru (Terakhir Dibuat)</option>
               <option value="desc">Kupon: Terbesar ke Terkecil</option>
               <option value="asc">Kupon: Terkecil ke Terbesar</option>
             </select>
@@ -687,7 +750,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
           <div className="flex items-center space-x-2">
             <button
               type="button"
-              onClick={() => { setCurrentPage(1); setReloadKey((k) => k + 1); }}
+              onClick={() => { setCurrentPage(1); setListReloadKey((k) => k + 1); setSummaryReloadKey((k) => k + 1); }}
               className="flex-1 py-1.5 bg-[#b81d24] hover:bg-[#a0181e] text-white font-medium text-xs rounded-sm transition flex items-center justify-center space-x-1.5 cursor-pointer shadow-2xs"
             >
               <Search className="w-3.5 h-3.5" />

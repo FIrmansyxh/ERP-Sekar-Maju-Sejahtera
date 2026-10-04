@@ -486,7 +486,7 @@ export class ErpApiService {
     return { data: loadTransaksiData(), fromBackend: false };
   }
 
-  public static async getTransaksiListPaginated(page = 1, perPage = 50, filters: any = {}): Promise<{ data: TransaksiPembelian[]; pagination: any; fromBackend: boolean }> {
+  public static async getTransaksiListPaginated(page = 1, perPage = 50, filters: any = {}): Promise<{ data: TransaksiPembelian[]; pagination: any; fromBackend: boolean; tidakBerubah?: boolean }> {
     try {
         let url = `/transaksi?paginated=true&page=${page}&per_page=${perPage}`;
         if (filters.tanggal) url += `&tanggal=${filters.tanggal}`;
@@ -499,7 +499,11 @@ export class ErpApiService {
         if (filters.sort_field) url += `&sort_field=${filters.sort_field}&sort_dir=${filters.sort_dir === 'asc' ? 'asc' : 'desc'}`;
         if (filters.status_bayar) url += `&status_bayar=${filters.status_bayar}`;
         
-        const res = await api.get<any>(url);
+        const res = await api.get<any>(url, { daftar: true });
+        // 304: tidak ada kupon baru maupun perubahan (timbang, sortir, bayar) sejak penyegaran sebelumnya
+        if (res.tidakBerubah) {
+          return { data: [], pagination: res.pagination, fromBackend: true, tidakBerubah: true };
+        }
         if (res.status === 'success' && Array.isArray(res.data)) {
           const mapped = res.data.map((t: any) => this.mapBackendTransaksi(t));
           const gabungan = overlayTransaksi(mapped);
@@ -546,7 +550,10 @@ export class ErpApiService {
         if (filters.petani_id) url += `&petani_id=${filters.petani_id}`;
         if (filters.status_bayar) url += `&status_bayar=${filters.status_bayar}`;
         
-        const res = await api.get<any>(url);
+        const res = await api.get<any>(url, { daftar: true });
+        if (res.tidakBerubah) {
+          return { data: null, fromBackend: true, tidakBerubah: true };
+        }
         if (res.status === 'success' && res.data) {
           return { data: res.data, fromBackend: true };
         }

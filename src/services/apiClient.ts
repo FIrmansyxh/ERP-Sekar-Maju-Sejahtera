@@ -8,7 +8,7 @@ function resolveDefaultApiUrl(): string {
     const hostname = window.location.hostname;
     // 1. Jika dibuka di komputer lokal saat development
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://localhost:8000/api/v1';
+      return 'http://127.0.0.1:8000/api/v1';
     }
     // 2. Jika di-deploy di Vercel (demo standalone tanpa backend server)
     if (hostname.endsWith('.vercel.app')) {
@@ -17,7 +17,7 @@ function resolveDefaultApiUrl(): string {
     // 3. Jika dibuka di server VPS / domain produksi, gunakan origin server yang sedang dibuka
     return `${window.location.origin}/api/v1`;
   }
-  return 'http://localhost:8000/api/v1';
+  return 'http://127.0.0.1:8000/api/v1';
 }
 
 export const API_BASE_URL = 
