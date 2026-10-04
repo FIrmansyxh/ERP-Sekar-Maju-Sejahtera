@@ -488,8 +488,6 @@ export class ErpApiService {
 
   public static async getTransaksiListPaginated(page = 1, perPage = 50, filters: any = {}): Promise<{ data: TransaksiPembelian[]; pagination: any; fromBackend: boolean }> {
     try {
-      const isOnline = await this.isBackendOnline();
-      if (isOnline) {
         let url = `/transaksi?paginated=true&page=${page}&per_page=${perPage}`;
         if (filters.tanggal) url += `&tanggal=${filters.tanggal}`;
         if (filters.tahap) url += `&tahap=${filters.tahap}`;
@@ -498,6 +496,7 @@ export class ErpApiService {
         if (filters.end_date) url += `&end_date=${filters.end_date}`;
         if (filters.search) url += `&search=${encodeURIComponent(filters.search)}`;
         if (filters.petani_id) url += `&petani_id=${filters.petani_id}`;
+        if (filters.sort_field) url += `&sort_field=${filters.sort_field}&sort_dir=${filters.sort_dir === 'asc' ? 'asc' : 'desc'}`;
         if (filters.status_bayar) url += `&status_bayar=${filters.status_bayar}`;
         
         const res = await api.get<any>(url);
@@ -506,7 +505,6 @@ export class ErpApiService {
           const gabungan = overlayTransaksi(mapped);
           return { data: gabungan, pagination: res.pagination, fromBackend: true };
         }
-      }
     } catch (err) {
       console.warn('Gagal mengambil transaksi pagination dari API:', err);
     }
@@ -538,8 +536,6 @@ export class ErpApiService {
 
   public static async getKasirSummary(filters: any = {}): Promise<any> {
     try {
-      const isOnline = await this.isBackendOnline();
-      if (isOnline) {
         let url = `/transaksi/summary-kasir?dummy=1`;
         if (filters.tanggal) url += `&tanggal=${filters.tanggal}`;
         if (filters.tahap) url += `&tahap=${filters.tahap}`;
@@ -554,7 +550,6 @@ export class ErpApiService {
         if (res.status === 'success' && res.data) {
           return { data: res.data, fromBackend: true };
         }
-      }
     } catch (err) {
       console.warn('Gagal mengambil kasir summary dari API:', err);
     }

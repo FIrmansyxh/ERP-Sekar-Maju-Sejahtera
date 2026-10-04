@@ -91,69 +91,89 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
   const [serverTotal, setServerTotal] = useState(0);
   const [summaryStats, setSummaryStats] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
-  // Total dari summary (untuk pagination yang muncul sebelum list fetch selesai)
-  const [totalFromSummary, setTotalFromSummary] = useState(0);
-
-  // Effect 1: Ambil summary stats dari backend (tidak terpengaruh oleh page/itemsPerPage)
+  // Teks pencarian di-debounce; filter lain (tanggal, petani, status, halaman) langsung memicu fetch
+  const [debouncedSearch, setDebouncedSearch] = useState((tableSearch || filterKupon).trim());
   React.useEffect(() => {
-    let isMounted = true;
-    const fetchSummary = async () => {
-      const { ErpApiService } = await import('../../services/erpApi');
-      const filters = {
-        start_date: startDate,
-        end_date: endDate,
-        search: tableSearch || filterKupon,
-        petani_id: filterPetaniId,
-        status_bayar: filterStatusBayar === 'all' ? undefined : filterStatusBayar
-      };
-      const summaryRes = await ErpApiService.getKasirSummary(filters);
-      if (isMounted) {
+    const t = setTimeout(() => setDebouncedSearch((tableSearch || filterKupon).trim()), 400);
+    return () => clearTimeout(t);
+  }, [tableSearch, filterKupon]);
+
+  // Kembali ke halaman 1 saat teks pencarian efektif berubah
+  const prevSearchRef = React.useRef(debouncedSearch);
+  React.useEffect(() => {
+    if (prevSearchRef.current !== debouncedSearch) {
+      prevSearchRef.current = debouncedSearch;
+      setCurrentPage(1);
+    }
+  }, [debouncedSearch]);
+
+  const [reloadKey, setReloadKey] = useState(0);
+
+  // Effect 1: Ambil summary stats (tidak bergantung pada page/itemsPerPage/urutan)
+  React.useEffect(() => {
+    let batal = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const fetchSummary = async (percobaan: number) => {
+      try {
+        const { ErpApiService } = await import('../../services/erpApi');
+        const summaryRes = await ErpApiService.getKasirSummary({
+          start_date: startDate,
+          end_date: endDate,
+          search: debouncedSearch,
+          petani_id: filterPetaniId,
+          status_bayar: filterStatusBayar === 'all' ? undefined : filterStatusBayar,
+        });
+        if (batal) return;
         if (summaryRes.data) {
           setSummaryStats(summaryRes.data);
-          // Langsung update total paginate dari summary agar grid pagination muncul lebih awal
-          // Pilih total yang sesuai dengan filter status_bayar yang aktif
-          const sd = summaryRes.data;
-          let totalHint = sd.semua?.jumlah ?? 0;
-          if (filters.status_bayar === 'siap_bayar') totalHint = sd.siapBayar?.jumlah ?? 0;
-          else if (filters.status_bayar === 'belum_lengkap') totalHint = sd.belumLengkap?.jumlah ?? 0;
-          else if (filters.status_bayar === 'cash') totalHint = sd.lunas?.jumlah ?? 0;
-          else if (filters.status_bayar === 'kredit') totalHint = sd.belumLunas?.jumlah ?? 0;
-          setTotalFromSummary(totalHint);
-        } else {
-          setSummaryStats(null);
-          setTotalFromSummary(0);
+        } else if (percobaan < 3) {
+          timer = setTimeout(() => fetchSummary(percobaan + 1), 1500 * (percobaan + 1));
         }
+      } catch (err) {
+        console.warn('Gagal memuat summary kasir:', err);
+        if (!batal && percobaan < 3) timer = setTimeout(() => fetchSummary(percobaan + 1), 1500 * (percobaan + 1));
       }
     };
-    const delay = tableSearch ? 300 : 0;
-    const timer = setTimeout(() => { fetchSummary(); }, delay);
-    return () => { isMounted = false; clearTimeout(timer); };
-  }, [startDate, endDate, filterKupon, tableSearch, filterPetaniId, filterStatusBayar]);
+    fetchSummary(0);
+    return () => { batal = true; if (timer) clearTimeout(timer); };
+  }, [startDate, endDate, debouncedSearch, filterPetaniId, filterStatusBayar, reloadKey]);
 
-  // Effect 2: Ambil data paginated (berubah ketika page, itemsPerPage, atau filter berubah)
+  // Effect 2: Ambil data paginated; respons usang dari filter lama diabaikan
   React.useEffect(() => {
-    let isMounted = true;
-    const fetchList = async () => {
-      setIsLoading(true);
-      const { ErpApiService } = await import('../../services/erpApi');
-      const filters = {
-        start_date: startDate,
-        end_date: endDate,
-        search: tableSearch || filterKupon,
-        petani_id: filterPetaniId,
-        status_bayar: filterStatusBayar === 'all' ? undefined : filterStatusBayar
-      };
-      const res = await ErpApiService.getTransaksiListPaginated(currentPage, itemsPerPage, filters);
-      if (isMounted) {
+    let batal = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    setIsLoading(true);
+    const fetchList = async (percobaan: number) => {
+      try {
+        const { ErpApiService } = await import('../../services/erpApi');
+        const res = await ErpApiService.getTransaksiListPaginated(currentPage, itemsPerPage, {
+          start_date: startDate,
+          end_date: endDate,
+          search: debouncedSearch,
+          petani_id: filterPetaniId,
+          status_bayar: filterStatusBayar === 'all' ? undefined : filterStatusBayar,
+          sort_field: sortField === 'kupon' ? 'kupon' : undefined,
+          sort_dir: sortDirection,
+        });
+        if (batal) return;
+        // Server gagal dijangkau: hasil lokal tidak lengkap & tidak terfilter, coba lagi
+        if (!res.fromBackend && percobaan < 3) {
+          timer = setTimeout(() => fetchList(percobaan + 1), 1500 * (percobaan + 1));
+          return;
+        }
         setServerData(res.data);
-        setServerTotal(res.pagination.total);
+        setServerTotal(res.pagination?.total ?? res.data.length);
         setIsLoading(false);
+      } catch (err) {
+        console.warn('Gagal memuat daftar kasir:', err);
+        if (batal) return;
+        if (percobaan < 3) timer = setTimeout(() => fetchList(percobaan + 1), 1500 * (percobaan + 1));
+        else setIsLoading(false);
       }
     };
-    const delay = tableSearch ? 300 : 0;
-    const timer = setTimeout(() => { fetchList(); }, delay);
-    return () => { isMounted = false; clearTimeout(timer); };
-  }, [currentPage, itemsPerPage, startDate, endDate, filterKupon, tableSearch, filterPetaniId, filterStatusBayar]);
+    fetchList(0);
+    return () => { batal = true; if (timer) clearTimeout(timer); };
+  }, [currentPage, itemsPerPage, startDate, endDate, debouncedSearch, filterPetaniId, filterStatusBayar, sortField, sortField === 'kupon' ? sortDirection : null, reloadKey]);
 
   const [confirmConfig, setConfirmConfig] = useState<{
     isOpen: boolean;
@@ -425,19 +445,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
   const searchedAndSortedList = useMemo(() => {
     let result = [...serverData];
 
-    // Quick text search across all columns
-    if (tableSearch.trim()) {
-      const q = tableSearch.trim().toLowerCase();
-      result = result.filter((tx) => {
-        const kupon = (tx.no_kupon || '').toLowerCase();
-        const tgl = formatDateIndo(tx.tanggal_transaksi).toLowerCase();
-        const petani = (tx.nama_petani || '').toLowerCase();
-        const id = (tx.transaksi_id || '').toLowerCase();
-        const bal = String(tx.total_bal || tx.items?.length || 1);
-        const netto = String(tx.berat_kg || 0);
-        return kupon.includes(q) || tgl.includes(q) || petani.includes(q) || id.includes(q) || bal.includes(q) || netto.includes(q);
-      });
-    }
+    // Pencarian & filter sudah dilakukan server; hanya urutan lokal untuk halaman ini
 
     // Dynamic sorting
     result.sort((a, b) => {
@@ -517,8 +525,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
   }, [serverData, tableSearch, sortField, sortDirection]);
 
   // Pagination calculation
-  // Gunakan serverTotal (dari list fetch) jika tersedia, fallback ke totalFromSummary (dari summary fetch yang lebih cepat)
-  const effectiveTotal = serverTotal > 0 ? serverTotal : totalFromSummary;
+  const effectiveTotal = serverTotal;
   const totalPages = Math.ceil(effectiveTotal / itemsPerPage) || 1;
   const paginatedList = useMemo(() => {
     return searchedAndSortedList;
@@ -581,7 +588,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
             <span>Filter</span>
           </div>
           <span className="text-[11px] text-slate-500">
-            Ditemukan <strong className="text-slate-800">{effectiveTotal}</strong> dari {summaryStats?.semua?.jumlah ?? totalFromSummary} transaksi
+            Ditemukan <strong className="text-slate-800">{effectiveTotal}</strong> dari {summaryStats?.semua?.jumlah ?? '...'} transaksi
           </span>
         </div>
 
@@ -680,7 +687,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
           <div className="flex items-center space-x-2">
             <button
               type="button"
-              onClick={() => setCurrentPage(1)}
+              onClick={() => { setCurrentPage(1); setReloadKey((k) => k + 1); }}
               className="flex-1 py-1.5 bg-[#b81d24] hover:bg-[#a0181e] text-white font-medium text-xs rounded-sm transition flex items-center justify-center space-x-1.5 cursor-pointer shadow-2xs"
             >
               <Search className="w-3.5 h-3.5" />

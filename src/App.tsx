@@ -1420,8 +1420,13 @@ export default function App() {
         setLaporanRefreshing(false);
       };
     }
+    let sedangBerjalan = false;
     const segarkan = () => {
-      if (document.visibilityState === 'visible') void segarkanDataModulRef.current(activeModuleId);
+      if (document.visibilityState !== 'visible' || sedangBerjalan) return;
+      sedangBerjalan = true;
+      void segarkanDataModulRef.current(activeModuleId).finally(() => {
+        sedangBerjalan = false;
+      });
     };
     const id = window.setInterval(segarkan, 10000);
     document.addEventListener('visibilitychange', segarkan);
