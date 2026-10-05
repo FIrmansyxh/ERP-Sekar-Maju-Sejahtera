@@ -8,13 +8,11 @@ import {
   Filter,
   X,
   FileSpreadsheet,
-  ExternalLink,
-  FlaskConical,
   ArrowUp,
   ArrowDown,
   ClipboardList
 } from 'lucide-react';
-import { PengirimanBarang, PengirimanSample, Barang, UserRole } from '../../types';
+import { PengirimanBarang, Barang, UserRole } from '../../types';
 import { downloadExcelReport, periodeInfo, todayStamp } from '../../utils/excelExport';
 import { Pagination } from '../common/Pagination';
 import { beratBrutoBal, beratKirimBal, nettoJualBal } from '../../utils/beratKirim';
@@ -24,23 +22,20 @@ import { LaporanTampilanToggle } from './LaporanTampilanToggle';
 import { ResumePengirimanPanel } from './ResumePengirimanPanel';
 import { hitungResumePengiriman, susunBarisExcelResume } from '../../utils/resumePengiriman';
 
+/** Laporan Pengiriman Reguler (DO). Pengiriman Sample / Reclass punya laporan sendiri (LaporanSampleView). */
 interface LaporanPengirimanViewProps {
   pengirimanList: PengirimanBarang[];
-  sampleList?: PengirimanSample[];
   barangList?: Barang[];
   userRole?: UserRole;
-  onNavigateToSample?: () => void;
 }
 
 export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
   pengirimanList = [],
-  sampleList = [],
   barangList = [],
   userRole = 'superadmin',
-  onNavigateToSample,
 }) => {
-  // Tabs: 'resume' | 'surat-jalan' | 'rekap-pabrik' | 'sample-qc' | 'log-bal'
-  const [activeTab, setActiveTab] = useState<'resume' | 'surat-jalan' | 'rekap-pabrik' | 'sample-qc' | 'log-bal'>('resume');
+  // Tabs: 'resume' | 'surat-jalan' | 'rekap-pabrik' | 'log-bal'
+  const [activeTab, setActiveTab] = useState<'resume' | 'surat-jalan' | 'rekap-pabrik' | 'log-bal'>('resume');
 
   // Filter States
   const [searchQuery, setSearchQuery] = useState('');
@@ -79,10 +74,6 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
   // Tab 1 (Surat Jalan DO) Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-
-  // Tab 3 (Pengiriman Sample QC) Pagination
-  const [sampleCurrentPage, setSampleCurrentPage] = useState(1);
-  const [sampleItemsPerPage, setSampleItemsPerPage] = useState(10);
 
   // Tab 4 (Log Bal Fisik Terkirim) Pagination
   const [balCurrentPage, setBalCurrentPage] = useState(1);
@@ -208,9 +199,6 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
     const countDalamPerjalanan = filteredPengirimanList.filter((p) => p.status === 'dalam_perjalanan' || p.status === 'dikirim').length;
     const countDimuat = filteredPengirimanList.filter((p) => p.status === 'dimuat').length;
 
-    const totalSample = sampleList.length;
-    const sampleApproved = sampleList.filter((s) => s.status === 'disetujui').length;
-
     return {
       totalDO,
       totalBalKirim,
@@ -218,27 +206,13 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
       countDiterima,
       countDalamPerjalanan,
       countDimuat,
-      totalSample,
-      sampleApproved,
     };
-  }, [pengirimanList, filteredPengirimanList, sampleList]);
-
-  // Sample QC yang ikut resume: mengikuti periode dan pabrik terfilter (status DO tidak berlaku untuk sample)
-  const sampleTerfilter = useMemo(() => {
-    const { startDate, endDate, pabrik } = appliedFilters;
-    return sampleList.filter((s) => {
-      const tgl = (s.tanggal_kirim || '').slice(0, 10);
-      if (tgl && startDate && tgl < startDate) return false;
-      if (tgl && endDate && tgl > endDate) return false;
-      if (pabrik && pabrik !== 'ALL' && !(s.tujuan || '').toLowerCase().includes(pabrik.toLowerCase())) return false;
-      return true;
-    });
-  }, [sampleList, appliedFilters]);
+  }, [pengirimanList, filteredPengirimanList]);
 
   // Resume Pengiriman: satu sumber angka untuk tab Resume dan Excel
   const resume = useMemo(
-    () => hitungResumePengiriman(filteredPengirimanList, barangList, sampleTerfilter),
-    [filteredPengirimanList, barangList, sampleTerfilter]
+    () => hitungResumePengiriman(filteredPengirimanList, barangList),
+    [filteredPengirimanList, barangList]
   );
 
   // Aggregation per Pabrik Buyer (Tab 2)
@@ -545,20 +519,6 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
     return Math.ceil(searchedPengirimanList.length / itemsPerPage);
   }, [searchedPengirimanList.length, itemsPerPage]);
 
-  // Tab 3: Paginated Sample Data & Total Pages
-  const paginatedSampleData = useMemo(() => {
-    if (sampleItemsPerPage >= 100000) {
-      return sampleList;
-    }
-    const start = (sampleCurrentPage - 1) * sampleItemsPerPage;
-    return sampleList.slice(start, start + sampleItemsPerPage);
-  }, [sampleList, sampleCurrentPage, sampleItemsPerPage]);
-
-  const sampleTotalPages = useMemo(() => {
-    if (sampleItemsPerPage >= 100000 || sampleList.length === 0) return 1;
-    return Math.ceil(sampleList.length / sampleItemsPerPage);
-  }, [sampleList.length, sampleItemsPerPage]);
-
   // Tab 4: Paginated Bal Keluar Data & Total Pages
   const paginatedBalKeluarData = useMemo(() => {
     if (balItemsPerPage >= 100000) {
@@ -582,7 +542,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
           <div className="w-10 h-10 bg-[#b81d24] text-white rounded-sm flex items-center justify-center shadow-xs shrink-0">
             <Truck className="w-5 h-5" />
           </div>
-          <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">Laporan Pengiriman</h1>
+          <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">Laporan Pengiriman Reguler (DO)</h1>
         </div>
 
         {/* Action Controls: Tampilan (Filter / Ringkasan / Fokus Tabel), dan Unduh Excel */}
@@ -603,7 +563,7 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
       {/* 2. Executive KPI Cards */}
       {showSummaryCards && (
         <div className="overflow-hidden">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
         <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
           <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
             Total Surat Jalan
@@ -662,19 +622,6 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
           </div>
         </div>
 
-        <div className="bg-white p-3 border border-gray-200 shadow-2xs flex flex-col justify-between">
-          <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-            Sample
-          </div>
-          <div className="mt-1">
-            <div className="text-xl font-bold font-mono text-slate-900">
-              {overallKPIs.totalSample} Bal
-            </div>
-            <div className="text-[10px] text-slate-700 font-semibold mt-0.5">
-              {overallKPIs.sampleApproved} Disetujui
-            </div>
-          </div>
-        </div>
       </div>
       </div>
     )}
@@ -841,18 +788,6 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
         >
           <Building2 className="w-3.5 h-3.5" />
           <span>Rekapitulasi per Pabrik Buyer ({pabrikAggregates.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('sample-qc')}
-          className={`px-4 py-2 text-xs font-bold cursor-pointer transition border-b-2 flex items-center space-x-1.5 ${
-            activeTab === 'sample-qc'
-              ? 'border-[#b81d24] text-[#b81d24] bg-white'
-              : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-          }`}
-        >
-          <FlaskConical className="w-3.5 h-3.5" />
-          <span>Pengiriman Sample ({sampleList.length})</span>
         </button>
 
         <button
@@ -1107,160 +1042,6 @@ export const LaporanPengirimanView: React.FC<LaporanPengirimanViewProps> = ({
               </tbody>
             </table>
           </div>
-        </div>
-      )}
-
-      {/* 7. Tab Content 3: Pengiriman Sample */}
-      {activeTab === 'sample-qc' && (
-        <div className="bg-white border border-gray-200 shadow-2xs overflow-hidden">
-          <div className="p-3 border-b border-gray-200 bg-gray-50 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
-              Pengiriman Sample ({sampleList.length} Bal)
-            </h3>
-            <div className="flex items-center space-x-3">
-              <div className="flex items-center space-x-1.5 text-xs text-gray-600">
-                <span className="font-medium">Tampil</span>
-                <select
-                  value={sampleItemsPerPage >= 100000 ? 'all' : sampleItemsPerPage}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setSampleItemsPerPage(val === 'all' ? 100000 : Number(val));
-                    setSampleCurrentPage(1);
-                  }}
-                  className="border border-gray-300 rounded-xs px-2 py-1 bg-white text-xs text-gray-800 font-semibold focus:outline-none focus:border-[#b81d24]"
-                >
-                  <option value={5}>5</option>
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                  <option value="all">All</option>
-                </select>
-              </div>
-              {onNavigateToSample && (
-                <button
-                  onClick={onNavigateToSample}
-                  className="px-2.5 py-1 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 text-xs font-semibold rounded-xs transition flex items-center space-x-1 cursor-pointer"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  <span>Modul Sample QC</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-gray-100 text-gray-700 font-bold uppercase text-[10px] border-b border-gray-200">
-                  <th className="py-2.5 px-3 border-r border-gray-200 text-center w-10">No</th>
-                  <th className="py-2.5 px-3 border-r border-gray-200">No Bal</th>
-                  <th className="py-2.5 px-3 border-r border-gray-200">Grade / Mutu</th>
-                  <th className="py-2.5 px-3 border-r border-gray-200">Tanggal Kirim</th>
-                  <th className="py-2.5 px-3 border-r border-gray-200">Tujuan Lab / Pabrik</th>
-                  <th className="py-2.5 px-3 border-r border-gray-200 text-right">Berat Sample</th>
-                  <th className="py-2.5 px-3 border-r border-gray-200 text-center">Status Pengujian</th>
-                  <th className="py-2.5 px-3 border-r border-gray-200">Petugas QC</th>
-                  <th className="py-2.5 px-3">Catatan / Respon</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {sampleList.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="py-8 text-center text-gray-500 italic">
-                      Belum ada data pengiriman sampel laboratorium tercatat.
-                    </td>
-                  </tr>
-                ) : (
-                  paginatedSampleData.map((s, idx) => {
-                    const effectiveLimit = sampleItemsPerPage >= 100000 ? sampleList.length : sampleItemsPerPage;
-                    const rowNumber = (sampleCurrentPage - 1) * effectiveLimit + idx + 1;
-                    return (
-                      <tr key={s.sample_id} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'} hover:bg-gray-100/80 transition-colors`}>
-                        <td className="py-2.5 px-3 border-r border-gray-200 text-center font-mono text-gray-500">{rowNumber}</td>
-                        <td className="py-2.5 px-3 border-r border-gray-200 font-mono font-bold text-gray-900">{s.no_bal || '-'}</td>
-                        <td className="py-2.5 px-3 border-r border-gray-200">
-                          <span className="px-2 py-0.5 bg-zinc-900 text-white rounded-xs text-[10px] font-bold">
-                            Grade {s.kode_grade}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 border-r border-gray-200 font-mono text-gray-700">
-                          {s.tanggal_kirim ? s.tanggal_kirim.split('T')[0] : '-'}
-                        </td>
-                        <td className="py-2.5 px-3 border-r border-gray-200 font-semibold text-gray-800">{s.tujuan}</td>
-                        <td className="py-2.5 px-3 border-r border-gray-200 text-right font-mono font-bold text-gray-900">
-                          {s.berat_sample_gram} gram
-                        </td>
-                        <td className="py-2.5 px-3 border-r border-gray-200 text-center">
-                          {s.status === 'disetujui' ? (
-                            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xs text-[10px] font-bold">
-                              Disetujui
-                            </span>
-                          ) : s.status === 'ditolak' ? (
-                            <span className="px-2 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded-xs text-[10px] font-bold">
-                              Ditolak
-                            </span>
-                          ) : s.status === 'nego' ? (
-                            <span className="px-2 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-xs text-[10px] font-bold">
-                              Nego
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 bg-slate-50 text-slate-700 border border-slate-200 rounded-xs text-[10px] font-bold">
-                              Menunggu
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-2.5 px-3 border-r border-gray-200 text-gray-600">{s.dikirim_oleh}</td>
-                        <td className="py-2.5 px-3 text-gray-500 text-[11px]">{s.alasan_tolak || s.catatan_nego || s.catatan || '-'}</td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Sample QC Pagination Controls */}
-          {sampleList.length > 0 && (
-            <div className="p-3 bg-[#f8f9fa] border-t border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center space-x-1.5 text-xs text-gray-600">
-                  <span className="font-medium">Tampil</span>
-                  <select
-                    value={sampleItemsPerPage >= 100000 ? 'all' : sampleItemsPerPage}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setSampleItemsPerPage(val === 'all' ? 100000 : Number(val));
-                      setSampleCurrentPage(1);
-                    }}
-                    className="border border-gray-300 rounded-xs px-2 py-1 bg-white text-xs text-gray-800 font-semibold focus:outline-none focus:border-[#b81d24]"
-                  >
-                    <option value={5}>5</option>
-                    <option value={10}>10</option>
-                    <option value={20}>20</option>
-                    <option value={25}>25</option>
-                    <option value={50}>50</option>
-                    <option value={100}>100</option>
-                    <option value="all">All</option>
-                  </select>
-                </div>
-                <div className="text-xs text-gray-600">
-                  Menampilkan <strong>{(sampleCurrentPage - 1) * (sampleItemsPerPage >= 100000 ? sampleList.length : sampleItemsPerPage) + 1}</strong> - <strong>{Math.min(sampleCurrentPage * (sampleItemsPerPage >= 100000 ? sampleList.length : sampleItemsPerPage), sampleList.length)}</strong> dari <strong>{sampleList.length}</strong> sampel
-                </div>
-              </div>
-
-              {sampleItemsPerPage < 100000 && sampleTotalPages > 1 && (
-                <Pagination
-                  currentPage={sampleCurrentPage}
-                  totalPages={sampleTotalPages}
-                  totalItems={sampleList.length}
-                  itemsPerPage={sampleItemsPerPage}
-                  onPageChange={(page) => setSampleCurrentPage(page)}
-                />
-              )}
-            </div>
-          )}
         </div>
       )}
 

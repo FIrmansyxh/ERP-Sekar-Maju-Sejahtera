@@ -1,6 +1,7 @@
-import type { Barang, BatchPengirimanSample, MasterHargaJual, PengirimanBarang, Petani, TabelHarga, TransaksiPembelian, User } from '../types';
+import type { Barang, BatchPengirimanSample, MasterHargaJual, PengirimanBarang, Petani, RiwayatNoBal, TabelHarga, TransaksiPembelian, User } from '../types';
 import { antrianMutasi } from './antrianMutasi';
 import { antrianSinkron } from './antrianSinkron';
+import { DataGantiNoBal, RencanaGantiNoBal, terapkanGantiNoBal } from '../utils/gantiNoBal';
 
 /**
  * Menimpa daftar dari server dengan perubahan yang belum (atau baru saja) sampai ke server.
@@ -17,15 +18,35 @@ export const overlayPetani = (daftar: Petani[]): Petani[] =>
     gabung: (srv, lokal) => ({ ...srv, ...lokal, statistik: srv.statistik ?? lokal.statistik }),
   });
 
+/** Ganti No Bal yang belum (atau baru saja) sampai ke server diterapkan ke daftar yang baru dimuat. */
+function terapkanGantiNoBalMenunggu<K extends keyof DataGantiNoBal>(kunci: K, daftar: DataGantiNoBal[K]): DataGantiNoBal[K] {
+  const rencana = antrianMutasi.dataTugas<RencanaGantiNoBal>('no_bal', 'ganti');
+  return rencana.reduce((hasil, r) => {
+    const data: Partial<DataGantiNoBal> = { [kunci]: hasil };
+    return (terapkanGantiNoBal(data, r)[kunci] ?? hasil) as DataGantiNoBal[K];
+  }, daftar);
+}
+
+/** Riwayat ganti No Bal dari server ditambah penggantian di perangkat ini yang belum tersimpan di server. */
+export const overlayRiwayatNoBal = (daftar: RiwayatNoBal[]): RiwayatNoBal[] => {
+  const ada = new Set(daftar.map((r) => r.riwayat_id));
+  const menunggu = antrianMutasi
+    .dataTugas<RencanaGantiNoBal>('no_bal', 'ganti')
+    .map((r) => r.riwayat)
+    .filter((r) => !ada.has(r.riwayat_id));
+  return menunggu.length > 0 ? [...menunggu.reverse(), ...daftar] : daftar;
+};
+
 /** Status bal yang diubah di perangkat ini tetap dipakai; bal milik kupon yang sedang dihapus disembunyikan. */
 export const overlayBarang = (daftar: Barang[]): Barang[] => {
   const kuponDihapus = antrianMutasi.daftarTerhapus('transaksi');
-  return antrianMutasi
+  const hasil = antrianMutasi
     .terapkanKeDaftar('barang', daftar, {
       ambilId: (b) => b.barang_id,
       gabung: (srv, lokal) => ({ ...srv, status_stok: lokal.status_stok, catatan: lokal.catatan ?? srv.catatan }),
     })
     .filter((b) => !b.transaksi_pembelian_id || !kuponDihapus.has(b.transaksi_pembelian_id));
+  return terapkanGantiNoBalMenunggu('barangList', hasil);
 };
 
 export const overlayHargaBeli = (daftar: TabelHarga[]): TabelHarga[] =>
@@ -41,11 +62,14 @@ export const overlayUser = (daftar: User[]): User[] =>
   });
 
 export const overlayBatchSample = (daftar: BatchPengirimanSample[]): BatchPengirimanSample[] =>
-  antrianMutasi.terapkanKeDaftar('batch_sample', daftar, {
-    ambilId: (b) => b.batch_id,
-    ambilIdAlt: (b) => b.kode_batch,
-    gabung: (srv, lokal) => ({ ...srv, ...lokal, batch_id: srv.batch_id }),
-  });
+  terapkanGantiNoBalMenunggu(
+    'batchSampleList',
+    antrianMutasi.terapkanKeDaftar('batch_sample', daftar, {
+      ambilId: (b) => b.batch_id,
+      ambilIdAlt: (b) => b.kode_batch,
+      gabung: (srv, lokal) => ({ ...srv, ...lokal, batch_id: srv.batch_id }),
+    })
+  );
 
 export const overlayPengiriman = (daftar: PengirimanBarang[]): PengirimanBarang[] =>
   antrianMutasi.terapkanKeDaftar('pengiriman', daftar, {

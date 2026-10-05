@@ -50,6 +50,22 @@ export function statusSetelahSinkron(lokal: StatusBatchSample | undefined, serve
 }
 
 /**
+ * Status batch final setelah hasil sortir pembeli diubah. Sama dengan aturan server (RelasiBatchSample, keputusan
+ * pemilik 2026-10-01): semua bal yang tidak ditolak sudah masuk Surat Jalan = selesai, kapan pun evaluasinya disimpan.
+ * Bal yang ditolak tetap tercatat di batch (masuk laporan) dan bebas dipakai DO atau batch lain.
+ */
+export function statusBatchDariEvaluasi(
+  items: Pick<BatchPengirimanSample['items'][number], 'status_item' | 'sudah_dikirim_do'>[]
+): StatusBatchSample {
+  if (items.length === 0) return 'dibatalkan';
+  const aktif = items.filter((it) => it.status_item !== 'ditolak');
+  if (aktif.length > 0 && aktif.every((it) => it.sudah_dikirim_do)) return 'selesai';
+  // Semua ditolak tetap 'diproses' (bukan dibatalkan) supaya penolakannya tercatat di Laporan Pengiriman Sample
+  if (aktif.length === 0 || items.some((it) => it.status_item === 'disetujui')) return 'diproses';
+  return 'sample';
+}
+
+/**
  * Baris sample per bal untuk laporan (Dashboard, Laporan Pengiriman), diturunkan dari batch sample yang tersimpan di
  * server. Batch Draft belum dikirim ke pembeli dan batch yang dibatalkan tidak dihitung.
  */

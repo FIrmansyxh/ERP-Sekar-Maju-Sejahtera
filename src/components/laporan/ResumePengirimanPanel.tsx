@@ -48,7 +48,6 @@ export const ResumePengirimanPanel: React.FC<ResumePengirimanPanelProps> = ({ re
   const pabrikTampil = r.pabrik.slice(0, BATAS_PABRIK);
   const gradeTampil = r.grade.slice(0, BATAS_GRADE);
   const selisihNegatif = r.selisihTimbangUlang < 0;
-  const sample = r.sample;
   const adaPerhatian =
     r.perhatian.belumSelesai.length > 0 || r.perhatian.selesaiTanpaNilai.length > 0 || r.perhatian.balTidakDitemukan.length > 0;
 
@@ -88,70 +87,33 @@ export const ResumePengirimanPanel: React.FC<ResumePengirimanPanelProps> = ({ re
         <Kartu judul="Nilai Berjalan" nilai={formatRupiah(r.nilaiBerjalan)} ket="DO belum Selesai" warna="text-amber-700" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        {/* Status pengiriman */}
-        <Bagian judul="Status Surat Jalan">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs border-collapse">
-              <thead>
-                <tr className="bg-gray-100 text-gray-700 font-bold uppercase text-[10px] border-b border-gray-200">
-                  <th className={th}>Status</th>
-                  <th className={th}>DO</th>
-                  <th className={th}>Bal</th>
-                  <th className={th}>Bruto (Kg)</th>
-                  <th className={th}>Porsi DO</th>
+      {/* Status pengiriman */}
+      <Bagian judul="Status Surat Jalan">
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr className="bg-gray-100 text-gray-700 font-bold uppercase text-[10px] border-b border-gray-200">
+                <th className={th}>Status</th>
+                <th className={th}>DO</th>
+                <th className={th}>Bal</th>
+                <th className={th}>Bruto (Kg)</th>
+                <th className={th}>Porsi DO</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {r.status.map((s) => (
+                <tr key={s.status}>
+                  <td className={`${td} font-semibold text-gray-900`}>{s.label}</td>
+                  <td className={`${td} text-center font-mono`}>{formatNumber(s.jumlahDO)}</td>
+                  <td className={`${td} text-center font-mono`}>{formatNumber(s.bal)}</td>
+                  <td className={`${td} text-right font-mono`}>{formatNumber(s.kg, 1)}</td>
+                  <td className={`${td} text-center font-mono`}>{persen(s.persenDO)}</td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {r.status.map((s) => (
-                  <tr key={s.status}>
-                    <td className={`${td} font-semibold text-gray-900`}>{s.label}</td>
-                    <td className={`${td} text-center font-mono`}>{formatNumber(s.jumlahDO)}</td>
-                    <td className={`${td} text-center font-mono`}>{formatNumber(s.bal)}</td>
-                    <td className={`${td} text-right font-mono`}>{formatNumber(s.kg, 1)}</td>
-                    <td className={`${td} text-center font-mono`}>{persen(s.persenDO)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Bagian>
-
-        {/* Sample QC */}
-        <Bagian judul="Sample QC Pembeli" catatan="Sesuai periode dan pabrik terfilter">
-          {sample.total === 0 ? (
-            <div className="p-4 text-center text-xs text-gray-500">Tidak ada pengiriman sample pada filter ini.</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs border-collapse">
-                <thead>
-                  <tr className="bg-gray-100 text-gray-700 font-bold uppercase text-[10px] border-b border-gray-200">
-                    <th className={th}>Total</th>
-                    <th className={th}>Disetujui</th>
-                    <th className={th}>Nego</th>
-                    <th className={th}>Ditolak</th>
-                    <th className={th}>Menunggu</th>
-                    <th className={th}>Tingkat Setuju</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td className={`${td} text-center font-mono font-bold`}>{formatNumber(sample.total)}</td>
-                    <td className={`${td} text-center font-mono text-emerald-700 font-bold`}>{formatNumber(sample.disetujui)}</td>
-                    <td className={`${td} text-center font-mono text-amber-700 font-bold`}>{formatNumber(sample.nego)}</td>
-                    <td className={`${td} text-center font-mono text-red-700 font-bold`}>{formatNumber(sample.ditolak)}</td>
-                    <td className={`${td} text-center font-mono`}>{formatNumber(sample.menunggu)}</td>
-                    <td className={`${td} text-center font-mono font-bold`}>{persen(sample.persenSetuju)}</td>
-                  </tr>
-                </tbody>
-              </table>
-              <p className="px-3 py-2 text-[11px] text-gray-500 border-t border-gray-200">
-                {formatNumber(sample.sudahMasukDO)} sample sudah masuk Surat Jalan • total contoh {formatNumber(sample.totalGram / 1000, 2)} kg
-              </p>
-            </div>
-          )}
-        </Bagian>
-      </div>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Bagian>
 
       {/* Pabrik tujuan */}
       <Bagian

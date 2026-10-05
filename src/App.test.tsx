@@ -14,17 +14,22 @@ const MENU = [
   'Laporan Harga',
   'Laporan Pembelian',
   'Laporan Petani',
-  'Laporan Pengiriman',
+  'Laporan Pengiriman Reguler (DO)',
+  'Laporan Pengiriman Sample',
   'Master Petani',
   'Master Harga Beli',
   'Master Harga Jual',
+  'Master Potongan Tara',
   'Sortir',
   'Timbangan',
   'Kasir',
+  'Koreksi No Bal',
   'Pengiriman Sample',
-  'Status & Detail Batch',
+  'Status Batch & Reclass',
   'Pengiriman Reguler (DO)',
-  'Manajemen Pengguna',
+  'Status Pengiriman Reguler (DO)',
+  'Daftar Pengguna',
+  'Audit Trail',
 ];
 
 /**
@@ -68,8 +73,9 @@ describe('Aplikasi: setiap menu dapat dibuka', () => {
 
       await userEvent.click(tombol[0]);
 
-      // Potongan kode menu selesai diunduh (tampilan "Memuat halaman" hilang), lalu tidak ada galat tampilan
-      await vi.waitFor(() => expect(screen.queryByText(/Memuat halaman/)).not.toBeInTheDocument(), { timeout: 8000 });
+      // Potongan kode menu selesai diunduh (tampilan "Memuat halaman" hilang), lalu tidak ada galat tampilan. Batas
+      // longgar: saat seluruh tes berjalan paralel, menu pertama (Dashboard, pustaka grafik) bisa lebih dari 8 detik.
+      await vi.waitFor(() => expect(screen.queryByText(/Memuat halaman/)).not.toBeInTheDocument(), { timeout: 18000 });
       expect(screen.queryByText('Halaman tidak dapat ditampilkan')).not.toBeInTheDocument();
       expect(screen.queryByText('Versi baru aplikasi tersedia')).not.toBeInTheDocument();
     },

@@ -49,6 +49,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     'master-data': true,
     pembelian: true,
     pengiriman: true,
+    pengguna: true,
   });
 
   const toggleSection = (section: string) => {
@@ -69,7 +70,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'modul-6-laporan-grade', label: 'Laporan Harga' },
         { id: 'modul-6-laporan-pembelian', label: 'Laporan Pembelian' },
         { id: 'modul-6-laporan-petani', label: 'Laporan Petani' },
-        { id: 'modul-6-laporan-pengiriman', label: 'Laporan Pengiriman' },
+        { id: 'modul-6-laporan-pengiriman', label: 'Laporan Pengiriman Reguler (DO)' },
+        { id: 'modul-6-laporan-sample', label: 'Laporan Pengiriman Sample' },
       ],
     },
     {
@@ -91,6 +93,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'modul-0-sortir', label: 'Sortir' },
         { id: 'modul-0-timbangan', label: 'Timbangan' },
         { id: 'modul-0-kasir', label: 'Kasir', aliasId: ['modul-0-transaksi'], jumlah: String(transaksiCount) },
+        { id: 'modul-koreksi-no-bal', label: 'Koreksi No Bal' },
       ],
     },
     {
@@ -98,15 +101,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: 'Pengiriman Barang',
       Ikon: Truck,
       items: [
-        { id: 'modul-4-sample', label: 'Pengiriman Sample', jumlah: String(sampleCount) },
-        { id: 'modul-status-batch', label: 'Status & Detail Batch' },
-        { id: 'modul-5-pengiriman', label: 'Pengiriman Reguler (DO)', jumlah: String(pengirimanCount) },
+        // Jumlah batch dan Surat Jalan tampil di menu Status, tempat daftarnya dipantau
+        { id: 'modul-4-sample', label: 'Pengiriman Sample' },
+        { id: 'modul-status-batch', label: 'Status Batch & Reclass', jumlah: String(sampleCount) },
+        { id: 'modul-5-pengiriman', label: 'Pengiriman Reguler (DO)' },
+        { id: 'modul-status-pengiriman', label: 'Status Pengiriman Reguler (DO)', jumlah: String(pengirimanCount) },
+      ],
+    },
+    {
+      kunci: 'pengguna',
+      label: 'Manajemen Pengguna',
+      Ikon: UserCheck,
+      items: [
+        { id: 'modul-users', label: 'Daftar Pengguna', jumlah: String(userCount) },
+        { id: 'modul-audit-trail', label: 'Audit Trail' },
       ],
     },
   ];
 
   const isHomeActive = activeModuleId === 'modul-home';
-  const isUsersActive = activeModuleId === 'modul-users';
 
   return (
     <aside className="w-60 sm:w-64 bg-white border-r border-gray-200 flex flex-col shrink-0 min-h-[calc(100vh-4rem)] select-none">
@@ -178,29 +191,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           );
         })}
-
-        {hasModuleAccess(userRole, 'modul-users') && (
-          <div className="pt-2 border-t border-slate-100">
-            <button
-              onClick={() => onSelectModule('modul-users')}
-              className={`w-full text-left px-3 py-2.5 rounded-sm flex items-center justify-between text-xs transition cursor-pointer ${
-                isUsersActive ? 'bg-slate-900 text-white font-medium shadow-2xs' : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
-              }`}
-            >
-              <div className="flex items-center space-x-3 min-w-0">
-                <UserCheck className={`w-4 h-4 shrink-0 ${isUsersActive ? 'text-white' : 'text-slate-500'}`} />
-                <span>Manajemen Pengguna</span>
-              </div>
-              <span
-                className={`text-[10px] font-mono font-medium px-1 rounded-xs ${
-                  isUsersActive ? 'bg-slate-800 text-slate-200' : 'bg-slate-100 text-slate-600'
-                }`}
-              >
-                {userCount}
-              </span>
-            </button>
-          </div>
-        )}
       </nav>
 
       <div className="px-4 py-2.5 border-t border-slate-200 bg-slate-50/70 text-[10px] text-slate-400 flex items-center justify-between">

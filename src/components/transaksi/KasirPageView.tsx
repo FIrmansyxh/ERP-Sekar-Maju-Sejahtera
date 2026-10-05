@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { TransaksiPembelian, Petani, TabelHarga, Barang, UserRole, User as UserType, SaveTransaksiMeta } from '../../types';
 import { isTransaksiLunas, labelStatusBayar } from '../../utils/statusBayar';
-import { formatRupiah, formatAccounting, formatDateIndo, formatNoKupon, normalizeKg } from '../../utils/formatters';
+import { formatRupiah, formatAccounting, formatDateIndo, formatNoKupon } from '../../utils/formatters';
 import { TransaksiDetailModal } from './TransaksiDetailModal';
 import { PembayaranKasirModal } from './PembayaranKasirModal';
 import { ConfirmModal } from '../common/ConfirmModal';
@@ -73,7 +73,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
 
   // Quick Table Search & Sort (DataTables style)
   const [tableSearch, setTableSearch] = useState('');
-  const [sortField, setSortField] = useState<string>('kupon');
+  const [sortField, setSortField] = useState<string>('terbaru');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   // Modals & Selection
@@ -85,9 +85,150 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  
+  // Server-side Data
+  const [serverData, setServerData] = useState<TransaksiPembelian[]>([]);
+  const [serverTotal, setServerTotal] = useState(0);
+  const [summaryStats, setSummaryStats] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  // Teks pencarian di-debounce; filter lain (tanggal, petani, status, halaman) langsung memicu fetch
+  const [debouncedSearch, setDebouncedSearch] = useState((tableSearch || filterKupon).trim());
+  React.useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch((tableSearch || filterKupon).trim()), 400);
+    return () => clearTimeout(t);
+  }, [tableSearch, filterKupon]);
 
+  // Kembali ke halaman 1 saat teks pencarian efektif berubah
+  const prevSearchRef = React.useRef(debouncedSearch);
+  React.useEffect(() => {
+    if (prevSearchRef.current !== debouncedSearch) {
+      prevSearchRef.current = debouncedSearch;
+      setCurrentPage(1);
+    }
+  }, [debouncedSearch]);
 
-  // Confirm Modal state to avoid blocking browser locker errors
+  const [listReloadKey, setListReloadKey] = useState(0);
+  const [summaryReloadKey, setSummaryReloadKey] = useState(0);
+  // Refresh otomatis berjalan senyap (tanpa indikator loading) agar tabel tidak berkedip
+  const refreshSenyapRef = React.useRef(false);
+  // Mencegah request yang sama menumpuk bila server sedang lambat. Daftar dan ringkasan tidak saling menunggu:
+  // ringkasan menghitung seluruh kupon dan bisa lama, daftar harus tetap disegarkan.
+  const listInFlightRef = React.useRef(false);
+  const summaryInFlightRef = React.useRef(false);
+
+  // Tiap 3 detik & saat tab kembali aktif: tanya server apakah ada kupon baru ATAU kupon yang sudah ada berubah
+  // (hasil timbang, bal sortir, pelunasan). Server menjawab 304 tanpa menghitung ulang daftar bila versi tabel
+  // kupon dan bal tidak berubah. Ringkasan yang masih berjalan tidak menahan penyegaran daftar.
+  React.useEffect(() => {
+    const segarkan = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (!listInFlightRef.current) {
+        refreshSenyapRef.current = true;
+        setListReloadKey((k) => k + 1);
+      }
+      if (!summaryInFlightRef.current) setSummaryReloadKey((k) => k + 1);
+    };
+    const id = window.setInterval(segarkan, 3000);
+    document.addEventListener('visibilitychange', segarkan);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', segarkan);
+    };
+  }, []);
+
+  // Effect 1: Ambil summary stats (tidak bergantung pada page/itemsPerPage/urutan)
+  React.useEffect(() => {
+    let batal = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    summaryInFlightRef.current = true;
+    const fetchSummary = async (percobaan: number) => {
+      try {
+        const { ErpApiService } = await import('../../services/erpApi');
+        const summaryRes = await ErpApiService.getKasirSummary({
+          start_date: startDate,
+          end_date: endDate,
+          search: debouncedSearch,
+          petani_id: filterPetaniId,
+          status_bayar: filterStatusBayar === 'all' ? undefined : filterStatusBayar,
+        });
+        if (batal) return;
+        if (summaryRes.tidakBerubah) {
+          summaryInFlightRef.current = false;
+          return;
+        }
+        if (summaryRes.data) {
+          setSummaryStats(summaryRes.data);
+          summaryInFlightRef.current = false;
+        } else if (percobaan < 3) {
+          timer = setTimeout(() => fetchSummary(percobaan + 1), 1500 * (percobaan + 1));
+        } else {
+          summaryInFlightRef.current = false;
+        }
+      } catch (err) {
+        console.warn('Gagal memuat summary kasir:', err);
+        if (batal) return;
+        if (percobaan < 3) timer = setTimeout(() => fetchSummary(percobaan + 1), 1500 * (percobaan + 1));
+        else summaryInFlightRef.current = false;
+      }
+    };
+    fetchSummary(0);
+    return () => { batal = true; if (timer) clearTimeout(timer); summaryInFlightRef.current = false; };
+  }, [startDate, endDate, debouncedSearch, filterPetaniId, filterStatusBayar, summaryReloadKey]);
+
+  // Effect 2: Ambil data paginated; respons usang dari filter lama diabaikan
+  React.useEffect(() => {
+    let batal = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const senyap = refreshSenyapRef.current;
+    refreshSenyapRef.current = false;
+    if (!senyap) setIsLoading(true);
+    listInFlightRef.current = true;
+    const fetchList = async (percobaan: number) => {
+      try {
+        const { ErpApiService } = await import('../../services/erpApi');
+        const res = await ErpApiService.getTransaksiListPaginated(currentPage, itemsPerPage, {
+          start_date: startDate,
+          end_date: endDate,
+          search: debouncedSearch,
+          petani_id: filterPetaniId,
+          status_bayar: filterStatusBayar === 'all' ? undefined : filterStatusBayar,
+          sort_field: sortField === 'kupon' ? 'kupon' : undefined,
+          sort_dir: sortDirection,
+        });
+        if (batal) return;
+        // Tidak ada kupon baru dan tidak ada perubahan pada kupon yang sudah tampil
+        if (res.tidakBerubah) {
+          setIsLoading(false);
+          listInFlightRef.current = false;
+          return;
+        }
+        // Server gagal dijangkau: hasil lokal tidak lengkap & tidak terfilter, coba lagi.
+        // Penyegaran senyap yang gagal tidak boleh menimpa grid dengan salinan lokal yang masih "belum ditimbang".
+        if (!res.fromBackend) {
+          if (senyap) {
+            listInFlightRef.current = false;
+            return;
+          }
+          if (percobaan < 3) {
+            timer = setTimeout(() => fetchList(percobaan + 1), 1500 * (percobaan + 1));
+            return;
+          }
+        }
+        setServerData(res.data);
+        setServerTotal(res.pagination?.total ?? res.data.length);
+        setIsLoading(false);
+        listInFlightRef.current = false;
+      } catch (err) {
+        console.warn('Gagal memuat daftar kasir:', err);
+        if (batal) return;
+        if (percobaan < 3) timer = setTimeout(() => fetchList(percobaan + 1), 1500 * (percobaan + 1));
+        else { setIsLoading(false); listInFlightRef.current = false; }
+      }
+    };
+    fetchList(0);
+    return () => { batal = true; if (timer) clearTimeout(timer); listInFlightRef.current = false; };
+  }, [currentPage, itemsPerPage, startDate, endDate, debouncedSearch, filterPetaniId, filterStatusBayar, sortField, sortField === 'kupon' ? sortDirection : null, listReloadKey]);
+
   const [confirmConfig, setConfirmConfig] = useState<{
     isOpen: boolean;
     title: string;
@@ -131,16 +272,6 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     };
   };
 
-  // Helper super cepat untuk memantau status timbang dalam loop useMemo, tanpa alokasi memori untuk map/filter
-  const checkIsAllWeighed = (tx: TransaksiPembelian) => {
-    if (isKuponProsesSortir(tx)) return false;
-    const items = tx.items || [];
-    if (items.length === 0) return (tx.berat_kg || 0) > 0;
-    for (let i = 0; i < items.length; i++) {
-      if ((items[i].berat_kg || 0) <= 0) return false;
-    }
-    return true;
-  };
 
   const alasanBelumSiapBayar = (tx: TransaksiPembelian, status: ReturnType<typeof getKuponWeighStatus>) =>
     status.isSortirOpen
@@ -156,7 +287,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     },
     directPrintAfter?: boolean
   ): Promise<boolean> => {
-    const tx = transaksiList.find((t) => t.transaksi_id === txId);
+    const tx = serverData.find((t) => t.transaksi_id === txId);
     if (!tx) return false;
 
     // Strict validation: Kupon MUST have all bales weighed before payment can be confirmed!
@@ -198,7 +329,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
   const handleEditKupon = (tx: TransaksiPembelian) => {
     if (!onEditKupon || !canEditKupon) return;
     // Pakai data terbaru, bukan salinan lama dari modal Detail
-    const latest = transaksiList.find((t) => t.transaksi_id === tx.transaksi_id) || tx;
+    const latest = serverData.find((t) => t.transaksi_id === tx.transaksi_id) || tx;
     const alasan = alasanBalSusulanDitolak(latest);
     if (alasan) {
       setConfirmConfig({
@@ -216,7 +347,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
   };
 
   const handleMarkAsLunas = (txId: string) => {
-    const tx = transaksiList.find((t) => t.transaksi_id === txId);
+    const tx = serverData.find((t) => t.transaksi_id === txId);
     if (!tx) return;
 
     const weighStatus = getKuponWeighStatus(tx);
@@ -238,77 +369,27 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     setSelectedTxForBayar(tx);
   };
 
-  // Main Filter logic
-  const filteredList = useMemo(() => {
-    return transaksiList.filter((tx) => {
-      // Tanggal Mulai
-      if (startDate) {
-        const txDate = (tx.tanggal_transaksi || '').split(' ')[0];
-        if (txDate < startDate) return false;
-      }
-      // Tanggal Akhir
-      if (endDate) {
-        const txDate = (tx.tanggal_transaksi || '').split(' ')[0];
-        if (txDate > endDate) return false;
-      }
-      // Kupon / ID / Bal
-      if (filterKupon.trim()) {
-        const q = filterKupon.trim().toLowerCase();
-        const matchKupon = (tx.no_kupon || '').toLowerCase().includes(q);
-        const matchId = (tx.transaksi_id || '').toLowerCase().includes(q);
-        const matchBal = (tx.no_bal || '').toLowerCase().includes(q);
-        if (!matchKupon && !matchId && !matchBal) return false;
-      }
-      // Petani
-      if (filterPetaniId && tx.petani_id !== filterPetaniId) {
-        return false;
-      }
-      // Status Kas (Cash vs Kredit) & Kesiapan Timbang
-      const isLunas = isTransaksiLunas(tx);
-      const isAllWeighed = checkIsAllWeighed(tx);
 
-      if (filterStatusBayar === 'cash' && !isLunas) return false;
-      if (filterStatusBayar === 'kredit' && isLunas) return false;
-      if (filterStatusBayar === 'siap_bayar' && (!isAllWeighed || isLunas)) return false;
-      if (filterStatusBayar === 'belum_lengkap' && isAllWeighed) return false;
-
-      return true;
-    });
-  }, [transaksiList, startDate, endDate, filterKupon, filterPetaniId, filterStatusBayar]);
-
-  // Jumlah dan nilai kupon per status untuk kartu filter status
+  // Jumlah dan nilai kupon per status untuk kartu filter status (merangkum SELURUH data paginate dari summaryStats)
   const statusCounts = useMemo(() => {
+    if (summaryStats) {
+      return {
+        semua: summaryStats.semua,
+        siapBayar: summaryStats.siapBayar,
+        belumLengkap: summaryStats.belumLengkap,
+        lunas: summaryStats.lunas,
+        belumLunas: summaryStats.belumLunas,
+      };
+    }
     const kosong = () => ({ jumlah: 0, nilai: 0 });
-    const semua = kosong();
-    const siapBayar = kosong();
-    const belumLengkap = kosong();
-    const lunas = kosong();
-    const belumLunas = kosong();
-    const tambah = (grup: { jumlah: number; nilai: number }, nilai: number) => {
-      grup.jumlah += 1;
-      grup.nilai += nilai;
+    return {
+      semua: kosong(),
+      siapBayar: kosong(),
+      belumLengkap: kosong(),
+      lunas: kosong(),
+      belumLunas: kosong(),
     };
-
-    transaksiList.forEach((t) => {
-      const nilai = t.harga_final || 0;
-      const isLunas = isTransaksiLunas(t);
-      const isAllWeighed = checkIsAllWeighed(t);
-      tambah(semua, nilai);
-      if (isLunas) {
-        tambah(lunas, nilai);
-      } else {
-        tambah(belumLunas, nilai);
-        if (isAllWeighed) {
-          tambah(siapBayar, nilai);
-        }
-      }
-      if (!isAllWeighed) {
-        tambah(belumLengkap, nilai);
-      }
-    });
-
-    return { semua, siapBayar, belumLengkap, lunas, belumLunas };
-  }, [transaksiList]);
+  }, [summaryStats]);
 
   // Kartu filter status pembayaran: satu klik langsung menyaring tabel
   const kartuStatus = [
@@ -374,80 +455,54 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     },
   ];
 
-  // Overall stats for the filtered list
+  // Overall stats for the entire paginated list (merangkum SELURUH data paginate dari summaryStats)
   const stats = useMemo(() => {
-    let totalBal = 0, totalNetto = 0, totalKotor = 0, totalPajak = 0, totalPotongan = 0, totalBayar = 0;
-    let lunasCount = 0, belumLunasCount = 0, lunasNominal = 0, belumLunasNominal = 0;
-    let unweighedPendingCount = 0, siapBayarCount = 0;
-
-    for (let i = 0; i < filteredList.length; i++) {
-      const t = filteredList[i];
-      totalBal += t.total_bal || (t.items ? t.items.length : 1);
-      totalNetto += t.berat_kg || 0;
-      const kotor = t.total_kotor || t.total_harga_beli || 0;
-      totalKotor += kotor;
-      totalPajak += t.pajak || 0;
-      totalPotongan += t.total_potongan || 0;
-      const final = t.harga_final || 0;
-      totalBayar += final;
-
-      const isLunas = isTransaksiLunas(t);
-      const isAllWeighed = checkIsAllWeighed(t);
-
-      if (isLunas) {
-        lunasCount++;
-        lunasNominal += final;
-      } else {
-        belumLunasCount++;
-        belumLunasNominal += final;
-        if (isAllWeighed) {
-          siapBayarCount++;
-        }
-      }
-
-      if (!isAllWeighed) {
-        unweighedPendingCount++;
-      }
+    if (summaryStats) {
+      const avgHarga = summaryStats.totalNetto > 0 ? Math.round(summaryStats.totalKotor / summaryStats.totalNetto) : 0;
+      return {
+        totalTx: summaryStats.totalTx,
+        totalBal: summaryStats.totalBal,
+        totalNetto: summaryStats.totalNetto,
+        totalKotor: summaryStats.totalKotor,
+        totalPajak: summaryStats.totalPajak,
+        totalPotongan: summaryStats.totalPotongan,
+        totalBayar: summaryStats.totalBayar,
+        avgHarga,
+        lunasNominal: summaryStats.lunas.nilai,
+        belumLunasNominal: summaryStats.belumLunas.nilai,
+        lunasCount: summaryStats.lunas.jumlah,
+        belumLunasCount: summaryStats.belumLunas.jumlah,
+        unweighedPendingCount: summaryStats.unweighedPendingCount,
+        siapBayarCount: summaryStats.siapBayar.jumlah,
+      };
     }
-
-    totalNetto = normalizeKg(totalNetto);
-    const avgHarga = totalNetto > 0 ? Math.round(totalKotor / totalNetto) : 0;
-
+    
     return {
-      totalTx: filteredList.length,
-      totalBal,
-      totalNetto,
-      totalKotor,
-      totalPajak,
-      totalPotongan,
-      totalBayar,
-      avgHarga,
-      lunasNominal,
-      belumLunasNominal,
-      lunasCount,
-      belumLunasCount,
-      unweighedPendingCount,
-      siapBayarCount,
+      totalTx: 0,
+      totalBal: 0,
+      totalNetto: 0,
+      totalKotor: 0,
+      totalPajak: 0,
+      totalPotongan: 0,
+      totalBayar: 0,
+      avgHarga: 0,
+      lunasNominal: 0,
+      belumLunasNominal: 0,
+      lunasCount: 0,
+      belumLunasCount: 0,
+      unweighedPendingCount: 0,
+      siapBayarCount: 0,
     };
-  }, [filteredList]);
+  }, [summaryStats]);
 
-  // Table Quick Search filtering & sorting
+  // Table Quick Search filtering & sorting (local sorting for the current page)
   const searchedAndSortedList = useMemo(() => {
-    let result = [...filteredList];
+    let result = [...serverData];
 
-    // Quick text search across all columns
-    if (tableSearch.trim()) {
-      const q = tableSearch.trim().toLowerCase();
-      result = result.filter((tx) => {
-        const kupon = (tx.no_kupon || '').toLowerCase();
-        const tgl = formatDateIndo(tx.tanggal_transaksi).toLowerCase();
-        const petani = (tx.nama_petani || '').toLowerCase();
-        const id = (tx.transaksi_id || '').toLowerCase();
-        const bal = String(tx.total_bal || tx.items?.length || 1);
-        const netto = String(tx.berat_kg || 0);
-        return kupon.includes(q) || tgl.includes(q) || petani.includes(q) || id.includes(q) || bal.includes(q) || netto.includes(q);
-      });
-    }
+    // Pencarian & filter sudah dilakukan server; hanya urutan lokal untuk halaman ini
+
+    // Mode 'terbaru': urutan sudah ditentukan server (created_at terbaru di atas), jangan diurutkan ulang
+    if (sortField === 'terbaru') return result;
 
     // Dynamic sorting
     result.sort((a, b) => {
@@ -524,14 +579,14 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     });
 
     return result;
-  }, [filteredList, tableSearch, sortField, sortDirection]);
+  }, [serverData, tableSearch, sortField, sortDirection]);
 
   // Pagination calculation
-  const totalPages = Math.ceil(searchedAndSortedList.length / itemsPerPage) || 1;
+  const effectiveTotal = serverTotal;
+  const totalPages = Math.ceil(effectiveTotal / itemsPerPage) || 1;
   const paginatedList = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
-    return searchedAndSortedList.slice(start, start + itemsPerPage);
-  }, [searchedAndSortedList, currentPage, itemsPerPage]);
+    return searchedAndSortedList;
+  }, [searchedAndSortedList]);
 
   const handleHeaderSort = (field: string) => {
     if (sortField === field) {
@@ -549,7 +604,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
     setFilterPetaniId('');
     setFilterStatusBayar('all');
     setTableSearch('');
-    setSortField('kupon');
+    setSortField('terbaru');
     setSortDirection('desc');
     setCurrentPage(1);
   };
@@ -590,7 +645,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
             <span>Filter</span>
           </div>
           <span className="text-[11px] text-slate-500">
-            Ditemukan <strong className="text-slate-800">{filteredList.length}</strong> dari {transaksiList.length} transaksi
+            Ditemukan <strong className="text-slate-800">{effectiveTotal}</strong> dari {summaryStats?.semua?.jumlah ?? '...'} transaksi
           </span>
         </div>
 
@@ -673,13 +728,19 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
               Urutan Kupon
             </label>
             <select
-              value={sortDirection}
+              value={sortField === 'terbaru' ? 'terbaru' : sortDirection}
               onChange={(e) => {
+                if (e.target.value === 'terbaru') {
+                  setSortField('terbaru');
+                  setSortDirection('desc');
+                  return;
+                }
                 setSortField('kupon');
                 setSortDirection(e.target.value as 'desc' | 'asc');
               }}
               className="w-full bg-white border border-slate-300 rounded-sm px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800 font-medium"
             >
+              <option value="terbaru">Data Terbaru (Terakhir Dibuat)</option>
               <option value="desc">Kupon: Terbesar ke Terkecil</option>
               <option value="asc">Kupon: Terkecil ke Terbesar</option>
             </select>
@@ -689,7 +750,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
           <div className="flex items-center space-x-2">
             <button
               type="button"
-              onClick={() => setCurrentPage(1)}
+              onClick={() => { setCurrentPage(1); setListReloadKey((k) => k + 1); setSummaryReloadKey((k) => k + 1); }}
               className="flex-1 py-1.5 bg-[#b81d24] hover:bg-[#a0181e] text-white font-medium text-xs rounded-sm transition flex items-center justify-center space-x-1.5 cursor-pointer shadow-2xs"
             >
               <Search className="w-3.5 h-3.5" />
@@ -709,7 +770,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
       </div>
 
       {/* Kartu Status Pembayaran: klik untuk menyaring tabel */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-1 min-[520px]:grid-cols-2 xl:grid-cols-5 gap-3">
         {kartuStatus.map((k) => {
           const terpilih = filterStatusBayar === k.nilai;
           return (
@@ -721,19 +782,19 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 setFilterStatusBayar(k.nilai);
                 setCurrentPage(1);
               }}
-              className={`p-3.5 border rounded-sm shadow-2xs text-left cursor-pointer transition ${terpilih ? k.aktif : k.biasa}`}
+              className={`min-w-0 p-3.5 border rounded-sm shadow-2xs text-left cursor-pointer transition ${terpilih ? k.aktif : k.biasa}`}
             >
-              <div className="flex items-center justify-between gap-2">
-                <span className={`text-[11px] font-semibold ${k.teks}`}>{k.judul}</span>
+              <div className="flex items-start justify-between gap-2">
+                <span className={`text-[11px] font-semibold leading-snug ${k.teks}`}>{k.judul}</span>
                 <k.Ikon className={`w-4 h-4 shrink-0 ${k.ikon}`} />
               </div>
-              <div className="mt-2 flex items-baseline justify-between">
-                <span className={`text-xl font-bold ${k.teks}`}>{k.data.jumlah}</span>
-                <span className={`text-[11px] font-medium ${k.ikon}`}>{k.satuan}</span>
+              <div className="mt-2 flex items-baseline justify-between gap-2">
+                <span className={`text-xl font-bold tabular-nums ${k.teks}`}>{k.data.jumlah.toLocaleString('id-ID')}</span>
+                <span className={`text-[11px] font-medium shrink-0 ${k.ikon}`}>{k.satuan}</span>
               </div>
-              <div className={`mt-2 pt-2 border-t ${k.garis} flex items-center justify-between text-[11px]`}>
-                <span className={`font-medium ${k.teks}`}>Nilai Pembelian:</span>
-                <span className="font-mono font-bold text-slate-900">{formatRupiah(k.data.nilai)}</span>
+              <div className={`mt-2 pt-2 border-t ${k.garis} min-w-0`}>
+                <span className={`block text-[10px] font-medium ${k.teks}`}>Nilai Pembelian</span>
+                <span className="block mt-0.5 font-mono text-[12px] font-bold leading-snug text-slate-900 break-words">{formatRupiah(k.data.nilai)}</span>
               </div>
             </button>
           );
@@ -741,23 +802,23 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
       </div>
 
       {/* Total sesuai filter; jumlah nota lunas dan kredit ada di kartu status di atas */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="bg-white border border-slate-200 p-3 rounded-sm shadow-2xs">
+      <div className="grid grid-cols-1 min-[520px]:grid-cols-3 gap-3">
+        <div className="min-w-0 bg-white border border-slate-200 p-3 rounded-sm shadow-2xs">
           <span className="text-[10px] uppercase font-semibold text-slate-500 block tracking-wider">Total Bal</span>
-          <p className="text-base font-semibold text-slate-900 mt-0.5">{stats.totalBal} Bal</p>
-          <span className="text-[10px] text-slate-500 font-normal">{stats.totalTx} Kupon</span>
+          <p className="text-sm sm:text-base font-semibold text-slate-900 mt-0.5 break-words">{stats.totalBal.toLocaleString('id-ID')} Bal</p>
+          <span className="text-[10px] text-slate-500 font-normal">{stats.totalTx.toLocaleString('id-ID')} Kupon</span>
         </div>
 
-        <div className="bg-white border border-slate-200 p-3 rounded-sm shadow-2xs">
+        <div className="min-w-0 bg-white border border-slate-200 p-3 rounded-sm shadow-2xs">
           <span className="text-[10px] uppercase font-semibold text-slate-500 block tracking-wider">Total Tonase Netto</span>
-          <p className="text-base font-semibold text-slate-900 mt-0.5 font-mono">{stats.totalNetto.toLocaleString('id-ID')} Kg</p>
-          <span className="text-[10px] text-slate-500 font-normal">{(stats.totalNetto / 1000).toFixed(2)} Ton</span>
+          <p className="text-sm sm:text-base font-semibold text-slate-900 mt-0.5 font-mono break-words">{stats.totalNetto.toLocaleString('id-ID')} Kg</p>
+          <span className="text-[10px] text-slate-500 font-normal">{(stats.totalNetto / 1000).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Ton</span>
         </div>
 
-        <div className="bg-white border border-slate-200 p-3 rounded-sm shadow-2xs">
+        <div className="min-w-0 bg-white border border-slate-200 p-3 rounded-sm shadow-2xs">
           <span className="text-[10px] uppercase font-semibold text-slate-500 block tracking-wider">Total Pembelian</span>
-          <p className="text-base font-semibold text-slate-900 mt-0.5 font-mono">{formatRupiah(stats.totalBayar)}</p>
-          <span className="text-[10px] text-slate-500 font-normal">Potongan {formatRupiah(stats.totalPotongan)}</span>
+          <p className="text-sm sm:text-base font-semibold text-slate-900 mt-0.5 font-mono break-words">{formatRupiah(stats.totalBayar)}</p>
+          <span className="text-[10px] text-slate-500 font-normal break-words">Potongan {formatRupiah(stats.totalPotongan)}</span>
         </div>
 
       </div>
@@ -983,7 +1044,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-700">
+            <tbody className={`divide-y divide-slate-100 text-slate-700 transition-opacity duration-200 ${isLoading ? 'opacity-40 pointer-events-none' : ''}`}>
               {paginatedList.length === 0 ? (
                 <tr>
                   <td colSpan={14} className="py-12 text-center text-slate-400 bg-white">
@@ -1261,7 +1322,7 @@ export const KasirPageView: React.FC<KasirPageViewProps> = ({
           <Pagination
             currentPage={currentPage}
             totalPages={totalPages}
-            totalItems={searchedAndSortedList.length}
+            totalItems={effectiveTotal}
             itemsPerPage={itemsPerPage}
             onPageChange={setCurrentPage}
             showQuickJumper={true}

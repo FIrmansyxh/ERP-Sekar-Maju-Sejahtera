@@ -1,30 +1,36 @@
 import React from 'react';
 import { BatchPengirimanSample } from '../../types';
-import { formatNumber } from '../../utils/formatters';
+import { formatNumber, formatRupiah } from '../../utils/formatters';
 import { COMPANY_NAME } from '../../config/appInfo';
 import { DokumenBerlembar } from '../common/DokumenBerlembar';
 import { UKURAN_SURAT_SAMPLE, UkuranDokumen } from '../../utils/paginasiDokumen';
 import { beratBrutoItemSample } from '../../utils/beratKirim';
-import { kodeBalPembeliBerbeda, kodeHargaJualSample } from '../../utils/suratSample';
+import {
+  kodeHargaJualSample,
+  KunciKolomSample,
+  kolomSuratSample,
+  nilaiHargaJualSample,
+  noJadiSample,
+  OPSI_CETAK_SAMPLE_BAWAAN,
+  OpsiCetakSample,
+} from '../../utils/suratSample';
 
 export interface SuratSampleDokumenProps {
   batch: BatchPengirimanSample;
+  /** Kolom nomor (asal & jadi / jadi saja) dan harga jual (kode / nilai / keduanya); bruto selalu tampil */
+  opsi?: OpsiCetakSample;
 }
 
 /**
  * Isi Surat Pengantar Sample & Penawaran Batch untuk pratinjau dan cetak. Aturan halaman sama
  * dengan Nota Pembelian dan Surat Jalan: satu lembar per halaman, baris tidak terpotong, judul kolom
- * berulang. Data pemasok (petani) sengaja tidak ditampilkan, dan harga jual hanya tampil sebagai
- * KODE harga jual, bukan nilai rupiahnya.
+ * berulang. Data pemasok (petani) sengaja tidak ditampilkan.
  */
-export const SuratSampleDokumen: React.FC<SuratSampleDokumenProps> = ({ batch }) => {
+export const SuratSampleDokumen: React.FC<SuratSampleDokumenProps> = ({ batch, opsi = OPSI_CETAK_SAMPLE_BAWAAN }) => {
   const items = batch.items || [];
   const totalBal = items.length;
   // Dokumen untuk buyer memakai berat bruto; netto hanya untuk pembelian internal
   const totalBruto = items.reduce((sum, it) => sum + beratBrutoItemSample(it), 0);
-
-  // Kolom hanya muncul bila ada isinya, supaya tiap sel tetap satu baris dan tinggi baris pasti
-  const adaKodeBuyer = items.some((it) => kodeBalPembeliBerbeda(it) !== '');
 
   const U: UkuranDokumen = { ...UKURAN_SURAT_SAMPLE, totalBaris: 44 };
 
@@ -34,72 +40,93 @@ export const SuratSampleDokumen: React.FC<SuratSampleDokumenProps> = ({ batch })
     return `${p2(d.getDate())}-${p2(d.getMonth() + 1)}-${d.getFullYear()} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
   })();
 
+  const daftarKolom = kolomSuratSample(opsi);
   // Lebar kolom dalam persen; jumlahnya selalu 100
-  const lebar: number[] = [6, adaKodeBuyer ? 24 : 34, ...(adaKodeBuyer ? [22] : [])];
-  const sisa = 100 - lebar.reduce((a, b) => a + b, 0);
-  const lebarBruto = Math.floor(sisa / 2);
-  lebar.push(lebarBruto, sisa - lebarBruto);
-
+  const totalBobot = daftarKolom.reduce((s, k) => s + k.bobot, 0);
   const kolom = (
     <colgroup>
-      {lebar.map((w, i) => (
-        <col key={i} style={{ width: `${w}%` }} />
+      {daftarKolom.map((k) => (
+        <col key={k.kunci} style={{ width: `${(k.bobot / totalBobot) * 100}%` }} />
       ))}
     </colgroup>
   );
+
+  const RATA: Record<KunciKolomSample, string> = {
+    no: 'text-center',
+    asal: 'text-left',
+    jadi: 'text-left',
+    bruto: 'text-right',
+    kode: 'text-center',
+    nilai: 'text-right',
+  };
+  const garis = (i: number, warna: string) => (i < daftarKolom.length - 1 ? `border-r ${warna}` : '');
 
   const kepalaTabel = (
     <tr
       className="bg-slate-100 border-b border-slate-300 font-bold text-slate-700 text-[11px] uppercase tracking-wide whitespace-nowrap"
       style={{ height: U.thead - 2 }}
     >
-      <th className="px-3 text-center border-r border-slate-300">No</th>
-      <th className="px-3 text-left border-r border-slate-300">No Bal</th>
-      {adaKodeBuyer && <th className="px-3 text-left border-r border-slate-300">Kode Buyer</th>}
-      <th className="px-3 text-right border-r border-slate-300">Bruto (kg)</th>
-      <th className="px-3 text-center">Kode Harga Jual</th>
+      {daftarKolom.map((k, i) => (
+        <th key={k.kunci} className={`px-3 ${RATA[k.kunci]} ${garis(i, 'border-slate-300')}`}>
+          {k.judul}
+        </th>
+      ))}
     </tr>
   );
 
-  const baris = items.map((it, idx) => {
-    const bruto = beratBrutoItemSample(it);
-    const kodeBuyer = kodeBalPembeliBerbeda(it);
-    return (
-      <tr key={it.sample_item_id || `${it.barang_id}-${idx}`} className={idx % 2 === 1 ? 'bg-slate-50/70' : 'bg-white'} style={{ height: U.baris }}>
-        <td className="px-3 text-center font-mono font-medium text-slate-500 border-r border-slate-200 text-xs">{idx + 1}</td>
-        <td className="px-3 text-left font-mono font-bold text-slate-950 border-r border-slate-200 text-xs sm:text-sm truncate" title={it.no_bal}>
-          {it.no_bal}
-        </td>
-        {adaKodeBuyer && (
-          <td className="px-3 text-left font-mono text-slate-700 border-r border-slate-200 text-xs truncate">
-            {kodeBuyer}
-          </td>
-        )}
-        <td className="px-3 text-right font-mono font-medium text-slate-700 border-r border-slate-200 text-xs sm:text-sm whitespace-nowrap">
-          {formatNumber(bruto, 1)} kg
-        </td>
-        <td className="px-3 text-center font-mono font-bold text-slate-950 text-xs sm:text-sm whitespace-nowrap">
-          {kodeHargaJualSample(it)}
-        </td>
-      </tr>
-    );
-  });
+  const isiSel = (kunci: KunciKolomSample, it: (typeof items)[number], idx: number): React.ReactNode => {
+    switch (kunci) {
+      case 'no':
+        return idx + 1;
+      case 'asal':
+        return it.no_bal || '-';
+      case 'jadi':
+        return noJadiSample(it);
+      case 'bruto':
+        return `${formatNumber(beratBrutoItemSample(it), 1)} kg`;
+      case 'kode':
+        return kodeHargaJualSample(it);
+      case 'nilai': {
+        const nilai = nilaiHargaJualSample(it);
+        return nilai > 0 ? formatRupiah(nilai) : '-';
+      }
+    }
+  };
+  const GAYA_SEL: Record<KunciKolomSample, string> = {
+    no: 'font-mono font-medium text-slate-500 text-xs',
+    asal: 'font-mono font-bold text-slate-950 text-xs sm:text-sm truncate',
+    jadi: 'font-mono font-bold text-slate-950 text-xs sm:text-sm truncate',
+    bruto: 'font-mono font-medium text-slate-700 text-xs sm:text-sm whitespace-nowrap',
+    kode: 'font-mono font-bold text-slate-950 text-xs sm:text-sm whitespace-nowrap',
+    nilai: 'font-mono font-bold text-slate-950 text-xs sm:text-sm whitespace-nowrap',
+  };
 
-  // Kolom sebelum "Bruto": No, No Bal, (Kode Buyer)
-  const kolomLabel = 2 + (adaKodeBuyer ? 1 : 0);
+  const baris = items.map((it, idx) => (
+    <tr key={it.sample_item_id || `${it.barang_id}-${idx}`} className={idx % 2 === 1 ? 'bg-slate-50/70' : 'bg-white'} style={{ height: U.baris }}>
+      {daftarKolom.map((k, i) => (
+        <td key={k.kunci} className={`px-3 ${RATA[k.kunci]} ${GAYA_SEL[k.kunci]} ${garis(i, 'border-slate-200')}`}>
+          {isiSel(k.kunci, it, idx)}
+        </td>
+      ))}
+    </tr>
+  ));
+
+  // Kolom sebelum "Bruto" menjadi label total; kolom sesudahnya kosong
+  const posisiBruto = daftarKolom.findIndex((k) => k.kunci === 'bruto');
+  const kolomSesudah = daftarKolom.length - posisiBruto - 1;
   const barisTotal = (
     <>
       <tr
         className="bg-slate-100 font-bold border-t-2 border-slate-300 text-slate-900 text-xs sm:text-sm"
         style={{ height: 42 }}
       >
-        <td colSpan={kolomLabel} className="px-3 text-right uppercase tracking-wider text-xs text-slate-700 font-bold border-r border-slate-300">
+        <td colSpan={posisiBruto} className="px-3 text-right uppercase tracking-wider text-xs text-slate-700 font-bold border-r border-slate-300">
           TOTAL ({totalBal} BAL SAMPLE):
         </td>
-        <td className="px-3 text-right font-mono font-medium text-slate-700 border-r border-slate-300 whitespace-nowrap">
+        <td className={`px-3 text-right font-mono font-medium text-slate-700 whitespace-nowrap ${kolomSesudah > 0 ? 'border-r border-slate-300' : ''}`}>
           {formatNumber(totalBruto, 1)} kg
         </td>
-        <td className="px-3" />
+        {kolomSesudah > 0 && <td colSpan={kolomSesudah} className="px-3" />}
       </tr>
     </>
   );

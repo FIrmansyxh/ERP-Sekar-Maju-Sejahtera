@@ -4,6 +4,8 @@ import { BatchPengirimanSample } from '../../types';
 import { unduhSuratSampleExcel } from '../../utils/excelSuratSample';
 import { openPrintDocument } from '../../utils/openDedicatedPrint';
 import { SuratSampleDokumen } from './SuratSampleDokumen';
+import { OpsiCetakSampleBar } from './OpsiCetakSampleBar';
+import { useOpsiCetakSample } from '../../utils/suratSample';
 
 interface BatchSamplePrintModalProps {
   isOpen: boolean;
@@ -17,6 +19,7 @@ export const BatchSamplePrintModal: React.FC<BatchSamplePrintModalProps> = ({
   batch,
 }) => {
   const [isDownloadingExcel, setIsDownloadingExcel] = useState(false);
+  const [opsi, ubahOpsi] = useOpsiCetakSample();
 
   React.useEffect(() => {
     if (!isOpen) return;
@@ -39,7 +42,7 @@ export const BatchSamplePrintModal: React.FC<BatchSamplePrintModalProps> = ({
   const handleDownloadExcel = async () => {
     setIsDownloadingExcel(true);
     try {
-      await unduhSuratSampleExcel(batch);
+      await unduhSuratSampleExcel(batch, opsi);
     } catch (err) {
       console.error('Excel export error:', err);
     } finally {
@@ -107,10 +110,15 @@ export const BatchSamplePrintModal: React.FC<BatchSamplePrintModalProps> = ({
           </div>
         </div>
 
+        {/* Isi dokumen: kolom nomor bal dan harga jual (bruto selalu tampil) */}
+        <div className="px-5 py-2.5 border-b border-gray-200 bg-gray-50 shrink-0 print:hidden">
+          <OpsiCetakSampleBar opsi={opsi} onUbah={ubahOpsi} />
+        </div>
+
         {/* Lembar dokumen: tiap halaman tampil sebagai kertas terpisah, sama seperti Nota Pembelian */}
         <div className="p-4 sm:p-8 overflow-y-auto flex-1 bg-gray-100">
           <div className="mx-auto w-full max-w-3xl text-gray-900 font-sans">
-            <SuratSampleDokumen batch={batch} />
+            <SuratSampleDokumen batch={batch} opsi={opsi} />
           </div>
         </div>
 

@@ -10,6 +10,7 @@ import {
   PengirimanBarang,
   User,
   AuditLogEntry,
+  RiwayatNoBal,
 } from '../types';
 import LZString from 'lz-string';
 import { pulihkanStatusSampleLama } from './kuponSortir';
@@ -42,11 +43,13 @@ const KEY_PENGIRIMAN = `${NS}pengiriman_${STORAGE_VERSION}`;
 const KEY_USERS = `${NS}users_${STORAGE_VERSION}`;
 const KEY_CURRENT_USER = `${NS}current_user_${STORAGE_VERSION}`;
 const KEY_AUDIT_LOG = `${NS}audit_log_${STORAGE_VERSION}`;
+const KEY_RIWAYAT_NO_BAL = `${NS}riwayat_no_bal_${STORAGE_VERSION}`;
 
 /** Kunci yang dipantau untuk sinkronisasi kupon antar tab/jendela */
 export const STORAGE_KEY_TRANSAKSI = KEY_TRANSAKSI;
 export const STORAGE_KEY_BARANG = KEY_BARANG;
 export const STORAGE_KEY_PETANI = KEY_PETANI;
+export const STORAGE_KEY_RIWAYAT_NO_BAL = KEY_RIWAYAT_NO_BAL;
 
 /** Kunci sesi login (tidak dikompresi agar mudah dibersihkan saat logout). */
 const KEY_RAW_AUTH = `${NS}auth_session`;
@@ -66,6 +69,7 @@ const DATA_KEYS = [
   KEY_USERS,
   KEY_CURRENT_USER,
   KEY_AUDIT_LOG,
+  KEY_RIWAYAT_NO_BAL,
 ];
 
 const PRESERVED_KEYS = new Set([...DATA_KEYS, KEY_RAW_AUTH, KEY_ACTIVE_MODULE]);
@@ -352,6 +356,15 @@ export function savePengirimanData(data: PengirimanBarang[]): void {
 }
 
 // --- LOG AKTIVITAS & AUDIT TRAIL ---
+// --- RIWAYAT GANTI NO BAL ---
+export function loadRiwayatNoBalData(): RiwayatNoBal[] {
+  return readList<RiwayatNoBal>(KEY_RIWAYAT_NO_BAL) ?? [];
+}
+
+export function saveRiwayatNoBalData(data: RiwayatNoBal[]): void {
+  safeSetItem(KEY_RIWAYAT_NO_BAL, data);
+}
+
 export function loadAuditLogData(): AuditLogEntry[] {
   return readList<AuditLogEntry>(KEY_AUDIT_LOG) ?? [];
 }

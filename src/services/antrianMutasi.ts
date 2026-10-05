@@ -27,9 +27,16 @@ export type EntitasMutasi =
   | 'batch_sample'
   | 'pengiriman'
   | 'barang'
-  | 'transaksi';
+  | 'transaksi'
+  | 'no_bal';
 
-export type AksiMutasi = 'simpan' | 'hapus' | 'status' | 'reset_sandi' | 'ganti_id';
+export type AksiMutasi = 'simpan' | 'hapus' | 'status' | 'reset_sandi' | 'ganti_id' | 'ganti';
+
+/**
+ * Aksi yang dibatalkan (bukan dicoba ulang tiap 5 menit) bila server menolaknya dengan alasan tetap, mis. hapus yang
+ * sudah tidak boleh atau No Bal baru yang ternyata sudah dipakai di perangkat lain.
+ */
+const AKSI_BATAL_BILA_DITOLAK: AksiMutasi[] = ['hapus', 'ganti'];
 
 export interface TugasMutasi {
   kunci: string;
@@ -290,7 +297,7 @@ function jalankan(kunci: string): Promise<void> {
           return;
         }
         const butuhLogin = status === 401 || status === 403 || pesanGalat(err).toLowerCase().includes('unauthenticated');
-        if (t.aksi === 'hapus' && status && status >= 400 && status < 500 && ![404, 405, 408, 429].includes(status) && !butuhLogin) {
+        if (AKSI_BATAL_BILA_DITOLAK.includes(t.aksi) && status && status >= 400 && status < 500 && ![404, 405, 408, 429].includes(status) && !butuhLogin) {
           // Server menolak penghapusan dengan alasan yang jelas (mis. Surat Jalan sudah Selesai di perangkat lain).
           // Jangan disembunyikan diam-diam selamanya di perangkat ini: batalkan, tampilkan alasannya, dan muat ulang
           // datanya sehingga yang tampil sama dengan server.
@@ -482,13 +489,34 @@ export const antrianMutasi = {
     return () => pendengarDihapusServer.delete(fn);
   },
 
-  /** Dipanggil bila server menolak penghapusan dengan alasan tetap (mis. sudah Selesai); datanya harus tampil lagi. */
+  /**
+   * Dipanggil bila server menolak penghapusan atau ganti No Bal dengan alasan tetap (mis. sudah Selesai, nomor sudah
+   * dipakai); tugasnya dibatalkan dan data server harus tampil lagi.
+   */
   saatHapusDitolak(fn: (tugas: TugasMutasi, pesan: string) => void): () => void {
     pendengarHapusDitolak.add(fn);
     return () => pendengarHapusDitolak.delete(fn);
   },
 
   kirimUlangSekarang,
+
+  /**
+   * Data tugas sebuah entitas yang belum selesai atau baru saja selesai, urut dari yang terlama. Dipakai untuk
+   * menerapkan perubahan yang menyentuh beberapa daftar sekaligus (mis. ganti No Bal) ke data server yang baru dimuat.
+   */
+  dataTugas<T>(entitas: EntitasMutasi, aksi: AksiMutasi): T[] {
+    muatDariPenyimpanan();
+    const sekarang = Date.now();
+    const tugas: TugasMutasi[] = [];
+    for (const s of barusSelesai.values()) {
+      if (sekarang - s.pada <= MASA_INGAT_SELESAI_MS && s.tugas.entitas === entitas && s.tugas.aksi === aksi) tugas.push(s.tugas);
+    }
+    for (const t of antrian.values()) if (t.entitas === entitas && t.aksi === aksi) tugas.push(t);
+    return tugas
+      .filter((t) => t.data !== undefined)
+      .sort((a, b) => a.dibuatPada - b.dibuatPada)
+      .map((t) => t.data as T);
+  },
 
   /** ID entitas yang sedang atau baru saja dihapus (belum tentu sudah hilang dari daftar server). */
   daftarTerhapus(entitas: EntitasMutasi): Set<string> {

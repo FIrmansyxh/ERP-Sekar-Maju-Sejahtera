@@ -31,14 +31,17 @@ import { formatNumber, formatRupiah } from '../../utils/formatters';
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner';
 import { SuratJalanPrintModal } from './SuratJalanPrintModal';
 import { ConfirmModal } from '../common/ConfirmModal';
+import { SortIcon } from '../common/SortIcon';
 import { BatchSamplePrintModal } from '../sample/BatchSamplePrintModal';
 import { openPrintDocument } from '../../utils/openDedicatedPrint';
 import { isSuratJalanTerkunci, pesanSuratJalanTerkunci } from '../../utils/kunciHapus';
 import { beratBrutoBal, beratBrutoItemSample } from '../../utils/beratKirim';
-import { alasanBatchBelumFinal, isBatchDraft } from '../../utils/statusBatchSample';
+import { alasanBatchBelumFinal, isBatchDraft, statusBatchDariEvaluasi } from '../../utils/statusBatchSample';
 import { hariIniLokal, formatTanggalLokal } from '../../utils/rentangTanggal';
 
 interface StatusBatchPengirimanManagementProps {
+  /** Menu yang dibuka: Status Batch & Reclass (di bawah Pengiriman Sample) atau Status Pengiriman Reguler (DO). */
+  tampilan: 'sample_batch' | 'pengiriman_batch';
   batchSampleList: BatchPengirimanSample[];
   pengirimanList: PengirimanBarang[];
   barangList: Barang[];
@@ -59,6 +62,7 @@ interface StatusBatchPengirimanManagementProps {
 }
 
 export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanManagementProps> = ({
+  tampilan,
   batchSampleList = [],
   pengirimanList = [],
   barangList = [],
@@ -87,11 +91,12 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
     };
   }, [onRefreshPengirimanData]);
 
-  // Main Module Tab
-  const [activeMainTab, setActiveMainTab] = useState<'sample_batch' | 'pengiriman_batch'>('pengiriman_batch');
+  // Setiap tampilan kini menu sendiri di menu samping (dulu dua tab dalam satu menu)
+  const activeMainTab = tampilan;
   const [isBatchDropdownOpen, setIsBatchDropdownOpen] = useState(false);
   const [highlightedBatchIndex, setHighlightedBatchIndex] = useState(0);
   const [itemToRemove, setItemToRemove] = useState<string | null>(null);
+  const [itemToTolak, setItemToTolak] = useState<string | null>(null);
   const [pengirimanToDelete, setPengirimanToDelete] = useState<string | null>(null);
   const [isDeletingPengiriman, setIsDeletingPengiriman] = useState(false);
   const [pengirimanToFinish, setPengirimanToFinish] = useState<string | null>(null);
@@ -129,6 +134,7 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
   // --- TAB 1 STATE: DETAIL BATCH SAMPLE & SORTIR BUYER ---
   const [selectedBatchId, setSelectedBatchId] = useState<string>('');
   const [batchItems, setBatchItems] = useState<SampleItemDetail[]>([]);
+  const [urutNoBal, setUrutNoBal] = useState<'asc' | 'desc' | null>(null);
   const [filterSortirStatus, setFilterSortirStatus] = useState<string>('all');
   const [scanSortirInput, setScanSortirInput] = useState('');
   const [isAccAllConfirmOpen, setIsAccAllConfirmOpen] = useState(false);
@@ -312,8 +318,9 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
   // Change individual bal sortir status
   const handleChangeItemStatus = (sampleItemId: string, newStatus: StatusSample) => {
     if (isBatchDraft(activeBatch)) return;
+    // Tolak tetap tercatat di batch (masuk laporan); dikonfirmasi dulu
     if (newStatus === 'ditolak') {
-      setItemToRemove(sampleItemId);
+      setItemToTolak(sampleItemId);
       return;
     }
 
@@ -378,6 +385,25 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
     setHasUnsavedSortir(true);
   };
 
+  // Bal ditolak pembeli: tetap di batch berstatus Ditolak (keputusan pemilik 2026-10-01), bal bebas dipakai DO/batch lain
+  const confirmTolakItem = () => {
+    if (!itemToTolak) return;
+    setBatchItems((prev) =>
+      prev.map((item) =>
+        item.sample_item_id === itemToTolak
+          ? {
+              ...item,
+              status_item: 'ditolak' as const,
+              alasan_tolak: item.alasan_tolak || 'Ditolak pembeli',
+              tanggal_evaluasi: formatTanggalLokal(new Date()),
+            }
+          : item
+      )
+    );
+    setHasUnsavedSortir(true);
+    setItemToTolak(null);
+  };
+
   // Remove individual bal from batch
   const handleRemoveItemFromBatch = (sampleItemId: string) => {
     if (isBatchDraft(activeBatch)) return;
@@ -390,24 +416,20 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
       setBatchItems(updatedBatchItems);
 
       if (activeBatch) {
-        // If the item was removed as a "Tolak" action from the scan/sortir table
-        const itemToTolak = batchItems.find(i => i.sample_item_id === itemToRemove);
+        // Bal dikeluarkan dari batch (bukan ditolak pembeli): batch langsung disimpan tanpa bal itu
+        const itemDikeluarkan = batchItems.find(i => i.sample_item_id === itemToRemove);
 
-        if (itemToTolak) {
+        if (itemDikeluarkan) {
           const countAcc = updatedBatchItems.filter((i) => i.status_item === 'disetujui').length;
           const countTolak = updatedBatchItems.filter((i) => i.status_item === 'ditolak').length;
           const countNego = updatedBatchItems.filter((i) => i.status_item === 'nego').length;
           const totalDeal = updatedBatchItems
             .filter((i) => i.status_item === 'disetujui')
             .reduce((sum, i) => sum + beratBrutoItemSample(i) * (i.harga_deal_kg || i.harga_tawaran_kg), 0);
-            
-          let batchStatus: BatchPengirimanSample['status'] = 'sample';
-          if (countAcc > 0) batchStatus = 'diproses';
-          else if (updatedBatchItems.length === 0) batchStatus = 'dibatalkan';
 
           const updatedBatch: BatchPengirimanSample = {
             ...activeBatch,
-            status: batchStatus,
+            status: statusBatchDariEvaluasi(updatedBatchItems),
             items: updatedBatchItems,
             total_sample_bal: updatedBatchItems.length,
             total_bal_disetujui: countAcc,
@@ -452,14 +474,9 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
       .filter((i) => i.status_item === 'disetujui')
       .reduce((sum, i) => sum + beratBrutoItemSample(i) * (i.harga_deal_kg || i.harga_tawaran_kg), 0);
 
-    let batchStatus: BatchPengirimanSample['status'] = 'sample';
-    if (countAcc > 0) batchStatus = 'diproses';
-    else if (countTolak === batchItems.length) batchStatus = 'dibatalkan';
-    
-
     const updatedBatch: BatchPengirimanSample = {
       ...activeBatch,
-      status: batchStatus,
+      status: statusBatchDariEvaluasi(batchItems),
       items: batchItems,
       total_bal_disetujui: countAcc,
       total_bal_ditolak: countTolak,
@@ -479,12 +496,11 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
   const handleBuatDOReguler = async () => {
     if (!activeBatch) return;
 
-    // Filter items to keep only those not rejected
-    const remainingItems = batchItems.filter((i) => i.status_item !== 'ditolak');
-
-    const countAcc = remainingItems.filter((i) => i.status_item === 'disetujui').length;
-    const countNego = remainingItems.filter((i) => i.status_item === 'nego').length;
-    const totalDeal = remainingItems
+    // Bal yang ditolak tetap tercatat di batch (masuk laporan); hanya bal lain yang dibawa ke Surat Jalan
+    const countAcc = batchItems.filter((i) => i.status_item === 'disetujui').length;
+    const countNego = batchItems.filter((i) => i.status_item === 'nego').length;
+    const countTolak = batchItems.filter((i) => i.status_item === 'ditolak').length;
+    const totalDeal = batchItems
       .filter((i) => i.status_item === 'disetujui')
       .reduce((sum, i) => sum + beratBrutoItemSample(i) * (i.harga_deal_kg || i.harga_tawaran_kg), 0);
 
@@ -492,10 +508,10 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
       ...activeBatch,
       status: 'diproses',
       is_locked: true,
-      items: remainingItems,
-      total_sample_bal: remainingItems.length,
+      items: batchItems,
+      total_sample_bal: batchItems.length,
       total_bal_disetujui: countAcc,
-      total_bal_ditolak: 0,
+      total_bal_ditolak: countTolak,
       total_bal_nego: countNego,
       total_nilai_deal: totalDeal,
       tanggal_respon: hariIniLokal(),
@@ -508,14 +524,23 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
 
   // Filtered Items for Display in Tab 1
   const displayedBatchItems = useMemo(() => {
-    return batchItems.filter((it) => {
+    const hasil = batchItems.filter((it) => {
       if (filterSortirStatus === 'disetujui') return it.status_item === 'disetujui';
       if (filterSortirStatus === 'ditolak') return it.status_item === 'ditolak';
       if (filterSortirStatus === 'nego') return it.status_item === 'nego';
       if (filterSortirStatus === 'dikirim') return it.status_item === 'dikirim' || it.status_item === 'diterima';
       return true;
     });
-  }, [batchItems, filterSortirStatus]);
+    if (!urutNoBal) return hasil;
+    // Urut alfabet lalu angka (SB2 sebelum SB10); tanpa urutan = urutan bal di batch
+    const arah = urutNoBal === 'asc' ? 1 : -1;
+    return [...hasil].sort(
+      (a, b) => arah * (a.no_bal || a.barang_id).localeCompare(b.no_bal || b.barang_id, undefined, { numeric: true, sensitivity: 'base' })
+    );
+  }, [batchItems, filterSortirStatus, urutNoBal]);
+
+  // Klik judul No Bal: terendah → tertinggi → urutan semula
+  const handleUrutNoBal = () => setUrutNoBal((u) => (u === null ? 'asc' : u === 'asc' ? 'desc' : null));
 
   // Tab 1 Metrics
   const countAcc = batchItems.filter((i) => i.status_item === 'disetujui').length;
@@ -620,44 +645,14 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
         <div>
           <div className="flex items-center space-x-2.5">
             <div className="p-2.5 bg-[#b81d24] text-white rounded-xs shadow-xs">
-              <Layers className="w-5 h-5" />
+              {activeMainTab === 'sample_batch' ? <FlaskConical className="w-5 h-5" /> : <Truck className="w-5 h-5" />}
             </div>
             <div>
               <h1 className="text-lg font-bold text-gray-900 tracking-tight">
-                Status & Detail Batch Pengiriman
+                {activeMainTab === 'sample_batch' ? 'Status Batch & Reclass' : 'Status Pengiriman Reguler (DO)'}
               </h1>
-              
             </div>
           </div>
-        </div>
-
-        {/* Master Navigation Switcher */}
-        <div className="flex items-center p-1 bg-gray-100 border border-gray-300 rounded-xs shrink-0">
-          <button
-            type="button"
-            onClick={() => setActiveMainTab('pengiriman_batch')}
-            className={`px-3.5 py-1.5 text-xs font-bold rounded-xs flex items-center space-x-1.5 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
-              activeMainTab === 'pengiriman_batch'
-                ? 'bg-white text-gray-900 shadow-xs border border-gray-200'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            <Truck className="w-3.5 h-3.5 text-[#b81d24]" />
-            <span>Status Pengiriman Barang</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveMainTab('sample_batch')}
-            className={`px-3.5 py-1.5 text-xs font-bold rounded-xs flex items-center space-x-1.5 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
-              activeMainTab === 'sample_batch'
-                ? 'bg-white text-gray-900 shadow-xs border border-gray-200'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            <FlaskConical className="w-3.5 h-3.5 text-[#b81d24]" />
-            <span>Batch Sample & Reclass</span>
-          </button>
         </div>
       </div>
 
@@ -1341,7 +1336,16 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
                 <thead className="bg-gray-100 border-b border-gray-300 text-gray-700 font-bold">
                   <tr>
                     <th className="p-3 w-10 text-center">No</th>
-                    <th className="p-3 w-36">No Bal</th>
+                    <th
+                      onClick={handleUrutNoBal}
+                      className="p-3 w-36 cursor-pointer select-none hover:bg-gray-200/80 transition"
+                      title="Klik untuk urutkan No Bal: terendah, tertinggi, lalu urutan semula"
+                    >
+                      <div className="flex items-center">
+                        <span>No Bal</span>
+                        <SortIcon aktif={urutNoBal !== null} arah={urutNoBal || 'asc'} />
+                      </div>
+                    </th>
                     <th className="p-3 text-right w-24">Berat Bruto (Kg)</th>
                     <th className="p-3 text-center w-48">Status Sortir Pembeli</th>
                     <th className="p-3 w-56">Kode Master Harga Jual</th>
@@ -1528,10 +1532,19 @@ export const StatusBatchPengirimanManagement: React.FC<StatusBatchPengirimanMana
       {/* ========================================================================= */}
       {/* Modal Konfirmasi Hapus Bal */}
       <ConfirmModal
+        isOpen={!!itemToTolak}
+        title="Konfirmasi Tolak Bal"
+        message="Tolak bal ini? Bal tetap tercatat Ditolak di batch ini dan bisa dipakai untuk Surat Jalan atau batch lain."
+        confirmText="Ya, Tolak"
+        cancelText="Batal"
+        onConfirm={confirmTolakItem}
+        onClose={() => setItemToTolak(null)}
+      />
+      <ConfirmModal
         isOpen={!!itemToRemove}
-        title="Konfirmasi Tolak & Kembalikan Bal"
-        message="Tolak bal ini? Bal dikeluarkan dari batch dan tetap di stok gudang."
-        confirmText="Ya, Tolak & Kembalikan ke Gudang"
+        title="Konfirmasi Keluarkan Bal"
+        message="Keluarkan bal ini dari batch? Bal tetap di stok gudang dan tidak tercatat lagi di batch ini."
+        confirmText="Ya, Keluarkan dari Batch"
         cancelText="Batal"
         onConfirm={confirmRemoveItem}
         onClose={() => setItemToRemove(null)}

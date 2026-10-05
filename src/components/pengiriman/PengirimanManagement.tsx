@@ -20,7 +20,8 @@ import {
   Package,
   Edit3,
   Layers,
-  Scissors
+  Scissors,
+  CheckSquare
 } from 'lucide-react';
 import {
   PengirimanBarang,
@@ -622,6 +623,18 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
     );
   };
 
+  // Centang semua bal di tabel Surat Jalan ini; bila semuanya sudah tercentang, semua centang dilepas
+  const handleToggleCentangSemua = () => {
+    const semua = idBalBisaDicentang;
+    if (semua.length === 0) return;
+    const sudahSemua = semua.every((id) => selectedBalIds.includes(id));
+    setSelectedBalIds((prev) => (sudahSemua ? prev.filter((id) => !semua.includes(id)) : Array.from(new Set([...prev, ...semua]))));
+    setScanAlert({
+      type: sudahSemua ? 'warning' : 'success',
+      message: sudahSemua ? 'Semua centang bal dilepas.' : `${semua.length} bal dicentang untuk dikirim.`,
+    });
+  };
+
   // Remove a bal from current shipment
   const handleRemoveBal = (barangId: string) => {
     const balObj = barangList.find((b) => b.barang_id === barangId);
@@ -967,6 +980,17 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
   const regulerManifestObjects = useMemo(() => {
     return barangList.filter((b) => regulerManifestBalIds.includes(b.barang_id));
   }, [barangList, regulerManifestBalIds]);
+
+  // Bal yang boleh dicentang lewat "centang semua": batch sample tanpa bal yang sudah masuk DO atau ditolak pembeli
+  const idBalBisaDicentang = useMemo(
+    () =>
+      sourceMode === 'sample_batch'
+        ? (activeBatchObj?.items || []).filter((it) => !it.sudah_dikirim_do && it.status_item !== 'ditolak').map((it) => it.barang_id)
+        : regulerManifestObjects.map((b) => b.barang_id),
+    [sourceMode, activeBatchObj, regulerManifestObjects]
+  );
+  const jumlahTercentang = idBalBisaDicentang.filter((id) => selectedBalIds.includes(id)).length;
+  const semuaTercentang = idBalBisaDicentang.length > 0 && jumlahTercentang === idBalBisaDicentang.length;
 
   // Selected Bal Objects (Checked bales in shipment)
   const selectedBalObjects = useMemo(() => {
@@ -1481,7 +1505,7 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                 className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-xs transition flex items-center space-x-1 cursor-pointer shadow-xs"
               >
                 <Layers className="w-3.5 h-3.5" />
-                <span>Status & Detail Batch</span>
+                <span>Status Pengiriman Reguler (DO)</span>
               </button>
             )}
             <button
@@ -2223,42 +2247,30 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
               {/* Bulk & Quick Selection Action Bar */}
               <div className="bg-gray-50 p-2.5 border border-gray-300 rounded-xs flex flex-wrap items-center justify-between gap-2.5 text-xs">
                 <div className="flex items-center space-x-2 flex-wrap">
-                  {sourceMode === 'sample_batch' ? (
-                    <>
-                      {selectedBalIds.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedBalIds([]);
-                            setScanAlert({
-                              type: 'warning',
-                              message: 'Semua centang bal dikosongkan.',
-                            });
-                          }}
-                          className="px-2.5 py-1 text-[11px] font-semibold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-xs cursor-pointer transition"
-                        >
-                          Kosongkan Centang
-                        </button>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      {selectedBalIds.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedBalIds([]);
-                            setScanAlert({
-                              type: 'warning',
-                              message: 'Semua centang bal dikosongkan.',
-                            });
-                          }}
-                          className="px-2.5 py-1 text-[11px] font-semibold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-xs cursor-pointer transition"
-                        >
-                          Kosongkan Centang
-                        </button>
-                      )}
-                    </>
+                  {idBalBisaDicentang.length > 0 && !semuaTercentang && (
+                    <button
+                      type="button"
+                      onClick={handleToggleCentangSemua}
+                      className="px-2.5 py-1 text-[11px] font-semibold text-white bg-[#b81d24] hover:bg-[#9e161c] border border-[#b81d24] rounded-xs cursor-pointer transition flex items-center gap-1"
+                    >
+                      <CheckSquare className="w-3.5 h-3.5" />
+                      Centang Semua ({idBalBisaDicentang.length} Bal)
+                    </button>
+                  )}
+                  {selectedBalIds.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedBalIds([]);
+                        setScanAlert({
+                          type: 'warning',
+                          message: 'Semua centang bal dikosongkan.',
+                        });
+                      }}
+                      className="px-2.5 py-1 text-[11px] font-semibold text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-xs cursor-pointer transition"
+                    >
+                      Kosongkan Centang
+                    </button>
                   )}
                 </div>
 
@@ -2317,7 +2329,22 @@ export const PengirimanManagement: React.FC<PengirimanManagementProps> = ({
                   )}
                   <thead className="bg-gray-100 border-b border-gray-300 text-gray-700 font-bold z-10 sticky top-0 shadow-[0_1px_0_0_#d1d5db]">
                     <tr>
-                      <th className="p-2 text-center">Kirim</th>
+                      <th className="p-2 text-center">
+                        <label className="inline-flex items-center justify-center gap-1.5 cursor-pointer" title="Centang / lepas semua bal">
+                          <input
+                            type="checkbox"
+                            aria-label="Centang semua bal"
+                            checked={semuaTercentang}
+                            ref={(el) => {
+                              if (el) el.indeterminate = jumlahTercentang > 0 && !semuaTercentang;
+                            }}
+                            disabled={idBalBisaDicentang.length === 0}
+                            onChange={handleToggleCentangSemua}
+                            className="w-4 h-4 text-[#b81d24] rounded-xs border-gray-300 focus:ring-[#b81d24] cursor-pointer disabled:opacity-40"
+                          />
+                          <span>Kirim</span>
+                        </label>
+                      </th>
                       <th className="p-2 text-center">No Bal</th>
                       {sourceMode === 'sample_batch' && <th className="p-2 text-center">Status Sample</th>}
                       <th className="p-2 text-center">Berat Bruto</th>

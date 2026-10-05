@@ -22,6 +22,7 @@ import { hitungPotonganTaraKg, normalizeKg, getInfoAturanTara } from '../../util
 import { recordAuditLog } from '../../utils/storage';
 import { buildBarangDariItem, hitungUlangKupon, isKuponProsesSortir, terapkanHasilTimbang } from '../../utils/kuponSortir';
 import { alasanKuponTerkunciBayar } from '../../utils/statusBayar';
+import { noBalTerkini } from '../../utils/noBalPensiun';
 import { POTONGAN_GANTI_TIKAR, POTONGAN_KULI_PER_BAL, POTONGAN_TALI_PER_BAL } from '../../config/aturanTimbang';
 
 interface TimbanganPageViewProps {
@@ -339,7 +340,9 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
       const bCode = (it.barcode || '').toLowerCase();
       const nBal = (it.no_bal || '').toLowerCase();
       const nBalNorm = (it.no_bal || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-      return bCode === cleanQ || nBal === cleanQ || nBalNorm === cleanQNormalized;
+      // Bal yang diganti nomornya lewat Koreksi No Bal: kupon tetap bernomor lama, label fisik bernomor baru
+      const nBaru = noBalTerkini(it.no_bal || '').toLowerCase();
+      return bCode === cleanQ || nBal === cleanQ || nBalNorm === cleanQNormalized || nBaru === cleanQ;
     };
 
     if (preferCurrent?.items) {
@@ -566,8 +569,10 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
         const nBalNorm = (it.no_bal || '').replace(/[^a-zA-Z0-9]/g, '');
         const nKupon = (tx.no_kupon || '').toLowerCase();
         const nPetani = (tx.nama_petani || '').toLowerCase();
+        const nBaru = noBalTerkini(it.no_bal || '').toLowerCase();
         if (
           nBal.includes(q) ||
+          (nBaru !== nBal && nBaru.includes(q)) ||
           bCode.includes(q) ||
           (cleanQNormalized && nBalNorm.includes(cleanQNormalized)) ||
           nKupon.includes(q) ||
@@ -585,8 +590,8 @@ export const TimbanganPageView: React.FC<TimbanganPageViewProps> = ({
       const nBalNorm = nBal.replace(/[^a-zA-Z0-9]/g, '');
       const nKupon = (tx.no_kupon || '').toLowerCase();
 
-      // Tier 1: Exact match with bal number, barcode, or clean normalized
-      if (nBal === q || bCode === q || (cleanQNormalized && nBalNorm === cleanQNormalized)) {
+      // Tier 1: Exact match with bal number (juga nomor baru hasil Koreksi No Bal), barcode, or clean normalized
+      if (nBal === q || noBalTerkini(item.no_bal || '').toLowerCase() === q || bCode === q || (cleanQNormalized && nBalNorm === cleanQNormalized)) {
         return 0;
       }
       // Tier 2: Starts with query

@@ -30,6 +30,29 @@ export function alasanKuponTerkunciBayar(tx?: (DataStatusBayar & { no_kupon: str
 export const labelStatusBayar =(tx?: DataStatusBayar | null): string => (isTransaksiLunas(tx) ? 'Lunas' : 'Belum Lunas');
 
 /**
+ * Kupon belum lunas yang balnya ada di Surat Jalan, beserta No Bal-nya. Surat Jalan boleh dimuat dan dikirim dengan bal
+ * yang kuponnya belum dibayar, tetapi baru boleh Selesai setelah semuanya lunas (keputusan pemilik 2026-10-01; server
+ * menolak dengan aturan yang sama). Bal tanpa kaitan kupon (data lama/manual) tidak menahan.
+ */
+export function kuponBelumLunasDiSuratJalan(
+  barangIds: string[],
+  barangList: Barang[],
+  transaksiList: TransaksiPembelian[]
+): { no_kupon: string; no_bal: string[] }[] {
+  const txById = new Map<string, TransaksiPembelian>(transaksiList.map((tx) => [tx.transaksi_id, tx]));
+  const hasil = new Map<string, { no_kupon: string; no_bal: string[] }>();
+  for (const id of barangIds) {
+    const bal = barangList.find((b) => b.barang_id === id);
+    const tx = bal?.transaksi_pembelian_id ? txById.get(bal.transaksi_pembelian_id) : undefined;
+    if (!bal || !tx || isTransaksiLunas(tx)) continue;
+    const baris = hasil.get(tx.transaksi_id) || { no_kupon: tx.no_kupon || tx.transaksi_id, no_bal: [] };
+    baris.no_bal.push(bal.no_bal || bal.barang_id);
+    hasil.set(tx.transaksi_id, baris);
+  }
+  return [...hasil.values()];
+}
+
+/**
  * Bal yang boleh dihitung sebagai aset, nilai pembelian, dan valuasi: bal dari kupon
  * yang sudah lunas. Bal tanpa kaitan transaksi pembelian (data lama/manual) tetap dihitung.
  */

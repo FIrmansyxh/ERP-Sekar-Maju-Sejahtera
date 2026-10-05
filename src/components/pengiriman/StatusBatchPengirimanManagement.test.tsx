@@ -5,6 +5,7 @@ import { StatusBatchPengirimanManagement } from './StatusBatchPengirimanManageme
 import { buatBal, buatBatch, buatItemSample, buatSuratJalan } from '../../test/fixtures';
 
 const buatProps = (extra: Partial<React.ComponentProps<typeof StatusBatchPengirimanManagement>> = {}) => ({
+  tampilan: 'pengiriman_batch' as const,
   batchSampleList: [],
   pengirimanList: [],
   barangList: [buatBal('B1', { status_stok: 'keluar' }), buatBal('B2', { status_stok: 'keluar' })],
@@ -21,15 +22,13 @@ const buatProps = (extra: Partial<React.ComponentProps<typeof StatusBatchPengiri
 
 const barisSuratJalan = (no: string) => screen.getByText(no).closest('tr') as HTMLElement;
 
-describe('Status & Detail Batch: tab Status Pengiriman', () => {
-  it('membuka Status Pengiriman lebih dulu, lalu Detail Batch', () => {
-    render(<StatusBatchPengirimanManagement {...buatProps()} />);
-    const tab = screen.getAllByRole('button').filter((b) => /Status Pengiriman Barang|Batch Sample & Reclass/.test(b.textContent || ''));
-    expect(tab.map((b) => b.textContent)).toEqual([
-      expect.stringContaining('Status Pengiriman Barang'),
-      expect.stringContaining('Batch Sample & Reclass'),
-    ]);
+describe('Status Pengiriman Reguler (DO)', () => {
+  it('menu sendiri: hanya daftar Surat Jalan, tanpa tab Batch Sample', () => {
+    render(<StatusBatchPengirimanManagement {...buatProps({ batchSampleList: [buatBatch('1', 'sample')] })} />);
+    expect(screen.getByRole('heading', { name: 'Status Pengiriman Reguler (DO)' })).toBeInTheDocument();
     expect(screen.getByText('Semua Surat Jalan')).toBeInTheDocument();
+    expect(screen.queryByText('Semua Batch Sample')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Batch Sample & Reclass/ })).not.toBeInTheDocument();
   });
 
   it('Surat Jalan belum Selesai boleh diedit dan dihapus; yang Selesai terkunci', async () => {
@@ -68,7 +67,7 @@ describe('Status & Detail Batch: tab Status Pengiriman', () => {
   });
 });
 
-describe('Status & Detail Batch: tab Batch Sample & Reclass menampilkan semua daftar batch', () => {
+describe('Status Batch & Reclass menampilkan semua daftar batch', () => {
   const batchList = [
     buatBatch('1', 'sample'),
     buatBatch('2', 'dikirim', { tujuan_buyer: 'Buyer B' }),
@@ -76,8 +75,7 @@ describe('Status & Detail Batch: tab Batch Sample & Reclass menampilkan semua da
   ];
 
   const bukaTabDetail = async (props = buatProps({ batchSampleList: batchList })) => {
-    render(<StatusBatchPengirimanManagement {...props} />);
-    await userEvent.click(screen.getByRole('button', { name: /Batch Sample & Reclass/ }));
+    render(<StatusBatchPengirimanManagement {...props} tampilan="sample_batch" />);
     return props;
   };
 
@@ -87,6 +85,9 @@ describe('Status & Detail Batch: tab Batch Sample & Reclass menampilkan semua da
     expect(screen.getByText('SAMPLE-2')).toBeInTheDocument();
     expect(screen.getByText('SAMPLE-3')).toBeInTheDocument();
     expect(screen.getByText('Semua Batch Sample')).toBeInTheDocument();
+    // Menu sendiri: Surat Jalan ada di menu Status Pengiriman Reguler (DO)
+    expect(screen.getByRole('heading', { name: 'Status Batch & Reclass' })).toBeInTheDocument();
+    expect(screen.queryByText('Semua Surat Jalan')).not.toBeInTheDocument();
   });
 
   it('kartu status menyaring daftar dengan satu klik', async () => {
@@ -146,6 +147,28 @@ describe('Status & Detail Batch: tab Batch Sample & Reclass menampilkan semua da
     expect(screen.getByRole('button', { name: /Simpan Hasil Sortir Buyer/ })).toBeInTheDocument();
   });
 
+  it('Tolak mencatat bal sebagai Ditolak (tidak dikeluarkan) dan batch Selesai bila sisa balnya sudah di Surat Jalan', async () => {
+    // Keputusan pemilik 2026-10-01: penolakan tetap tercatat (Laporan Pengiriman Sample), batch ditutup otomatis
+    const batch = buatBatch('4', 'sample', {
+      items: [buatItemSample('B1', { sudah_dikirim_do: true }), buatItemSample('B2')],
+    });
+    const props = await bukaTabDetail(buatProps({ batchSampleList: [batch] }));
+    await userEvent.click(within(screen.getByText('SAMPLE-4').closest('tr') as HTMLElement).getByRole('button', { name: /Detail/ }));
+
+    const barisB2 = screen.getAllByText('B2').map((el) => el.closest('tr')).find(Boolean) as HTMLElement;
+    await userEvent.click(within(barisB2).getByRole('button', { name: 'Tolak' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Ya, Tolak' }));
+    await userEvent.click(screen.getByRole('button', { name: /Simpan Hasil Sortir Buyer/ }));
+
+    const [batchTersimpan] = (props.onUpdateBatchSample as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(batchTersimpan.items.map((it: { barang_id: string; status_item: string }) => [it.barang_id, it.status_item])).toEqual([
+      ['B1', 'dikirim'],
+      ['B2', 'ditolak'],
+    ]);
+    expect(batchTersimpan.total_bal_ditolak).toBe(1);
+    expect(batchTersimpan.status).toBe('selesai');
+  });
+
   it('Detail membuka satu batch dan dapat kembali ke daftar', async () => {
     await bukaTabDetail();
     await userEvent.click(within(screen.getByText('SAMPLE-1').closest('tr') as HTMLElement).getByRole('button', { name: /Detail/ }));
@@ -156,13 +179,12 @@ describe('Status & Detail Batch: tab Batch Sample & Reclass menampilkan semua da
   });
 });
 
-describe('Status & Detail Batch: batch Draft', () => {
+describe('Status Batch & Reclass: batch Draft', () => {
   const draft = buatBatch('1', 'draft');
   const final = buatBatch('2', 'sample', { tujuan_buyer: 'Buyer B' });
 
   const bukaTabDetail = async (props = buatProps({ batchSampleList: [draft, final] })) => {
-    render(<StatusBatchPengirimanManagement {...props} />);
-    await userEvent.click(screen.getByRole('button', { name: /Batch Sample & Reclass/ }));
+    render(<StatusBatchPengirimanManagement {...props} tampilan="sample_batch" />);
     return props;
   };
   const baris = (kode: string) => within(screen.getByText(kode).closest('tr') as HTMLElement);

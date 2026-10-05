@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { alasanBatchBelumFinal, barisSampleDariBatch, isBatchDraft, statusKeServer, statusSetelahSinkron, tandaiServerKenalDraft } from './statusBatchSample';
+import { alasanBatchBelumFinal, barisSampleDariBatch, isBatchDraft, statusBatchDariEvaluasi, statusKeServer, statusSetelahSinkron, tandaiServerKenalDraft } from './statusBatchSample';
 import type { BatchPengirimanSample } from '../types';
 
 describe('isBatchDraft', () => {
@@ -98,5 +98,24 @@ describe('barisSampleDariBatch', () => {
   it('batch Draft dan yang dibatalkan tidak dihitung', () => {
     const baris = barisSampleDariBatch([batch('draft', 'D'), batch('dibatalkan', 'X'), batch('selesai', 'S')]);
     expect(baris.map((b) => b.batch_id)).toEqual(['B-S', 'B-S']);
+  });
+});
+
+describe('statusBatchDariEvaluasi (sama dengan aturan server, keputusan 2026-10-01)', () => {
+  const it_ = (status_item: string, sudah_dikirim_do = false) => ({ status_item, sudah_dikirim_do }) as never;
+
+  it('semua bal selain yang ditolak sudah di Surat Jalan: selesai, kapan pun evaluasi disimpan', () => {
+    expect(statusBatchDariEvaluasi([it_('disetujui', true), it_('ditolak')])).toBe('selesai');
+    expect(statusBatchDariEvaluasi([it_('dikirim', true)])).toBe('selesai');
+  });
+
+  it('semua ditolak tetap tercatat (diproses, masuk laporan); tanpa bal = dibatalkan', () => {
+    expect(statusBatchDariEvaluasi([it_('ditolak'), it_('ditolak')])).toBe('diproses');
+    expect(statusBatchDariEvaluasi([])).toBe('dibatalkan');
+  });
+
+  it('ada yang disetujui tetapi belum dikirim: diproses; belum dievaluasi: sample', () => {
+    expect(statusBatchDariEvaluasi([it_('disetujui'), it_('ditolak')])).toBe('diproses');
+    expect(statusBatchDariEvaluasi([it_('dikirim'), it_('nego')])).toBe('sample');
   });
 });

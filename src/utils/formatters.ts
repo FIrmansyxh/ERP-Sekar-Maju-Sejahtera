@@ -39,6 +39,15 @@ export function formatDateIndo(dateStr?: string | null): string {
 export function formatDateTimeIndo(dateStr?: string | null): string {
   if (!dateStr) return '-';
   try {
+    // Waktu berzona (ISO "...Z" dari perangkat ini, "...+00" dari server) ditampilkan dalam jam perangkat (WIB),
+    // bukan jam yang tertulis di teksnya; tanpa ini jam terakhir login / ganti No Bal tampil 7 jam lebih awal
+    if (/[T ]\d{2}:\d{2}/.test(dateStr) && /(Z|[+-]\d{2}(:?\d{2})?)$/.test(dateStr.trim())) {
+      const d = new Date(dateStr.trim());
+      if (!isNaN(d.getTime())) {
+        const p = (n: number) => String(n).padStart(2, '0');
+        return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+      }
+    }
     const cleanStr = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr.split(' ')[0];
     const timeStr = dateStr.includes('T') ? dateStr.split('T')[1]?.split('.')[0] : dateStr.split(' ')[1];
     

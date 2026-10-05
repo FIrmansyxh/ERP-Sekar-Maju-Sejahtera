@@ -19,6 +19,7 @@ import { TransaksiPembelian, Petani, TabelHarga, Barang, TransaksiItemBal, UserR
 import { akhiranUnik } from '../../utils/idUnik';
 import { batalkanBalDihapus, catatBalDihapus } from '../../utils/balDihapus';
 import { idKuponTerkini } from '../../utils/aliasKupon';
+import { penggantiNoBal } from '../../utils/noBalPensiun';
 import { formatRupiah, formatNoKupon, formatDateHariBulanTahun, formatNumber, generateTransaksiId, hitungPotonganTaraKg, normalizeKg } from '../../utils/formatters';
 import { useSessionDraft } from '../../hooks/useSessionDraft';
 import { alasanKuponTerkunciBayar, isTransaksiLunas } from '../../utils/statusBayar';
@@ -196,7 +197,6 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
 
   // Inline edit bal di grid tabel
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
-  const [editNoBal, setEditNoBal] = useState<string>('');
   const [editGrade, setEditGrade] = useState<string>('');
 
   const barcodeInputRef = useRef<HTMLInputElement>(null);
@@ -407,6 +407,13 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
       return;
     }
 
+    // Nomor lama hasil Koreksi No Bal tidak boleh dipakai bal lain
+    const penggantiLama = penggantiNoBal(cleanedBalCode);
+    if (penggantiLama) {
+      setScanFeedback({ text: `Gagal: Nomor bal "${cleanedBalCode}" sudah pernah dipakai dan diganti menjadi "${penggantiLama}".`, isError: true });
+      return;
+    }
+
     // Check duplicate in current batch
     if (balItems.some((b) => b.no_bal.toUpperCase() === cleanedBalCode)) {
       setScanFeedback({ text: `Nomor bal "${cleanedBalCode}" sudah ada dalam daftar sortir kupon ini!`, isError: true });
@@ -534,37 +541,19 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
 
     const handleStartEdit = (item: TransaksiItemBal) => {
     setEditingItemId(item.item_id);
-    setEditNoBal(item.no_bal);
     setEditGrade(item.kode_grade);
   };
 
   const handleCancelEdit = () => {
     setEditingItemId(null);
-    setEditNoBal('');
     setEditGrade('');
   };
 
+  // Hanya grade yang diubah di sini; No Bal diganti lewat menu Koreksi No Bal supaya nomor lama tercatat
   const handleSaveEdit = async (item: TransaksiItemBal) => {
     if (!openTx) return;
 
-    const cleanedNoBal = editNoBal.trim().replace(/-/g, '').toUpperCase();
-    if (!cleanedNoBal) {
-      setScanFeedback({ text: 'Nomor bal tidak boleh kosong!', isError: true });
-      return;
-    }
-
-    // Jika nomor bal berubah, cek duplikasi di kupon ini maupun di inventaris gudang
-    if (cleanedNoBal !== item.no_bal.toUpperCase()) {
-      if (balItems.some((b) => b.item_id !== item.item_id && b.no_bal.toUpperCase() === cleanedNoBal)) {
-        setScanFeedback({ text: `Gagal: Nomor bal "${cleanedNoBal}" sudah digunakan pada kupon ini!`, isError: true });
-        return;
-      }
-      if (barangList.some((b) => b.barang_id !== item.barang_id && (b.no_bal || b.barang_id || '').toUpperCase() === cleanedNoBal)) {
-        setScanFeedback({ text: `Gagal: Nomor bal "${cleanedNoBal}" sudah ada di master data inventaris!`, isError: true });
-        return;
-      }
-    }
-
+    const cleanedNoBal = item.no_bal;
     const trimmedGrade = editGrade.trim();
     if (!trimmedGrade) {
       setScanFeedback({ text: 'Mutu grade tidak boleh kosong!', isError: true });
@@ -612,7 +601,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
         timpaPenuh: true,
         audit: {
           aksi: 'SORTIR_EDIT_BAL',
-          deskripsi: `Koreksi bal Kupon ${openTx.no_kupon}: Bal "${item.no_bal}" (Grade ${item.kode_grade}) diubah menjadi "${cleanedNoBal}" (Grade ${trimmedGrade})`,
+          deskripsi: `Koreksi bal Kupon ${openTx.no_kupon}: Grade Bal "${item.no_bal}" diubah dari ${item.kode_grade} menjadi ${trimmedGrade}`,
         },
       }
     );
@@ -621,7 +610,6 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
     if (!success) return;
 
     setEditingItemId(null);
-    setEditNoBal('');
     setEditGrade('');
     setScanFeedback({
       text: `Bal "${cleanedNoBal}" diperbarui (Grade ${trimmedGrade} • ${formatRupiah(newHarga)}/kg).`,
@@ -1159,32 +1147,10 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                           {balItemsTampil.length - index}
                         </td>
                         <td className="py-2 px-3.5">
-                          {isEditing ? (
-                            <input
-                              type="text"
-                              value={editNoBal}
-                              onChange={(e) => setEditNoBal(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  handleSaveEdit(item);
-                                }
-                                if (e.key === 'Escape') {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  handleCancelEdit();
-                                }
-                              }}
-                              autoFocus
-                              className="w-full max-w-[140px] bg-white border border-[#b81d24] focus:ring-1 focus:ring-[#b81d24] rounded px-2 py-1 text-xs font-mono font-bold text-slate-900 focus:outline-none shadow-2xs"
-                              placeholder="No Bal..."
-                            />
-                          ) : (
-                            <span className="font-mono font-semibold text-slate-900 bg-slate-100 px-2 py-0.5 border border-slate-200 rounded text-xs">
-                              {item.no_bal}
-                            </span>
-                          )}
+                          {/* No Bal diganti lewat menu Koreksi No Bal (riwayat nomor lama tersimpan) */}
+                          <span className="font-mono font-semibold text-slate-900 bg-slate-100 px-2 py-0.5 border border-slate-200 rounded text-xs">
+                            {item.no_bal}
+                          </span>
                         </td>
                         <td className="py-2 px-3.5">
                           {isEditing ? (
@@ -1203,6 +1169,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                                   handleCancelEdit();
                                 }
                               }}
+                              autoFocus
                               className="w-full max-w-[180px] bg-white border border-slate-300 focus:border-[#b81d24] focus:ring-1 focus:ring-[#b81d24] rounded px-2 py-1 text-xs font-medium text-slate-900 focus:outline-none shadow-2xs"
                             >
                               {hargaList
@@ -1272,7 +1239,7 @@ export const SortirPageView: React.FC<SortirPageViewProps> = ({
                                 type="button"
                                 onClick={() => handleStartEdit(item)}
                                 className="p-1 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded transition-colors cursor-pointer"
-                                title="Edit Nomor Bal & Mutu Grade"
+                                title="Edit Mutu Grade (No Bal diganti lewat menu Koreksi No Bal)"
                               >
                                 <Pencil className="w-3.5 h-3.5" />
                               </button>
